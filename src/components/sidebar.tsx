@@ -12,6 +12,7 @@ import {
   IcInbox,
   IcMarketing,
   IcSettings,
+  IcDiscount,
 } from "./icons";
 import type { ComponentType, SVGProps } from "react";
 
@@ -27,6 +28,7 @@ const store: Item[] = [
   { href: "/orders", key: "nav_orders", icon: IcOrders, badge: 7 },
   { href: "/products", key: "nav_products", icon: IcProducts },
   { href: "/customers", key: "nav_customers", icon: IcCustomers },
+  { href: "/discounts", key: "nav_discounts", icon: IcDiscount },
   { href: "/couriers", key: "nav_couriers", icon: IcCourier },
 ];
 const engage: Item[] = [

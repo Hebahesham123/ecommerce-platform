@@ -39,6 +39,13 @@ export const IcCustomers = (p: P) => (
     <path d="M3.5 20a5.5 5.5 0 0 1 11 0M16 5.2a3.2 3.2 0 0 1 0 6M17 20a5.5 5.5 0 0 0-2.5-4.6" />
   </svg>
 );
+export const IcDiscount = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M9 5H5a2 2 0 0 0-2 2v4l9.5 9.5a2 2 0 0 0 2.8 0l4.2-4.2a2 2 0 0 0 0-2.8L10 4" />
+    <circle cx="7.5" cy="9.5" r="1.2" />
+    <path d="M13 13 9 17" />
+  </svg>
+);
 export const IcCourier = (p: P) => (
   <svg {...base(p)}>
     <path d="M3 6h10v9H3zM13 9h4l3 3v3h-7" />

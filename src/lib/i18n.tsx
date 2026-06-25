@@ -107,6 +107,113 @@ const dict = {
   low_stock: { ar: "مخزون منخفض", en: "Low" },
   out_stock: { ar: "نفد", en: "Out" },
   unread: { ar: "غير مقروء", en: "Unread" },
+
+  // ---- Discounts ----
+  nav_discounts: { ar: "الخصومات", en: "Discounts" },
+  discounts_subtitle: { ar: "أكواد الخصم والعروض التلقائية", en: "Discount codes & automatic offers" },
+  create_discount: { ar: "إنشاء خصم", en: "Create discount" },
+  edit_discount: { ar: "تعديل الخصم", en: "Edit discount" },
+  no_discounts: { ar: "لا توجد خصومات بعد", en: "No discounts yet" },
+  no_discounts_hint: { ar: "أنشئ أول كود خصم أو عرض تلقائي لمتجرك.", en: "Create your first discount code or automatic offer." },
+  delete: { ar: "حذف", en: "Delete" },
+  activate: { ar: "تفعيل", en: "Activate" },
+  save: { ar: "حفظ", en: "Save" },
+  save_discount: { ar: "حفظ الخصم", en: "Save discount" },
+  cancel: { ar: "إلغاء", en: "Cancel" },
+  discard: { ar: "تجاهل", en: "Discard" },
+
+  // Column headers
+  col_title: { ar: "العنوان", en: "Title" },
+  col_method: { ar: "الطريقة", en: "Method" },
+  col_eligibility: { ar: "الأهلية", en: "Eligibility" },
+  col_type: { ar: "النوع", en: "Type" },
+  col_combinations: { ar: "الدمج", en: "Combinations" },
+  col_used: { ar: "الاستخدام", en: "Used" },
+
+  // Method
+  dm_code: { ar: "كود", en: "Code" },
+  dm_automatic: { ar: "تلقائي", en: "Automatic" },
+
+  // Types
+  dt_amount_products: { ar: "خصم على المنتجات", en: "Amount off products" },
+  dt_amount_order: { ar: "خصم على الطلب", en: "Amount off order" },
+  dt_bxgy: { ar: "اشترِ X واحصل على Y", en: "Buy X Get Y" },
+  dt_free_shipping: { ar: "شحن مجاني", en: "Free shipping" },
+  dt_amount_products_desc: { ar: "نسبة أو مبلغ ثابت على منتجات أو مجموعات محددة", en: "Percentage or fixed amount on specific products or collections" },
+  dt_amount_order_desc: { ar: "نسبة أو مبلغ ثابت على إجمالي الطلب", en: "Percentage or fixed amount off the order total" },
+  dt_bxgy_desc: { ar: "عرض اشترِ كمية واحصل على منتجات مجانية أو مخفّضة", en: "Buy a quantity and get items free or discounted" },
+  dt_free_shipping_desc: { ar: "شحن مجاني عند تحقق الشروط", en: "Free shipping when conditions are met" },
+
+  // Status
+  ds_active: { ar: "نشط", en: "Active" },
+  ds_scheduled: { ar: "مجدول", en: "Scheduled" },
+  ds_expired: { ar: "منتهي", en: "Expired" },
+  ds_draft: { ar: "مسودة", en: "Draft" },
+
+  // Form sections
+  sec_method: { ar: "الطريقة", en: "Method" },
+  sec_type: { ar: "نوع الخصم", en: "Discount type" },
+  sec_value: { ar: "القيمة", en: "Discount value" },
+  sec_applies_to: { ar: "ينطبق على", en: "Applies to" },
+  sec_min_req: { ar: "الحد الأدنى للشراء", en: "Minimum purchase requirements" },
+  sec_eligibility: { ar: "أهلية العملاء", en: "Customer eligibility" },
+  sec_max_uses: { ar: "الحد الأقصى للاستخدام", en: "Maximum discount uses" },
+  sec_combinations: { ar: "الدمج مع خصومات أخرى", en: "Combinations" },
+  sec_dates: { ar: "تواريخ التفعيل", en: "Active dates" },
+  sec_bxgy_buys: { ar: "ما يشتريه العميل", en: "Customer buys" },
+  sec_bxgy_gets: { ar: "ما يحصل عليه العميل", en: "Customer gets" },
+  sec_countries: { ar: "الدول", en: "Countries" },
+  summary: { ar: "الملخص", en: "Summary" },
+
+  // Fields
+  fld_code: { ar: "كود الخصم", en: "Discount code" },
+  fld_title_auto: { ar: "عنوان الخصم التلقائي", en: "Automatic discount title" },
+  fld_generate: { ar: "توليد", en: "Generate" },
+  code_hint: { ar: "سيكتب العملاء هذا الكود عند الدفع.", en: "Customers enter this code at checkout." },
+  title_hint: { ar: "لن يراه العملاء؛ للاستخدام الداخلي فقط.", en: "Customers won't see this; internal only." },
+  percentage: { ar: "نسبة مئوية", en: "Percentage" },
+  fixed_amount: { ar: "مبلغ ثابت", en: "Fixed amount" },
+  value_label: { ar: "قيمة الخصم", en: "Discount value" },
+
+  applies_all_products: { ar: "كل المنتجات", en: "All products" },
+  applies_collections: { ar: "مجموعات محددة", en: "Specific collections" },
+  applies_products: { ar: "منتجات محددة", en: "Specific products" },
+
+  min_none: { ar: "بدون حد أدنى", en: "No minimum requirements" },
+  min_amount: { ar: "حد أدنى لقيمة الشراء (جنيه)", en: "Minimum purchase amount (EGP)" },
+  min_quantity: { ar: "حد أدنى لعدد القطع", en: "Minimum quantity of items" },
+
+  elig_all: { ar: "كل العملاء", en: "All customers" },
+  elig_segments: { ar: "شرائح عملاء محددة", en: "Specific customer segments" },
+  elig_customers: { ar: "عملاء محددون", en: "Specific customers" },
+
+  limit_total: { ar: "حد إجمالي لعدد مرات الاستخدام", en: "Limit number of times this discount can be used in total" },
+  limit_once: { ar: "مرة واحدة لكل عميل", en: "Limit to one use per customer" },
+
+  combine_product: { ar: "خصومات المنتجات", en: "Product discounts" },
+  combine_order: { ar: "خصومات الطلب", en: "Order discounts" },
+  combine_shipping: { ar: "خصومات الشحن", en: "Shipping discounts" },
+  combine_none: { ar: "لا يُدمج", en: "No combinations" },
+  combine_hint: { ar: "اختر أنواع الخصومات التي يمكن دمج هذا الخصم معها.", en: "Choose which discount types this can combine with." },
+
+  start_date: { ar: "تاريخ البدء", en: "Start date" },
+  end_date: { ar: "تاريخ الانتهاء", en: "End date" },
+  set_end_date: { ar: "تحديد تاريخ انتهاء", en: "Set end date" },
+
+  bxgy_min_qty: { ar: "أدنى كمية للشراء", en: "Minimum quantity of items" },
+  bxgy_min_amount: { ar: "أدنى قيمة للشراء", en: "Minimum purchase amount" },
+  bxgy_gets_qty: { ar: "الكمية المجانية/المخفّضة", en: "Quantity" },
+  bxgy_free: { ar: "مجاناً", en: "Free" },
+
+  countries_all: { ar: "كل الدول", en: "All countries" },
+  ship_exclude: { ar: "استثناء رسوم الشحن الأعلى من مبلغ معيّن", en: "Exclude shipping rates over a certain amount" },
+
+  saving: { ar: "جارٍ الحفظ…", en: "Saving…" },
+  loading: { ar: "جارٍ التحميل…", en: "Loading…" },
+  no_value: { ar: "—", en: "—" },
+  times: { ar: "مرة", en: "times" },
+  supabase_missing: { ar: "لم يتم ربط Supabase. أضِف المفاتيح في ملف .env.local.", en: "Supabase is not connected. Add your keys to .env.local." },
+  delete_confirm: { ar: "حذف هذا الخصم نهائياً؟", en: "Permanently delete this discount?" },
 } as const;
 
 export type DictKey = keyof typeof dict;
