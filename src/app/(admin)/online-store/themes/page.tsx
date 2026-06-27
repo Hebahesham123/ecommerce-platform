@@ -2,51 +2,24 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useI18n, num } from "@/lib/i18n";
-import {
-  type Theme,
-  themeStatusKey,
-  themeStatusTone,
-} from "@/lib/themes";
+import { type Theme, themeStatusKey, themeStatusTone } from "@/lib/themes";
 import { formatBytes } from "@/lib/content";
-import {
-  listThemes,
-  uploadTheme,
-  publishTheme,
-  renameTheme,
-  deleteTheme,
-} from "./actions";
+import { listThemes, uploadTheme, publishTheme, renameTheme, deleteTheme } from "./actions";
 import { PageHeader } from "@/components/page-header";
 import { Card, Badge } from "@/components/ui";
 import { ThemePreview } from "@/components/theme-preview";
 import { ThemeInspector } from "@/components/theme-inspector";
-import {
-  IcUpload,
-  IcEye,
-  IcTrash,
-  IcTheme,
-  IcAlert,
-} from "@/components/icons";
+import { IcUpload, IcEye, IcTrash, IcTheme, IcAlert, IcFile } from "@/components/icons";
 
-/** Non-interactive thumbnail of a theme's entry page. */
 function ThemeThumb({ theme }: { theme: Theme }) {
-  if (!theme.previewUrl) {
-    return (
-      <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-brand-50 to-slate-50 text-ink-soft">
-        <IcTheme className="h-10 w-10" />
-      </div>
-    );
-  }
   return (
-    <div className="relative h-full w-full overflow-hidden bg-white">
-      <iframe
-        src={theme.previewUrl}
-        title={theme.name}
-        tabIndex={-1}
-        scrolling="no"
-        className="pointer-events-none h-full w-full border-0"
-        sandbox="allow-scripts allow-same-origin"
-      />
-      <div className="absolute inset-0" />
+    <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-brand-50 to-slate-50">
+      <div className="flex flex-col items-center gap-2 text-brand-600">
+        <IcTheme className="h-10 w-10" />
+        <span className="text-[11px] font-medium uppercase tracking-wide text-ink-soft">
+          {theme.sourceKind}
+        </span>
+      </div>
     </div>
   );
 }
@@ -60,6 +33,7 @@ export default function ThemesPage() {
   const [dragOver, setDragOver] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [preview, setPreview] = useState<Theme | null>(null);
+  const [inspect, setInspect] = useState<Theme | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   async function load() {
@@ -84,9 +58,8 @@ export default function ThemesPage() {
     fd.append("file", file);
     const res = await uploadTheme(fd);
     setUploading(false);
-    if (res.ok) {
-      await load();
-    } else {
+    if (res.ok) await load();
+    else {
       const msgs: Record<string, string> = {
         empty_zip: lang === "ar" ? "الملف المضغوط فارغ" : "The zip is empty",
         unsupported_type: lang === "ar" ? "نوع ملف غير مدعوم (استخدم zip أو html)" : "Unsupported file (use zip or html)",
@@ -200,12 +173,15 @@ export default function ThemesPage() {
           <h3 className="mb-2 text-sm font-semibold text-ink">{t("live_theme")}</h3>
           <Card className="overflow-hidden">
             <div className="grid grid-cols-1 md:grid-cols-[280px_1fr]">
-              <div className="relative aspect-[16/10] border-b border-line md:border-b-0 md:border-e">
+              <button
+                className="relative aspect-[16/10] border-b border-line md:border-b-0 md:border-e"
+                onClick={() => setPreview(current)}
+              >
                 <ThemeThumb theme={current} />
                 <span className="absolute start-3 top-3">
                   <Badge className={themeStatusTone.published}>{t("th_published")}</Badge>
                 </span>
-              </div>
+              </button>
               <div className="flex flex-col justify-between p-5">
                 <div>
                   <h4 className="text-lg font-bold text-ink">{current.name}</h4>
@@ -216,6 +192,9 @@ export default function ThemesPage() {
                 <div className="mt-4 flex flex-wrap gap-2">
                   <button className="btn-primary" onClick={() => setPreview(current)}>
                     <IcEye className="h-4 w-4" /> {t("preview")}
+                  </button>
+                  <button className="btn-outline" onClick={() => setInspect(current)}>
+                    <IcFile className="h-4 w-4" /> {t("inspect")}
                   </button>
                   <button className="btn-outline" onClick={() => onRename(current)}>
                     {t("rename")}
@@ -277,18 +256,14 @@ export default function ThemesPage() {
                   {num(th.fileCount, lang)} {t("theme_files")} · {formatBytes(th.sizeBytes, lang)}
                 </p>
                 <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-line pt-3">
-                  <button
-                    className="btn-primary h-8 px-3 text-xs disabled:opacity-60"
-                    onClick={() => onPublish(th.id)}
-                    disabled={busyId === th.id}
-                  >
+                  <button className="btn-primary h-8 px-3 text-xs disabled:opacity-60" onClick={() => onPublish(th.id)} disabled={busyId === th.id}>
                     {t("publish")}
                   </button>
                   <button className="btn-outline h-8 px-3 text-xs" onClick={() => setPreview(th)}>
                     {t("preview")}
                   </button>
-                  <button className="btn-ghost h-8 px-2 text-xs" onClick={() => onRename(th)}>
-                    {t("rename")}
+                  <button className="btn-ghost h-8 px-2 text-xs" onClick={() => setInspect(th)}>
+                    {t("inspect")}
                   </button>
                   <button
                     className="btn-ghost ms-auto h-8 px-2 text-xs text-rose-600 hover:bg-rose-50 disabled:opacity-60"
@@ -304,12 +279,8 @@ export default function ThemesPage() {
         </div>
       )}
 
-      {preview &&
-        (preview.previewUrl ? (
-          <ThemePreview theme={preview} onClose={() => setPreview(null)} />
-        ) : (
-          <ThemeInspector theme={preview} onClose={() => setPreview(null)} />
-        ))}
+      {preview && <ThemePreview theme={preview} onClose={() => setPreview(null)} />}
+      {inspect && <ThemeInspector theme={inspect} onClose={() => setInspect(null)} />}
     </>
   );
 }

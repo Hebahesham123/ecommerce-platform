@@ -8,10 +8,13 @@ import { IcX, IcDesktop, IcMobile, IcLink } from "@/components/icons";
 export function ThemePreview({ theme, onClose }: { theme: Theme; onClose: () => void }) {
   const { t } = useI18n();
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
+  const [loaded, setLoaded] = useState(false);
+
+  // Served by our own route as text/html (Supabase serves stored HTML as text/plain).
+  const src = `/online-store/themes/${theme.id}/preview`;
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-ink/70 backdrop-blur-sm">
-      {/* Toolbar */}
       <div className="flex items-center gap-3 border-b border-white/10 bg-ink px-4 py-3 text-white">
         <div className="min-w-0">
           <div className="truncate text-sm font-semibold">{theme.name}</div>
@@ -37,16 +40,14 @@ export function ThemePreview({ theme, onClose }: { theme: Theme; onClose: () => 
           </button>
         </div>
 
-        {theme.previewUrl && (
-          <a
-            href={theme.previewUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="hidden items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/90 hover:bg-white/20 sm:flex"
-          >
-            <IcLink className="h-4 w-4" /> {t("open_new_tab")}
-          </a>
-        )}
+        <a
+          href={src}
+          target="_blank"
+          rel="noreferrer"
+          className="hidden items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/90 hover:bg-white/20 sm:flex"
+        >
+          <IcLink className="h-4 w-4" /> {t("open_new_tab")}
+        </a>
         <button
           onClick={onClose}
           className="flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white/90 hover:bg-white/20"
@@ -55,26 +56,25 @@ export function ThemePreview({ theme, onClose }: { theme: Theme; onClose: () => 
         </button>
       </div>
 
-      {/* Viewport */}
       <div className="flex flex-1 items-stretch justify-center overflow-auto p-4">
-        {theme.previewUrl ? (
-          <div
-            className={`h-full overflow-hidden rounded-2xl bg-white shadow-pop transition-all ${
-              device === "mobile" ? "w-[390px] max-w-full" : "w-full"
-            }`}
-          >
-            <iframe
-              src={theme.previewUrl}
-              title={theme.name}
-              className="h-full w-full border-0"
-              sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
-            />
-          </div>
-        ) : (
-          <div className="flex items-center justify-center text-sm text-white/70">
-            {t("no_preview")}
-          </div>
-        )}
+        <div
+          className={`relative h-full overflow-hidden rounded-2xl bg-white shadow-pop transition-all ${
+            device === "mobile" ? "w-[390px] max-w-full" : "w-full"
+          }`}
+        >
+          {!loaded && (
+            <div className="absolute inset-0 flex items-center justify-center text-sm text-ink-soft">
+              {t("processing")}
+            </div>
+          )}
+          <iframe
+            src={src}
+            title={theme.name}
+            onLoad={() => setLoaded(true)}
+            className="h-full w-full border-0"
+            sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals"
+          />
+        </div>
       </div>
     </div>
   );

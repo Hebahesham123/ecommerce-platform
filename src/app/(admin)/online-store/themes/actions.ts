@@ -4,6 +4,7 @@ import JSZip from "jszip";
 import { revalidatePath } from "next/cache";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
 import { mimeForPath, pickEntry, type Theme, type ThemeStatus } from "@/lib/themes";
+import { renderThemeHome, type FileMap } from "@/lib/liquid-render";
 
 const BUCKET = "themes";
 
@@ -179,6 +180,78 @@ export async function renameTheme(id: string, name: string): Promise<ThemeResult
     if (error) return { ok: false, error: error.message };
     revalidatePath("/online-store/themes");
     return { ok: true, data: undefined };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+// ---- Build a best-effort rendered HTML preview (Shopify Liquid themes) ------
+export async function buildThemePreview(
+  id: string,
+): Promise<ThemeResult<{ previewUrl: string }>> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  try {
+    const supabase = getServerSupabase();
+    const { data: row } = await supabase
+      .from("themes")
+      .select("storage_path, name")
+      .eq("id", id)
+      .single();
+    const prefix = (row?.storage_path as string) || id;
+
+    // List all files (recursive) and locate the theme root (single wrapper folder).
+    const res = await listThemeFiles(id);
+    if (!res.ok) return { ok: false, error: res.error };
+    const all = res.data.files; // path is relative to prefix
+    if (all.length === 0) return { ok: false, error: "empty_theme" };
+
+    const tops = new Set(all.map((f) => f.path.split("/")[0]));
+    const wrapper = tops.size === 1 ? [...tops][0] : "";
+    const stripLen = wrapper ? wrapper.length + 1 : 0;
+    const rootStorage = wrapper ? `${prefix}/${wrapper}` : prefix;
+
+    // Fetch text contents for liquid + json + locale files.
+    const textFiles = all.filter((f) => /\.(liquid|json)$/i.test(f.path));
+    const entries = await Promise.all(
+      textFiles.map(async (f) => {
+        try {
+          const r = await fetch(f.url);
+          return [f.path.slice(stripLen), r.ok ? await r.text() : ""] as const;
+        } catch {
+          return [f.path.slice(stripLen), ""] as const;
+        }
+      }),
+    );
+    const files: FileMap = {};
+    for (const [k, v] of entries) files[k] = v;
+
+    if (!files["layout/theme.liquid"] && !files["templates/index.json"] && !files["templates/index.liquid"]) {
+      return { ok: false, error: "not_renderable" };
+    }
+
+    const assetBase = supabase.storage.from(BUCKET).getPublicUrl(`${rootStorage}/`).data.publicUrl;
+    const html = await renderThemeHome({
+      files,
+      assetBase: assetBase.endsWith("/") ? assetBase : `${assetBase}/`,
+      shopName: (row?.name as string) || "Store",
+      currency: "EGP",
+    });
+
+    const previewPath = `${rootStorage}/_preview/index.html`;
+    const { error: upErr } = await supabase.storage
+      .from(BUCKET)
+      .upload(previewPath, new TextEncoder().encode(html), {
+        contentType: "text/html; charset=utf-8",
+        upsert: true,
+      });
+    if (upErr) return { ok: false, error: upErr.message };
+
+    const previewUrl = supabase.storage.from(BUCKET).getPublicUrl(previewPath).data.publicUrl;
+    const entryRel = previewPath.slice(prefix.length + 1);
+    await supabase.from("themes").update({ preview_url: previewUrl, entry_path: entryRel }).eq("id", id);
+
+    revalidatePath("/online-store/themes");
+    return { ok: true, data: { previewUrl } };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }
