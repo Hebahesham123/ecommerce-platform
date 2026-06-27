@@ -295,6 +295,15 @@ const dict = {
   no_preview: { ar: "لا تتوفر معاينة لهذا القالب", en: "No preview available for this theme" },
   processing: { ar: "جارٍ المعالجة…", en: "Processing…" },
 
+  // ---- Theme inspector ----
+  theme_inspector: { ar: "مستكشف القالب", en: "Theme inspector" },
+  inspect: { ar: "استكشاف", en: "Inspect" },
+  select_a_file: { ar: "اختر ملفاً لمعاينته", en: "Select a file to preview" },
+  binary_no_preview: { ar: "لا تتوفر معاينة لهذا الملف", en: "No preview for this file type" },
+  theme_settings: { ar: "إعدادات القالب", en: "Theme settings" },
+  search_files: { ar: "بحث في الملفات…", en: "Search files…" },
+  shopify_theme_note: { ar: "قالب Shopify (Liquid) — يُعرض كمستكشف ملفات لأنه يحتاج محرك Shopify للعرض المباشر.", en: "Shopify (Liquid) theme — shown as a file inspector since live rendering needs Shopify." },
+
 } as const;
 
 export type DictKey = keyof typeof dict;

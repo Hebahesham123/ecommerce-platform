@@ -184,6 +184,52 @@ export async function renameTheme(id: string, name: string): Promise<ThemeResult
   }
 }
 
+// ---- Inspect (list files for the theme inspector) --------------------------
+export type ThemeFile = { path: string; url: string; size: number };
+
+export async function listThemeFiles(
+  id: string,
+): Promise<ThemeResult<{ files: ThemeFile[] }>> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  try {
+    const supabase = getServerSupabase();
+    const { data: row } = await supabase
+      .from("themes")
+      .select("storage_path")
+      .eq("id", id)
+      .single();
+    const prefix = (row?.storage_path as string) || id;
+
+    type Item = { name: string; id: string | null; metadata?: { size?: number } };
+    async function walk(dir: string): Promise<ThemeFile[]> {
+      const { data } = await supabase.storage
+        .from(BUCKET)
+        .list(dir, { limit: 1000, sortBy: { column: "name", order: "asc" } });
+      if (!data) return [];
+      const out: ThemeFile[] = [];
+      for (const item of data as Item[]) {
+        const full = dir ? `${dir}/${item.name}` : item.name;
+        if (item.id === null) {
+          out.push(...(await walk(full)));
+        } else {
+          const url = supabase.storage.from(BUCKET).getPublicUrl(full).data.publicUrl;
+          out.push({
+            path: full.slice(prefix.length + 1),
+            url,
+            size: item.metadata?.size ?? 0,
+          });
+        }
+      }
+      return out;
+    }
+
+    const files = await walk(prefix);
+    return { ok: true, data: { files } };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
 // ---- Delete (storage folder + row) -----------------------------------------
 async function removeFolder(prefix: string) {
   const supabase = getServerSupabase();

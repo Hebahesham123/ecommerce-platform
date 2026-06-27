@@ -18,6 +18,7 @@ import {
 import { PageHeader } from "@/components/page-header";
 import { Card, Badge } from "@/components/ui";
 import { ThemePreview } from "@/components/theme-preview";
+import { ThemeInspector } from "@/components/theme-inspector";
 import {
   IcUpload,
   IcEye,
@@ -303,7 +304,12 @@ export default function ThemesPage() {
         </div>
       )}
 
-      {preview && <ThemePreview theme={preview} onClose={() => setPreview(null)} />}
+      {preview &&
+        (preview.previewUrl ? (
+          <ThemePreview theme={preview} onClose={() => setPreview(null)} />
+        ) : (
+          <ThemeInspector theme={preview} onClose={() => setPreview(null)} />
+        ))}
     </>
   );
 }
