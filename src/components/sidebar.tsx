@@ -13,6 +13,7 @@ import {
   IcMarketing,
   IcSettings,
   IcDiscount,
+  IcFile,
 } from "./icons";
 import type { ComponentType, SVGProps } from "react";
 
@@ -30,6 +31,9 @@ const store: Item[] = [
   { href: "/customers", key: "nav_customers", icon: IcCustomers },
   { href: "/discounts", key: "nav_discounts", icon: IcDiscount },
   { href: "/couriers", key: "nav_couriers", icon: IcCourier },
+];
+const content: Item[] = [
+  { href: "/content/files", key: "nav_files", icon: IcFile },
 ];
 const engage: Item[] = [
   { href: "/inbox", key: "nav_inbox", icon: IcInbox, badge: 3 },
@@ -65,6 +69,20 @@ function NavLink({ item }: { item: Item }) {
   );
 }
 
+function NavGroup({ label, items }: { label: DictKey; items: Item[] }) {
+  const { t } = useI18n();
+  return (
+    <div className="space-y-1">
+      <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-ink-soft">
+        {t(label)}
+      </p>
+      {items.map((i) => (
+        <NavLink key={i.href} item={i} />
+      ))}
+    </div>
+  );
+}
+
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { t } = useI18n();
   return (
@@ -80,22 +98,9 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       </Link>
 
       <nav className="flex flex-1 flex-col gap-6 overflow-y-auto">
-        <div className="space-y-1">
-          <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-ink-soft">
-            {t("group_store")}
-          </p>
-          {store.map((i) => (
-            <NavLink key={i.href} item={i} />
-          ))}
-        </div>
-        <div className="space-y-1">
-          <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-ink-soft">
-            {t("group_engage")}
-          </p>
-          {engage.map((i) => (
-            <NavLink key={i.href} item={i} />
-          ))}
-        </div>
+        <NavGroup label="group_store" items={store} />
+        <NavGroup label="group_content" items={content} />
+        <NavGroup label="group_engage" items={engage} />
       </nav>
 
       <Link

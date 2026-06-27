@@ -137,3 +137,57 @@ export const IcGlobe = (p: P) => (
     <path d="M3 12h18M12 3c2.5 2.5 2.5 15 0 18M12 3c-2.5 2.5-2.5 15 0 18" />
   </svg>
 );
+export const IcContent = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M4 4h11l5 5v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z" />
+    <path d="M14 4v5h5M7 13h10M7 17h7" />
+  </svg>
+);
+export const IcFile = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M6 2h8l4 4v15a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1Z" />
+    <path d="M14 2v5h5" />
+  </svg>
+);
+export const IcUpload = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M12 16V4M7 9l5-5 5 5" />
+    <path d="M5 16v3a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3" />
+  </svg>
+);
+export const IcImage = (p: P) => (
+  <svg {...base(p)}>
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <circle cx="8.5" cy="9.5" r="1.6" />
+    <path d="m21 16-5-5-9 9" />
+  </svg>
+);
+export const IcVideo = (p: P) => (
+  <svg {...base(p)}>
+    <rect x="3" y="5" width="14" height="14" rx="2" />
+    <path d="m17 9 4-2v10l-4-2" />
+  </svg>
+);
+export const IcLink = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1" />
+    <path d="M14 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1" />
+  </svg>
+);
+export const IcCopy = (p: P) => (
+  <svg {...base(p)}>
+    <rect x="9" y="9" width="11" height="11" rx="2" />
+    <path d="M5 15V5a2 2 0 0 1 2-2h8" />
+  </svg>
+);
+export const IcTrash = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13" />
+    <path d="M10 11v6M14 11v6" />
+  </svg>
+);
+export const IcX = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M6 6l12 12M18 6 6 18" />
+  </svg>
+);
