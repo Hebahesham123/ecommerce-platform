@@ -191,3 +191,33 @@ export const IcX = (p: P) => (
     <path d="M6 6l12 12M18 6 6 18" />
   </svg>
 );
+export const IcTheme = (p: P) => (
+  <svg {...base(p)}>
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <path d="M3 9h18M7 4v5" />
+    <circle cx="6" cy="6.5" r="0.5" />
+  </svg>
+);
+export const IcChevron = (p: P) => (
+  <svg {...base(p)}>
+    <path d="m9 6 6 6-6 6" />
+  </svg>
+);
+export const IcEye = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+);
+export const IcDesktop = (p: P) => (
+  <svg {...base(p)}>
+    <rect x="3" y="4" width="18" height="12" rx="2" />
+    <path d="M8 20h8M12 16v4" />
+  </svg>
+);
+export const IcMobile = (p: P) => (
+  <svg {...base(p)}>
+    <rect x="7" y="3" width="10" height="18" rx="2" />
+    <path d="M11 18h2" />
+  </svg>
+);

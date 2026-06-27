@@ -261,6 +261,40 @@ const dict = {
   rename: { ar: "إعادة تسمية", en: "Rename" },
   files_count: { ar: "ملف", en: "files" },
 
+  // ---- Online Store / Themes ----
+  group_online_store: { ar: "المتجر الإلكتروني", en: "Online Store" },
+  nav_online_store: { ar: "المتجر الإلكتروني", en: "Online Store" },
+  nav_themes: { ar: "القوالب", en: "Themes" },
+  themes_subtitle: { ar: "ارفع قوالب المتجر وعايِنها وانشرها", en: "Upload, preview & publish store themes" },
+  upload_theme: { ar: "رفع قالب", en: "Upload theme" },
+  theme_library: { ar: "مكتبة القوالب", en: "Theme library" },
+  live_theme: { ar: "القالب الحالي", en: "Current theme" },
+  theme_name: { ar: "اسم القالب", en: "Theme name" },
+  theme_version: { ar: "الإصدار", en: "Version" },
+  drop_theme_here: { ar: "اسحب وأفلت ملف القالب هنا", en: "Drag and drop your theme file here" },
+  theme_hint: { ar: "ملف مضغوط .zip يحتوي index.html، أو ملف .html واحد", en: ".zip bundle containing index.html, or a single .html file" },
+  theme_uploading: { ar: "جارٍ الرفع والمعالجة…", en: "Uploading & processing…" },
+  no_themes: { ar: "لا توجد قوالب بعد", en: "No themes yet" },
+  no_themes_hint: { ar: "ارفع أول قالب لمتجرك (zip أو html).", en: "Upload your first store theme (zip or html)." },
+
+  th_published: { ar: "منشور", en: "Published" },
+  th_unpublished: { ar: "غير منشور", en: "Unpublished" },
+  th_draft: { ar: "مسودة", en: "Draft" },
+
+  publish: { ar: "نشر", en: "Publish" },
+  unpublish: { ar: "إلغاء النشر", en: "Unpublish" },
+  preview: { ar: "معاينة", en: "Preview" },
+  preview_theme: { ar: "معاينة القالب", en: "Preview theme" },
+  customize: { ar: "تخصيص", en: "Customize" },
+  desktop: { ar: "سطح المكتب", en: "Desktop" },
+  mobile: { ar: "الجوال", en: "Mobile" },
+  open_new_tab: { ar: "فتح في تبويب جديد", en: "Open in new tab" },
+  close: { ar: "إغلاق", en: "Close" },
+  delete_theme_confirm: { ar: "حذف هذا القالب نهائياً؟", en: "Permanently delete this theme?" },
+  theme_files: { ar: "ملف", en: "files" },
+  no_preview: { ar: "لا تتوفر معاينة لهذا القالب", en: "No preview available for this theme" },
+  processing: { ar: "جارٍ المعالجة…", en: "Processing…" },
+
 } as const;
 
 export type DictKey = keyof typeof dict;
