@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useI18n, type DictKey } from "@/lib/i18n";
@@ -62,7 +62,7 @@ const groups: Group[] = [
     id: "engage",
     label: "group_engage",
     items: [
-      { href: "/inbox", key: "nav_inbox", icon: IcInbox, badge: 3 },
+      { href: "/inbox", key: "nav_inbox", icon: IcInbox },
       { href: "/marketing", key: "nav_marketing", icon: IcMarketing },
     ],
   },
@@ -105,8 +105,11 @@ function CollapsibleGroup({ group }: { group: Group }) {
   );
   const [open, setOpen] = useState(hasActive);
 
-  // Keep the group containing the current route open.
-  const expanded = open || hasActive;
+  // Auto-open the group when you navigate into it, but let the chevron collapse it.
+  useEffect(() => {
+    if (hasActive) setOpen(true);
+  }, [hasActive]);
+  const expanded = open;
 
   return (
     <div className="space-y-1">
