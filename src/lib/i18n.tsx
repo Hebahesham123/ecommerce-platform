@@ -304,6 +304,57 @@ const dict = {
   search_files: { ar: "بحث في الملفات…", en: "Search files…" },
   shopify_theme_note: { ar: "قالب Shopify (Liquid) — يُعرض كمستكشف ملفات لأنه يحتاج محرك Shopify للعرض المباشر.", en: "Shopify (Liquid) theme — shown as a file inspector since live rendering needs Shopify." },
 
+  // ---- Meta (Facebook) integration ----
+  group_channels: { ar: "قنوات البيع", en: "Sales channels" },
+  nav_meta: { ar: "ميتا (فيسبوك)", en: "Meta (Facebook)" },
+  meta_subtitle: { ar: "اربط البيكسل والكتالوج وأحداث الخادم مع ميتا", en: "Connect Pixel, Catalog & server events to Meta" },
+  sec_connection: { ar: "الاتصال", en: "Connection" },
+  meta_connect: { ar: "ربط فيسبوك", en: "Connect Facebook" },
+  meta_reconnect: { ar: "إعادة الربط", en: "Reconnect" },
+  meta_disconnect: { ar: "إلغاء الربط", en: "Disconnect" },
+  meta_connected: { ar: "متصل", en: "Connected" },
+  meta_not_connected: { ar: "غير متصل", en: "Not connected" },
+  meta_account: { ar: "الحساب", en: "Account" },
+  meta_business: { ar: "النشاط التجاري", en: "Business" },
+  meta_app_missing: { ar: "لم يتم ضبط تطبيق ميتا. أضِف META_APP_ID و META_APP_SECRET في ملف .env.local.", en: "Meta app not configured. Add META_APP_ID and META_APP_SECRET to .env.local." },
+  meta_connect_hint: { ar: "سجّل الدخول بحساب فيسبوك التجاري للوصول إلى البيكسل والكتالوج.", en: "Sign in with your Facebook business account to access your Pixel and Catalog." },
+  token_expires: { ar: "تنتهي صلاحية الإذن", en: "Access expires" },
+
+  sec_pixel: { ar: "بيكسل ميتا", en: "Meta Pixel" },
+  pixel_select: { ar: "اختر البيكسل", en: "Select pixel" },
+  pixel_id_label: { ar: "معرّف البيكسل", en: "Pixel ID" },
+  pixel_enable: { ar: "تفعيل تتبّع البيكسل في المتجر", en: "Enable Pixel tracking on storefront" },
+  pixel_inject_hint: { ar: "يُحقن كود البيكسل تلقائياً في معاينة القالب وصفحات المتجر.", en: "Pixel code is injected into the theme preview and storefront pages." },
+  pixel_snippet: { ar: "كود البيكسل", en: "Pixel code" },
+  copy_snippet: { ar: "نسخ الكود", en: "Copy code" },
+
+  sec_catalog: { ar: "كتالوج المنتجات", en: "Product catalog" },
+  catalog_select: { ar: "اختر الكتالوج", en: "Select catalog" },
+  sync_catalog: { ar: "مزامنة المنتجات", en: "Sync products" },
+  syncing: { ar: "جارٍ المزامنة…", en: "Syncing…" },
+  last_sync: { ar: "آخر مزامنة", en: "Last sync" },
+  products_synced: { ar: "منتج تمت مزامنته", en: "products synced" },
+  no_catalog_selected: { ar: "اختر كتالوجاً أولاً", en: "Select a catalog first" },
+
+  sec_events: { ar: "مدير الأحداث", en: "Events Manager" },
+  events_tester: { ar: "اختبار الأحداث", en: "Test events" },
+  send_test_event: { ar: "إرسال حدث تجريبي", en: "Send test event" },
+  event_type: { ar: "نوع الحدث", en: "Event type" },
+  test_event_code: { ar: "كود الاختبار (Test Event Code)", en: "Test Event Code" },
+  test_event_code_hint: { ar: "من مدير أحداث ميتا ← اختبار الأحداث. يتيح ظهور الأحداث التجريبية فوراً.", en: "From Meta Events Manager → Test events. Lets test events appear instantly." },
+  recent_events: { ar: "أحدث الأحداث المرسلة", en: "Recently sent events" },
+  no_events_yet: { ar: "لم تُرسل أحداث بعد", en: "No events sent yet" },
+  events_received: { ar: "حدث مُستلم", en: "events received" },
+  open_events_manager: { ar: "فتح مدير الأحداث", en: "Open Events Manager" },
+  capi_enable: { ar: "تفعيل واجهة التحويلات (الخادم)", en: "Enable Conversions API (server)" },
+
+  ev_pageview: { ar: "زيارة صفحة", en: "PageView" },
+  ev_viewcontent: { ar: "عرض محتوى", en: "ViewContent" },
+  ev_addtocart: { ar: "إضافة للسلة", en: "AddToCart" },
+  ev_purchase: { ar: "شراء", en: "Purchase" },
+  status_sent: { ar: "أُرسل", en: "Sent" },
+  status_error: { ar: "خطأ", en: "Error" },
+
 } as const;
 
 export type DictKey = keyof typeof dict;

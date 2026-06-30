@@ -1,6 +1,7 @@
 import "server-only";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
 import { renderThemeHome, type FileMap } from "@/lib/liquid-render";
+import { pixelBaseCode } from "@/lib/meta";
 
 const BUCKET = "themes";
 const CACHE_PATH = ".cache/preview.html";
@@ -31,10 +32,33 @@ function injectBase(html: string, base: string): string {
   return `${tag}${html}`;
 }
 
+/** Read the Meta Pixel config and inject the pixel snippet into <head> when enabled. */
+async function getPixelSnippet(): Promise<string> {
+  try {
+    const supabase = getServerSupabase();
+    const { data } = await supabase
+      .from("meta_connection")
+      .select("pixel_id, pixel_enabled")
+      .eq("id", "default")
+      .single();
+    if (data?.pixel_enabled && data?.pixel_id) return pixelBaseCode(data.pixel_id as string);
+  } catch {
+    /* no pixel */
+  }
+  return "";
+}
+
+function injectHead(html: string, snippet: string): string {
+  if (!snippet) return html;
+  if (/<head[^>]*>/i.test(html)) return html.replace(/<head[^>]*>/i, (m) => `${m}${snippet}`);
+  return `${snippet}${html}`;
+}
+
 /**
  * Returns rendered HTML for a theme as a string (or an error).
  * - Shopify Liquid themes are rendered via the Liquid engine (cached after first build).
  * - Static themes that already contain index.html are served as-is.
+ * The Meta Pixel is injected when connected + enabled.
  */
 export async function getThemeHtml(
   id: string,
@@ -62,6 +86,8 @@ export async function getThemeHtml(
   if (!assetBase.endsWith("/")) assetBase += "/";
 
   const rel = (p: string) => p.slice(stripLen);
+  const pixel = await getPixelSnippet();
+
   const hasLiquid =
     all.some((f) => rel(f.path) === "layout/theme.liquid") ||
     all.some((f) => rel(f.path) === "templates/index.json") ||
@@ -76,7 +102,7 @@ export async function getThemeHtml(
       const r = await fetch(entry.url);
       const html = await r.text();
       const folder = entry.url.slice(0, entry.url.lastIndexOf("/") + 1);
-      return { html: injectBase(html, folder) };
+      return { html: injectHead(injectBase(html, folder), pixel) };
     } catch (e) {
       return { error: (e as Error).message };
     }
@@ -89,7 +115,7 @@ export async function getThemeHtml(
     if (cached) {
       try {
         const r = await fetch(cached.url);
-        if (r.ok) return { html: await r.text() };
+        if (r.ok) return { html: injectHead(await r.text(), pixel) };
       } catch {
         /* fall through to re-render */
       }
@@ -132,7 +158,7 @@ export async function getThemeHtml(
     } catch {
       /* non-fatal cache write */
     }
-    return { html };
+    return { html: injectHead(html, pixel) };
   } catch (e) {
     return { error: (e as Error).message };
   }

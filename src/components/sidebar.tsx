@@ -17,6 +17,7 @@ import {
   IcFile,
   IcTheme,
   IcChevron,
+  IcMeta,
 } from "./icons";
 import type { ComponentType, SVGProps } from "react";
 
@@ -51,6 +52,11 @@ const groups: Group[] = [
     id: "online_store",
     label: "group_online_store",
     items: [{ href: "/online-store/themes", key: "nav_themes", icon: IcTheme }],
+  },
+  {
+    id: "channels",
+    label: "group_channels",
+    items: [{ href: "/channels/meta", key: "nav_meta", icon: IcMeta }],
   },
   {
     id: "engage",
