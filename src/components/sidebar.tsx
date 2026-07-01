@@ -136,6 +136,8 @@ function CollapsibleGroup({ group }: { group: Group }) {
 
 export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { t } = useI18n();
+  const sidebarPath = usePathname();
+  const pathnameSettingsActive = sidebarPath.startsWith("/settings");
   return (
     <div className="flex h-full flex-col gap-5 px-3 py-5" onClick={onNavigate}>
       <Link href="/dashboard" className="flex items-center gap-2.5 px-2">
@@ -155,10 +157,12 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       </nav>
 
       <Link
-        href="/dashboard"
-        className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-ink-muted hover:bg-surface-hover hover:text-ink"
+        href="/settings"
+        className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
+          pathnameSettingsActive ? "bg-brand-50 text-brand-700" : "text-ink-muted hover:bg-surface-hover hover:text-ink"
+        }`}
       >
-        <IcSettings className="h-5 w-5 text-ink-soft" />
+        <IcSettings className={`h-5 w-5 ${pathnameSettingsActive ? "text-brand-600" : "text-ink-soft"}`} />
         {t("nav_settings")}
       </Link>
     </div>
