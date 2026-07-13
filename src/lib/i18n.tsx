@@ -355,6 +355,78 @@ const dict = {
   status_sent: { ar: "أُرسل", en: "Sent" },
   status_error: { ar: "خطأ", en: "Error" },
 
+  // ---- Inventory & Locations ----
+  group_inventory: { ar: "المخزون", en: "Inventory" },
+  nav_inventory: { ar: "المخزون", en: "Inventory" },
+  nav_locations: { ar: "المواقع", en: "Locations" },
+  inventory_subtitle: { ar: "تتبّع الكميات لكل منتج عبر مواقعك", en: "Track quantities for each product across your locations" },
+  locations_subtitle: { ar: "مخازنك وفروعك التي تحتفظ بالمخزون", en: "The warehouses & branches that hold your stock" },
+
+  // Inventory table
+  col_product: { ar: "المنتج", en: "Product" },
+  col_sku: { ar: "SKU", en: "SKU" },
+  col_unavailable: { ar: "غير متاح", en: "Unavailable" },
+  col_committed: { ar: "محجوز", en: "Committed" },
+  col_available: { ar: "المتاح", en: "Available" },
+  col_on_hand: { ar: "الموجود", en: "On hand" },
+  col_incoming: { ar: "قادم", en: "Incoming" },
+  col_location: { ar: "الموقع", en: "Location" },
+
+  all_locations: { ar: "كل المواقع", en: "All locations" },
+  edit_qty: { ar: "تعديل الكمية", en: "Edit quantity" },
+  save_qty: { ar: "حفظ", en: "Save" },
+  units: { ar: "قطعة", en: "units" },
+  total_available: { ar: "إجمالي المتاح", en: "Total available" },
+  across_locations: { ar: "عبر المواقع", en: "across locations" },
+
+  no_inventory: { ar: "لا توجد منتجات في المخزون", en: "No inventory items yet" },
+  no_inventory_hint: { ar: "أضِف أول منتج لتتبّع كمياته عبر المواقع.", en: "Add your first item to track its quantity across locations." },
+  add_item: { ar: "إضافة منتج", en: "Add item" },
+  edit_item: { ar: "تعديل المنتج", en: "Edit item" },
+  new_item: { ar: "منتج جديد", en: "New item" },
+  item_details: { ar: "تفاصيل المنتج", en: "Item details" },
+  fld_product_name: { ar: "اسم المنتج", en: "Product name" },
+  fld_variant: { ar: "التنويعة (مقاس/لون)", en: "Variant (size / color)" },
+  fld_sku: { ar: "SKU", en: "SKU" },
+  fld_barcode: { ar: "الباركود", en: "Barcode" },
+  fld_category: { ar: "الفئة", en: "Category" },
+  fld_price: { ar: "السعر", en: "Price" },
+  fld_cost: { ar: "التكلفة", en: "Cost per item" },
+  fld_tracked: { ar: "تتبّع الكمية", en: "Track quantity" },
+  quantities_by_location: { ar: "الكميات حسب الموقع", en: "Quantities by location" },
+  delete_item_confirm: { ar: "حذف هذا المنتج من المخزون نهائياً؟", en: "Permanently delete this inventory item?" },
+
+  // Locations
+  add_location: { ar: "إضافة موقع", en: "Add location" },
+  edit_location: { ar: "تعديل الموقع", en: "Edit location" },
+  new_location: { ar: "موقع جديد", en: "New location" },
+  location_details: { ar: "تفاصيل الموقع", en: "Location details" },
+  no_locations: { ar: "لا توجد مواقع بعد", en: "No locations yet" },
+  no_locations_hint: { ar: "أضِف مخزناً أو فرعاً لتتبّع المخزون فيه.", en: "Add a warehouse or branch to track stock in." },
+  fld_loc_name: { ar: "اسم الموقع", en: "Location name" },
+  fld_loc_code: { ar: "الرمز", en: "Code" },
+  fld_address: { ar: "العنوان", en: "Address" },
+  fld_city: { ar: "المدينة", en: "City" },
+  fld_governorate: { ar: "المحافظة", en: "Governorate" },
+  fld_phone: { ar: "الهاتف", en: "Phone" },
+  loc_active: { ar: "نشط", en: "Active" },
+  loc_inactive: { ar: "غير نشط", en: "Inactive" },
+  loc_default: { ar: "الموقع الافتراضي", en: "Default location" },
+  loc_set_default: { ar: "تعيين كافتراضي", en: "Set as default" },
+  loc_fulfills: { ar: "ينفّذ طلبات المتجر الإلكتروني", en: "Fulfills online orders" },
+  loc_activate: { ar: "تفعيل", en: "Activate" },
+  loc_deactivate: { ar: "إيقاف", en: "Deactivate" },
+  delete_location_confirm: { ar: "حذف هذا الموقع نهائياً؟ سيُحذف مخزونه أيضاً.", en: "Permanently delete this location? Its stock records go too." },
+  manage_inventory: { ar: "إدارة المخزون", en: "Manage inventory" },
+  items_count: { ar: "منتج", en: "items" },
+
+  // ---- Operations: Accounting & Courier (embedded external apps) ----
+  group_operations: { ar: "العمليات", en: "Operations" },
+  nav_accounting: { ar: "المحاسبة", en: "Accounting" },
+  nav_courier_system: { ar: "نظام الشحن", en: "Courier system" },
+  accounting_subtitle: { ar: "دفتر الأستاذ والقيود والتقارير المالية — مدمج", en: "Ledger, journal entries & financial reports — embedded" },
+  courier_system_subtitle: { ar: "إدارة المندوبين والشحنات والتحصيل — مدمج", en: "Couriers, shipments & cash collection — embedded" },
+
 } as const;
 
 export type DictKey = keyof typeof dict;

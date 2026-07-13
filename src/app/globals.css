@@ -52,4 +52,7 @@ body {
   .btn-outline {
     @apply btn border border-line bg-white text-ink hover:bg-surface-hover;
   }
+  .inp {
+    @apply h-10 w-full rounded-xl border border-line bg-surface-page px-3 text-sm text-ink outline-none focus:border-brand-600 focus:bg-white;
+  }
 }

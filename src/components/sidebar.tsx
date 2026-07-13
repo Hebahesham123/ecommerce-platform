@@ -18,6 +18,9 @@ import {
   IcTheme,
   IcChevron,
   IcMeta,
+  IcInventory,
+  IcLocation,
+  IcAccounting,
 } from "./icons";
 import type { ComponentType, SVGProps } from "react";
 
@@ -41,6 +44,22 @@ const groups: Group[] = [
       { href: "/customers", key: "nav_customers", icon: IcCustomers },
       { href: "/discounts", key: "nav_discounts", icon: IcDiscount },
       { href: "/couriers", key: "nav_couriers", icon: IcCourier },
+    ],
+  },
+  {
+    id: "inventory",
+    label: "group_inventory",
+    items: [
+      { href: "/inventory", key: "nav_inventory", icon: IcInventory },
+      { href: "/inventory/locations", key: "nav_locations", icon: IcLocation },
+    ],
+  },
+  {
+    id: "operations",
+    label: "group_operations",
+    items: [
+      { href: "/accounting", key: "nav_accounting", icon: IcAccounting },
+      { href: "/courier-system", key: "nav_courier_system", icon: IcCourier },
     ],
   },
   {
