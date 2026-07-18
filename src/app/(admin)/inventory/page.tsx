@@ -1,38 +1,47 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useI18n, num } from "@/lib/i18n";
+import { useI18n, egp, num } from "@/lib/i18n";
 import {
   type InventoryItem,
   type Location,
+  type ProductStatus,
   stockStatus,
   stockStatusKey,
   stockStatusTone,
+  statusKey,
+  statusTone,
   totalAvailable,
-  totalCommitted,
+  totalOnHand,
   levelAt,
   emptyItem,
 } from "@/lib/inventory";
-import {
-  listInventory,
-  listLocations,
-  setLevel,
-  createItem,
-  updateItem,
-  deleteItem,
-} from "./actions";
+import { listInventory, listLocations, setLevel, deleteItem } from "./actions";
+import { ProductEditor } from "./product-editor";
 import { PageHeader } from "@/components/page-header";
 import { Card, Badge } from "@/components/ui";
+import { StatTile, SegBtn, Select, SearchInput } from "@/components/dashboard-ui";
 import {
-  IcSearch,
   IcPlus,
   IcInventory,
   IcAlert,
   IcLocation,
-  IcX,
   IcTrash,
+  IcImage,
+  IcCash,
+  IcX,
 } from "@/components/icons";
+
+type StockFilter = "all" | "in_stock" | "low_stock" | "out_stock";
+type StatusFilter = "all" | ProductStatus;
+type SortKey =
+  | "name_az"
+  | "avail_high"
+  | "avail_low"
+  | "price_high"
+  | "price_low"
+  | "updated";
 
 export default function InventoryPage() {
   const { t, lang } = useI18n();
@@ -40,9 +49,15 @@ export default function InventoryPage() {
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [loc, setLoc] = useState<string>("all"); // "all" | locationId
-  const [q, setQ] = useState("");
   const [drawer, setDrawer] = useState<InventoryItem | null>(null);
+
+  // Filters
+  const [loc, setLoc] = useState<string>("all");
+  const [q, setQ] = useState("");
+  const [status, setStatus] = useState<StatusFilter>("all");
+  const [stock, setStock] = useState<StockFilter>("all");
+  const [category, setCategory] = useState<string>("all");
+  const [sort, setSort] = useState<SortKey>("name_az");
 
   async function load() {
     setLoading(true);
@@ -59,40 +74,105 @@ export default function InventoryPage() {
 
   useEffect(() => {
     load();
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("new") === "1") {
+        setDrawer(emptyItem());
+        window.history.replaceState(null, "", "/inventory");
+      }
+    }
   }, []);
-
-  const filtered = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    if (!needle) return items;
-    return items.filter((i) =>
-      `${i.productName} ${i.variantTitle ?? ""} ${i.sku ?? ""} ${i.category ?? ""}`
-        .toLowerCase()
-        .includes(needle),
-    );
-  }, [items, q]);
 
   const singleLoc = loc !== "all";
 
-  // Optimistic patch of one level in local state after a save.
-  function patchLevel(
-    itemId: string,
-    locationId: string,
-    fields: Partial<{ onHand: number; committed: number; incoming: number }>,
-  ) {
+  // Stock respecting the selected location.
+  const availOf = (it: InventoryItem) =>
+    singleLoc ? levelAt(it, loc).available : totalAvailable(it);
+  const onHandOf = (it: InventoryItem) =>
+    singleLoc ? levelAt(it, loc).onHand : totalOnHand(it);
+
+  const categories = useMemo(() => {
+    const s = new Set<string>();
+    for (const i of items) if (i.category?.trim()) s.add(i.category.trim());
+    return [...s].sort();
+  }, [items]);
+
+  const filtered = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    const rows = items.filter((i) => {
+      if (status !== "all" && i.status !== status) return false;
+      if (category !== "all" && (i.category ?? "") !== category) return false;
+      if (stock !== "all" && stockStatus(availOf(i)) !== stock) return false;
+      if (needle) {
+        const hay =
+          `${i.productName} ${i.variantTitle ?? ""} ${i.sku ?? ""} ${i.barcode ?? ""} ${i.category ?? ""} ${i.vendor ?? ""} ${i.tags.join(" ")}`.toLowerCase();
+        if (!hay.includes(needle)) return false;
+      }
+      return true;
+    });
+    const sorted = [...rows];
+    sorted.sort((a, b) => {
+      switch (sort) {
+        case "avail_high":
+          return availOf(b) - availOf(a);
+        case "avail_low":
+          return availOf(a) - availOf(b);
+        case "price_high":
+          return (b.price ?? 0) - (a.price ?? 0);
+        case "price_low":
+          return (a.price ?? 0) - (b.price ?? 0);
+        case "updated":
+          return (b.updatedAt || "").localeCompare(a.updatedAt || "");
+        default:
+          return a.productName.localeCompare(b.productName, lang === "ar" ? "ar" : "en");
+      }
+    });
+    return sorted;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, q, status, stock, category, sort, loc, lang]);
+
+  // KPIs over the current filtered view (respecting the location).
+  const kpi = useMemo(() => {
+    let units = 0,
+      value = 0,
+      low = 0,
+      out = 0;
+    for (const i of filtered) {
+      const oh = onHandOf(i);
+      const av = availOf(i);
+      units += oh;
+      value += oh * (i.price ?? 0);
+      if (av <= 0) out += 1;
+      else if (stockStatus(av) === "low_stock") low += 1;
+    }
+    return { products: filtered.length, units, value, low, out };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filtered, loc]);
+
+  const maxAvail = useMemo(
+    () => Math.max(1, ...filtered.map((i) => availOf(i))),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filtered, loc],
+  );
+
+  const filtersActive =
+    q !== "" || status !== "all" || stock !== "all" || category !== "all";
+
+  function clearFilters() {
+    setQ("");
+    setStatus("all");
+    setStock("all");
+    setCategory("all");
+  }
+
+  function patchLevel(itemId: string, locationId: string, onHand: number) {
     setItems((prev) =>
       prev.map((it) => {
         if (it.id !== itemId) return it;
-        const existing = it.levels.find((l) => l.locationId === locationId);
-        const base = existing ?? {
-          locationId,
-          onHand: 0,
-          committed: 0,
-          incoming: 0,
-          available: 0,
-        };
-        const merged = { ...base, ...fields };
-        merged.available = merged.onHand - merged.committed;
-        const levels = existing
+        const ex = it.levels.find((l) => l.locationId === locationId);
+        const base = ex ?? { locationId, onHand: 0, committed: 0, incoming: 0, available: 0 };
+        const merged = { ...base, onHand, available: onHand - base.committed };
+        const levels = ex
           ? it.levels.map((l) => (l.locationId === locationId ? merged : l))
           : [...it.levels, merged];
         return { ...it, levels };
@@ -106,6 +186,15 @@ export default function InventoryPage() {
     if (res.ok) setItems((r) => r.filter((i) => i.id !== item.id));
   }
 
+  const sortLabels: Record<SortKey, string> = {
+    name_az: t("sort_name_az"),
+    avail_high: t("sort_avail_high"),
+    avail_low: t("sort_avail_low"),
+    price_high: t("sort_price_high"),
+    price_low: t("sort_price_low"),
+    updated: t("sort_updated"),
+  };
+
   return (
     <>
       <PageHeader
@@ -116,10 +205,7 @@ export default function InventoryPage() {
             <Link href="/inventory/locations" className="btn-outline">
               <IcLocation className="h-4 w-4" /> {t("nav_locations")}
             </Link>
-            <button
-              className="btn-primary"
-              onClick={() => setDrawer(emptyItem())}
-            >
+            <button className="btn-primary" onClick={() => setDrawer(emptyItem())}>
               <IcPlus className="h-4 w-4" /> {t("add_item")}
             </button>
           </>
@@ -137,123 +223,245 @@ export default function InventoryPage() {
         </Card>
       )}
 
+      {/* ---- KPI tiles ---- */}
+      <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <StatTile
+          icon={IcInventory}
+          label={t("kpi_products")}
+          value={num(kpi.products, lang)}
+          accent="brand"
+        />
+        <StatTile
+          icon={IcInventory}
+          label={t("kpi_units")}
+          value={num(kpi.units, lang)}
+          accent="sky"
+        />
+        <StatTile
+          icon={IcCash}
+          label={t("kpi_value")}
+          value={egp(kpi.value, lang)}
+          accent="emerald"
+        />
+        <StatTile
+          icon={IcAlert}
+          label={t("kpi_low_stock")}
+          value={num(kpi.low, lang)}
+          accent="amber"
+          active={stock === "low_stock"}
+          onClick={() => setStock(stock === "low_stock" ? "all" : "low_stock")}
+        />
+        <StatTile
+          icon={IcAlert}
+          label={t("kpi_out_stock")}
+          value={num(kpi.out, lang)}
+          accent="rose"
+          active={stock === "out_stock"}
+          onClick={() => setStock(stock === "out_stock" ? "all" : "out_stock")}
+        />
+      </div>
+
       <Card className="overflow-hidden">
-        {/* Toolbar: location selector + search */}
-        <div className="flex flex-wrap items-center gap-2 border-b border-line p-3">
-          <div className="flex flex-wrap gap-1.5">
-            <button
-              onClick={() => setLoc("all")}
-              className={`badge gap-1.5 px-3 py-1.5 text-sm transition-colors ${
-                loc === "all"
-                  ? "bg-ink text-white"
-                  : "bg-surface-page text-ink-muted hover:bg-surface-hover"
-              }`}
-            >
-              {t("all_locations")}
-            </button>
-            {locations.map((l) => (
+        {/* ---- Filter toolbar ---- */}
+        <div className="space-y-3 border-b border-line p-3">
+          {/* Location segmented control */}
+          {locations.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              <SegBtn active={loc === "all"} onClick={() => setLoc("all")}>
+                {t("all_locations")}
+              </SegBtn>
+              {locations.map((l) => (
+                <SegBtn key={l.id} active={loc === l.id} onClick={() => setLoc(l.id)}>
+                  <IcLocation className="h-3.5 w-3.5" />
+                  {l.name}
+                </SegBtn>
+              ))}
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center gap-2">
+            <SearchInput value={q} onChange={setQ} placeholder={t("search")} />
+
+            {/* Status */}
+            <Select value={status} onChange={(v) => setStatus(v as StatusFilter)}>
+              <option value="all">{t("all_statuses")}</option>
+              <option value="active">{t("st_active")}</option>
+              <option value="draft">{t("st_draft")}</option>
+              <option value="archived">{t("st_archived")}</option>
+            </Select>
+
+            {/* Stock */}
+            <Select value={stock} onChange={(v) => setStock(v as StockFilter)}>
+              <option value="all">{t("filter_stock")}: {t("filter_all")}</option>
+              <option value="in_stock">{t("in_stock")}</option>
+              <option value="low_stock">{t("low_stock")}</option>
+              <option value="out_stock">{t("out_stock")}</option>
+            </Select>
+
+            {/* Category */}
+            {categories.length > 0 && (
+              <Select value={category} onChange={(v) => setCategory(v)}>
+                <option value="all">{t("all_categories")}</option>
+                {categories.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </Select>
+            )}
+
+            {/* Sort */}
+            <Select value={sort} onChange={(v) => setSort(v as SortKey)}>
+              {(Object.keys(sortLabels) as SortKey[]).map((k) => (
+                <option key={k} value={k}>
+                  {t("sort_label")}: {sortLabels[k]}
+                </option>
+              ))}
+            </Select>
+
+            {filtersActive && (
               <button
-                key={l.id}
-                onClick={() => setLoc(l.id)}
-                className={`badge gap-1.5 px-3 py-1.5 text-sm transition-colors ${
-                  loc === l.id
-                    ? "bg-ink text-white"
-                    : "bg-surface-page text-ink-muted hover:bg-surface-hover"
-                }`}
+                onClick={clearFilters}
+                className="btn-ghost h-9 gap-1 px-2.5 text-xs text-ink-muted"
               >
-                <IcLocation className="h-3.5 w-3.5" />
-                {l.name}
-                {l.isDefault && loc !== l.id && (
-                  <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />
-                )}
+                <IcX className="h-3.5 w-3.5" /> {t("clear_filters")}
               </button>
-            ))}
-          </div>
-          <div className="relative ms-auto">
-            <IcSearch className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-soft" />
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder={t("search")}
-              className="h-9 w-56 rounded-xl border border-line bg-surface-page ps-9 pe-3 text-sm outline-none focus:border-brand-600 focus:bg-white"
-            />
+            )}
+
+            <span className="ms-auto text-xs text-ink-soft">
+              {num(filtered.length, lang)} {t("results_word")}
+            </span>
           </div>
         </div>
 
-        {/* Table */}
+        {/* ---- Table ---- */}
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[820px] text-sm">
+          <table className="w-full min-w-[880px] text-sm">
             <thead>
-              <tr className="text-xs text-ink-soft">
+              <tr className="border-b border-line text-xs text-ink-soft">
                 <th className="px-5 py-3 text-start font-medium">{t("col_product")}</th>
                 <th className="px-3 py-3 text-start font-medium">{t("col_sku")}</th>
-                <th className="px-3 py-3 text-end font-medium">{t("col_incoming")}</th>
-                <th className="px-3 py-3 text-end font-medium">{t("col_committed")}</th>
-                <th className="px-3 py-3 text-end font-medium">
-                  {singleLoc ? t("col_on_hand") : t("col_available")}
-                </th>
-                <th className="px-3 py-3 text-center font-medium">{t("col_status")}</th>
+                <th className="px-3 py-3 text-start font-medium">{t("col_status")}</th>
+                <th className="px-3 py-3 text-end font-medium">{t("col_price")}</th>
+                <th className="px-3 py-3 text-start font-medium">{t("col_available")}</th>
                 <th className="px-5 py-3 text-end font-medium"></th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((item) => {
-                const lvl = singleLoc ? levelAt(item, loc) : null;
-                const available = singleLoc ? lvl!.available : totalAvailable(item);
-                const committed = singleLoc ? lvl!.committed : totalCommitted(item);
-                const incoming = singleLoc
-                  ? lvl!.incoming
-                  : item.levels.reduce((s, l) => s + l.incoming, 0);
-                const status = stockStatus(available);
+                const available = availOf(item);
+                const st = stockStatus(available);
+                const barPct = Math.min(100, Math.round((Math.max(0, available) / maxAvail) * 100));
+                const barColor =
+                  st === "out_stock"
+                    ? "bg-rose-400"
+                    : st === "low_stock"
+                      ? "bg-amber-400"
+                      : "bg-emerald-400";
                 return (
                   <tr
                     key={item.id}
-                    className="border-t border-line transition-colors hover:bg-surface-page"
+                    className="group cursor-pointer border-b border-line transition-colors last:border-0 hover:bg-surface-page"
+                    onClick={() => setDrawer(item)}
                   >
-                    <td
-                      className="cursor-pointer px-5 py-3.5"
-                      onClick={() => setDrawer(item)}
-                    >
-                      <div className="font-semibold text-ink">{item.productName}</div>
-                      {(item.variantTitle || item.category) && (
-                        <div className="text-xs text-ink-soft">
-                          {item.variantTitle || item.category}
+                    {/* Product */}
+                    <td className="px-5 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-surface-page">
+                          {item.imageUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={item.imageUrl} alt="" className="h-full w-full object-cover" />
+                          ) : (
+                            <IcImage className="h-4 w-4 text-ink-soft" />
+                          )}
                         </div>
-                      )}
+                        <div className="min-w-0">
+                          <div className="truncate font-semibold text-ink">
+                            {item.productName}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-1.5 text-xs text-ink-soft">
+                            {item.variantTitle && <span>{item.variantTitle}</span>}
+                            {item.vendor && <span>· {item.vendor}</span>}
+                            {item.tags.slice(0, 2).map((tg) => (
+                              <span
+                                key={tg}
+                                className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-ink-muted"
+                              >
+                                {tg}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
                     </td>
-                    <td className="px-3 py-3.5 text-ink-muted" dir="ltr">
+
+                    {/* SKU */}
+                    <td className="px-3 py-3 text-ink-muted" dir="ltr">
                       {item.sku || "—"}
                     </td>
-                    <td className="px-3 py-3.5 text-end text-ink-muted">
-                      {num(incoming, lang)}
-                    </td>
-                    <td className="px-3 py-3.5 text-end text-ink-muted">
-                      {num(committed, lang)}
-                    </td>
-                    <td className="px-3 py-3.5 text-end">
-                      {singleLoc ? (
-                        <EditableQty
-                          value={lvl!.onHand}
-                          onSave={async (v) => {
-                            patchLevel(item.id, loc, { onHand: v });
-                            await setLevel(item.id, loc, { onHand: v });
-                          }}
-                        />
-                      ) : (
-                        <span className="font-semibold text-ink">
-                          {num(available, lang)}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-3 py-3.5 text-center">
-                      <Badge className={stockStatusTone[status]}>
-                        {t(stockStatusKey[status])}
+
+                    {/* Status */}
+                    <td className="px-3 py-3">
+                      <Badge className={statusTone[item.status]}>
+                        {t(statusKey[item.status])}
                       </Badge>
                     </td>
-                    <td className="px-5 py-3.5 text-end">
+
+                    {/* Price */}
+                    <td className="px-3 py-3 text-end">
+                      {item.price != null ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          {item.compareAtPrice != null &&
+                            item.compareAtPrice > item.price && (
+                              <span className="text-xs text-ink-soft line-through">
+                                {egp(item.compareAtPrice, lang)}
+                              </span>
+                            )}
+                          <span className="font-semibold text-ink">
+                            {egp(item.price, lang)}
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="text-ink-soft">—</span>
+                      )}
+                    </td>
+
+                    {/* Available: number + status + meter, editable in a single location */}
+                    <td className="px-3 py-3" onClick={(e) => singleLoc && e.stopPropagation()}>
+                      <div className="flex items-center gap-2.5">
+                        {singleLoc ? (
+                          <EditableQty
+                            value={levelAt(item, loc).onHand}
+                            onSave={async (v) => {
+                              patchLevel(item.id, loc, v);
+                              await setLevel(item.id, loc, { onHand: v });
+                            }}
+                          />
+                        ) : (
+                          <span className="w-9 text-end font-semibold text-ink">
+                            {num(available, lang)}
+                          </span>
+                        )}
+                        <div className="hidden flex-1 sm:block">
+                          <div className="h-1.5 w-full max-w-[120px] overflow-hidden rounded-full bg-slate-100">
+                            <div
+                              className={`h-full rounded-full ${barColor}`}
+                              style={{ width: `${barPct}%` }}
+                            />
+                          </div>
+                        </div>
+                        <Badge className={stockStatusTone[st]}>
+                          {t(stockStatusKey[st])}
+                        </Badge>
+                      </div>
+                    </td>
+
+                    {/* Actions */}
+                    <td className="px-5 py-3 text-end" onClick={(e) => e.stopPropagation()}>
                       <button
                         onClick={() => onDelete(item)}
-                        className="btn-ghost h-8 px-2 text-xs text-rose-600 hover:bg-rose-50"
+                        className="btn-ghost h-8 w-8 p-0 text-rose-600 opacity-0 hover:bg-rose-50 group-hover:opacity-100"
+                        aria-label="delete"
                       >
                         <IcTrash className="h-4 w-4" />
                       </button>
@@ -273,22 +481,29 @@ export default function InventoryPage() {
                 <IcInventory className="h-6 w-6" />
               </span>
               <div>
-                <div className="font-semibold text-ink">{t("no_inventory")}</div>
-                <p className="mt-1 text-sm text-ink-soft">{t("no_inventory_hint")}</p>
+                <div className="font-semibold text-ink">
+                  {filtersActive ? t("no_inventory") : t("no_inventory")}
+                </div>
+                <p className="mt-1 text-sm text-ink-soft">
+                  {filtersActive ? t("clear_filters") : t("no_inventory_hint")}
+                </p>
               </div>
-              <button
-                className="btn-primary mt-1"
-                onClick={() => setDrawer(emptyItem())}
-              >
-                <IcPlus className="h-4 w-4" /> {t("add_item")}
-              </button>
+              {filtersActive ? (
+                <button className="btn-outline mt-1" onClick={clearFilters}>
+                  <IcX className="h-4 w-4" /> {t("clear_filters")}
+                </button>
+              ) : (
+                <button className="btn-primary mt-1" onClick={() => setDrawer(emptyItem())}>
+                  <IcPlus className="h-4 w-4" /> {t("add_item")}
+                </button>
+              )}
             </div>
           )}
         </div>
       </Card>
 
       {drawer && (
-        <ItemDrawer
+        <ProductEditor
           item={drawer}
           locations={locations}
           onClose={() => setDrawer(null)}
@@ -302,7 +517,7 @@ export default function InventoryPage() {
   );
 }
 
-// ---- Inline editable quantity ------------------------------------------------
+// ---- Inline editable quantity ----------------------------------------------
 function EditableQty({
   value,
   onSave,
@@ -339,256 +554,7 @@ function EditableQty({
       onKeyDown={(e) => {
         if (e.key === "Enter") (e.target as HTMLInputElement).blur();
       }}
-      className="h-9 w-20 rounded-lg border border-line bg-white px-2 text-end text-sm font-semibold text-ink outline-none focus:border-brand-600 disabled:opacity-50"
+      className="h-9 w-16 rounded-lg border border-line bg-white px-2 text-end text-sm font-semibold text-ink outline-none focus:border-brand-600 disabled:opacity-50"
     />
-  );
-}
-
-// ---- Item drawer (details + per-location quantities) -------------------------
-function ItemDrawer({
-  item,
-  locations,
-  onClose,
-  onSaved,
-}: {
-  item: InventoryItem;
-  locations: Location[];
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const { t, lang } = useI18n();
-  const isNew = !item.id;
-  const [draft, setDraft] = useState<InventoryItem>(item);
-  const [saving, setSaving] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-
-  function set<K extends keyof InventoryItem>(k: K, v: InventoryItem[K]) {
-    setDraft((d) => ({ ...d, [k]: v }));
-  }
-
-  function levelFor(locationId: string) {
-    return (
-      draft.levels.find((l) => l.locationId === locationId) ?? {
-        locationId,
-        onHand: 0,
-        committed: 0,
-        incoming: 0,
-        available: 0,
-      }
-    );
-  }
-
-  function setLevelField(locationId: string, onHand: number) {
-    setDraft((d) => {
-      const existing = d.levels.find((l) => l.locationId === locationId);
-      const next = existing
-        ? d.levels.map((l) =>
-            l.locationId === locationId
-              ? { ...l, onHand, available: onHand - l.committed }
-              : l,
-          )
-        : [
-            ...d.levels,
-            { locationId, onHand, committed: 0, incoming: 0, available: onHand },
-          ];
-      return { ...d, levels: next };
-    });
-  }
-
-  async function save() {
-    if (!draft.productName.trim()) {
-      setErr("name_required");
-      return;
-    }
-    setSaving(true);
-    setErr(null);
-    if (isNew) {
-      const res = await createItem(draft);
-      if (!res.ok) {
-        setErr(res.error);
-        setSaving(false);
-        return;
-      }
-    } else {
-      const res = await updateItem(draft.id, draft);
-      if (!res.ok) {
-        setErr(res.error);
-        setSaving(false);
-        return;
-      }
-      // Persist any changed on-hand levels.
-      for (const l of draft.levels) {
-        const orig = item.levels.find((o) => o.locationId === l.locationId);
-        if (!orig || orig.onHand !== l.onHand) {
-          await setLevel(draft.id, l.locationId, { onHand: l.onHand });
-        }
-      }
-    }
-    setSaving(false);
-    onSaved();
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex">
-      <div className="flex-1 bg-black/30" onClick={onClose} />
-      <div className="flex h-full w-full max-w-md flex-col bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-line px-5 py-4">
-          <h2 className="text-base font-bold text-ink">
-            {isNew ? t("new_item") : t("edit_item")}
-          </h2>
-          <button onClick={onClose} className="btn-ghost h-8 w-8 p-0">
-            <IcX className="h-4 w-4" />
-          </button>
-        </div>
-
-        <div className="flex-1 space-y-5 overflow-y-auto p-5">
-          <div className="space-y-3">
-            <Field label={t("fld_product_name")}>
-              <input
-                value={draft.productName}
-                onChange={(e) => set("productName", e.target.value)}
-                className="inp"
-              />
-            </Field>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label={t("fld_variant")}>
-                <input
-                  value={draft.variantTitle ?? ""}
-                  onChange={(e) => set("variantTitle", e.target.value)}
-                  className="inp"
-                />
-              </Field>
-              <Field label={t("fld_category")}>
-                <input
-                  value={draft.category ?? ""}
-                  onChange={(e) => set("category", e.target.value)}
-                  className="inp"
-                />
-              </Field>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label={t("fld_sku")}>
-                <input
-                  value={draft.sku ?? ""}
-                  onChange={(e) => set("sku", e.target.value)}
-                  className="inp"
-                  dir="ltr"
-                />
-              </Field>
-              <Field label={t("fld_barcode")}>
-                <input
-                  value={draft.barcode ?? ""}
-                  onChange={(e) => set("barcode", e.target.value)}
-                  className="inp"
-                  dir="ltr"
-                />
-              </Field>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label={t("fld_price")}>
-                <input
-                  type="number"
-                  value={draft.price ?? ""}
-                  onChange={(e) =>
-                    set("price", e.target.value === "" ? null : Number(e.target.value))
-                  }
-                  className="inp"
-                />
-              </Field>
-              <Field label={t("fld_cost")}>
-                <input
-                  type="number"
-                  value={draft.cost ?? ""}
-                  onChange={(e) =>
-                    set("cost", e.target.value === "" ? null : Number(e.target.value))
-                  }
-                  className="inp"
-                />
-              </Field>
-            </div>
-            <label className="flex items-center gap-2.5 text-sm text-ink">
-              <input
-                type="checkbox"
-                checked={draft.tracked}
-                onChange={(e) => set("tracked", e.target.checked)}
-                className="h-4 w-4 accent-brand-600"
-              />
-              {t("fld_tracked")}
-            </label>
-          </div>
-
-          {/* Quantities by location */}
-          <div>
-            <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-ink">
-              <IcLocation className="h-4 w-4 text-ink-soft" />
-              {t("quantities_by_location")}
-            </h3>
-            {locations.length === 0 ? (
-              <p className="text-sm text-ink-soft">{t("no_locations")}</p>
-            ) : (
-              <div className="space-y-2">
-                {locations.map((l) => {
-                  const lv = levelFor(l.id);
-                  return (
-                    <div
-                      key={l.id}
-                      className="flex items-center justify-between gap-3 rounded-xl border border-line px-3 py-2.5"
-                    >
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-medium text-ink">
-                          {l.name}
-                        </div>
-                        <div className="text-xs text-ink-soft">
-                          {t("col_available")}: {num(lv.onHand - lv.committed, lang)}
-                        </div>
-                      </div>
-                      <input
-                        type="number"
-                        min={0}
-                        value={lv.onHand}
-                        onChange={(e) =>
-                          setLevelField(l.id, Math.max(0, Number(e.target.value) || 0))
-                        }
-                        className="h-9 w-20 rounded-lg border border-line bg-white px-2 text-end text-sm font-semibold text-ink outline-none focus:border-brand-600"
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {err && (
-            <p className="text-sm text-rose-600">
-              {err === "name_required"
-                ? lang === "ar"
-                  ? "اسم المنتج مطلوب"
-                  : "Product name is required"
-                : err === "not_configured"
-                  ? t("supabase_missing")
-                  : err}
-            </p>
-          )}
-        </div>
-
-        <div className="flex items-center justify-end gap-2 border-t border-line px-5 py-4">
-          <button onClick={onClose} className="btn-outline">
-            {t("cancel")}
-          </button>
-          <button onClick={save} disabled={saving} className="btn-primary">
-            {saving ? t("saving") : t("save")}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <label className="block">
-      <span className="mb-1 block text-xs font-medium text-ink-muted">{label}</span>
-      {children}
-    </label>
   );
 }

@@ -29,19 +29,50 @@ export type Level = {
 };
 
 /** A stock-keeping unit with its per-location levels. */
+export type ProductStatus = "active" | "draft" | "archived";
+
 export type InventoryItem = {
   id: string;
-  productName: string;
+  productName: string; // acts as the product title
+  description: string | null;
+  imageUrl: string | null; // primary image (= images[0])
+  images: string[]; // full media gallery
+  status: ProductStatus;
+  vendor: string | null;
+  productType: string | null;
+  tags: string[];
   variantTitle: string | null;
   sku: string | null;
   barcode: string | null;
   category: string | null;
   price: number | null;
+  compareAtPrice: number | null;
   cost: number | null;
   tracked: boolean;
   levels: Level[];
   createdAt: string;
   updatedAt: string;
+};
+
+// ---- Pricing math (drives the profit/margin recommendations) ----------------
+export function profit(price: number | null, cost: number | null): number | null {
+  if (price == null || cost == null) return null;
+  return Math.round((price - cost) * 100) / 100;
+}
+export function margin(price: number | null, cost: number | null): number | null {
+  if (price == null || cost == null || price <= 0) return null;
+  return Math.round(((price - cost) / price) * 1000) / 10; // one decimal %
+}
+
+export const statusTone: Record<ProductStatus, string> = {
+  active: tone.green,
+  draft: tone.amber,
+  archived: tone.slate,
+};
+export const statusKey: Record<ProductStatus, DictKey> = {
+  active: "st_active",
+  draft: "st_draft",
+  archived: "st_archived",
 };
 
 // ---- Stock status (matches the products page badge language) ----------------
@@ -116,11 +147,19 @@ export function emptyItem(): InventoryItem {
   return {
     id: "",
     productName: "",
+    description: "",
+    imageUrl: "",
+    images: [],
+    status: "active",
+    vendor: "",
+    productType: "",
+    tags: [],
     variantTitle: "",
     sku: "",
     barcode: "",
     category: "",
     price: null,
+    compareAtPrice: null,
     cost: null,
     tracked: true,
     levels: [],
