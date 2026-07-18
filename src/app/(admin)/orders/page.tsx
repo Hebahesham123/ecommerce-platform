@@ -1,9 +1,11 @@
 "use client";
 
-import { Fragment, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useI18n, egp, num } from "@/lib/i18n";
 import {
   orders,
+  labels,
+  salesSeries,
   type Order,
   type Lifecycle,
   type Payment,
@@ -11,90 +13,106 @@ import {
   type PayMethod,
 } from "@/lib/data";
 import { PageHeader } from "@/components/page-header";
-import { Card, Badge, Dot } from "@/components/ui";
+import { Card } from "@/components/ui";
 import {
-  LifecycleBadge,
-  PaymentBadge,
-  FulfillmentBadge,
-} from "@/components/status";
-import {
-  KpiRow,
-  StatTile,
+  KpiStrip,
+  StatusPill,
+  ViewTabs,
+  Checkbox,
   Toolbar,
   SearchInput,
   Select,
-  SegBtn,
+  type PillTone,
 } from "@/components/dashboard-ui";
-import { IcOrders, IcCash, IcAlert, IcCourier, IcX } from "@/components/icons";
+import { IcFile, IcX, IcChevron } from "@/components/icons";
 
-type QuickTab = "all" | "attention" | "today";
-type LifecycleFilter = "all" | Lifecycle;
-type PaymentFilter = "all" | Payment;
-type FulfillmentFilter = "all" | Fulfillment;
-type MethodFilter = "all" | PayMethod;
+type Tab = "all" | "unfulfilled" | "unpaid" | "open" | "attention";
 type SortKey = "newest" | "oldest" | "total_high" | "total_low";
 
-type OrderFlag = NonNullable<Order["flag"]>;
-
-const flagTone: Record<OrderFlag, string> = {
-  fake_cod: "bg-rose-50 text-rose-700",
-  return: "bg-slate-100 text-slate-600",
-  unpaid_delivered: "bg-amber-50 text-amber-700",
+const paymentPill: Record<Payment, PillTone> = {
+  pending: "warning",
+  authorized: "info",
+  paid: "success",
+  refunded: "neutral",
 };
-const flagDot: Record<OrderFlag, string> = {
-  fake_cod: "bg-rose-500",
-  return: "bg-slate-400",
-  unpaid_delivered: "bg-amber-500",
+const fulfillmentPill: Record<Fulfillment, PillTone> = {
+  unfulfilled: "neutral",
+  assigned: "info",
+  out: "attention",
+  delivered: "success",
+  returned: "critical",
+};
+
+type OrderFlag = NonNullable<Order["flag"]>;
+const flagPill: Record<OrderFlag, PillTone> = {
+  fake_cod: "critical",
+  return: "neutral",
+  unpaid_delivered: "warning",
 };
 
 export default function OrdersPage() {
   const { t, lang } = useI18n();
-
-  const [quickTab, setQuickTab] = useState<QuickTab>("all");
+  const [tab, setTab] = useState<Tab>("all");
   const [q, setQ] = useState("");
-  const [lifecycle, setLifecycle] = useState<LifecycleFilter>("all");
-  const [payment, setPayment] = useState<PaymentFilter>("all");
-  const [fulfillment, setFulfillment] = useState<FulfillmentFilter>("all");
-  const [method, setMethod] = useState<MethodFilter>("all");
+  const [payment, setPayment] = useState<"all" | Payment>("all");
+  const [fulfillment, setFulfillment] = useState<"all" | Fulfillment>("all");
+  const [method, setMethod] = useState<"all" | PayMethod>("all");
   const [sort, setSort] = useState<SortKey>("newest");
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  function flagLabel(f: OrderFlag) {
-    if (f === "fake_cod") return lang === "ar" ? "دفع وهمي" : "Fake COD";
-    if (f === "return") return t("f_returned");
-    return lang === "ar" ? "تم التسليم بدون تحصيل" : "Delivered unpaid";
-  }
+  const ar = lang === "ar";
+  const fmtDate = (d: string) =>
+    new Date(d).toLocaleDateString(ar ? "ar-EG" : "en-US", {
+      month: "short",
+      day: "numeric",
+    });
 
-  // ---- KPIs (computed over the full dataset, independent of active filters) ----
-  const latestDate = useMemo(
-    () => orders.reduce((max, o) => (o.date > max ? o.date : max), orders[0]?.date ?? ""),
-    [],
-  );
+  const flagLabel = (f: OrderFlag) =>
+    f === "fake_cod"
+      ? ar
+        ? "اشتباه وهمي"
+        : "Suspected fake"
+      : f === "unpaid_delivered"
+        ? ar
+          ? "سُلّم بدون تحصيل"
+          : "Unpaid, delivered"
+        : ar
+          ? "مرتجع"
+          : "Return";
 
+  // ---- KPIs + sparklines ----
   const kpi = useMemo(() => {
     const revenue = orders.reduce((s, o) => s + o.total, 0);
-    const codOrders = orders.filter((o) => o.method === "cod");
-    const attention = orders.filter((o) => o.flag);
-    const uncollected = codOrders
-      .filter((o) => o.payment !== "paid" && o.payment !== "refunded")
-      .reduce((s, o) => s + o.total, 0);
+    const cod = orders.filter((o) => o.method === "cod").length;
+    const unfulfilled = orders.filter((o) => o.fulfillment === "unfulfilled").length;
+    const delivered = orders.filter((o) => o.fulfillment === "delivered").length;
     return {
-      total: orders.length,
+      count: orders.length,
       revenue,
-      codCount: codOrders.length,
-      codShare: orders.length ? Math.round((codOrders.length / orders.length) * 100) : 0,
-      attentionCount: attention.length,
-      uncollected,
+      codShare: Math.round((cod / orders.length) * 100),
+      unfulfilled,
+      delivered,
     };
   }, []);
+  const ordersSpark = salesSeries.map((s) => s.orders);
+  const salesSpark = salesSeries.map((s) => s.sales);
 
-  // ---- Filter + sort ----
-  const filteredSorted = useMemo(() => {
+  const tabs: { key: Tab; label: string }[] = [
+    { key: "all", label: t("filter_all") },
+    { key: "unfulfilled", label: t("f_unfulfilled") },
+    { key: "unpaid", label: t("p_pending") },
+    { key: "open", label: ar ? "مفتوحة" : "Open" },
+    { key: "attention", label: t("needs_attention") },
+  ];
+
+  const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     const rows = orders.filter((o) => {
-      if (quickTab === "attention" && !o.flag) return false;
-      if (quickTab === "today" && o.date !== latestDate) return false;
-      if (lifecycle !== "all" && o.lifecycle !== lifecycle) return false;
+      if (tab === "unfulfilled" && o.fulfillment !== "unfulfilled") return false;
+      if (tab === "unpaid" && o.payment !== "pending") return false;
+      if (tab === "open" && (o.lifecycle === "completed" || o.lifecycle === "cancelled"))
+        return false;
+      if (tab === "attention" && !o.flag) return false;
       if (payment !== "all" && o.payment !== payment) return false;
       if (fulfillment !== "all" && o.fulfillment !== fulfillment) return false;
       if (method !== "all" && o.method !== method) return false;
@@ -108,261 +126,209 @@ export default function OrdersPage() {
     sorted.sort((a, b) => {
       switch (sort) {
         case "oldest":
-          return a.date.localeCompare(b.date) || a.id.localeCompare(b.id);
+          return a.date.localeCompare(b.date);
         case "total_high":
           return b.total - a.total;
         case "total_low":
           return a.total - b.total;
         default:
-          return b.date.localeCompare(a.date) || b.id.localeCompare(a.id);
+          return b.date.localeCompare(a.date) || Number(b.id) - Number(a.id);
       }
     });
     return sorted;
-  }, [q, quickTab, lifecycle, payment, fulfillment, method, sort, latestDate]);
+  }, [tab, q, payment, fulfillment, method, sort]);
 
-  const filtersActive =
-    q !== "" ||
-    quickTab !== "all" ||
-    lifecycle !== "all" ||
-    payment !== "all" ||
-    fulfillment !== "all" ||
-    method !== "all";
+  const filtersActive = q !== "" || payment !== "all" || fulfillment !== "all" || method !== "all";
+  const allSelected = filtered.length > 0 && filtered.every((o) => selected.has(o.id));
+  const someSelected = filtered.some((o) => selected.has(o.id));
 
-  function clearFilters() {
-    setQ("");
-    setQuickTab("all");
-    setLifecycle("all");
-    setPayment("all");
-    setFulfillment("all");
-    setMethod("all");
+  function toggleAll() {
+    setSelected((prev) => {
+      if (allSelected) return new Set();
+      return new Set(filtered.map((o) => o.id));
+    });
   }
-
-  const sortLabels: Record<SortKey, string> = {
-    newest: t("sort_newest"),
-    oldest: t("sort_oldest"),
-    total_high: lang === "ar" ? "الإجمالي: الأعلى أولاً" : "Total: High to low",
-    total_low: lang === "ar" ? "الإجمالي: الأقل أولاً" : "Total: Low to high",
-  };
+  function toggleOne(id: string) {
+    setSelected((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  }
 
   return (
     <>
       <PageHeader
         title={t("nav_orders")}
-        subtitle={lang === "ar" ? "إدارة الطلبات بحالة ثلاثية المحاور" : "Three-axis order management"}
-        actions={<button className="btn-outline">{t("export")}</button>}
+        subtitle={ar ? "إدارة ومتابعة الطلبات" : "Manage & track orders"}
+        actions={
+          <>
+            <button className="btn-outline">{t("export")}</button>
+            <button className="btn-primary">{ar ? "إنشاء طلب" : "Create order"}</button>
+          </>
+        }
       />
 
-      {/* ---- KPI tiles ---- */}
       <div className="mb-4">
-        <KpiRow cols={5}>
-          <StatTile icon={IcOrders} label={t("kpi_orders")} value={num(kpi.total, lang)} accent="brand" />
-          <StatTile icon={IcCash} label={t("kpi_revenue")} value={egp(kpi.revenue, lang)} accent="emerald" />
-          <StatTile
-            icon={IcCourier}
-            label={t("cod")}
-            value={num(kpi.codCount, lang)}
-            sub={`${num(kpi.codShare, lang)}%`}
-            accent="sky"
-          />
-          <StatTile
-            icon={IcAlert}
-            label={t("needs_attention")}
-            value={num(kpi.attentionCount, lang)}
-            accent="amber"
-            active={quickTab === "attention"}
-            onClick={() => setQuickTab(quickTab === "attention" ? "all" : "attention")}
-          />
-          <StatTile
-            icon={IcCash}
-            label={t("kpi_pending_cod")}
-            value={egp(kpi.uncollected, lang)}
-            accent="rose"
-          />
-        </KpiRow>
+        <KpiStrip
+          period={
+            <span className="inline-flex items-center gap-1.5">
+              {ar ? "اليوم" : "Today"}
+              <IcChevron className="h-3.5 w-3.5 rotate-90 text-ink-soft" />
+            </span>
+          }
+          segments={[
+            { label: t("kpi_orders"), value: num(kpi.count, lang), delta: 12, data: ordersSpark, tone: "brand" },
+            { label: t("kpi_revenue"), value: egp(kpi.revenue, lang), delta: 8, data: salesSpark, tone: "emerald" },
+            { label: t("kpi_cod_share"), value: `${kpi.codShare}%`, delta: -4, data: ordersSpark, tone: "slate" },
+            {
+              label: t("f_unfulfilled"),
+              value: num(kpi.unfulfilled, lang),
+              tone: "slate",
+              active: tab === "unfulfilled",
+              onClick: () => setTab(tab === "unfulfilled" ? "all" : "unfulfilled"),
+            },
+            { label: t("f_delivered"), value: num(kpi.delivered, lang), data: ordersSpark, tone: "emerald" },
+          ]}
+        />
       </div>
 
       <Card className="overflow-hidden">
-        {/* ---- Quick tabs ---- */}
-        <Toolbar>
-          <div className="flex flex-wrap gap-1.5">
-            <SegBtn active={quickTab === "all"} onClick={() => setQuickTab("all")}>
-              {t("filter_all")}
-            </SegBtn>
-            <SegBtn active={quickTab === "attention"} onClick={() => setQuickTab("attention")}>
-              <IcAlert className="h-3.5 w-3.5" />
-              {t("needs_attention")}
-            </SegBtn>
-            <SegBtn active={quickTab === "today"} onClick={() => setQuickTab("today")}>
-              {lang === "ar" ? "اليوم" : "Today"}
-            </SegBtn>
-          </div>
-        </Toolbar>
+        {/* Tabs */}
+        <div className="flex items-center gap-2 border-b border-line px-3 py-2">
+          <ViewTabs tabs={tabs} active={tab} onChange={(k) => setTab(k as Tab)} />
+        </div>
 
-        {/* ---- Filters ---- */}
-        <Toolbar>
-          <SearchInput value={q} onChange={setQ} placeholder={t("search")} />
-
-          <Select value={lifecycle} onChange={(v) => setLifecycle(v as LifecycleFilter)}>
-            <option value="all">{`${t("col_lifecycle")}: ${t("filter_all")}`}</option>
-            <option value="placed">{t("s_placed")}</option>
-            <option value="confirmed">{t("s_confirmed")}</option>
-            <option value="packed">{t("s_packed")}</option>
-            <option value="shipped">{t("s_shipped")}</option>
-            <option value="completed">{t("s_completed")}</option>
-            <option value="cancelled">{t("s_cancelled")}</option>
-          </Select>
-
-          <Select value={payment} onChange={(v) => setPayment(v as PaymentFilter)}>
-            <option value="all">{`${t("col_payment")}: ${t("filter_all")}`}</option>
-            <option value="pending">{t("p_pending")}</option>
-            <option value="authorized">{t("p_authorized")}</option>
-            <option value="paid">{t("p_paid")}</option>
-            <option value="refunded">{t("p_refunded")}</option>
-          </Select>
-
-          <Select value={fulfillment} onChange={(v) => setFulfillment(v as FulfillmentFilter)}>
-            <option value="all">{`${t("col_fulfillment")}: ${t("filter_all")}`}</option>
-            <option value="unfulfilled">{t("f_unfulfilled")}</option>
-            <option value="assigned">{t("f_assigned")}</option>
-            <option value="out">{t("f_out")}</option>
-            <option value="delivered">{t("f_delivered")}</option>
-            <option value="returned">{t("f_returned")}</option>
-          </Select>
-
-          <Select value={method} onChange={(v) => setMethod(v as MethodFilter)}>
-            <option value="all">{`${t("col_method")}: ${t("filter_all")}`}</option>
-            <option value="cod">{t("cod")}</option>
-            <option value="card">{t("card")}</option>
-            <option value="wallet">{t("wallet")}</option>
-          </Select>
-
-          <Select value={sort} onChange={(v) => setSort(v as SortKey)}>
-            {(Object.keys(sortLabels) as SortKey[]).map((k) => (
-              <option key={k} value={k}>
-                {`${t("sort_label")}: ${sortLabels[k]}`}
-              </option>
-            ))}
-          </Select>
-
-          {filtersActive && (
-            <button
-              onClick={clearFilters}
-              className="btn-ghost h-9 gap-1 px-2.5 text-xs text-ink-muted"
-            >
-              <IcX className="h-3.5 w-3.5" /> {t("clear_filters")}
+        {/* Toolbar or bulk bar */}
+        {someSelected ? (
+          <div className="flex items-center gap-3 border-b border-line bg-brand-50/50 px-3 py-2.5">
+            <span className="text-sm font-medium text-ink">
+              {num([...selected].length, lang)} {ar ? "محدد" : "selected"}
+            </span>
+            <button className="btn-outline h-8 px-3 text-xs">{ar ? "تعليم كمنفّذ" : "Mark fulfilled"}</button>
+            <button className="btn-outline h-8 px-3 text-xs">{t("export")}</button>
+            <button onClick={() => setSelected(new Set())} className="btn-ghost ms-auto h-8 px-2 text-xs">
+              <IcX className="h-3.5 w-3.5" /> {ar ? "إلغاء التحديد" : "Clear"}
             </button>
-          )}
+          </div>
+        ) : (
+          <Toolbar>
+            <SearchInput value={q} onChange={setQ} placeholder={t("search")} />
+            <Select value={payment} onChange={(v) => setPayment(v as "all" | Payment)}>
+              <option value="all">{t("col_payment")}</option>
+              {(["pending", "authorized", "paid", "refunded"] as Payment[]).map((p) => (
+                <option key={p} value={p}>{t(labels.paymentKey[p])}</option>
+              ))}
+            </Select>
+            <Select value={fulfillment} onChange={(v) => setFulfillment(v as "all" | Fulfillment)}>
+              <option value="all">{t("col_fulfillment")}</option>
+              {(["unfulfilled", "assigned", "out", "delivered", "returned"] as Fulfillment[]).map((f) => (
+                <option key={f} value={f}>{t(labels.fulfillmentKey[f])}</option>
+              ))}
+            </Select>
+            <Select value={method} onChange={(v) => setMethod(v as "all" | PayMethod)}>
+              <option value="all">{ar ? "طريقة الدفع" : "Method"}</option>
+              {(["cod", "card", "wallet"] as PayMethod[]).map((m) => (
+                <option key={m} value={m}>{t(labels.methodKey[m])}</option>
+              ))}
+            </Select>
+            <Select value={sort} onChange={(v) => setSort(v as SortKey)}>
+              <option value="newest">{t("sort_label")}: {ar ? "الأحدث" : "Newest"}</option>
+              <option value="oldest">{ar ? "الأقدم" : "Oldest"}</option>
+              <option value="total_high">{ar ? "الأعلى قيمة" : "Total high → low"}</option>
+              <option value="total_low">{ar ? "الأقل قيمة" : "Total low → high"}</option>
+            </Select>
+            {filtersActive && (
+              <button
+                onClick={() => { setPayment("all"); setFulfillment("all"); setMethod("all"); setQ(""); }}
+                className="btn-ghost h-9 gap-1 px-2.5 text-xs text-ink-muted"
+              >
+                <IcX className="h-3.5 w-3.5" /> {t("clear_filters")}
+              </button>
+            )}
+            <span className="ms-auto text-xs text-ink-soft">
+              {num(filtered.length, lang)} {t("results_word")}
+            </span>
+          </Toolbar>
+        )}
 
-          <span className="ms-auto text-xs text-ink-soft">
-            {num(filteredSorted.length, lang)} {t("results_word")}
-          </span>
-        </Toolbar>
-
-        {/* ---- Table ---- */}
+        {/* Table */}
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[960px] text-sm">
+          <table className="w-full min-w-[900px] text-sm">
             <thead>
               <tr className="border-b border-line text-xs text-ink-soft">
-                <th className="px-5 py-3 text-start font-medium">{t("col_order")}</th>
-                <th className="px-3 py-3 text-start font-medium">{t("col_customer")}</th>
-                <th className="px-3 py-3 text-start font-medium">{t("col_governorate")}</th>
+                <th className="w-10 ps-5 pe-2 py-3">
+                  <Checkbox checked={allSelected} indeterminate={someSelected} onChange={toggleAll} />
+                </th>
+                <th className="px-3 py-3 text-start font-medium">{t("col_order")}</th>
                 <th className="px-3 py-3 text-start font-medium">{t("col_date")}</th>
+                <th className="px-3 py-3 text-start font-medium">{t("col_customer")}</th>
                 <th className="px-3 py-3 text-end font-medium">{t("col_total")}</th>
                 <th className="px-3 py-3 text-start font-medium">{t("col_payment")}</th>
                 <th className="px-3 py-3 text-start font-medium">{t("col_fulfillment")}</th>
-                <th className="px-3 py-3 text-start font-medium">{t("col_lifecycle")}</th>
-                <th className="px-5 py-3 text-start font-medium">
-                  {lang === "ar" ? "تنبيه" : "Flag"}
-                </th>
+                <th className="px-5 py-3 text-start font-medium">{t("col_governorate")}</th>
               </tr>
             </thead>
             <tbody>
-              {filteredSorted.map((o) => {
-                const isOpen = expanded === o.id;
+              {filtered.map((o) => {
+                const sel = selected.has(o.id);
                 return (
-                  <Fragment key={o.id}>
-                    <tr
-                      onClick={() => setExpanded(isOpen ? null : o.id)}
-                      className={`cursor-pointer border-b border-line transition-colors last:border-0 hover:bg-surface-page ${
-                        isOpen ? "bg-surface-page" : ""
-                      }`}
-                    >
-                      <td className="px-5 py-3.5">
-                        <div className="font-semibold text-ink" dir="ltr">
-                          #{o.id}
-                        </div>
-                      </td>
-                      <td className="px-3 py-3.5">
-                        <div className="text-ink">{o.customer}</div>
-                        <div className="text-xs text-ink-soft" dir="ltr">{o.phone}</div>
-                      </td>
-                      <td className="px-3 py-3.5 text-ink-muted">{o.governorate}</td>
-                      <td className="px-3 py-3.5 text-ink-muted" dir="ltr">{o.date}</td>
-                      <td className="px-3 py-3.5 text-end font-semibold text-ink">
-                        {egp(o.total, lang)}
-                      </td>
-                      <td className="px-3 py-3.5">
-                        <PaymentBadge v={o.payment} method={o.method} />
-                      </td>
-                      <td className="px-3 py-3.5">
-                        <FulfillmentBadge v={o.fulfillment} />
-                      </td>
-                      <td className="px-3 py-3.5">
-                        <LifecycleBadge v={o.lifecycle} />
-                      </td>
-                      <td className="px-5 py-3.5">
-                        {o.flag ? (
-                          <Badge className={`gap-1.5 ${flagTone[o.flag]}`}>
-                            <Dot className={flagDot[o.flag]} />
-                            {flagLabel(o.flag)}
-                          </Badge>
-                        ) : (
-                          <span className="text-ink-soft">—</span>
-                        )}
-                      </td>
-                    </tr>
-                    {isOpen && (
-                      <tr className="border-b border-line bg-surface-page/60 last:border-0">
-                        <td colSpan={9} className="px-5 py-3 text-xs text-ink-muted">
-                          <div className="flex flex-wrap items-center gap-x-6 gap-y-1.5">
-                            <span>
-                              {t("col_courier")}:{" "}
-                              <span className="font-medium text-ink">
-                                {o.courier ?? (lang === "ar" ? "لم يُعيّن بعد" : "Not assigned")}
-                              </span>
-                            </span>
-                            {o.flag && (
-                              <span>
-                                {lang === "ar" ? "ملاحظة: " : "Note: "}
-                                <span className="font-medium text-ink">{flagLabel(o.flag)}</span>
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
+                  <tr
+                    key={o.id}
+                    className={`border-b border-line last:border-0 transition-colors hover:bg-surface-page ${
+                      sel ? "bg-brand-50/40" : ""
+                    }`}
+                  >
+                    <td className="ps-5 pe-2 py-3.5">
+                      <Checkbox checked={sel} onChange={() => toggleOne(o.id)} />
+                    </td>
+                    <td className="px-3 py-3.5">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-semibold text-ink">#{o.id}</span>
+                        {o.flag && <IcFile className="h-3.5 w-3.5 text-ink-soft" />}
+                      </div>
+                    </td>
+                    <td className="px-3 py-3.5 text-ink-muted">{fmtDate(o.date)}</td>
+                    <td className="px-3 py-3.5">
+                      <div className="font-medium text-ink">{o.customer}</div>
+                      <div className="text-xs text-ink-soft" dir="ltr">{o.phone}</div>
+                    </td>
+                    <td className="px-3 py-3.5 text-end font-semibold text-ink">
+                      {egp(o.total, lang)}
+                    </td>
+                    <td className="px-3 py-3.5">
+                      <StatusPill
+                        label={t(labels.paymentKey[o.payment])}
+                        tone={paymentPill[o.payment]}
+                        hollow={o.payment === "pending"}
+                      />
+                    </td>
+                    <td className="px-3 py-3.5">
+                      <StatusPill
+                        label={t(labels.fulfillmentKey[o.fulfillment])}
+                        tone={fulfillmentPill[o.fulfillment]}
+                        hollow={o.fulfillment === "unfulfilled"}
+                      />
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-ink-muted">{o.governorate}</span>
+                        {o.flag && <StatusPill label={flagLabel(o.flag)} tone={flagPill[o.flag]} />}
+                      </div>
+                    </td>
+                  </tr>
                 );
               })}
             </tbody>
           </table>
 
-          {filteredSorted.length === 0 && (
-            <div className="flex flex-col items-center gap-3 py-16 text-center">
-              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-brand-600">
-                <IcOrders className="h-6 w-6" />
-              </span>
-              <div>
-                <div className="font-semibold text-ink">
-                  {lang === "ar" ? "لا توجد طلبات مطابقة" : "No matching orders"}
-                </div>
-                <p className="mt-1 text-sm text-ink-soft">{t("clear_filters")}</p>
-              </div>
-              {filtersActive && (
-                <button className="btn-outline mt-1" onClick={clearFilters}>
-                  <IcX className="h-4 w-4" /> {t("clear_filters")}
-                </button>
-              )}
+          {filtered.length === 0 && (
+            <div className="py-16 text-center">
+              <div className="font-semibold text-ink">{ar ? "لا توجد طلبات مطابقة" : "No matching orders"}</div>
+              <p className="mt-1 text-sm text-ink-soft">
+                {ar ? "جرّب تعديل الفلاتر." : "Try adjusting your filters."}
+              </p>
             </div>
           )}
         </div>
