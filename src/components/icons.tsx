@@ -226,23 +226,3 @@ export const IcMeta = (p: P) => (
     <path d="M4 15c0-4 1.6-7 4-7 1.7 0 2.8 1.4 4 4 1.2-2.6 2.3-4 4-4 2.4 0 4 3 4 7 0 2-1 3-2.4 3-1.4 0-2.2-1-3.2-3-1-2-1.6-3-2.2-3s-1.2 1-2.2 3c-1 2-1.8 3-3.2 3C5 18 4 17 4 15Z" />
   </svg>
 );
-export const IcInventory = (p: P) => (
-  <svg {...base(p)}>
-    <path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5v-9Z" />
-    <path d="M3 7.5 12 12m0 0 9-4.5M12 12v9" />
-    <path d="m7.5 5.2 9 4.6" />
-  </svg>
-);
-export const IcLocation = (p: P) => (
-  <svg {...base(p)}>
-    <path d="M12 21s7-6.3 7-11a7 7 0 1 0-14 0c0 4.7 7 11 7 11Z" />
-    <circle cx="12" cy="10" r="2.6" />
-  </svg>
-);
-export const IcAccounting = (p: P) => (
-  <svg {...base(p)}>
-    <rect x="4" y="3" width="16" height="18" rx="2" />
-    <path d="M8 7h8M8 11h3M8 15h3" />
-    <path d="M15 11.5v4M13 13.5h4" />
-  </svg>
-);

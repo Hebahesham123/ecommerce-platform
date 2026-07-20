@@ -30,6 +30,3 @@ yarn-error.log*
 # editor
 .vscode/
 .idea/
-
-# local app bundles (contain other apps + their secrets)
-*.zip

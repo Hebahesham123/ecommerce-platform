@@ -202,6 +202,9 @@ export async function sendConversionEvent(
 }
 
 // ---- Pixel base code (for storefront injection) ----------------------------
+// Fires the standard e-commerce funnel automatically, tuned to Shopify theme
+// conventions (URL paths + form actions) and Arabic/English button text.
+// Events: PageView, ViewContent, Search, AddToCart, InitiateCheckout, Purchase.
 export function pixelBaseCode(pixelId: string): string {
   return `<!-- Meta Pixel Code -->
 <script>
@@ -212,6 +215,32 @@ t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,
 document,'script','https://connect.facebook.net/en_US/fbevents.js');
 fbq('init', '${pixelId}');
 fbq('track', 'PageView');
+(function(){
+  try{
+    var last={};
+    function T(ev,data){var n=Date.now();if(last[ev]&&n-last[ev]<800)return;last[ev]=n;fbq('track',ev,data||{});}
+    var path=(location.pathname||'').toLowerCase();
+    var title=document.title||'';
+    // Product page view
+    if(/\\/products\\//.test(path)){T('ViewContent',{content_type:'product',content_name:title,currency:'EGP'});}
+    // Purchase / order confirmation page
+    if(/(thank_you|\\/orders\\/|order-confirmation|order_received)/.test(path)){T('Purchase',{currency:'EGP',value:0});}
+    // Cart page = intent to checkout soon (ViewContent on cart is optional; skip)
+    document.addEventListener('submit',function(e){
+      var f=e.target;if(!f)return;var a=((f.getAttribute&&f.getAttribute('action'))||'').toLowerCase();
+      if(/\\/cart\\/add/.test(a)){T('AddToCart',{content_type:'product',content_name:title,currency:'EGP'});}
+      if(/\\/search/.test(a)){var q=f.querySelector&&f.querySelector('[name=q],[type=search]');T('Search',{search_string:q?q.value:''});}
+    },true);
+    document.addEventListener('click',function(e){
+      var t=e.target;var el=t&&t.closest?t.closest('a,button,input[type=submit],input[type=button]'):null;if(!el)return;
+      var name=((el.getAttribute&&el.getAttribute('name'))||'').toLowerCase();
+      var href=((el.getAttribute&&el.getAttribute('href'))||'').toLowerCase();
+      var txt=((el.textContent||el.value||'')+'').toLowerCase();
+      if(name==='add'||/add.?to.?cart|add to bag/.test(txt)||/أضف|اضف|السلة|أضِف للسلة|إضافة/.test(txt)){T('AddToCart',{content_type:'product',content_name:title,currency:'EGP'});}
+      if(name==='checkout'||/\\/checkout|\\/cart$/.test(href)||/checkout|proceed to|إتمام|الدفع|إنهاء الطلب|اتمام الشراء/.test(txt)){T('InitiateCheckout',{currency:'EGP'});}
+    },true);
+  }catch(err){}
+})();
 </script>
 <noscript><img height="1" width="1" style="display:none"
 src="https://www.facebook.com/tr?id=${pixelId}&ev=PageView&noscript=1"/></noscript>
