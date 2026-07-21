@@ -12,7 +12,7 @@
     "@supabase/supabase-js": "2.48.1",
     "jszip": "^3.10.1",
     "liquidjs": "^10.27.1",
-    "next": "15.1.6",
+    "next": "^15.5.20",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "recharts": "2.15.0"
