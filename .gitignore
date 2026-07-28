@@ -33,3 +33,7 @@ yarn-error.log*
 
 # local app bundles (contain other apps + their secrets)
 *.zip
+
+# product export contains private cost prices — never commit to a public repo
+products_export.csv
+*.csv
