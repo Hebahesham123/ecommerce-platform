@@ -15,7 +15,7 @@ export type Lang = "ar" | "en";
  * English is the optional fallback. Add keys here as new UI strings appear.
  */
 const dict = {
-  brand: { ar: "متجر الأزياء", en: "Fashion Store" },
+  brand: { ar: "بيوتي بار", en: "BeautyBar" },
   search: { ar: "ابحث عن طلب، منتج، عميل…", en: "Search orders, products, customers…" },
   greeting: { ar: "أهلاً، هبة", en: "Hi, Heba" },
 

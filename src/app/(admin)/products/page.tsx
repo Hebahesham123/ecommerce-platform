@@ -6,11 +6,14 @@ import { useI18n, egp, num } from "@/lib/i18n";
 import { products as demoProducts } from "@/lib/data";
 import {
   type InventoryItem,
+  type Location,
   type ProductStatus,
   stockStatus,
   totalAvailable,
+  emptyItem,
 } from "@/lib/inventory";
-import { listInventory } from "../inventory/actions";
+import { listInventory, listLocations } from "../inventory/actions";
+import { ProductEditor } from "../inventory/product-editor";
 import { PageHeader } from "@/components/page-header";
 import { Card, Badge } from "@/components/ui";
 import {
@@ -49,6 +52,7 @@ type Product = {
   available: number;
   priceMin: number | null;
   priceMax: number | null;
+  items: InventoryItem[];
 };
 
 function groupProducts(items: InventoryItem[]): Product[] {
@@ -74,6 +78,7 @@ function groupProducts(items: InventoryItem[]): Product[] {
       available,
       priceMin: prices.length ? Math.min(...prices) : null,
       priceMax: prices.length ? Math.max(...prices) : null,
+      items: group,
     });
   }
   return out;
@@ -92,6 +97,7 @@ function demoAsProducts(): Product[] {
     available: p.stock,
     priceMin: p.price,
     priceMax: p.price,
+    items: [],
   }));
 }
 
@@ -100,6 +106,7 @@ export default function ProductsPage() {
   const ar = lang === "ar";
   const router = useRouter();
   const [items, setItems] = useState<InventoryItem[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [tab, setTab] = useState<StatusTab>("all");
@@ -109,14 +116,23 @@ export default function ProductsPage() {
   const [sort, setSort] = useState<SortKey>("name_az");
   const [view, setView] = useState<View>("list");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [editItem, setEditItem] = useState<InventoryItem | null>(null);
 
+  async function load() {
+    const [inv, locs] = await Promise.all([listInventory(), listLocations()]);
+    if (inv.ok) setItems(inv.data);
+    if (locs.ok) setLocations(locs.data);
+    setLoading(false);
+  }
   useEffect(() => {
-    (async () => {
-      const inv = await listInventory();
-      if (inv.ok) setItems(inv.data);
-      setLoading(false);
-    })();
+    load();
   }, []);
+
+  // Open the full product editor for a product (its representative variant).
+  function openProduct(p: Product) {
+    if (p.items[0]) setEditItem(p.items[0]);
+    else router.push("/inventory");
+  }
 
   const allProducts = useMemo(
     () => (items.length ? groupProducts(items) : demoAsProducts()),
@@ -201,7 +217,7 @@ export default function ProductsPage() {
             <button className="btn-outline" onClick={() => router.push("/inventory")}>
               <IcInventory className="h-4 w-4" /> {t("manage_inventory")}
             </button>
-            <button className="btn-primary" onClick={() => router.push("/inventory?new=1")}>
+            <button className="btn-primary" onClick={() => setEditItem(emptyItem())}>
               <IcPlus className="h-4 w-4" /> {t("add_product")}
             </button>
           </>
@@ -277,11 +293,11 @@ export default function ProductsPage() {
                 {filtered.map((p) => {
                   const sel = selected.has(p.key);
                   return (
-                    <tr key={p.key} onClick={() => router.push("/inventory")}
+                    <tr key={p.key} onClick={() => openProduct(p)}
                       className={`cursor-pointer border-b border-line last:border-0 transition-colors hover:bg-surface-page ${sel ? "bg-brand-50/40" : ""}`}>
                       <td className="ps-5 pe-2 py-3" onClick={(e) => e.stopPropagation()}>
                         <Checkbox checked={sel} onChange={() =>
-                          setSelected((prev) => { const n = new Set(prev); n.has(p.key) ? n.delete(p.key) : n.add(p.key); return n; })} />
+                          setSelected((prev) => { const n = new Set(prev); if (n.has(p.key)) n.delete(p.key); else n.add(p.key); return n; })} />
                       </td>
                       <td className="px-3 py-3">
                         <div className="flex items-center gap-3">
@@ -314,7 +330,7 @@ export default function ProductsPage() {
         ) : (
           <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filtered.map((p) => (
-              <div key={p.key} onClick={() => router.push("/inventory")}
+              <div key={p.key} onClick={() => openProduct(p)}
                 className="cursor-pointer overflow-hidden rounded-2xl border border-line bg-white transition-shadow hover:shadow-pop">
                 <div className="flex aspect-square items-center justify-center overflow-hidden bg-gradient-to-br from-brand-50 to-slate-50">
                   {p.image ? (
@@ -340,6 +356,18 @@ export default function ProductsPage() {
           </div>
         )}
       </Card>
+
+      {editItem && (
+        <ProductEditor
+          item={editItem}
+          locations={locations}
+          onClose={() => setEditItem(null)}
+          onSaved={() => {
+            setEditItem(null);
+            load();
+          }}
+        />
+      )}
     </>
   );
 }

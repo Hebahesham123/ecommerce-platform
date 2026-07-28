@@ -3,8 +3,8 @@ import "./globals.css";
 import { LangProvider } from "@/lib/i18n";
 
 export const metadata: Metadata = {
-  title: "متجر الأزياء · لوحة التحكم",
-  description: "Unified fashion commerce admin dashboard",
+  title: "BeautyBar · لوحة التحكم",
+  description: "BeautyBar commerce admin dashboard",
 };
 
 // Meta Pixel ID — verifying the pixel fires. Move to env/DB once OAuth is wired.

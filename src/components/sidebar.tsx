@@ -161,7 +161,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     <div className="flex h-full flex-col gap-5 px-3 py-5" onClick={onNavigate}>
       <Link href="/dashboard" className="flex items-center gap-2.5 px-2">
         <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-base font-bold text-white">
-          ف
+          B
         </div>
         <div className="leading-tight">
           <div className="text-sm font-bold text-ink">{t("brand")}</div>

@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useI18n, egp, num } from "@/lib/i18n";
 import {
-  orders,
+  orders as mockOrders,
   labels,
   salesSeries,
   type Order,
@@ -12,6 +12,7 @@ import {
   type Fulfillment,
   type PayMethod,
 } from "@/lib/data";
+import { listStoreOrders } from "../../store/actions";
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui";
 import {
@@ -24,7 +25,7 @@ import {
   Select,
   type PillTone,
 } from "@/components/dashboard-ui";
-import { IcFile, IcX, IcChevron } from "@/components/icons";
+import { IcFile, IcX, IcChevron, IcCash, IcCourier } from "@/components/icons";
 
 type Tab = "all" | "unfulfilled" | "unpaid" | "open" | "attention";
 type SortKey = "newest" | "oldest" | "total_high" | "total_low";
@@ -59,6 +60,33 @@ export default function OrdersPage() {
   const [method, setMethod] = useState<"all" | PayMethod>("all");
   const [sort, setSort] = useState<SortKey>("newest");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [detail, setDetail] = useState<Order | null>(null);
+  const [placed, setPlaced] = useState<Order[]>([]);
+
+  useEffect(() => {
+    (async () => {
+      const res = await listStoreOrders();
+      if (res.ok) {
+        setPlaced(
+          res.data.map((o): Order => ({
+            id: o.id,
+            customer: o.customer,
+            phone: o.phone,
+            governorate: o.governorate,
+            total: o.total,
+            method: o.method,
+            lifecycle: o.lifecycle,
+            payment: o.payment,
+            fulfillment: o.fulfillment,
+            date: o.date,
+          })),
+        );
+      }
+    })();
+  }, []);
+
+  // Real placed orders first, then the demo orders.
+  const orders = useMemo(() => [...placed, ...mockOrders], [placed]);
 
   const ar = lang === "ar";
   const fmtDate = (d: string) =>
@@ -89,11 +117,11 @@ export default function OrdersPage() {
     return {
       count: orders.length,
       revenue,
-      codShare: Math.round((cod / orders.length) * 100),
+      codShare: orders.length ? Math.round((cod / orders.length) * 100) : 0,
       unfulfilled,
       delivered,
     };
-  }, []);
+  }, [orders]);
   const ordersSpark = salesSeries.map((s) => s.orders);
   const salesSpark = salesSeries.map((s) => s.sales);
 
@@ -136,7 +164,7 @@ export default function OrdersPage() {
       }
     });
     return sorted;
-  }, [tab, q, payment, fulfillment, method, sort]);
+  }, [orders, tab, q, payment, fulfillment, method, sort]);
 
   const filtersActive = q !== "" || payment !== "all" || fulfillment !== "all" || method !== "all";
   const allSelected = filtered.length > 0 && filtered.every((o) => selected.has(o.id));
@@ -276,7 +304,8 @@ export default function OrdersPage() {
                 return (
                   <tr
                     key={o.id}
-                    className={`border-b border-line last:border-0 transition-colors hover:bg-surface-page ${
+                    onClick={() => setDetail(o)}
+                    className={`cursor-pointer border-b border-line last:border-0 transition-colors hover:bg-surface-page ${
                       sel ? "bg-brand-50/40" : ""
                     }`}
                   >
@@ -333,6 +362,132 @@ export default function OrdersPage() {
           )}
         </div>
       </Card>
+
+      {detail && (
+        <OrderDetailDrawer
+          order={detail}
+          onClose={() => setDetail(null)}
+        />
+      )}
     </>
   );
+}
+
+// ---- Order detail drawer (Shopify-style) ------------------------------------
+function OrderDetailDrawer({ order: o, onClose }: { order: Order; onClose: () => void }) {
+  const { t, lang } = useI18n();
+  const ar = lang === "ar";
+  const fmt = (d: string) =>
+    new Date(d).toLocaleDateString(ar ? "ar-EG" : "en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+  const balance = o.payment === "paid" ? 0 : o.total;
+
+  return (
+    <div className="fixed inset-0 z-50 flex">
+      <div className="flex-1 bg-black/30" onClick={onClose} />
+      <div className="flex h-full w-full max-w-lg flex-col bg-white shadow-xl">
+        {/* Header */}
+        <div className="flex items-start justify-between border-b border-line px-5 py-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-bold text-ink">#{o.id}</h2>
+              <StatusPill label={t(labels.paymentKey[o.payment])} tone={paymentPill[o.payment]} hollow={o.payment === "pending"} />
+              <StatusPill label={t(labels.fulfillmentKey[o.fulfillment])} tone={fulfillmentPill[o.fulfillment]} hollow={o.fulfillment === "unfulfilled"} />
+            </div>
+            <p className="mt-1 text-xs text-ink-soft">{fmt(o.date)}</p>
+          </div>
+          <button onClick={onClose} className="btn-ghost h-8 w-8 shrink-0 p-0">
+            <IcX className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="flex-1 space-y-4 overflow-y-auto p-5">
+          {o.flag && (
+            <div className="rounded-xl bg-amber-50 px-3 py-2.5 text-sm text-amber-800">
+              {flagLabelStatic(o.flag, ar)}
+            </div>
+          )}
+
+          {/* Payment summary */}
+          <div className="rounded-2xl border border-line">
+            <div className="border-b border-line px-4 py-3 text-sm font-semibold text-ink">
+              {ar ? "ملخص الدفع" : "Payment"}
+            </div>
+            <div className="space-y-2 px-4 py-3 text-sm">
+              <Row label={ar ? "الإجمالي الفرعي" : "Subtotal"} value={egp(o.total, lang)} />
+              <Row label={ar ? "الشحن" : "Shipping"} value={egp(0, lang)} muted />
+              <div className="my-1 border-t border-line" />
+              <Row label={ar ? "الإجمالي" : "Total"} value={egp(o.total, lang)} bold />
+              <Row label={ar ? "المدفوع" : "Paid"} value={egp(o.total - balance, lang)} muted />
+              <Row label={ar ? "المتبقي" : "Balance"} value={egp(balance, lang)} bold />
+            </div>
+            <div className="flex items-center justify-end gap-2 border-t border-line px-4 py-3">
+              {balance > 0 && (
+                <button className="btn-primary h-9">
+                  <IcCash className="h-4 w-4" /> {ar ? "تحصيل الدفع" : "Collect payment"}
+                </button>
+              )}
+              {o.fulfillment === "unfulfilled" && (
+                <button className="btn-outline h-9">{ar ? "تعليم كمنفّذ" : "Mark fulfilled"}</button>
+              )}
+            </div>
+          </div>
+
+          {/* Customer */}
+          <div className="rounded-2xl border border-line px-4 py-3">
+            <div className="mb-2 text-sm font-semibold text-ink">{ar ? "العميل" : "Customer"}</div>
+            <div className="text-sm font-medium text-ink">{o.customer}</div>
+            <div className="mt-0.5 text-sm text-ink-muted" dir="ltr">{o.phone}</div>
+            <div className="mt-3 text-xs font-medium uppercase tracking-wide text-ink-soft">
+              {ar ? "عنوان الشحن" : "Shipping address"}
+            </div>
+            <div className="mt-1 text-sm text-ink-muted">{o.governorate}، {ar ? "مصر" : "Egypt"}</div>
+          </div>
+
+          {/* Fulfillment / courier */}
+          <div className="rounded-2xl border border-line px-4 py-3">
+            <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-ink">
+              <IcCourier className="h-4 w-4 text-ink-soft" /> {t("col_fulfillment")}
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-ink-muted">{t("col_courier")}</span>
+              <span className="font-medium text-ink">{o.courier || (ar ? "غير معيّن" : "Unassigned")}</span>
+            </div>
+            <div className="mt-1 flex items-center justify-between text-sm">
+              <span className="text-ink-muted">{ar ? "طريقة الدفع" : "Method"}</span>
+              <span className="font-medium text-ink">{t(labels.methodKey[o.method])}</span>
+            </div>
+            <div className="mt-1 flex items-center justify-between text-sm">
+              <span className="text-ink-muted">{t("col_lifecycle")}</span>
+              <span className="font-medium text-ink">{t(labels.lifecycleKey[o.lifecycle])}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 border-t border-line px-5 py-4">
+          <button onClick={onClose} className="btn-outline">{ar ? "إغلاق" : "Close"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Row({ label, value, bold, muted }: { label: string; value: string; bold?: boolean; muted?: boolean }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className={muted ? "text-ink-soft" : "text-ink-muted"}>{label}</span>
+      <span className={bold ? "font-semibold text-ink" : muted ? "text-ink-soft" : "text-ink"}>{value}</span>
+    </div>
+  );
+}
+
+function flagLabelStatic(f: OrderFlag, ar: boolean) {
+  return f === "fake_cod"
+    ? ar ? "اشتباه طلب وهمي — يُنصح بالتأكيد قبل الشحن." : "Suspected fake COD — confirm before shipping."
+    : f === "unpaid_delivered"
+      ? ar ? "تم التسليم بدون تحصيل النقدية." : "Delivered but cash not collected."
+      : ar ? "طلب مرتجع." : "Returned order.";
 }
