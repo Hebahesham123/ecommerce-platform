@@ -128,6 +128,10 @@ export default function CheckoutPage() {
                 <input
                   value={phone}
                   onChange={(e) => { setPhone(e.target.value); if (step === "verified") setStep("idle"); }}
+                  onBlur={async () => {
+                    // Returning customer: skip OTP if this number is already verified.
+                    if (phoneOk && step === "idle" && (await isPhoneVerified(phone))) setStep("verified");
+                  }}
                   placeholder={ar ? "رقم الموبايل" : "Mobile number"}
                   className={inp}
                   dir="ltr"

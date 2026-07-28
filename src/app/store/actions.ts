@@ -144,24 +144,57 @@ function normalizePhone(p: string): string {
   return p.replace(/[^\d+]/g, "");
 }
 
+const OTP_WEBHOOK_URL =
+  process.env.OTP_WEBHOOK_URL || "https://n8n.srv1155688.hstgr.cloud/webhook/send-otp";
+
 /**
- * "Send" an OTP. No SMS provider is wired, so for testing the code is returned
- * in `devCode` (and would be delivered by SMS in production).
+ * Generate a code, store it, and deliver it via the n8n OTP webhook.
+ * `sent` reflects whether the webhook accepted the request; if it fails we fall
+ * back to returning the code (`devCode`) so testing still works.
  */
-export async function sendOtp(phone: string): Promise<ActionResult<{ devCode: string }>> {
+export async function sendOtp(
+  phone: string,
+): Promise<ActionResult<{ sent: boolean; devCode: string | null }>> {
   if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
   try {
     const supabase = getServerSupabase();
     const ph = normalizePhone(phone);
-    if (ph.length < 8) return { ok: false, error: "invalid_phone" };
-    // 4-digit code, 10-minute expiry.
+    if (ph.replace(/\D/g, "").length < 8) return { ok: false, error: "invalid_phone" };
+
+    // Already verified before → caller should skip OTP entirely.
+    const { data: known } = await supabase
+      .from("verified_phones")
+      .select("phone")
+      .eq("phone", ph)
+      .maybeSingle();
+    if (known) return { ok: true, data: { sent: true, devCode: null } };
+
     const code = String(Math.floor(1000 + Math.random() * 9000));
     const expires = new Date(Date.now() + 10 * 60 * 1000).toISOString();
     const { error } = await supabase
       .from("otp_codes")
       .upsert({ phone: ph, code, expires_at: expires }, { onConflict: "phone" });
     if (error) return { ok: false, error: error.message };
-    return { ok: true, data: { devCode: code } };
+
+    // Deliver through the n8n webhook (SMS/WhatsApp).
+    let sent = false;
+    try {
+      const r = await fetch(OTP_WEBHOOK_URL, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          phone: ph,
+          code,
+          otp: code,
+          message: `BeautyBar verification code: ${code}`,
+        }),
+      });
+      sent = r.ok;
+    } catch {
+      sent = false;
+    }
+
+    return { ok: true, data: { sent, devCode: sent ? null : code } };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }
