@@ -159,7 +159,7 @@ export default function CheckoutPage() {
                     )}
                   </div>
                   <div className="flex gap-2">
-                    <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="0000" className={inp} dir="ltr" inputMode="numeric" maxLength={4} />
+                    <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="000000" className={inp} dir="ltr" inputMode="numeric" maxLength={6} />
                     <button onClick={submitCode} className="btn-primary h-11 shrink-0 px-4 text-sm">{ar ? "تحقق" : "Confirm"}</button>
                   </div>
                 </div>

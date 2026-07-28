@@ -169,7 +169,7 @@ export async function sendOtp(
       .maybeSingle();
     if (known) return { ok: true, data: { sent: true, devCode: null } };
 
-    const code = String(Math.floor(1000 + Math.random() * 9000));
+    const code = String(Math.floor(100000 + Math.random() * 900000)); // 6 digits
     const expires = new Date(Date.now() + 10 * 60 * 1000).toISOString();
     const { error } = await supabase
       .from("otp_codes")
