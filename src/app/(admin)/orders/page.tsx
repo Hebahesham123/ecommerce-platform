@@ -12,7 +12,7 @@ import {
   type Fulfillment,
   type PayMethod,
 } from "@/lib/data";
-import { listStoreOrders } from "../../store/actions";
+import { listStoreOrders, getOrderByNumber } from "../../store/actions";
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui";
 import {
@@ -374,9 +374,34 @@ export default function OrdersPage() {
 }
 
 // ---- Order detail drawer (Shopify-style) ------------------------------------
+type Line = {
+  product_name: string;
+  variant_title: string | null;
+  sku: string | null;
+  image_url: string | null;
+  price: number;
+  quantity: number;
+};
+
 function OrderDetailDrawer({ order: o, onClose }: { order: Order; onClose: () => void }) {
   const { t, lang } = useI18n();
   const ar = lang === "ar";
+  const [lines, setLines] = useState<Line[]>([]);
+  const [loadingLines, setLoadingLines] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      setLoadingLines(true);
+      const res = await getOrderByNumber(o.id);
+      if (res.ok && Array.isArray((res.data as Record<string, unknown>).store_order_items)) {
+        setLines((res.data as Record<string, unknown>).store_order_items as Line[]);
+      } else {
+        setLines([]);
+      }
+      setLoadingLines(false);
+    })();
+  }, [o.id]);
+
   const fmt = (d: string) =>
     new Date(d).toLocaleDateString(ar ? "ar-EG" : "en-US", {
       year: "numeric",
@@ -410,6 +435,49 @@ function OrderDetailDrawer({ order: o, onClose }: { order: Order; onClose: () =>
               {flagLabelStatic(o.flag, ar)}
             </div>
           )}
+
+          {/* Products */}
+          <div className="rounded-2xl border border-line">
+            <div className="border-b border-line px-4 py-3 text-sm font-semibold text-ink">
+              {ar ? "المنتجات" : "Products"}
+              {lines.length > 0 && <span className="ms-1 text-ink-soft">({lines.length})</span>}
+            </div>
+            {loadingLines ? (
+              <div className="px-4 py-4 text-sm text-ink-soft">{t("loading")}</div>
+            ) : lines.length === 0 ? (
+              <div className="px-4 py-4 text-sm text-ink-soft">
+                {ar ? "لا تتوفر تفاصيل المنتجات لهذا الطلب التجريبي." : "No line items for this demo order."}
+              </div>
+            ) : (
+              <div className="divide-y divide-line">
+                {lines.map((li, idx) => (
+                  <div key={idx} className="flex items-center gap-3 px-4 py-3">
+                    <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-line bg-surface-page">
+                      {li.image_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={li.image_url} alt="" className="h-full w-full object-cover" />
+                      ) : null}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="line-clamp-1 text-sm font-medium text-ink">{li.product_name}</div>
+                      <div className="text-xs text-ink-soft">
+                        {li.variant_title ? `${li.variant_title} · ` : ""}
+                        {li.sku ? <span dir="ltr">{li.sku}</span> : null}
+                      </div>
+                    </div>
+                    <div className="text-end text-sm">
+                      <div className="text-ink-muted">
+                        {egp(Number(li.price), lang)} × {num(Number(li.quantity), lang)}
+                      </div>
+                      <div className="font-semibold text-ink">
+                        {egp(Number(li.price) * Number(li.quantity), lang)}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Payment summary */}
           <div className="rounded-2xl border border-line">
