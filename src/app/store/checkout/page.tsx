@@ -26,7 +26,6 @@ export default function CheckoutPage() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [step, setStep] = useState<Step>("idle");
-  const [devCode, setDevCode] = useState<string | null>(null);
   const [code, setCode] = useState("");
   const [gov, setGov] = useState("");
   const [city, setCity] = useState("");
@@ -49,8 +48,11 @@ export default function CheckoutPage() {
     }
     setStep("sending");
     const res = await sendOtp(phone);
-    if (!res.ok) { setStep("idle"); setErr(ar ? "تعذّر إرسال الكود" : "Couldn't send code"); return; }
-    setDevCode(res.data.devCode);
+    if (!res.ok || !res.data.sent) {
+      setStep("idle");
+      setErr(ar ? "تعذّر إرسال الكود، حاولي مرة أخرى" : "Couldn't send the code, please try again");
+      return;
+    }
     setStep("code_sent");
   }
 
@@ -151,12 +153,7 @@ export default function CheckoutPage() {
               {step === "code_sent" && (
                 <div className="rounded-xl bg-surface-page p-3">
                   <div className="mb-2 text-xs text-ink-muted">
-                    {ar ? "أدخلي الكود المرسل إلى هاتفك" : "Enter the code sent to your phone"}
-                    {devCode && (
-                      <span className="ms-1 rounded bg-amber-100 px-1.5 py-0.5 font-mono text-amber-800">
-                        {ar ? "كود الاختبار" : "test code"}: {devCode}
-                      </span>
-                    )}
+                    {ar ? "أدخلي الكود المكوّن من 6 أرقام المرسل إلى هاتفك" : "Enter the 6-digit code sent to your phone"}
                   </div>
                   <div className="flex gap-2">
                     <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="000000" className={inp} dir="ltr" inputMode="numeric" maxLength={6} />

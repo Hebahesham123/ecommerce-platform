@@ -140,8 +140,16 @@ export async function isPhoneVerified(phone: string): Promise<boolean> {
   }
 }
 
+/**
+ * Normalize any Egyptian phone to the same international form n8n stores,
+ * e.g. "01027546062", "201027546062", "+20 102 754 6062" → "+201027546062".
+ */
 function normalizePhone(p: string): string {
-  return p.replace(/[^\d+]/g, "");
+  let d = (p || "").replace(/\D/g, "");
+  if (d.startsWith("0020")) d = d.slice(4);
+  else if (d.startsWith("20") && d.length >= 12) d = d.slice(2);
+  else if (d.startsWith("0")) d = d.slice(1);
+  return "+20" + d;
 }
 
 const OTP_WEBHOOK_URL =
@@ -154,12 +162,12 @@ const OTP_WEBHOOK_URL =
  */
 export async function sendOtp(
   phone: string,
-): Promise<ActionResult<{ sent: boolean; devCode: string | null }>> {
+): Promise<ActionResult<{ sent: boolean }>> {
   if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
   try {
     const supabase = getServerSupabase();
     const ph = normalizePhone(phone);
-    if (ph.replace(/\D/g, "").length < 8) return { ok: false, error: "invalid_phone" };
+    if (ph.replace(/\D/g, "").length < 10) return { ok: false, error: "invalid_phone" };
 
     // Already verified before → caller should skip OTP entirely.
     const { data: known } = await supabase
@@ -167,34 +175,23 @@ export async function sendOtp(
       .select("phone")
       .eq("phone", ph)
       .maybeSingle();
-    if (known) return { ok: true, data: { sent: true, devCode: null } };
+    if (known) return { ok: true, data: { sent: true } };
 
-    const code = String(Math.floor(100000 + Math.random() * 900000)); // 6 digits
-    const expires = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-    const { error } = await supabase
-      .from("otp_codes")
-      .upsert({ phone: ph, code, expires_at: expires }, { onConflict: "phone" });
-    if (error) return { ok: false, error: error.message };
-
-    // Deliver through the n8n webhook (SMS/WhatsApp).
+    // n8n owns OTP generation + delivery + storage (in otp_codes). We only
+    // trigger it; verifyOtp then checks the code n8n stored.
     let sent = false;
     try {
       const r = await fetch(OTP_WEBHOOK_URL, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          phone: ph,
-          code,
-          otp: code,
-          message: `BeautyBar verification code: ${code}`,
-        }),
+        body: JSON.stringify({ phone: ph, mobile: ph }),
       });
       sent = r.ok;
     } catch {
       sent = false;
     }
 
-    return { ok: true, data: { sent, devCode: sent ? null : code } };
+    return { ok: true, data: { sent } };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }
