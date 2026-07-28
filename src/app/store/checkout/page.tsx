@@ -26,6 +26,7 @@ export default function CheckoutPage() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [step, setStep] = useState<Step>("idle");
+  const [channel, setChannel] = useState<"whatsapp" | "sms" | null>(null);
   const [code, setCode] = useState("");
   const [gov, setGov] = useState("");
   const [city, setCity] = useState("");
@@ -47,13 +48,21 @@ export default function CheckoutPage() {
       return;
     }
     setStep("sending");
-    const res = await sendOtp(phone);
+    const res = await sendOtp(phone, "auto");
     if (!res.ok || !res.data.sent) {
       setStep("idle");
       setErr(ar ? "تعذّر إرسال الكود، حاولي مرة أخرى" : "Couldn't send the code, please try again");
       return;
     }
+    setChannel(res.data.channel);
     setStep("code_sent");
+  }
+
+  async function resendVia(ch: "whatsapp" | "sms") {
+    setErr(null);
+    const res = await sendOtp(phone, ch);
+    if (res.ok && res.data.sent) setChannel(res.data.channel ?? ch);
+    else setErr(ar ? "تعذّر إعادة الإرسال" : "Couldn't resend");
   }
 
   async function submitCode() {
@@ -152,12 +161,34 @@ export default function CheckoutPage() {
 
               {step === "code_sent" && (
                 <div className="rounded-xl bg-surface-page p-3">
-                  <div className="mb-2 text-xs text-ink-muted">
-                    {ar ? "أدخلي الكود المكوّن من 6 أرقام المرسل إلى هاتفك" : "Enter the 6-digit code sent to your phone"}
+                  <div className="mb-2 flex flex-wrap items-center gap-1.5 text-xs text-ink-muted">
+                    {ar ? "أدخلي الكود المكوّن من 6 أرقام المُرسل" : "Enter the 6-digit code sent"}
+                    {channel === "whatsapp" && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700">
+                        <span className="text-emerald-500">●</span> {ar ? "عبر واتساب" : "via WhatsApp"}
+                      </span>
+                    )}
+                    {channel === "sms" && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-sky-50 px-2 py-0.5 font-medium text-sky-700">
+                        SMS
+                      </span>
+                    )}
                   </div>
                   <div className="flex gap-2">
                     <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="000000" className={inp} dir="ltr" inputMode="numeric" maxLength={6} />
                     <button onClick={submitCode} className="btn-primary h-11 shrink-0 px-4 text-sm">{ar ? "تحقق" : "Confirm"}</button>
+                  </div>
+                  <div className="mt-2 flex gap-3 text-xs">
+                    {channel !== "sms" && (
+                      <button onClick={() => resendVia("sms")} className="text-brand-700 hover:underline">
+                        {ar ? "لم يصلك الكود؟ أرسليه برسالة SMS" : "Didn't get it? Send via SMS"}
+                      </button>
+                    )}
+                    {channel === "sms" && (
+                      <button onClick={() => resendVia("whatsapp")} className="text-brand-700 hover:underline">
+                        {ar ? "أرسليه عبر واتساب" : "Send via WhatsApp"}
+                      </button>
+                    )}
                   </div>
                 </div>
               )}
