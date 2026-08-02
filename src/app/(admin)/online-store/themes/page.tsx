@@ -9,7 +9,7 @@ import { PageHeader } from "@/components/page-header";
 import { Card, Badge } from "@/components/ui";
 import { ThemePreview } from "@/components/theme-preview";
 import { ThemeInspector } from "@/components/theme-inspector";
-import { IcUpload, IcEye, IcTrash, IcTheme, IcAlert, IcFile } from "@/components/icons";
+import { IcUpload, IcEye, IcTrash, IcTheme, IcAlert, IcFile, IcLink } from "@/components/icons";
 
 function ThemeThumb({ theme }: { theme: Theme }) {
   return (
@@ -193,6 +193,10 @@ export default function ThemesPage() {
                   <button className="btn-primary" onClick={() => setPreview(current)}>
                     <IcEye className="h-4 w-4" /> {t("preview")}
                   </button>
+                  <a className="btn-outline" href="/shop" target="_blank" rel="noreferrer">
+                    <IcLink className="h-4 w-4" />{" "}
+                    {lang === "ar" ? "المتجر المباشر" : "Live storefront"}
+                  </a>
                   <button className="btn-outline" onClick={() => setInspect(current)}>
                     <IcFile className="h-4 w-4" /> {t("inspect")}
                   </button>

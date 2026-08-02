@@ -494,6 +494,56 @@ const dict = {
   accounting_subtitle: { ar: "دفتر الأستاذ والقيود والتقارير المالية — مدمج", en: "Ledger, journal entries & financial reports — embedded" },
   courier_system_subtitle: { ar: "إدارة المندوبين والشحنات والتحصيل — مدمج", en: "Couriers, shipments & cash collection — embedded" },
 
+  // ---- Collections (merchandising groups rendered by the theme) ----
+  nav_collections: { ar: "التصنيفات", en: "Collections" },
+  collections_subtitle: {
+    ar: "جمّع منتجاتك في تصنيفات تظهر مباشرة في القالب",
+    en: "Group products into collections your theme renders live",
+  },
+  coll_new: { ar: "تصنيف جديد", en: "New collection" },
+  coll_edit: { ar: "تعديل التصنيف", en: "Edit collection" },
+  coll_title: { ar: "اسم التصنيف", en: "Title" },
+  coll_handle: { ar: "الرابط", en: "Handle" },
+  coll_description: { ar: "الوصف", en: "Description" },
+  coll_image: { ar: "صورة التصنيف", en: "Collection image" },
+  coll_visibility: { ar: "الظهور", en: "Visibility" },
+  coll_published: { ar: "ظاهر", en: "Published" },
+  coll_hidden: { ar: "مخفي", en: "Hidden" },
+  coll_type: { ar: "طريقة الإضافة", en: "How products are added" },
+  coll_rule_manual: { ar: "يدوي", en: "Manual" },
+  coll_rule_category: { ar: "حسب الفئة", en: "By category" },
+  coll_rule_vendor: { ar: "حسب المورّد", en: "By vendor" },
+  coll_rule_tag: { ar: "حسب الوسم", en: "By tag" },
+  coll_rule_value: { ar: "القيمة", en: "Value" },
+  coll_select_all: { ar: "تحديد الكل", en: "Select all" },
+  coll_deselect_all: { ar: "إلغاء التحديد", en: "Deselect all" },
+  coll_selected: { ar: "محدد", en: "selected" },
+  coll_products_in: { ar: "منتج في التصنيف", en: "products" },
+  coll_variants: { ar: "أنواع", en: "variants" },
+  coll_in_stock_short: { ar: "متاح", en: "available" },
+  coll_preview: { ar: "المنتجات المطابقة", en: "Matching products" },
+  coll_no_matches: { ar: "لا توجد منتجات مطابقة", en: "No products match yet" },
+  coll_no_products: { ar: "لا توجد منتجات في المخزون بعد", en: "No products in inventory yet" },
+  coll_order_hint: { ar: "الترتيب كما سيظهر في القالب", en: "Order shown in the theme" },
+  coll_empty: { ar: "لا توجد تصنيفات بعد", en: "No collections yet" },
+  coll_empty_hint: {
+    ar: "أنشئ تصنيفاً واختر منتجاتك؛ سيظهر فوراً في القالب المنشور.",
+    en: "Create one and pick your products — it appears in the published theme right away.",
+  },
+  coll_fallback_note: {
+    ar: "حتى تنشئ أول تصنيف، يستخدم القالب فئات المنتجات تلقائياً.",
+    en: "Until you create one, the theme falls back to product categories automatically.",
+  },
+  coll_migration_needed: {
+    ar: "شغّل ترحيل قاعدة البيانات الخاص بالتصنيفات",
+    en: "Run the collections database migration",
+  },
+  coll_view_in_theme: { ar: "عرض في القالب", en: "View in theme" },
+  coll_kpi_total: { ar: "التصنيفات", en: "Collections" },
+  coll_kpi_published: { ar: "ظاهرة", en: "Published" },
+  coll_kpi_automatic: { ar: "تلقائية", en: "Automatic" },
+  coll_kpi_grouped: { ar: "منتجات مصنّفة", en: "Products grouped" },
+
 } as const;
 
 export type DictKey = keyof typeof dict;
