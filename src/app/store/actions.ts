@@ -160,12 +160,9 @@ const OTP_WEBHOOK_URL =
  * `sent` reflects whether the webhook accepted the request; if it fails we fall
  * back to returning the code (`devCode`) so testing still works.
  */
-export type OtpChannel = "whatsapp" | "sms";
-
 export async function sendOtp(
   phone: string,
-  channel: OtpChannel | "auto" = "auto",
-): Promise<ActionResult<{ sent: boolean; channel: OtpChannel | null }>> {
+): Promise<ActionResult<{ sent: boolean }>> {
   if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
   try {
     const supabase = getServerSupabase();
@@ -178,32 +175,23 @@ export async function sendOtp(
       .select("phone")
       .eq("phone", ph)
       .maybeSingle();
-    if (known) return { ok: true, data: { sent: true, channel: null } };
+    if (known) return { ok: true, data: { sent: true } };
 
-    // n8n owns delivery: with channel="auto" it should try WhatsApp first and
-    // fall back to SMS if the number has no WhatsApp, returning { channel }.
-    // channel="sms" forces SMS (used by the "resend via SMS" button).
+    // n8n owns OTP generation + delivery + storage (in otp_codes). We only
+    // trigger it; verifyOtp then checks the code n8n stored.
     let sent = false;
-    let used: OtpChannel | null = channel === "auto" ? null : channel;
     try {
       const r = await fetch(OTP_WEBHOOK_URL, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ phone: ph, mobile: ph, channel }),
+        body: JSON.stringify({ phone: ph, mobile: ph }),
       });
       sent = r.ok;
-      try {
-        const j = (await r.json()) as { channel?: string; sent?: boolean };
-        if (j?.channel === "whatsapp" || j?.channel === "sms") used = j.channel;
-        if (typeof j?.sent === "boolean") sent = j.sent;
-      } catch {
-        /* webhook returned no/invalid JSON — keep sent from status */
-      }
     } catch {
       sent = false;
     }
 
-    return { ok: true, data: { sent, channel: used } };
+    return { ok: true, data: { sent } };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }
