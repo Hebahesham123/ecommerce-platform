@@ -1,6 +1,7 @@
 "use server";
 
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
+import { computeDiscount, slotLabel } from "@/lib/offers";
 
 export type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -162,12 +163,14 @@ const OTP_WEBHOOK_URL =
  */
 export async function sendOtp(
   phone: string,
+  channel: "whatsapp" | "sms" = "whatsapp",
 ): Promise<ActionResult<{ sent: boolean }>> {
   if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
   try {
     const supabase = getServerSupabase();
     const ph = normalizePhone(phone);
     if (ph.replace(/\D/g, "").length < 10) return { ok: false, error: "invalid_phone" };
+    const ch = channel === "sms" ? "sms" : "whatsapp";
 
     // Already verified before → caller should skip OTP entirely.
     const { data: known } = await supabase
@@ -178,13 +181,14 @@ export async function sendOtp(
     if (known) return { ok: true, data: { sent: true } };
 
     // n8n owns OTP generation + delivery + storage (in otp_codes). We only
-    // trigger it; verifyOtp then checks the code n8n stored.
+    // trigger it; verifyOtp then checks the code n8n stored. `channel` tells
+    // n8n which route to deliver on (WhatsApp or SMS) per the customer's pick.
     let sent = false;
     try {
       const r = await fetch(OTP_WEBHOOK_URL, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ phone: ph, mobile: ph }),
+        body: JSON.stringify({ phone: ph, mobile: ph, channel: ch }),
       });
       sent = r.ok;
     } catch {
@@ -238,6 +242,12 @@ export type OrderPayload = {
   city: string;
   address: string;
   note?: string;
+  couponCode?: string | null;
+  deliverySpeed?: "standard" | "scheduled";
+  deliveryDate?: string | null; // yyyy-mm-dd
+  deliverySlot?: string | null; // slot id from DELIVERY_SLOTS
+  giftWrap?: boolean;
+  giftMessage?: string | null;
   items: CartLine[];
 };
 
@@ -260,47 +270,57 @@ export async function placeOrder(
 
     const subtotal = payload.items.reduce((s, i) => s + i.price * i.quantity, 0);
     const shipping = 0; // free shipping for the test flow
-    const total = subtotal + shipping;
+
+    // Validate any coupon server-side (never trust the client for pricing).
+    const disc = computeDiscount(payload.couponCode, subtotal);
+    const discount = disc.ok ? disc.discount : 0;
+    const total = Math.max(0, subtotal - discount + shipping);
     const orderNumber = "BB" + Date.now().toString().slice(-8);
 
-    const { data: order, error: oe } = await supabase
-      .from("store_orders")
-      .insert({
-        order_number: orderNumber,
-        customer_name: payload.customerName.trim(),
-        phone: ph,
-        governorate: payload.governorate.trim() || null,
-        city: payload.city.trim() || null,
-        address: payload.address.trim() || null,
-        note: payload.note?.trim() || null,
-        subtotal,
-        shipping,
-        total,
-        payment_method: "cod",
-        payment_status: "pending",
-        fulfillment_status: "unfulfilled",
-        lifecycle: "placed",
-      })
-      .select("id")
-      .single();
-    if (oe) return { ok: false, error: oe.message };
+    // Fold delivery schedule, gift options and coupon into the merchant note
+    // (no schema change needed — it's all captured in store_orders.note).
+    const noteParts: string[] = [];
+    if (payload.note?.trim()) noteParts.push(payload.note.trim());
+    if (payload.deliverySpeed === "scheduled" && payload.deliveryDate) {
+      const slot = slotLabel(payload.deliverySlot, "ar");
+      noteParts.push(`التوصيل: ${payload.deliveryDate}${slot ? ` (${slot})` : ""}`);
+    } else {
+      noteParts.push("التوصيل: قياسي (٢–٤ أيام)");
+    }
+    if (payload.giftWrap) {
+      noteParts.push(`تغليف هدية${payload.giftMessage?.trim() ? `: "${payload.giftMessage.trim()}"` : ""}`);
+    }
+    if (disc.ok && disc.offer) noteParts.push(`كوبون ${disc.offer.code} (−${discount})`);
+    const composedNote = noteParts.join(" | ") || null;
 
-    const lines = payload.items.map((i) => ({
-      order_id: order.id,
-      item_id: i.itemId,
-      product_name: i.productName,
-      variant_title: i.variantTitle,
-      sku: i.sku,
-      image_url: i.imageUrl,
-      price: i.price,
-      quantity: i.quantity,
-    }));
-    const { error: ie } = await supabase.from("store_order_items").insert(lines);
-    if (ie) return { ok: false, error: ie.message };
-
-    // Decrement stock for each line (best-effort).
-    for (const i of payload.items) {
-      await supabase.rpc("decrement_stock", { p_item: i.itemId, p_qty: i.quantity });
+    // Place the order atomically: stock is reserved under row locks and the
+    // whole transaction rolls back if any line is short (prevents overselling).
+    const { error: rpcErr } = await supabase.rpc("place_store_order", {
+      p_order_number: orderNumber,
+      p_customer_name: payload.customerName.trim(),
+      p_phone: ph,
+      p_governorate: payload.governorate.trim() || null,
+      p_city: payload.city.trim() || null,
+      p_address: payload.address.trim() || null,
+      p_note: composedNote,
+      p_subtotal: subtotal,
+      p_shipping: shipping,
+      p_total: total,
+      p_items: payload.items.map((i) => ({
+        item_id: i.itemId,
+        product_name: i.productName,
+        variant_title: i.variantTitle,
+        sku: i.sku,
+        image_url: i.imageUrl,
+        price: i.price,
+        quantity: i.quantity,
+      })),
+    });
+    if (rpcErr) {
+      if ((rpcErr.message || "").includes("insufficient_stock")) {
+        return { ok: false, error: "out_of_stock" };
+      }
+      return { ok: false, error: rpcErr.message };
     }
 
     return { ok: true, data: { orderNumber } };
