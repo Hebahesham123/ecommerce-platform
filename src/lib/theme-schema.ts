@@ -221,22 +221,27 @@ export function collectSectionInstances(files: FileMap): SectionInstance[] {
     if (grp) out.push(...instancesFromJson(`sections/${grp[1]}`, tryJSON(files[path])));
   }
 
-  // Bare {% section 'name' %} in the layout has no JSON instance of its own.
-  const layout = files["layout/theme.liquid"] ?? "";
+  // A bare {% section 'name' %} has no JSON instance of its own. It can appear
+  // in the layout, in a .liquid template or inside a snippet — and the renderer
+  // keys all of them as "layout::<type>", so every .liquid file must be scanned
+  // or the section would render with no way to override it.
   const seen = new Set(out.map((i) => `${i.scope}::${i.instanceId}`));
-  for (const m of layout.matchAll(/\{%-?\s*section\s+['"]([\w.-]+)['"]\s*-?%\}/g)) {
-    const type = m[1];
-    const key = `layout::${type}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push({
-      scope: "layout",
-      instanceId: type,
-      type,
-      settings: {},
-      blocks: {},
-      blockOrder: [],
-    });
+  for (const [path, src] of Object.entries(files)) {
+    if (!path.endsWith(".liquid") || typeof src !== "string") continue;
+    for (const m of src.matchAll(/\{%-?\s*section\s+['"]([\w.-]+)['"]\s*-?%\}/g)) {
+      const type = m[1];
+      const key = `layout::${type}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({
+        scope: "layout",
+        instanceId: type,
+        type,
+        settings: {},
+        blocks: {},
+        blockOrder: [],
+      });
+    }
   }
   return out;
 }
@@ -360,40 +365,67 @@ const SKIP_HREF_RE = /^(#|javascript:|mailto:|tel:|data:)/i;
  * Pull the anchors out of rendered (pre-URL-rewrite) HTML so the customizer can
  * offer to re-point buttons the theme hardcodes instead of exposing as settings.
  */
+const ANCHOR_RE = /<a\b([^>]*?)href\s*=\s*(?:"([^"]*)"|'([^']*)')([^>]*)>([\s\S]*?)<\/a>/gi;
+
+/** Anchor text, flattened — this is what scoped overrides match on. */
+function anchorLabel(inner: string): string {
+  return inner
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 60);
+}
+
 export function scanLinks(html: string): FoundLink[] {
   const found = new Map<string, FoundLink>();
-  for (const m of html.matchAll(/<a\b[^>]*href\s*=\s*(?:"([^"]*)"|'([^']*)')[^>]*>([\s\S]*?)<\/a>/gi)) {
-    const href = (m[1] ?? m[2] ?? "").trim();
+  for (const m of html.matchAll(ANCHOR_RE)) {
+    const href = (m[2] ?? m[3] ?? "").trim();
     if (!href || SKIP_HREF_RE.test(href)) continue;
     // External destinations are the merchant's own business — leave them out.
     if (/^(https?:)?\/\//i.test(href)) continue;
-    const label = m[3]
-      .replace(/<[^>]*>/g, " ")
-      .replace(/\s+/g, " ")
-      .trim()
-      .slice(0, 60);
-    const hit = found.get(href);
-    if (hit) {
-      hit.count++;
-      if (!hit.label && label) hit.label = label;
-    } else {
-      found.set(href, { href, label, count: 1 });
-    }
+    const label = anchorLabel(m[5]);
+    // Keyed by href AND label so two buttons sharing a destination stay
+    // separate rows and can be re-pointed independently.
+    const key = `${href} ${label}`;
+    const hit = found.get(key);
+    if (hit) hit.count++;
+    else found.set(key, { href, label, count: 1 });
   }
-  return [...found.values()].sort((a, b) => b.count - a.count || a.href.localeCompare(b.href));
+  return [...found.values()].sort(
+    (a, b) => b.count - a.count || a.href.localeCompare(b.href),
+  );
 }
 
-/** Apply the merchant's link rewrites to raw theme hrefs. */
+/**
+ * Apply the merchant's link rewrites to raw theme hrefs.
+ *
+ * An override carrying a `label` only moves anchors whose text matches, so
+ * re-pointing a "Complete your cart" button leaves genuine cart links alone.
+ * An override without a label moves every anchor with that href.
+ */
 export function applyLinkOverrides(html: string, links: LinkOverride[]): string {
-  if (!links.length) return html;
-  const map = new Map(links.filter((l) => l.from && l.to).map((l) => [l.from, l.to]));
-  if (!map.size) return html;
+  const valid = links.filter((l) => l.from && l.to);
+  if (!valid.length) return html;
+
+  const byHref = new Map<string, LinkOverride[]>();
+  for (const l of valid) {
+    const list = byHref.get(l.from);
+    if (list) list.push(l);
+    else byHref.set(l.from, [l]);
+  }
+
   return html.replace(
-    /(\bhref\s*=\s*)(?:"([^"]*)"|'([^']*)')/gi,
-    (whole, attr: string, dq?: string, sq?: string) => {
-      const val = dq !== undefined ? dq : (sq ?? "");
-      const next = map.get(val.trim());
-      return next ? `${attr}"${next.replace(/"/g, "&quot;")}"` : whole;
+    ANCHOR_RE,
+    (whole, pre: string, dq: string | undefined, sq: string | undefined, post: string, inner: string) => {
+      const href = (dq ?? sq ?? "").trim();
+      const candidates = byHref.get(href);
+      if (!candidates) return whole;
+      const label = anchorLabel(inner);
+      const hit =
+        candidates.find((c) => c.label && c.label === label) ??
+        candidates.find((c) => !c.label);
+      if (!hit) return whole;
+      return `<a${pre}href="${hit.to.replace(/"/g, "&quot;")}"${post}>${inner}</a>`;
     },
   );
 }

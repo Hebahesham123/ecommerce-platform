@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { EditableType } from "@/lib/theme-schema";
 import type { LinkTargets } from "./actions";
 
@@ -81,12 +81,22 @@ export function LinkPicker({
   ar: boolean;
   onChange: (next: string) => void;
 }) {
-  const { kind, target } = useMemo(() => decode(type, value), [type, value]);
+  const { kind: derivedKind, target } = useMemo(() => decode(type, value), [type, value]);
+
+  // "Collection", "Product" and "Custom URL" encode to an empty value until a
+  // handle is chosen, which would decode straight back to "None". So the chosen
+  // kind is held here until it resolves into a real destination.
+  const [pendingKind, setPendingKind] = useState<Kind | null>(null);
+  const kind = pendingKind ?? derivedKind;
+  useEffect(() => {
+    if (derivedKind !== "none") setPendingKind(null);
+  }, [derivedKind, value]);
 
   // A `collection` setting can only hold a collection, and likewise `product`.
+  // ("All products" is just the `all` collection, so it's in the list below.)
   const kinds = useMemo(() => {
     if (type === "collection")
-      return KINDS.filter((k) => k.kind === "none" || k.kind === "all" || k.kind === "collection");
+      return KINDS.filter((k) => k.kind === "none" || k.kind === "collection");
     if (type === "product") return KINDS.filter((k) => k.kind === "none" || k.kind === "product");
     return KINDS;
   }, [type]);
@@ -96,7 +106,11 @@ export function LinkPicker({
       <select
         className={selectCls}
         value={kind}
-        onChange={(e) => onChange(encode(type, e.target.value as Kind, ""))}
+        onChange={(e) => {
+          const next = e.target.value as Kind;
+          setPendingKind(next);
+          onChange(encode(type, next, ""));
+        }}
       >
         {kinds.map((k) => (
           <option key={k.kind} value={k.kind}>
@@ -105,35 +119,49 @@ export function LinkPicker({
         ))}
       </select>
 
-      {kind === "collection" && (
-        <select
-          className={`${selectCls} min-w-[150px] flex-1`}
-          value={target}
-          onChange={(e) => onChange(encode(type, "collection", e.target.value))}
-        >
-          <option value="">{ar ? "اختر تصنيفاً…" : "Choose a collection…"}</option>
-          {targets.collections.map((c) => (
-            <option key={c.handle} value={c.handle}>
-              {c.title} ({c.count})
-            </option>
-          ))}
-        </select>
-      )}
+      {kind === "collection" &&
+        (targets.collections.length === 0 ? (
+          <EmptyHint
+            text={ar ? "لا توجد تصنيفات بعد" : "No collections yet"}
+            href="/collections"
+            cta={ar ? "أنشئ تصنيفاً" : "Create one"}
+          />
+        ) : (
+          <select
+            className={`${selectCls} min-w-[150px] flex-1`}
+            value={target}
+            onChange={(e) => onChange(encode(type, "collection", e.target.value))}
+          >
+            <option value="">{ar ? "اختر تصنيفاً…" : "Choose a collection…"}</option>
+            {targets.collections.map((c) => (
+              <option key={c.handle} value={c.handle}>
+                {c.title} ({c.count})
+              </option>
+            ))}
+          </select>
+        ))}
 
-      {kind === "product" && (
-        <select
-          className={`${selectCls} min-w-[150px] flex-1`}
-          value={target}
-          onChange={(e) => onChange(encode(type, "product", e.target.value))}
-        >
-          <option value="">{ar ? "اختر منتجاً…" : "Choose a product…"}</option>
-          {targets.products.map((p) => (
-            <option key={p.handle} value={p.handle}>
-              {p.title}
-            </option>
-          ))}
-        </select>
-      )}
+      {kind === "product" &&
+        (targets.products.length === 0 ? (
+          <EmptyHint
+            text={ar ? "لا توجد منتجات بعد" : "No products yet"}
+            href="/products"
+            cta={ar ? "أضف منتجات" : "Add products"}
+          />
+        ) : (
+          <select
+            className={`${selectCls} min-w-[150px] flex-1`}
+            value={target}
+            onChange={(e) => onChange(encode(type, "product", e.target.value))}
+          >
+            <option value="">{ar ? "اختر منتجاً…" : "Choose a product…"}</option>
+            {targets.products.map((p) => (
+              <option key={p.handle} value={p.handle}>
+                {p.title}
+              </option>
+            ))}
+          </select>
+        ))}
 
       {kind === "custom" && (
         <input
@@ -144,6 +172,18 @@ export function LinkPicker({
         />
       )}
     </div>
+  );
+}
+
+/** Shown instead of an empty dropdown, so the blank isn't mistaken for a bug. */
+function EmptyHint({ text, href, cta }: { text: string; href: string; cta: string }) {
+  return (
+    <span className="flex items-center gap-1.5 text-xs text-ink-soft">
+      {text} ·{" "}
+      <a className="font-medium text-brand-600 hover:underline" href={href}>
+        {cta}
+      </a>
+    </span>
   );
 }
 

@@ -127,9 +127,12 @@ export function Customizer({ themeId }: { themeId: string }) {
     });
     setDirty(true);
   }
+  /** Overrides are identified by href + anchor text, matching the scan rows. */
   function setLinkOverride(from: string, to: string, label?: string) {
     setDraft((d) => {
-      const rest = d.links.filter((l) => l.from !== from);
+      const rest = d.links.filter(
+        (l) => !(l.from === from && (l.label ?? "") === (label ?? "")),
+      );
       return { ...d, links: to ? [...rest, { from, to, label }] : rest };
     });
     setDirty(true);
@@ -367,9 +370,14 @@ export function Customizer({ themeId }: { themeId: string }) {
                       </p>
                     ) : (
                       links.map((l) => {
-                        const override = draft.links.find((o) => o.from === l.href);
+                        const override = draft.links.find(
+                          (o) => o.from === l.href && (o.label ?? "") === (l.label ?? ""),
+                        );
                         return (
-                          <div key={l.href} className="border-b border-line py-2 last:border-b-0">
+                          <div
+                            key={`${l.href} ${l.label}`}
+                            className="border-b border-line py-2 last:border-b-0"
+                          >
                             <div className="mb-1 flex items-baseline gap-1.5">
                               <span className="truncate text-sm font-medium text-ink">
                                 {l.label || (ar ? "(بدون نص)" : "(no label)")}
@@ -386,8 +394,8 @@ export function Customizer({ themeId }: { themeId: string }) {
                             {l.count > 1 && (
                               <p className="mb-1 text-[11px] text-amber-700">
                                 {ar
-                                  ? `يوجد ${l.count} روابط تشير لنفس المكان — تغييره يغيّرها كلها.`
-                                  : `${l.count} links share this destination — changing it moves all of them.`}
+                                  ? `${l.count} أزرار متطابقة في هذه الصفحة — ستتغير كلها.`
+                                  : `${l.count} identical buttons on this page — all of them will move.`}
                               </p>
                             )}
                             <LinkPicker
