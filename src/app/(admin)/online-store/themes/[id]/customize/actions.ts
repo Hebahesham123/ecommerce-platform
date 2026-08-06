@@ -16,15 +16,11 @@ import {
   type ThemeMap,
 } from "@/lib/theme-schema";
 
+import type { LinkTargets } from "@/components/link-picker";
+
 export type ActionResult<T = void> =
   | { ok: true; data: T }
   | { ok: false; error: string };
-
-/** Handles the customizer offers in its pickers. */
-export type LinkTargets = {
-  collections: { handle: string; title: string; count: number }[];
-  products: { handle: string; title: string }[];
-};
 
 export type CustomizerData = {
   themeName: string;

@@ -367,48 +367,100 @@ export async function renderThemePage(input: RenderInput): Promise<string> {
     product_recommendations_url: `${mount}/recommendations/products`,
   };
 
-  // ---- Navigation menus -----------------------------------------------------
-  const navCollections = catalog.collections.filter((c) => c.handle !== "all").slice(0, 8);
-  const mainMenu = {
-    title: "Main menu",
-    handle: "main-menu",
-    levels: 1,
-    links: [
-      { title: "Home", url: routes.root_url, type: "frontpage_link", active: route.type === "index", child_active: false, current: route.type === "index", links: [], object: null },
-      { title: "Shop all", url: routes.all_products_collection_url, type: "collection_link", active: false, child_active: false, current: false, links: [], object: null },
-      ...navCollections.map((c) => ({
-        title: c.title,
-        url: c.url,
-        type: "collection_link",
-        active: route.collection?.handle === c.handle,
-        child_active: false,
-        current: route.collection?.handle === c.handle,
-        links: [],
-        object: c as unknown,
-      })),
-    ],
-  };
-  // Any menu handle a theme asks for resolves to the store's real navigation.
-  const linklists = new Proxy(
-    { "main-menu": mainMenu, footer: mainMenu, "footer-menu": mainMenu } as Record<string, unknown>,
-    {
-      get(target, prop: string | symbol) {
-        if (typeof prop !== "string") return (target as any)[prop];
-        if (prop in target) return (target as any)[prop];
-        if (prop === "toLiquid" || prop === "then" || prop === "toJSON") return undefined;
-        return mainMenu;
-      },
-      has() {
-        return true;
-      },
-    },
-  );
-
   // Shopify-style keyed lookups: collections['handle'], all_products['handle'].
+  // Declared before the menus, which link items back to their collection drop.
   const collectionsByHandle: Record<string, unknown> = {};
   for (const c of catalog.collections) collectionsByHandle[c.handle] = c;
   const allProducts: Record<string, unknown> = {};
   for (const p of catalog.products) allProducts[p.handle] = p;
+
+  // ---- Navigation menus -----------------------------------------------------
+  const currentPath = route.path === "/" ? "/" : route.path;
+
+  /** A merchant menu item → Shopify's `link` drop, nested to any depth. */
+  function toLink(item: { title: string; url: string; children: any[] }): any {
+    const raw = String(item.url ?? "").trim() || "/";
+    const url = /^(https?:)?\/\//i.test(raw)
+      ? raw
+      : `${mount}${raw.startsWith("/") ? raw : `/${raw}`}`;
+    const links = (item.children ?? []).map(toLink);
+    const active = raw === currentPath;
+    const childActive = links.some((l: any) => l.active || l.child_active);
+    const handle = raw.match(/^\/collections\/([^/?#]+)$/)?.[1];
+    return {
+      title: String(item.title ?? ""),
+      url,
+      // Themes branch on `type` to decide whether to show a collection image.
+      type: raw.startsWith("/collections/")
+        ? "collection_link"
+        : raw.startsWith("/products/")
+          ? "product_link"
+          : raw === "/"
+            ? "frontpage_link"
+            : "http_link",
+      active,
+      child_active: childActive,
+      current: active,
+      links,
+      levels: links.length ? 1 + Math.max(...links.map((l: any) => l.levels ?? 0)) : 0,
+      object: handle ? (collectionsByHandle[handle] ?? null) : null,
+    };
+  }
+
+  function toMenu(def: { handle: string; title: string; items: any[] }): any {
+    const links = (def.items ?? []).map(toLink);
+    return {
+      title: def.title,
+      handle: def.handle,
+      links,
+      levels: links.length ? 1 + Math.max(...links.map((l: any) => l.levels ?? 0)) : 0,
+    };
+  }
+
+  // Until menus are built in the dashboard, derive one from collections so the
+  // theme's navigation is never empty.
+  const fallbackMenu = toMenu({
+    handle: "main-menu",
+    title: "Main menu",
+    items: [
+      { title: "Home", url: "/", children: [] },
+      { title: "Shop all", url: "/collections/all", children: [] },
+      ...catalog.collections
+        .filter((c) => c.handle !== "all")
+        .slice(0, 8)
+        .map((c) => ({ title: String(c.title), url: `/collections/${c.handle}`, children: [] })),
+    ],
+  });
+
+  const menusByHandle: Record<string, unknown> = {};
+  for (const def of catalog.menus ?? []) menusByHandle[def.handle] = toMenu(def);
+  const defaultMenu =
+    menusByHandle["main-menu"] ?? Object.values(menusByHandle)[0] ?? fallbackMenu;
+
+  // A theme may ask for any handle (`linklists[settings.menu]`); an unknown one
+  // resolves to the main menu rather than rendering nothing.
+  //
+  // liquidjs reads properties with `ownPropertyOnly: true`, so it calls
+  // hasOwnProperty BEFORE the `get` trap — without a matching
+  // getOwnPropertyDescriptor trap the lookup returns undefined and the trap
+  // never runs.
+  const RESERVED = new Set(["toLiquid", "then", "toJSON", "toString"]);
+  const linklists = new Proxy(menusByHandle, {
+    get(target, prop: string | symbol) {
+      if (typeof prop !== "string") return (target as any)[prop];
+      if (prop in target) return (target as any)[prop];
+      if (RESERVED.has(prop)) return undefined;
+      return defaultMenu;
+    },
+    has() {
+      return true;
+    },
+    getOwnPropertyDescriptor(target, prop) {
+      if (typeof prop === "string" && !(prop in target) && !RESERVED.has(prop))
+        return { configurable: true, enumerable: false, value: defaultMenu, writable: false };
+      return Reflect.getOwnPropertyDescriptor(target, prop);
+    },
+  });
 
   const canonicalPath = `${mount}${route.path === "/" ? "/" : route.path}`;
   const pageTitleFor = (): string => {

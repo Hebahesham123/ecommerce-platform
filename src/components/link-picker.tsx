@@ -2,7 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { EditableType } from "@/lib/theme-schema";
-import type { LinkTargets } from "./actions";
+
+/** Everything a link can point at, read from the live catalog. */
+export type LinkTargets = {
+  collections: { handle: string; title: string; count: number }[];
+  products: { handle: string; title: string }[];
+};
 
 /**
  * One control for "where does this point?".

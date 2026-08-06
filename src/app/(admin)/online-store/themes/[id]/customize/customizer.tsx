@@ -17,7 +17,7 @@ import {
   scanPageLinks,
   type CustomizerData,
 } from "./actions";
-import { LinkPicker, ListPicker } from "./link-picker";
+import { LinkPicker, ListPicker } from "@/components/link-picker";
 import { Card } from "@/components/ui";
 import {
   IcAlert,
