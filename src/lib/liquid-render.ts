@@ -2,6 +2,16 @@
 import "server-only";
 import { Liquid } from "liquidjs";
 import type { Catalog, CollectionDrop, ProductDrop } from "@/lib/storefront-data";
+import {
+  applyLinkOverrides,
+  parseSectionSchema,
+  scanLinks,
+  sectionKey,
+  themeSettingsData,
+  EMPTY_CUSTOMIZATION,
+  type FoundLink,
+  type ThemeCustomization,
+} from "@/lib/theme-schema";
 
 export type FileMap = Record<string, string>;
 
@@ -41,6 +51,13 @@ export type RenderInput = {
   /** CSS files force-linked into <head> — many themes load CSS ways we can't emit. */
   cssAssets?: string[];
   shopName?: string;
+  /** Merchant overrides: where each link/button points. */
+  customization?: ThemeCustomization;
+  /**
+   * When set, the anchors found on the page (before URL rewriting) are pushed
+   * here so the customizer can list hardcoded buttons.
+   */
+  collectLinks?: (links: FoundLink[]) => void;
 };
 
 // ---- Small helpers ----------------------------------------------------------
@@ -65,39 +82,6 @@ function escapeHtml(s: unknown): string {
   return String(s ?? "").replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!,
   );
-}
-
-function extractSchema(src: string): {
-  settings: Record<string, unknown>;
-  blockDefaults: Record<string, Record<string, unknown>>;
-  presetBlocks: { type: string; settings: Record<string, unknown> }[];
-} {
-  const m = src.match(/\{%-?\s*schema\s*-?%\}([\s\S]*?)\{%-?\s*endschema\s*-?%\}/);
-  const out = {
-    settings: {} as Record<string, unknown>,
-    blockDefaults: {} as Record<string, Record<string, unknown>>,
-    presetBlocks: [] as { type: string; settings: Record<string, unknown> }[],
-  };
-  if (!m) return out;
-  const schema = tryJSON<any>(m[1]);
-  if (!schema) return out;
-  for (const s of schema.settings ?? []) if (s?.id) out.settings[s.id] = s.default ?? "";
-  for (const b of schema.blocks ?? []) {
-    if (!b?.type) continue;
-    const d: Record<string, unknown> = {};
-    for (const s of b.settings ?? []) if (s?.id) d[s.id] = s.default ?? "";
-    out.blockDefaults[b.type] = d;
-  }
-  // A section dropped on the page with no saved blocks still shows its preset.
-  const preset = Array.isArray(schema.presets) ? schema.presets[0] : null;
-  for (const b of preset?.blocks ?? []) {
-    if (!b?.type) continue;
-    out.presetBlocks.push({
-      type: b.type,
-      settings: { ...(out.blockDefaults[b.type] ?? {}), ...(b.settings ?? {}) },
-    });
-  }
-  return out;
 }
 
 // ---- URL rewriting ----------------------------------------------------------
@@ -298,6 +282,7 @@ function fallbackTemplate(
 // ---- Main renderer ----------------------------------------------------------
 export async function renderThemePage(input: RenderInput): Promise<string> {
   const { files, catalog, route, cssAssets = [] } = input;
+  const customization = input.customization ?? EMPTY_CUSTOMIZATION;
   const mount = input.mount.replace(/\/$/, "");
   const assetBase = input.assetBase.endsWith("/") ? input.assetBase : `${input.assetBase}/`;
   const currency = catalog.shop.currency || "EGP";
@@ -313,11 +298,11 @@ export async function renderThemePage(input: RenderInput): Promise<string> {
     for (const panel of schema)
       for (const s of panel?.settings ?? []) if (s?.id) schemaDefaults[s.id] = s.default ?? "";
 
-  const settingsData = tryJSON<any>(files["config/settings_data.json"]);
-  let currentSettings: any = settingsData?.current;
-  if (typeof currentSettings === "string")
-    currentSettings = settingsData?.presets?.[currentSettings] ?? {};
-  const settings = { ...schemaDefaults, ...(currentSettings ?? {}) };
+  const settings = {
+    ...schemaDefaults,
+    ...themeSettingsData(files),
+    ...customization.settings,
+  };
 
   // ---- Locales --------------------------------------------------------------
   const localeKey =
@@ -851,12 +836,18 @@ export async function renderThemePage(input: RenderInput): Promise<string> {
   const argString = (token: any): string =>
     String(token?.args ?? "").trim().replace(/^['"]|['"]$/g, "");
 
-  async function renderSectionInstance(type: string, instance: any): Promise<string> {
+  async function renderSectionInstance(
+    type: string,
+    instance: any,
+    scope = "layout",
+  ): Promise<string> {
     if (instance?.disabled) return "";
     const src = files[`sections/${type}.liquid`];
     if (!src) return `<!-- section "${type}" not found -->`;
-    const sc = extractSchema(src);
+    const sc = parseSectionSchema(src);
     const id = instance?.id || type;
+    // Merchant overrides for this exact instance (see theme-schema.ts).
+    const override = customization.sections[sectionKey(scope, String(id))] ?? {};
     const savedOrder: string[] =
       instance?.block_order ?? Object.keys(instance?.blocks ?? {});
     let blocks = savedOrder.map((bid) => {
@@ -865,23 +856,34 @@ export async function renderThemePage(input: RenderInput): Promise<string> {
       return {
         id: bid,
         type: bt,
-        settings: { ...(sc.blockDefaults[bt] ?? {}), ...(b.settings ?? {}) },
+        settings: {
+          ...(sc.blockTypes[bt]?.defaults ?? {}),
+          ...(b.settings ?? {}),
+          ...(override.blocks?.[bid] ?? {}),
+        },
         shopify_attributes: "",
       };
     });
     // No saved blocks → fall back to the schema preset so the section isn't blank.
     if (blocks.length === 0 && sc.presetBlocks.length)
-      blocks = sc.presetBlocks.map((b, i) => ({
-        id: `${id}-${i}`,
-        type: b.type,
-        settings: b.settings,
-        shopify_attributes: "",
-      }));
+      blocks = sc.presetBlocks.map((b, i) => {
+        const bid = `${id}-${i}`;
+        return {
+          id: bid,
+          type: b.type,
+          settings: { ...b.settings, ...(override.blocks?.[bid] ?? {}) },
+          shopify_attributes: "",
+        };
+      });
 
     const section = {
       id,
       type,
-      settings: { ...sc.settings, ...(instance?.settings ?? {}) },
+      settings: {
+        ...sc.allDefaults,
+        ...(instance?.settings ?? {}),
+        ...(override.settings ?? {}),
+      },
       blocks,
       blocks_count: blocks.length,
       location: "",
@@ -903,7 +905,8 @@ export async function renderThemePage(input: RenderInput): Promise<string> {
     let out = "";
     for (const id of group.order) {
       const inst = group.sections?.[id];
-      if (inst?.type) out += await renderSectionInstance(inst.type, { id, ...inst });
+      if (inst?.type)
+        out += await renderSectionInstance(inst.type, { id, ...inst }, `sections/${name}`);
     }
     return out;
   }
@@ -955,7 +958,8 @@ export async function renderThemePage(input: RenderInput): Promise<string> {
       let out = "";
       for (const id of json.order) {
         const inst = json.sections?.[id];
-        if (inst?.type) out += await renderSectionInstance(inst.type, { id, ...inst });
+        if (inst?.type)
+          out += await renderSectionInstance(inst.type, { id, ...inst }, `templates/${name}`);
       }
       return out;
     }
@@ -1001,6 +1005,10 @@ export async function renderThemePage(input: RenderInput): Promise<string> {
   }
 
   // ---- Post-processing ------------------------------------------------------
+  // Anchors are inspected and re-pointed while hrefs are still the theme's own
+  // values, so overrides stay valid whichever prefix the storefront is on.
+  if (input.collectLinks) input.collectLinks(scanLinks(html));
+  html = applyLinkOverrides(html, customization.links);
   html = rewriteUrls(html, assetBase, mount);
 
   const cssLinks = cssAssets

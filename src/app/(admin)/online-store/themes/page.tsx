@@ -193,6 +193,10 @@ export default function ThemesPage() {
                   <button className="btn-primary" onClick={() => setPreview(current)}>
                     <IcEye className="h-4 w-4" /> {t("preview")}
                   </button>
+                  <a className="btn-outline" href={`/online-store/themes/${current.id}/customize`}>
+                    <IcTheme className="h-4 w-4" />{" "}
+                    {lang === "ar" ? "تخصيص الروابط" : "Customize links"}
+                  </a>
                   <a className="btn-outline" href="/shop" target="_blank" rel="noreferrer">
                     <IcLink className="h-4 w-4" />{" "}
                     {lang === "ar" ? "المتجر المباشر" : "Live storefront"}
@@ -266,6 +270,12 @@ export default function ThemesPage() {
                   <button className="btn-outline h-8 px-3 text-xs" onClick={() => setPreview(th)}>
                     {t("preview")}
                   </button>
+                  <a
+                    className="btn-ghost h-8 px-2 text-xs"
+                    href={`/online-store/themes/${th.id}/customize`}
+                  >
+                    {lang === "ar" ? "تخصيص" : "Customize"}
+                  </a>
                   <button className="btn-ghost h-8 px-2 text-xs" onClick={() => setInspect(th)}>
                     {t("inspect")}
                   </button>

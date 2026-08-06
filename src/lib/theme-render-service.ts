@@ -5,6 +5,13 @@ import { renderThemePage, type FileMap, type RenderRoute } from "@/lib/liquid-re
 import { getCatalog, searchProducts, type ProductDrop } from "@/lib/storefront-data";
 import { buildCart, type CartLine } from "@/lib/storefront-cart";
 import { pixelBaseCode } from "@/lib/meta";
+import {
+  buildThemeMap,
+  EMPTY_CUSTOMIZATION,
+  type FoundLink,
+  type ThemeCustomization,
+  type ThemeMap,
+} from "@/lib/theme-schema";
 
 const BUCKET = "themes";
 /** How long a theme's source files stay in memory. Catalog data is NOT cached here. */
@@ -137,6 +144,44 @@ async function loadBundle(
   return bundle;
 }
 
+// ---- Merchant customization (where links point) -----------------------------
+/**
+ * Load a theme's link/setting overrides. Returns the empty set when the
+ * customization migration has not been applied, so rendering never breaks.
+ */
+export async function loadCustomization(themeId: string): Promise<ThemeCustomization> {
+  if (!isSupabaseConfigured()) return EMPTY_CUSTOMIZATION;
+  try {
+    const supabase = getServerSupabase();
+    const { data, error } = await supabase
+      .from("theme_customizations")
+      .select("settings, sections, links")
+      .eq("theme_id", themeId)
+      .maybeSingle();
+    if (error || !data) return EMPTY_CUSTOMIZATION;
+    return {
+      settings: (data.settings ?? {}) as Record<string, unknown>,
+      sections: (data.sections ?? {}) as ThemeCustomization["sections"],
+      links: Array.isArray(data.links) ? (data.links as ThemeCustomization["links"]) : [],
+    };
+  } catch {
+    return EMPTY_CUSTOMIZATION;
+  }
+}
+
+/** The customizer's editable view of a theme: sections, settings, templates. */
+export async function getThemeMap(
+  themeId: string,
+  customization?: ThemeCustomization,
+): Promise<{ map: ThemeMap } | { error: string }> {
+  const bundle = await loadBundle(themeId, false);
+  if ("error" in bundle) return { error: bundle.error };
+  if (bundle.kind !== "liquid") return { error: "not_liquid" };
+  return {
+    map: buildThemeMap(bundle.files, customization ?? (await loadCustomization(themeId))),
+  };
+}
+
 // ---- Meta Pixel -------------------------------------------------------------
 async function getPixelSnippet(): Promise<string> {
   try {
@@ -223,6 +268,10 @@ export type StorefrontRequest = {
   fresh?: boolean;
   /** Overrides the shop name (the theme preview shows the theme's own name). */
   shopName?: string;
+  /** Pre-loaded overrides (the customizer passes unsaved edits for preview). */
+  customization?: ThemeCustomization;
+  /** Receives the anchors found on the page, for the customizer's link list. */
+  collectLinks?: (links: FoundLink[]) => void;
 };
 
 export type StorefrontResponse = { html: string; status: number };
@@ -367,6 +416,8 @@ export async function renderStorefront(
       route,
       cssAssets: bundle.cssAssets,
       shopName: req.shopName,
+      customization: req.customization ?? (await loadCustomization(req.themeId)),
+      collectLinks: req.collectLinks,
     });
     return { status, html: injectHead(html, pixel) };
   } catch (e) {
