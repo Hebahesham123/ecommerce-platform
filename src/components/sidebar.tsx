@@ -22,6 +22,7 @@ import {
   IcLocation,
   IcAccounting,
   IcCollection,
+  IcMenu,
 } from "./icons";
 import type { ComponentType, SVGProps } from "react";
 
@@ -72,7 +73,10 @@ const groups: Group[] = [
   {
     id: "online_store",
     label: "group_online_store",
-    items: [{ href: "/online-store/themes", key: "nav_themes", icon: IcTheme }],
+    items: [
+      { href: "/online-store/themes", key: "nav_themes", icon: IcTheme },
+      { href: "/navigation", key: "nav_navigation", icon: IcMenu },
+    ],
   },
   {
     id: "channels",

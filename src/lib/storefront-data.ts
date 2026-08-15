@@ -62,10 +62,24 @@ export type ShopInfo = {
   address: Record<string, unknown>;
 };
 
+/** A navigation menu as stored in the dashboard, ready for `linklists`. */
+export type MenuDef = {
+  handle: string;
+  title: string;
+  items: MenuItemDef[];
+};
+export type MenuItemDef = {
+  title: string;
+  url: string;
+  children: MenuItemDef[];
+};
+
 export type Catalog = {
   shop: ShopInfo;
   products: ProductDrop[];
   collections: CollectionDrop[];
+  /** Merchant-built menus; empty means "fall back to collections". */
+  menus: MenuDef[];
   productByHandle: Map<string, ProductDrop>;
   collectionByHandle: Map<string, CollectionDrop>;
   variantById: Map<string, { variant: VariantDrop; product: ProductDrop }>;
@@ -413,6 +427,7 @@ export function buildCatalog(
   shop: ShopInfo,
   mount: string,
   defs: CollectionDef[] = [],
+  menus: MenuDef[] = [],
 ): Catalog {
   // Only sellable rows reach the theme: active status and a real price.
   const sellable: Row[] = [];
@@ -502,6 +517,7 @@ export function buildCatalog(
     shop,
     products,
     collections,
+    menus,
     productByHandle,
     collectionByHandle,
     variantById,
@@ -544,6 +560,51 @@ async function loadCollectionDefs(): Promise<CollectionDef[]> {
   }
 }
 
+/**
+ * Read the merchant's navigation menus. Returns [] when the navigation
+ * migration has not been applied, so the theme falls back to a menu built
+ * from collections rather than losing its navigation entirely.
+ */
+async function loadMenus(): Promise<MenuDef[]> {
+  try {
+    const supabase = getServerSupabase();
+    const [{ data: menus, error }, { data: items, error: itemsErr }] = await Promise.all([
+      supabase.from("navigation_menus").select("id, handle, title").order("created_at"),
+      supabase
+        .from("navigation_items")
+        .select("id, menu_id, parent_id, title, url, position"),
+    ]);
+    if (error || itemsErr || !menus) return [];
+
+    const rowsByMenu = new Map<string, Row[]>();
+    for (const r of (items ?? []) as Row[]) {
+      const k = String(r.menu_id);
+      if (!rowsByMenu.has(k)) rowsByMenu.set(k, []);
+      rowsByMenu.get(k)!.push(r);
+    }
+
+    const toTree = (rows: Row[], parent: string | null): MenuItemDef[] =>
+      rows
+        .filter((r) => (r.parent_id ? String(r.parent_id) : null) === parent)
+        .sort((a, b) => Number(a.position ?? 0) - Number(b.position ?? 0))
+        .map((r) => ({
+          title: String(r.title ?? ""),
+          url: String(r.url ?? ""),
+          children: toTree(rows, String(r.id)),
+        }));
+
+    return (menus as Row[])
+      .map((m) => ({
+        handle: String(m.handle ?? ""),
+        title: String(m.title ?? ""),
+        items: toTree(rowsByMenu.get(String(m.id)) ?? [], null),
+      }))
+      .filter((m) => m.handle && m.items.length > 0);
+  } catch {
+    return [];
+  }
+}
+
 export const EMPTY_SHOP: ShopInfo = {
   name: "Store",
   currency: "EGP",
@@ -579,7 +640,8 @@ export async function getCatalog(mount = ""): Promise<Catalog> {
     return buildCatalog([], shop, mount);
   }
 
-  const value = buildCatalog(rows, shop, mount, await loadCollectionDefs());
+  const [collectionDefs, menus] = await Promise.all([loadCollectionDefs(), loadMenus()]);
+  const value = buildCatalog(rows, shop, mount, collectionDefs, menus);
   cache.set(mount, { at: Date.now(), value });
   return value;
 }

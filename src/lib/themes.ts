@@ -66,6 +66,27 @@ export function mimeForPath(path: string): string {
   return map[ext] ?? "application/octet-stream";
 }
 
+/** Extensions the theme code editor can open as text. */
+const EDITABLE_EXT = new Set([
+  "liquid", "json", "css", "scss", "sass", "js", "mjs", "ts",
+  "txt", "md", "xml", "svg", "yml", "yaml", "csv", "html", "htm",
+]);
+
+export function isEditablePath(path: string): boolean {
+  return EDITABLE_EXT.has(path.split(".").pop()?.toLowerCase() ?? "");
+}
+
+/** Rough syntax family, used for the editor's status bar. */
+export function languageOf(path: string): string {
+  const ext = path.split(".").pop()?.toLowerCase() ?? "";
+  const map: Record<string, string> = {
+    liquid: "Liquid", json: "JSON", css: "CSS", scss: "SCSS", sass: "Sass",
+    js: "JavaScript", mjs: "JavaScript", ts: "TypeScript", md: "Markdown",
+    xml: "XML", svg: "SVG", yml: "YAML", yaml: "YAML", html: "HTML", htm: "HTML",
+  };
+  return map[ext] ?? ext.toUpperCase() ?? "Text";
+}
+
 /** Pick the best entry HTML from a list of theme file paths. */
 export function pickEntry(paths: string[]): string | null {
   const html = paths.filter((p) => /\.html?$/i.test(p));

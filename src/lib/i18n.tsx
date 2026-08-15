@@ -279,6 +279,7 @@ const dict = {
   group_online_store: { ar: "المتجر الإلكتروني", en: "Online Store" },
   nav_online_store: { ar: "المتجر الإلكتروني", en: "Online Store" },
   nav_themes: { ar: "القوالب", en: "Themes" },
+  nav_navigation: { ar: "قوائم التنقّل", en: "Navigation" },
   themes_subtitle: { ar: "ارفع قوالب المتجر وعايِنها وانشرها", en: "Upload, preview & publish store themes" },
   upload_theme: { ar: "رفع قالب", en: "Upload theme" },
   theme_library: { ar: "مكتبة القوالب", en: "Theme library" },
