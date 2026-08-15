@@ -1,0 +1,133 @@
+{
+  "name": "Order Relay — Shopify A → Shopify B (draft order + checkout email)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "store-a-order",
+        "options": {}
+      },
+      "id": "webhook-store-a",
+      "name": "New order on Store A",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-560, 300],
+      "webhookId": "store-a-order"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// ---------------------------------------------------------------------------\n// Take the order from Store A and build a DRAFT ORDER for Store B (supplier).\n// For each line item, find the matching Store B product:\n//   1. by SKU   (best  — when both stores share SKUs)\n//   2. by TITLE (brand/vendor stripped, e.g. 'Rolex Gold Watch' -> 'gold watch')\n// Requires two n8n env vars for STORE B:\n//   SHOPIFY_B_STORE = supplier-store.myshopify.com\n//   SHOPIFY_B_TOKEN = shpat_...  (Admin API token, scopes: read_products, write_draft_orders)\n// ---------------------------------------------------------------------------\nconst store = $env.SHOPIFY_B_STORE;\nconst token = $env.SHOPIFY_B_TOKEN;\nconst API = '2024-10';\n\nconst order = $input.first().json.body || $input.first().json;\nconst lineItems = order.line_items || [];\nconst cust = order.customer || {};\nconst ship = order.shipping_address || {};\nconst email = order.email || cust.email || '';\n\n// Brands to strip when matching by title. Store A's line-item vendor is always\n// stripped automatically; add any extra brand words you carry here.\nconst BRAND_STOPWORDS = ['rolex','gucci','nike','adidas','apple','samsung','original','genuine','brand'];\n\nfunction cleanTitle(title, vendor) {\n  let q = String(title || '').toLowerCase();\n  if (vendor) q = q.split(String(vendor).toLowerCase()).join(' ');\n  for (const w of BRAND_STOPWORDS) q = q.replace(new RegExp('\\\\b' + w + '\\\\b', 'gi'), ' ');\n  return q.replace(/\\s+/g, ' ').trim();\n}\n\nconst gidToNumeric = (v) => (v == null ? null : String(v).split('/').pop());\n\nconst gql = async (query, variables) => {\n  const res = await this.helpers.httpRequest({\n    method: 'POST',\n    url: `https://${store}/admin/api/${API}/graphql.json`,\n    headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' },\n    body: { query, variables },\n    json: true,\n  });\n  return res && res.data;\n};\n\nconst findBySku = async (sku) => {\n  if (!sku) return null;\n  const d = await gql('query($q:String!){productVariants(first:1,query:$q){edges{node{id sku product{title}}}}}', { q: `sku:${sku}` });\n  const node = d && d.productVariants && d.productVariants.edges && d.productVariants.edges[0] && d.productVariants.edges[0].node;\n  if (!node) return null;\n  return { variant_id: Number(gidToNumeric(node.id)), matchedTitle: node.product.title, by: 'sku' };\n};\n\nconst findByTitle = async (term) => {\n  const d = await gql('query($q:String!){products(first:1,query:$q){edges{node{title variants(first:1){edges{node{id}}}}}}}', { q: term });\n  const edge = d && d.products && d.products.edges && d.products.edges[0];\n  const v = edge && edge.node && edge.node.variants && edge.node.variants.edges && edge.node.variants.edges[0] && edge.node.variants.edges[0].node;\n  if (!v) return null;\n  return { variant_id: Number(gidToNumeric(v.id)), matchedTitle: edge.node.title, by: 'title' };\n};\n\nconst line_items = [];\nconst matches = [];\nconst unmatched = [];\n\nfor (const li of lineItems) {\n  let found = await findBySku(li.sku);\n  if (!found) {\n    const term = cleanTitle(li.title, li.vendor);\n    found = await findByTitle(term);\n  }\n  if (found) {\n    line_items.push({ variant_id: found.variant_id, quantity: li.quantity || 1 });\n    matches.push({ ordered: li.title, matched: found.matchedTitle, by: found.by });\n  } else {\n    unmatched.push({ title: li.title, sku: li.sku || null });\n  }\n}\n\nconst draft_order = {\n  line_items,\n  note: `Relayed from Store A order ${order.name || order.id || ''}`,\n  tags: `order-relay,${order.name || ''}`,\n  shipping_address: {\n    first_name: ship.first_name || cust.first_name || 'Customer',\n    last_name: ship.last_name || cust.last_name || '-',\n    address1: ship.address1 || '',\n    address2: ship.address2 || '',\n    city: ship.city || '',\n    province: ship.province || '',\n    country: ship.country || 'Egypt',\n    zip: ship.zip || '',\n    phone: ship.phone || cust.phone || '',\n  },\n};\nif (email) draft_order.email = email;\n\nreturn [{\n  json: {\n    orderName: order.name || null,\n    hasItems: line_items.length > 0,\n    hasEmail: Boolean(email),\n    email,\n    matches,\n    unmatched,\n    body: { draft_order },\n  },\n}];\n"
+      },
+      "id": "prepare-draft",
+      "name": "Prepare draft for Store B",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-320, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "strict", "version": 2 },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "has-items",
+              "leftValue": "={{ $json.hasItems }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "true", "singleValue": true }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "if-has-items",
+      "name": "Any product matched?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [-80, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://{{ $env.SHOPIFY_B_STORE }}/admin/api/2024-10/draft_orders.json",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Shopify-Access-Token", "value": "={{ $env.SHOPIFY_B_TOKEN }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {}
+      },
+      "id": "create-draft",
+      "name": "Create draft order on Store B",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [180, 220]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "strict", "version": 2 },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "has-email",
+              "leftValue": "={{ $('Prepare draft for Store B').item.json.hasEmail }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "true", "singleValue": true }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "if-has-email",
+      "name": "Customer has email?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [420, 220]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "subject": "=Complete your payment — order {{ $('Prepare draft for Store B').item.json.orderName }}",
+        "bodyContent": "=<p>Hi {{ $('Prepare draft for Store B').item.json.body.draft_order.shipping_address.first_name }},</p><p>Thank you for your order. Please complete your payment securely using the link below:</p><p><a href=\"{{ $('Create draft order on Store B').item.json.draft_order.invoice_url }}\">Complete my payment</a></p><p>If the button does not work, copy this link:<br>{{ $('Create draft order on Store B').item.json.draft_order.invoice_url }}</p><p>Thank you!</p>",
+        "toRecipients": "={{ $('Prepare draft for Store B').item.json.email }}",
+        "additionalFields": { "bodyContentType": "html" }
+      },
+      "id": "send-outlook",
+      "name": "Email checkout link (Outlook)",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [660, 140],
+      "credentials": {
+        "microsoftOutlookOAuth2Api": { "id": "REPLACE_WITH_OUTLOOK_CREDENTIAL", "name": "Outlook" }
+      }
+    }
+  ],
+  "connections": {
+    "New order on Store A": { "main": [[{ "node": "Prepare draft for Store B", "type": "main", "index": 0 }]] },
+    "Prepare draft for Store B": { "main": [[{ "node": "Any product matched?", "type": "main", "index": 0 }]] },
+    "Any product matched?": {
+      "main": [
+        [{ "node": "Create draft order on Store B", "type": "main", "index": 0 }],
+        []
+      ]
+    },
+    "Create draft order on Store B": { "main": [[{ "node": "Customer has email?", "type": "main", "index": 0 }]] },
+    "Customer has email?": {
+      "main": [
+        [{ "node": "Email checkout link (Outlook)", "type": "main", "index": 0 }],
+        []
+      ]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": false
+}

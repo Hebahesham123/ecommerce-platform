@@ -19,6 +19,20 @@ const dict = {
   search: { ar: "ابحث عن طلب، منتج، عميل…", en: "Search orders, products, customers…" },
   greeting: { ar: "أهلاً، هبة", en: "Hi, Heba" },
 
+  // Command palette (⌘K)
+  cmd_placeholder: { ar: "اكتب أمراً أو ابحث…", en: "Type a command or search…" },
+  cmd_empty: { ar: "لا توجد نتائج", en: "No results found" },
+  cmd_group_nav: { ar: "التنقل", en: "Navigation" },
+  cmd_group_actions: { ar: "إجراءات سريعة", en: "Quick actions" },
+  cmd_group_prefs: { ar: "التفضيلات", en: "Preferences" },
+  cmd_new_product: { ar: "منتج جديد", en: "New product" },
+  cmd_new_discount: { ar: "خصم جديد", en: "New discount" },
+  cmd_toggle_lang: { ar: "التبديل إلى الإنجليزية", en: "Switch to Arabic" },
+  cmd_hint_open: { ar: "للفتح", en: "to open" },
+  cmd_hint_nav: { ar: "للتنقل", en: "to navigate" },
+  cmd_hint_select: { ar: "للاختيار", en: "to select" },
+  cmd_hint_close: { ar: "للإغلاق", en: "to close" },
+
   // Navigation
   nav_overview: { ar: "نظرة عامة", en: "Overview" },
   nav_orders: { ar: "الطلبات", en: "Orders" },

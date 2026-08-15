@@ -1,6 +1,18 @@
 import type { Metadata } from "next";
+import { Tajawal } from "next/font/google";
 import "./globals.css";
 import { LangProvider } from "@/lib/i18n";
+
+// Self-hosted Tajawal (bundled with the app) so an ad/privacy blocker or a
+// flaky network can never stop the font from loading — which used to break the
+// whole UI's type and spacing. Exposes the family as the --font-app CSS
+// variable. Weights are those Tajawal actually ships (no 600).
+const tajawal = Tajawal({
+  subsets: ["arabic", "latin"],
+  weight: ["400", "500", "700", "800"],
+  variable: "--font-app",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "BeautyBar · لوحة التحكم",
@@ -16,18 +28,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="ar" dir="rtl">
+    <html lang="ar" dir="rtl" className={tajawal.variable}>
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link
-          rel="preconnect"
-          href="https://fonts.gstatic.com"
-          crossOrigin="anonymous"
-        />
-        <link
-          href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&display=swap"
-          rel="stylesheet"
-        />
         {/* Meta Pixel */}
         <script
           dangerouslySetInnerHTML={{

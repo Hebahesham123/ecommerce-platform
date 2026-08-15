@@ -91,6 +91,9 @@ function rowToItem(r: Row): InventoryItem {
     compareAtPrice: numOrNull(r.compare_at_price),
     cost: numOrNull(r.cost),
     tracked: Boolean(r.tracked),
+    supplierVariantId: str(r.supplier_variant_id),
+    supplierUrl: str(r.supplier_url),
+    supplierTitle: str(r.supplier_title),
     levels,
     createdAt: String(r.created_at ?? ""),
     updatedAt: String(r.updated_at ?? ""),
@@ -118,6 +121,9 @@ function itemToRow(i: InventoryItem): Row {
     compare_at_price: i.compareAtPrice,
     cost: i.cost,
     tracked: i.tracked,
+    supplier_variant_id: i.supplierVariantId?.trim() || null,
+    supplier_url: i.supplierUrl?.trim() || null,
+    supplier_title: i.supplierTitle?.trim() || null,
   };
 }
 

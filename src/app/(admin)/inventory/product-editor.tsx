@@ -586,6 +586,52 @@ export function ProductEditor({
                   </Field>
                 </div>
               </SectionCard>
+
+              {/* Supplier mapping (order-relay / dropship flow) */}
+              <SectionCard
+                title={ar ? "المورّد (ربط الطلب)" : "Supplier mapping"}
+                hint={
+                  ar
+                    ? "يُستخدم لإنشاء طلب مسودة على متجر المورّد وإرسال رابط الدفع للعميل."
+                    : "Used to create a draft order on the supplier store and email the customer a checkout link."
+                }
+              >
+                <div className="space-y-3">
+                  <Field label={ar ? "معرّف تنويعة المورّد" : "Supplier variant ID"}>
+                    <input
+                      value={draft.supplierVariantId ?? ""}
+                      onChange={(e) => set("supplierVariantId", e.target.value)}
+                      className="inp"
+                      dir="ltr"
+                      placeholder="e.g. 44012345678901"
+                    />
+                  </Field>
+                  <p className="-mt-1 text-xs text-ink-soft">
+                    {ar
+                      ? "إذا حُدِّد، يُستخدم مباشرةً (مطابقة دقيقة). اتركه فارغاً للبحث بالاسم."
+                      : "If set, used directly (exact match). Leave empty to match by title search."}
+                  </p>
+                  <Field label={ar ? "رابط منتج المورّد" : "Supplier product URL"}>
+                    <input
+                      value={draft.supplierUrl ?? ""}
+                      onChange={(e) => set("supplierUrl", e.target.value)}
+                      className="inp"
+                      dir="ltr"
+                      placeholder="https://supplier.myshopify.com/products/..."
+                    />
+                  </Field>
+                  <Field label={ar ? "كلمة البحث (اختياري)" : "Search term override (optional)"}>
+                    <input
+                      value={draft.supplierTitle ?? ""}
+                      onChange={(e) => set("supplierTitle", e.target.value)}
+                      className="inp"
+                      placeholder={
+                        ar ? "مثال: ساعة ذهبية" : "e.g. gold watch (no brand)"
+                      }
+                    />
+                  </Field>
+                </div>
+              </SectionCard>
             </div>
           </div>
 

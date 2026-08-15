@@ -1,0 +1,164 @@
+{
+  "name": "Order Relay → Supplier Shopify Draft Order",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "order-relay",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-order-relay",
+      "name": "Webhook (order-relay)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-560, 300],
+      "webhookId": "order-relay"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// ---------------------------------------------------------------------------\n// Prepare the supplier draft order.\n//  - For each ordered item: use its exact supplier variant if mapped, else\n//    search the supplier Shopify store by the BRAND-STRIPPED title.\n//  - Build the Shopify draft_order body (line items + customer + address).\n// Requires two n8n env vars (or swap for credentials):\n//    SHOPIFY_STORE  = your-supplier.myshopify.com\n//    SHOPIFY_TOKEN  = shpat_...  (Admin API access token)\n// ---------------------------------------------------------------------------\nconst store = $env.SHOPIFY_STORE;\nconst token = $env.SHOPIFY_TOKEN;\nconst API = '2024-10';\n\nconst payload = $input.first().json.body || $input.first().json;\nconst items = payload.items || [];\nconst c = payload.customer || {};\n\n// Words to remove when auto-building a search term. The item's own vendor is\n// always stripped; extend this list with brands you carry.\nconst BRAND_STOPWORDS = ['rolex','gucci','nike','adidas','apple','samsung','original','genuine','brand'];\n\nfunction cleanTitle(title, vendor) {\n  let q = String(title || '').toLowerCase();\n  if (vendor) q = q.split(String(vendor).toLowerCase()).join(' ');\n  for (const w of BRAND_STOPWORDS) q = q.replace(new RegExp('\\\\b' + w + '\\\\b', 'gi'), ' ');\n  return q.replace(/\\s+/g, ' ').trim();\n}\n\nconst gidToNumeric = (v) => (v == null ? null : String(v).split('/').pop());\n\nconst findVariant = async (term) => {\n  const query = 'query($q:String!){products(first:1,query:$q){edges{node{title handle variants(first:1){edges{node{id title}}}}}}}';\n  const res = await this.helpers.httpRequest({\n    method: 'POST',\n    url: `https://${store}/admin/api/${API}/graphql.json`,\n    headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' },\n    body: { query, variables: { q: term } },\n    json: true,\n  });\n  const edge = res && res.data && res.data.products && res.data.products.edges && res.data.products.edges[0];\n  const v = edge && edge.node && edge.node.variants && edge.node.variants.edges && edge.node.variants.edges[0] && edge.node.variants.edges[0].node;\n  if (!v) return null;\n  return { variant_id: Number(gidToNumeric(v.id)), matchedTitle: edge.node.title };\n};\n\nconst line_items = [];\nconst matches = [];\nconst unmatched = [];\n\nfor (const it of items) {\n  let variantId = it.supplierVariantId ? gidToNumeric(it.supplierVariantId) : null;\n  let matchedTitle = it.title;\n  let mode = 'exact';\n  if (!variantId) {\n    const term = (it.supplierTitle && it.supplierTitle.trim()) || cleanTitle(it.title, it.vendor);\n    const found = await findVariant(term);\n    if (found) { variantId = found.variant_id; matchedTitle = found.matchedTitle; mode = 'search'; }\n    else { unmatched.push({ title: it.title, term }); continue; }\n  }\n  line_items.push({ variant_id: Number(variantId), quantity: Number(it.quantity) || 1 });\n  matches.push({ ordered: it.title, matched: matchedTitle, mode });\n}\n\nconst nameParts = String(c.name || 'Customer').trim().split(/\\s+/);\nconst firstName = nameParts.shift() || 'Customer';\nconst lastName = nameParts.join(' ') || '-';\nconst email = (c.email || '').trim();\n\nconst draft_order = {\n  line_items,\n  note: `Relayed from store order ${payload.orderNumber || ''}. ${c.note || ''}`.trim(),\n  tags: `order-relay,${payload.orderNumber || ''}`,\n  shipping_address: {\n    first_name: firstName,\n    last_name: lastName,\n    address1: c.address || '',\n    city: c.city || '',\n    province: c.governorate || '',\n    country: 'Egypt',\n    phone: c.phone || '',\n  },\n};\nif (email) draft_order.email = email;\n\nreturn [{\n  json: {\n    orderNumber: payload.orderNumber || null,\n    hasItems: line_items.length > 0,\n    hasEmail: Boolean(email),\n    email,\n    matches,\n    unmatched,\n    body: { draft_order },\n  },\n}];\n"
+      },
+      "id": "prepare-draft",
+      "name": "Prepare draft",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-340, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "strict", "version": 2 },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "has-items",
+              "leftValue": "={{ $json.hasItems }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "true", "singleValue": true }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "if-has-items",
+      "name": "Has line items?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [-120, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://{{ $env.SHOPIFY_STORE }}/admin/api/2024-10/draft_orders.json",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Shopify-Access-Token", "value": "={{ $env.SHOPIFY_TOKEN }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {}
+      },
+      "id": "create-draft",
+      "name": "Create draft order",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [140, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "strict", "version": 2 },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "has-email",
+              "leftValue": "={{ $('Prepare draft').item.json.hasEmail }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "true", "singleValue": true }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "if-has-email",
+      "name": "Has email?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [360, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://{{ $env.SHOPIFY_STORE }}/admin/api/2024-10/draft_orders/{{ $json.draft_order.id }}/send_invoice.json",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "X-Shopify-Access-Token", "value": "={{ $env.SHOPIFY_TOKEN }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ draft_order_invoice: { to: $('Prepare draft').item.json.email } }) }}",
+        "options": {}
+      },
+      "id": "send-invoice",
+      "name": "Email checkout link",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [580, 120]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, orderNumber: $('Prepare draft').item.json.orderNumber, draftOrderId: $('Create draft order').item.json.draft_order.id, invoiceUrl: $('Create draft order').item.json.draft_order.invoice_url, emailed: $('Prepare draft').item.json.hasEmail, matches: $('Prepare draft').item.json.matches, unmatched: $('Prepare draft').item.json.unmatched }) }}",
+        "options": {}
+      },
+      "id": "respond-ok",
+      "name": "Respond OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [800, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 422,
+        "responseBody": "={{ JSON.stringify({ ok: false, reason: 'no_supplier_match', unmatched: $json.unmatched }) }}",
+        "options": {}
+      },
+      "id": "respond-nomatch",
+      "name": "Respond no match",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [140, 420]
+    }
+  ],
+  "connections": {
+    "Webhook (order-relay)": { "main": [[{ "node": "Prepare draft", "type": "main", "index": 0 }]] },
+    "Prepare draft": { "main": [[{ "node": "Has line items?", "type": "main", "index": 0 }]] },
+    "Has line items?": {
+      "main": [
+        [{ "node": "Create draft order", "type": "main", "index": 0 }],
+        [{ "node": "Respond no match", "type": "main", "index": 0 }]
+      ]
+    },
+    "Create draft order": { "main": [[{ "node": "Has email?", "type": "main", "index": 0 }]] },
+    "Has email?": {
+      "main": [
+        [{ "node": "Email checkout link", "type": "main", "index": 0 }],
+        [{ "node": "Respond OK", "type": "main", "index": 0 }]
+      ]
+    },
+    "Email checkout link": { "main": [[{ "node": "Respond OK", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": false
+}

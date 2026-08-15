@@ -1,0 +1,82 @@
+{
+  "name": "Order Relay — Store A → Store B cart link (tag match, no token) + Outlook",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "store-a-order",
+        "options": {}
+      },
+      "id": "webhook-store-a",
+      "name": "New order on Store A",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-560, 300],
+      "webhookId": "store-a-order"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "// ---------------------------------------------------------------------------\n// NO Shopify token. Matches products by a shared TAG (e.g. 'relay-1001') that\n// you put on the SAME product in BOTH stores. Uses each store's PUBLIC feed\n// (https://STORE/products.json) which includes tags.\n//   Store A order gives product_id -> look up Store A's relay tag\n//   -> find the Store B product with the same tag -> build the checkout link.\n// ---------------------------------------------------------------------------\nconst TAG_PREFIX = 'relay-';                    // both products share e.g. relay-1001\nconst STORE_B = 'montre-usa.myshopify.com';     // supplier store (checkout happens here)\nconst STORE_A_FALLBACK = '';                    // optional; auto-detected from the webhook\n\nconst input = $input.first().json;\nconst order = input.body || input;\nconst headers = input.headers || {};\nconst STORE_A = String(headers['x-shopify-shop-domain'] || STORE_A_FALLBACK || '').trim();\n\nconst items = order.line_items || [];\nconst cust = order.customer || {};\nconst ship = order.shipping_address || {};\nconst email = order.email || cust.email || '';\n\nconst relayTagOf = (tags) => {\n  const arr = Array.isArray(tags) ? tags : String(tags || '').split(',');\n  let numeric = null;\n  for (const t of arr) {\n    const s = String(t).trim().toLowerCase();\n    if (s.startsWith(TAG_PREFIX)) return s;      // e.g. relay-1001\n    if (!numeric && /^\\d+$/.test(s)) numeric = s; // e.g. plain number 1\n  }\n  return numeric;\n};\n\nconst loadFeed = async (domain) => {\n  const out = [];\n  if (!domain) return out;\n  for (let page = 1; page <= 10; page++) {\n    const res = await this.helpers.httpRequest({\n      method: 'GET',\n      url: `https://${domain}/products.json?limit=250&page=${page}`,\n      json: true,\n    });\n    const products = (res && res.products) || [];\n    if (!products.length) break;\n    out.push(...products);\n  }\n  return out;\n};\n\n// Store A: product_id -> relay tag\nconst aTagById = new Map();\nfor (const p of await loadFeed(STORE_A)) {\n  const tag = relayTagOf(p.tags);\n  if (tag) aTagById.set(String(p.id), tag);\n}\n\n// Store B: relay tag -> variant id\nconst bVariantByTag = new Map();\nfor (const p of await loadFeed(STORE_B)) {\n  const tag = relayTagOf(p.tags);\n  const firstV = p.variants && p.variants[0];\n  if (tag && firstV) bVariantByTag.set(tag, firstV.id);\n}\n\nconst parts = [];\nconst unmatched = [];\nfor (const li of items) {\n  const tag = aTagById.get(String(li.product_id));\n  const vid = tag ? bVariantByTag.get(tag) : null;\n  if (vid) parts.push(`${vid}:${li.quantity || 1}`);\n  else unmatched.push(li.title + (tag ? ` [${tag} missing on Store B]` : ' [no relay tag on Store A]'));\n}\n\nconst enc = encodeURIComponent;\nlet link = '';\nif (parts.length) {\n  const q = [\n    email ? `checkout[email]=${enc(email)}` : '',\n    `checkout[shipping_address][first_name]=${enc(ship.first_name || cust.first_name || '')}`,\n    `checkout[shipping_address][last_name]=${enc(ship.last_name || cust.last_name || '')}`,\n    `checkout[shipping_address][address1]=${enc(ship.address1 || '')}`,\n    `checkout[shipping_address][city]=${enc(ship.city || '')}`,\n    `checkout[shipping_address][province]=${enc(ship.province || '')}`,\n    `checkout[shipping_address][country]=${enc(ship.country || 'Egypt')}`,\n    `checkout[shipping_address][phone]=${enc(ship.phone || cust.phone || '')}`,\n  ].filter(Boolean).join('&');\n  link = `https://${STORE_B}/cart/${parts.join(',')}?${q}`;\n}\n\nreturn [{\n  json: {\n    orderName: order.name || null,\n    storeA: STORE_A,\n    ready: Boolean(link) && Boolean(email),\n    email,\n    firstName: ship.first_name || cust.first_name || 'there',\n    link,\n    unmatched,\n  },\n}];\n"
+      },
+      "id": "build-link",
+      "name": "Build checkout link",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-320, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "typeValidation": "strict", "version": 2 },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "ready",
+              "leftValue": "={{ $json.ready }}",
+              "rightValue": true,
+              "operator": { "type": "boolean", "operation": "true", "singleValue": true }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "if-ready",
+      "name": "Link + email ready?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [-80, 300]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "subject": "=Complete your payment — order {{ $('Build checkout link').item.json.orderName }}",
+        "bodyContent": "=<p>Hi {{ $('Build checkout link').item.json.firstName }},</p><p>Thank you for your order. Please complete your payment securely using the link below — your details are already filled in:</p><p><a href=\"{{ $('Build checkout link').item.json.link }}\">Complete my payment</a></p><p>If the button does not work, copy this link:<br>{{ $('Build checkout link').item.json.link }}</p><p>Thank you!</p>",
+        "toRecipients": "={{ $('Build checkout link').item.json.email }}",
+        "additionalFields": { "bodyContentType": "html" }
+      },
+      "id": "send-outlook",
+      "name": "Email checkout link (Outlook)",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [180, 220],
+      "credentials": {
+        "microsoftOutlookOAuth2Api": { "id": "REPLACE_WITH_OUTLOOK_CREDENTIAL", "name": "Outlook" }
+      }
+    }
+  ],
+  "connections": {
+    "New order on Store A": { "main": [[{ "node": "Build checkout link", "type": "main", "index": 0 }]] },
+    "Build checkout link": { "main": [[{ "node": "Link + email ready?", "type": "main", "index": 0 }]] },
+    "Link + email ready?": {
+      "main": [
+        [{ "node": "Email checkout link (Outlook)", "type": "main", "index": 0 }],
+        []
+      ]
+    }
+  },
+  "settings": { "executionOrder": "v1" },
+  "active": false
+}

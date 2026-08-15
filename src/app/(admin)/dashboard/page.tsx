@@ -25,14 +25,11 @@ import { listInventory } from "../inventory/actions";
 import { listStoreOrders, type PlacedOrder } from "../../store/actions";
 import { PageHeader } from "@/components/page-header";
 import { Card, SectionHeader } from "@/components/ui";
-import { StatusPill, type PillTone } from "@/components/dashboard-ui";
+import { KpiStrip, StatusPill, type PillTone } from "@/components/dashboard-ui";
 import {
   IcUp,
-  IcDown,
   IcAlert,
   IcCash,
-  IcOrders,
-  IcProducts,
   IcInventory,
   IcImage,
 } from "@/components/icons";
@@ -71,7 +68,11 @@ export default function DashboardPage() {
     const low = items.filter((i) => stockStatus(totalAvailable(i)) === "low_stock").length;
     const out = items.filter((i) => totalAvailable(i) <= 0).length;
     const revenue = placed.reduce((s, o) => s + o.total, 0);
-    const codPending = placed.filter((o) => o.payment === "pending").reduce((s, o) => s + o.total, 0);
+    // Uncollected COD = cash out with couriers / delivered but not yet collected —
+    // NOT every pending order (else it just mirrors total revenue).
+    const codPending = placed
+      .filter((o) => o.payment === "pending" && (o.fulfillment === "out" || o.fulfillment === "delivered"))
+      .reduce((s, o) => s + o.total, 0);
     const ordersCount = placed.length;
     const aov = ordersCount ? Math.round(revenue / ordersCount) : 0;
     return { productCount, units, low, out, revenue, codPending, ordersCount, aov };
@@ -95,71 +96,33 @@ export default function DashboardPage() {
 
   const totalSales = salesSeries.reduce((s, d) => s + d.sales, 0);
   const totalStatus = statusBreakdown.reduce((s, d) => s + d.value, 0);
-
-  const tiles: {
-    icon: ComponentType<SVGProps<SVGSVGElement>>;
-    label: string; value: string; delta: number; accent: Accent;
-  }[] = [
-    { icon: IcCash, label: t("kpi_revenue"), value: egp(revenue, lang), delta: 12, accent: "brand" },
-    { icon: IcOrders, label: t("kpi_orders"), value: num(ordersCount, lang), delta: 8, accent: "sky" },
-    { icon: IcProducts, label: t("kpi_products"), value: num(productCount, lang), delta: 5, accent: "violet" },
-    { icon: IcCash, label: t("kpi_aov"), value: egp(aov, lang), delta: 3, accent: "emerald" },
-    { icon: IcAlert, label: t("kpi_pending_cod"), value: egp(codPending, lang), delta: -4, accent: "amber" },
-  ];
+  const salesSpark = salesSeries.map((d) => d.sales);
+  const ordersSpark = salesSeries.map((d) => d.orders);
 
   return (
     <>
-      <PageHeader title={t("nav_overview")} subtitle={t("greeting")} />
+      <PageHeader
+        title={t("nav_overview")}
+        subtitle={ar ? "أهلاً هبة 👋 — متجرك يعمل بكامل طاقته، لنواصل النمو." : "Welcome back, Heba 👋 — your store is live, let's keep growing."}
+        actions={
+          <>
+            <Link href="/store" className="btn-outline">{ar ? "زيارة المتجر" : "Visit store"}</Link>
+            <Link href="/inventory?new=1" className="btn-primary">{ar ? "إضافة منتج" : "Add product"}</Link>
+          </>
+        }
+      />
 
-      {/* Hero banner */}
-      <div className="relative mb-4 overflow-hidden rounded-3xl bg-gradient-to-br from-brand-600 via-rose-500 to-amber-400 p-6 text-white shadow-pop sm:p-8">
-        <div className="absolute -end-10 -top-10 h-40 w-40 rounded-full bg-white/10" />
-        <div className="absolute -bottom-16 -start-6 h-52 w-52 rounded-full bg-white/10" />
-        <div className="relative flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <div className="text-sm/relaxed text-white/80">
-              {ar ? "لوحة تحكم بيوتي بار" : "BeautyBar dashboard"}
-            </div>
-            <h2 className="mt-1 text-2xl font-extrabold tracking-tight sm:text-3xl">
-              {ar ? "أهلاً هبة 👋" : "Welcome back, Heba 👋"}
-            </h2>
-            <p className="mt-1 max-w-md text-sm text-white/85">
-              {ar
-                ? "متجرك يعمل بكامل طاقته — هذه نظرة سريعة على الأداء اليوم."
-                : "Your store is live — here's how things look today."}
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <Link href="/store" className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-brand-700 shadow-sm transition-transform hover:-translate-y-0.5">
-              {ar ? "زيارة المتجر" : "Visit store"}
-            </Link>
-            <Link href="/inventory?new=1" className="rounded-xl bg-white/15 px-4 py-2.5 text-sm font-semibold text-white ring-1 ring-white/30 backdrop-blur transition-colors hover:bg-white/25">
-              {ar ? "إضافة منتج" : "Add product"}
-            </Link>
-          </div>
-        </div>
-      </div>
-
-      {/* Colorful KPI tiles */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        {tiles.map((k) => {
-          const up = k.delta >= 0;
-          return (
-            <div key={k.label} className={`rounded-2xl border border-line bg-gradient-to-b ${TILE[k.accent].grad} p-4 shadow-card`}>
-              <div className="flex items-center justify-between">
-                <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${TILE[k.accent].chip} shadow-sm`}>
-                  <k.icon className="h-5 w-5" />
-                </span>
-                <span className={`inline-flex items-center gap-0.5 rounded-full bg-white/70 px-1.5 py-0.5 text-xs font-semibold ${up ? "text-emerald-600" : "text-rose-600"}`}>
-                  {up ? <IcUp className="h-3 w-3" /> : <IcDown className="h-3 w-3" />}{Math.abs(k.delta)}%
-                </span>
-              </div>
-              <div className="mt-3 truncate text-xl font-extrabold tracking-tight text-ink">{k.value}</div>
-              <div className="truncate text-xs text-ink-muted">{k.label}</div>
-            </div>
-          );
-        })}
-      </div>
+      {/* KPI metric strip (Shopify-style, sparklines + deltas) */}
+      <KpiStrip
+        period={<span>{ar ? "آخر ٧ أيام" : "Last 7 days"}</span>}
+        segments={[
+          { label: t("kpi_revenue"), value: egp(revenue, lang), delta: 12, data: salesSpark, tone: "brand" },
+          { label: t("kpi_orders"), value: num(ordersCount, lang), delta: 8, data: ordersSpark, tone: "emerald" },
+          { label: t("kpi_aov"), value: egp(aov, lang), delta: 3, data: salesSpark, tone: "slate" },
+          { label: t("kpi_products"), value: num(productCount, lang), tone: "slate" },
+          { label: t("kpi_pending_cod"), value: egp(codPending, lang), delta: -4, data: ordersSpark, tone: "rose" },
+        ]}
+      />
 
       <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* Sales chart */}

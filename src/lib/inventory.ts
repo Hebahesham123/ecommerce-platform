@@ -49,6 +49,10 @@ export type InventoryItem = {
   compareAtPrice: number | null;
   cost: number | null;
   tracked: boolean;
+  // ---- Supplier mapping (order-relay / dropship flow) ----------------------
+  supplierVariantId: string | null; // exact supplier Shopify variant → used as-is
+  supplierUrl: string | null; // supplier product page (reference)
+  supplierTitle: string | null; // optional search-term override
   levels: Level[];
   createdAt: string;
   updatedAt: string;
@@ -162,6 +166,9 @@ export function emptyItem(): InventoryItem {
     compareAtPrice: null,
     cost: null,
     tracked: true,
+    supplierVariantId: "",
+    supplierUrl: "",
+    supplierTitle: "",
     levels: [],
     createdAt: now,
     updatedAt: now,

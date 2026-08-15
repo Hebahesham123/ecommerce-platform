@@ -51,6 +51,9 @@ const flagPill: Record<OrderFlag, PillTone> = {
   unpaid_delivered: "warning",
 };
 
+// Table row = an order plus the extra columns the Shopify-style list shows.
+type Row = Order & { itemsCount: number; channel: "online" };
+
 export default function OrdersPage() {
   const { t, lang } = useI18n();
   const [tab, setTab] = useState<Tab>("all");
@@ -61,14 +64,14 @@ export default function OrdersPage() {
   const [sort, setSort] = useState<SortKey>("newest");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [detail, setDetail] = useState<Order | null>(null);
-  const [placed, setPlaced] = useState<Order[]>([]);
+  const [placed, setPlaced] = useState<Row[]>([]);
 
   useEffect(() => {
     (async () => {
       const res = await listStoreOrders();
       if (res.ok) {
         setPlaced(
-          res.data.map((o): Order => ({
+          res.data.map((o): Row => ({
             id: o.id,
             customer: o.customer,
             phone: o.phone,
@@ -79,14 +82,19 @@ export default function OrdersPage() {
             payment: o.payment,
             fulfillment: o.fulfillment,
             date: o.date,
+            itemsCount: o.itemsCount,
+            channel: "online",
           })),
         );
       }
     })();
   }, []);
 
-  // Real placed orders first, then the demo orders.
-  const orders = useMemo(() => [...placed, ...mockOrders], [placed]);
+  // Real placed orders first, then the demo orders (given a stable item count).
+  const orders = useMemo<Row[]>(
+    () => [...placed, ...mockOrders.map((m) => ({ ...m, itemsCount: 1 + (Number(m.id) % 3), channel: "online" as const }))],
+    [placed],
+  );
 
   const ar = lang === "ar";
   const fmtDate = (d: string) =>
@@ -283,7 +291,7 @@ export default function OrdersPage() {
 
         {/* Table */}
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] text-sm">
+          <table className="w-full min-w-[1080px] text-sm">
             <thead>
               <tr className="border-b border-line text-xs text-ink-soft">
                 <th className="w-10 ps-5 pe-2 py-3">
@@ -295,7 +303,9 @@ export default function OrdersPage() {
                 <th className="px-3 py-3 text-end font-medium">{t("col_total")}</th>
                 <th className="px-3 py-3 text-start font-medium">{t("col_payment")}</th>
                 <th className="px-3 py-3 text-start font-medium">{t("col_fulfillment")}</th>
-                <th className="px-5 py-3 text-start font-medium">{t("col_governorate")}</th>
+                <th className="px-3 py-3 text-end font-medium">{ar ? "الأصناف" : "Items"}</th>
+                <th className="px-3 py-3 text-start font-medium">{t("col_governorate")}</th>
+                <th className="px-5 py-3 text-start font-medium">{t("col_channel")}</th>
               </tr>
             </thead>
             <tbody>
@@ -340,11 +350,19 @@ export default function OrdersPage() {
                         hollow={o.fulfillment === "unfulfilled"}
                       />
                     </td>
-                    <td className="px-5 py-3.5">
+                    <td className="px-3 py-3.5 text-end text-ink-muted">
+                      {num(o.itemsCount, lang)} <span className="text-ink-soft">{ar ? "صنف" : "items"}</span>
+                    </td>
+                    <td className="px-3 py-3.5">
                       <div className="flex items-center gap-2">
                         <span className="text-ink-muted">{o.governorate}</span>
                         {o.flag && <StatusPill label={flagLabel(o.flag)} tone={flagPill[o.flag]} />}
                       </div>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-ink-muted">
+                        <span className="h-2 w-2 rounded-full bg-emerald-500" />{t("nav_online_store")}
+                      </span>
                     </td>
                   </tr>
                 );

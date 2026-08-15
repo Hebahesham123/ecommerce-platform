@@ -3,10 +3,17 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useI18n, egp } from "@/lib/i18n";
+import { useI18n, egp, num } from "@/lib/i18n";
 import { useCart } from "../cart";
-import { isPhoneVerified, sendOtp, verifyOtp, placeOrder } from "../actions";
-import { OFFERS, DELIVERY_SLOTS, computeDiscount } from "@/lib/offers";
+import {
+  sendOtp,
+  verifyOtp,
+  placeOrder,
+  getCustomer,
+  getStoreStats,
+  type CustomerProfile,
+} from "../actions";
+import { computeDiscount, isBirthday } from "@/lib/offers";
 
 const GOVERNORATES = [
   "القاهرة", "الجيزة", "الإسكندرية", "القليوبية", "الدقهلية", "الشرقية",
@@ -16,13 +23,10 @@ const GOVERNORATES = [
   "الوادي الجديد", "البحر الأحمر",
 ];
 
+const LOW_STOCK = 5;
+
 type Step = "idle" | "channel" | "sending" | "code_sent" | "verified";
 type Channel = "whatsapp" | "sms";
-type Speed = "standard" | "scheduled";
-
-function ymd(d: Date) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
 
 export default function CheckoutPage() {
   const { lang } = useI18n();
@@ -32,6 +36,7 @@ export default function CheckoutPage() {
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [step, setStep] = useState<Step>("idle");
   const [channel, setChannel] = useState<Channel>("whatsapp");
   const [code, setCode] = useState("");
@@ -39,57 +44,72 @@ export default function CheckoutPage() {
   const [city, setCity] = useState("");
   const [address, setAddress] = useState("");
   const [note, setNote] = useState("");
+  const [birthday, setBirthday] = useState("");
   const [placing, setPlacing] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // Offers
   const [couponInput, setCouponInput] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
   const [couponErr, setCouponErr] = useState<string | null>(null);
+  const [showCoupon, setShowCoupon] = useState(false);
 
-  // Delivery scheduling
-  const [speed, setSpeed] = useState<Speed>("standard");
-  const [deliveryDate, setDeliveryDate] = useState<string | null>(null);
-  const [deliverySlot, setDeliverySlot] = useState<string | null>(null);
-  const [days, setDays] = useState<Date[]>([]);
+  const [welcomeName, setWelcomeName] = useState<string | null>(null);
+  const [profileBirthday, setProfileBirthday] = useState<string | null>(null);
+  const [stats, setStats] = useState<{ orders: number; customers: number } | null>(null);
 
-  // Gift
-  const [giftWrap, setGiftWrap] = useState(false);
-  const [giftMessage, setGiftMessage] = useState("");
-
-  // Build the next 5 delivery days on the client (avoids SSR hydration drift).
   useEffect(() => {
-    const base = new Date();
-    const out: Date[] = [];
-    for (let i = 1; i <= 5; i++) {
-      const d = new Date(base);
-      d.setDate(base.getDate() + i);
-      out.push(d);
-    }
-    setDays(out);
+    (async () => {
+      const res = await getStoreStats();
+      if (res.ok) setStats(res.data);
+    })();
   }, []);
 
   const shipping = 0;
-  const discountResult = useMemo(() => computeDiscount(appliedCoupon, subtotal), [appliedCoupon, subtotal]);
+  const phoneOk = phone.replace(/[^\d]/g, "").length >= 10;
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const bdayToday = useMemo(() => isBirthday(birthday || profileBirthday, new Date()), [birthday, profileBirthday]);
+
+  const discountResult = useMemo(
+    () => computeDiscount(appliedCoupon, subtotal, { birthday: bdayToday }),
+    [appliedCoupon, subtotal, bdayToday],
+  );
   const discount = discountResult.ok ? discountResult.discount : 0;
   const total = Math.max(0, subtotal - discount + shipping);
-  const phoneOk = phone.replace(/[^\d]/g, "").length >= 10;
 
-  function chooseSpeed(s: Speed) {
-    setSpeed(s);
-    if (s === "scheduled") {
-      if (!deliveryDate && days[0]) setDeliveryDate(ymd(days[0]));
-      if (!deliverySlot) setDeliverySlot(DELIVERY_SLOTS[0].id);
+  // On a birthday, auto-apply the gift coupon (unless another is set).
+  useEffect(() => {
+    if (bdayToday && !appliedCoupon) setAppliedCoupon("BIRTHDAY");
+  }, [bdayToday, appliedCoupon]);
+
+  function applyProfile(p: CustomerProfile) {
+    setName((v) => v || p.name || "");
+    setEmail((v) => v || p.email || "");
+    setGov((v) => v || p.governorate || "");
+    setCity((v) => v || p.city || "");
+    setAddress((v) => v || p.address || "");
+    setBirthday((v) => v || p.birthday || "");
+    setWelcomeName(p.name);
+    setProfileBirthday(p.birthday);
+  }
+
+  // Recognize a returning verified customer and autofill their saved details.
+  async function recognizePhone() {
+    if (!phoneOk || step !== "idle") return;
+    const res = await getCustomer(phone);
+    if (res.ok && res.data.verified) {
+      setStep("verified");
+      if (res.data.profile) applyProfile(res.data.profile);
     }
   }
 
   function applyCoupon(codeArg?: string) {
     const c = (codeArg ?? couponInput).trim();
-    const res = computeDiscount(c, subtotal);
+    const res = computeDiscount(c, subtotal, { birthday: bdayToday });
     if (!res.ok) {
       setAppliedCoupon(null);
       setCouponErr(
         res.reason === "unknown" ? (ar ? "كود غير صالح" : "Invalid code")
+          : res.reason === "birthday_only" ? (ar ? "كود عيد الميلاد صالح في يوم ميلادك فقط" : "Birthday code works only on your birthday")
           : res.reason === "min_not_met"
             ? (ar ? `الحد الأدنى ${egp(res.offer!.minSubtotal, lang)}` : `Minimum ${egp(res.offer!.minSubtotal, lang)}`)
             : (ar ? "أدخلي كود الخصم" : "Enter a code"),
@@ -107,30 +127,26 @@ export default function CheckoutPage() {
     setCouponErr(null);
   }
 
-  // "Place order" entry point: validate, then either place directly (already
-  // verified) or auto-open the OTP modal on the channel-choice step.
   async function startCheckout() {
     setErr(null);
     if (!name.trim()) { setErr(ar ? "أدخلي الاسم" : "Enter your name"); return; }
     if (!phoneOk) { setErr(ar ? "أدخلي رقم هاتف صحيح" : "Enter a valid phone number"); return; }
+    if (!emailOk) { setErr(ar ? "أدخلي بريد إلكتروني صحيح لاستلام رابط الدفع" : "Enter a valid email to receive your payment link"); return; }
     if (!gov || !address.trim()) { setErr(ar ? "أكملي عنوان الشحن" : "Complete the shipping address"); return; }
-    if (speed === "scheduled" && (!deliveryDate || !deliverySlot)) {
-      setErr(ar ? "اختاري موعد التوصيل" : "Pick a delivery date & time"); return;
-    }
     if (items.length === 0) { setErr(ar ? "السلة فارغة" : "Cart is empty"); return; }
 
-    // Already verified this session or a returning customer → skip OTP, place now.
-    if (step === "verified" || (await isPhoneVerified(phone))) {
+    // Returning verified customer → place directly, else open the OTP modal.
+    if (step === "verified") { await placeOrderNow(); return; }
+    const res = await getCustomer(phone);
+    if (res.ok && res.data.verified) {
       setStep("verified");
       await placeOrderNow();
       return;
     }
-    // Otherwise open the OTP modal so the customer picks WhatsApp or SMS.
     setCode("");
     setStep("channel");
   }
 
-  // Customer picked a channel → trigger the n8n webhook to send the code.
   async function chooseChannel(ch: Channel) {
     setErr(null);
     setChannel(ch);
@@ -144,13 +160,11 @@ export default function CheckoutPage() {
     setStep("code_sent");
   }
 
-  // Resend the code (retry), optionally via a different channel.
   async function resend(ch: Channel) {
     setCode("");
     await chooseChannel(ch);
   }
 
-  // Confirm the code; on success the order is placed automatically.
   async function submitCode() {
     if (placing) return;
     setErr(null);
@@ -174,23 +188,19 @@ export default function CheckoutPage() {
     }
   }
 
-  // Actual order placement. Returns false (and shows an error) on failure.
   async function placeOrderNow(): Promise<boolean> {
     setErr(null);
     setPlacing(true);
     const res = await placeOrder({
       customerName: name,
       phone,
+      email: email.trim() || null,
       governorate: gov,
       city,
       address,
       note,
       couponCode: appliedCoupon,
-      deliverySpeed: speed,
-      deliveryDate: speed === "scheduled" ? deliveryDate : null,
-      deliverySlot: speed === "scheduled" ? deliverySlot : null,
-      giftWrap,
-      giftMessage: giftWrap ? giftMessage : null,
+      birthday: birthday || null,
       items: items.map((i) => ({
         itemId: i.itemId,
         productName: i.productName,
@@ -225,48 +235,54 @@ export default function CheckoutPage() {
   }
 
   const inp = "h-11 w-full rounded-xl border border-line bg-surface-page px-3 text-sm outline-none transition focus:border-brand-600 focus:bg-white focus:ring-2 focus:ring-brand-100";
-
-  const trust = ar
-    ? [{ i: "🔒", t: "دفع آمن" }, { i: "🚚", t: "شحن مجاني" }, { i: "↩️", t: "إرجاع خلال ١٤ يوم" }, { i: "✅", t: "منتجات أصلية" }]
-    : [{ i: "🔒", t: "Secure checkout" }, { i: "🚚", t: "Free shipping" }, { i: "↩️", t: "14-day returns" }, { i: "✅", t: "Authentic products" }];
+  const maxBirthday = new Date().toISOString().slice(0, 10);
+  const social = stats && stats.orders >= 10 ? stats.orders : 0;
 
   return (
     <>
-      <div className="mb-5 flex items-center justify-between">
-        <h1 className="text-xl font-bold text-ink">{ar ? "إتمام الطلب" : "Checkout"}</h1>
-        <span className="badge animate-pop-in bg-emerald-50 text-emerald-700">🔒 {ar ? "دفع مؤمّن ٪١٠٠" : "100% secure"}</span>
-      </div>
+      <h1 className="mb-4 text-xl font-bold text-ink">{ar ? "إتمام الطلب" : "Checkout"}</h1>
 
-      {/* Trust strip */}
-      <div className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
-        {trust.map((b, idx) => (
-          <div
-            key={b.t}
-            className="animate-fade-up flex items-center gap-2 rounded-xl border border-line bg-white px-3 py-2.5 shadow-card"
-            style={{ animationDelay: `${idx * 70}ms` }}
-          >
-            <span className="text-lg">{b.i}</span>
-            <span className="text-xs font-semibold text-ink">{b.t}</span>
-          </div>
-        ))}
-      </div>
+      {/* Returning customer welcome */}
+      {welcomeName && step === "verified" && (
+        <div className="animate-fade-up mb-3 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-700">
+          👋 {ar ? `أهلاً بعودتك، ${welcomeName}! بياناتك جاهزة.` : `Welcome back, ${welcomeName}! Your details are ready.`}
+        </div>
+      )}
+
+      {/* Birthday celebration */}
+      {bdayToday && (
+        <div className="animate-pop-in mb-3 flex items-center gap-2 rounded-xl border border-fuchsia-200 bg-gradient-to-r from-fuchsia-50 to-pink-50 px-4 py-2.5 text-sm font-semibold text-fuchsia-700">
+          <span className="animate-pulse-ring flex h-6 w-6 items-center justify-center rounded-full bg-fuchsia-500 text-xs text-white">🎂</span>
+          {ar ? "عيد ميلاد سعيد! أضفنا لك هدية ٢٠٪ خصم على طلبك." : "Happy birthday! We added a 20% gift to your order."}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
         {/* Form */}
-        <div className="space-y-5 lg:col-span-3">
-          {/* Contact + verification */}
-          <section className="animate-fade-up rounded-2xl border border-line bg-white p-4 shadow-card sm:p-5" style={{ animationDelay: "60ms" }}>
-            <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-ink"><span>👤</span>{ar ? "معلومات التواصل" : "Contact"}</h2>
+        <div className="space-y-4 lg:col-span-3">
+          {/* Your details */}
+          <section className="animate-fade-up rounded-2xl border border-line bg-white p-4 shadow-card sm:p-5" style={{ animationDelay: "40ms" }}>
+            <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-ink"><span>👤</span>{ar ? "بياناتك" : "Your details"}</h2>
             <div className="space-y-3">
               <input value={name} onChange={(e) => setName(e.target.value)} placeholder={ar ? "الاسم بالكامل" : "Full name"} className={inp} />
+              <div>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder={ar ? "البريد الإلكتروني" : "Email address"}
+                  className={inp}
+                  dir="ltr"
+                  inputMode="email"
+                  autoComplete="email"
+                />
+                <p className="mt-1 text-xs text-ink-soft">✉️ {ar ? "لإرسال رابط إتمام الدفع إليك" : "So we can email you the payment link"}</p>
+              </div>
               <div className="flex gap-2">
                 <input
                   value={phone}
-                  onChange={(e) => { setPhone(e.target.value); if (step === "verified") setStep("idle"); }}
-                  onBlur={async () => {
-                    // Returning customer: skip OTP if this number is already verified.
-                    if (phoneOk && step === "idle" && (await isPhoneVerified(phone))) setStep("verified");
-                  }}
+                  onChange={(e) => { setPhone(e.target.value); if (step === "verified") { setStep("idle"); setWelcomeName(null); } }}
+                  onBlur={recognizePhone}
                   placeholder={ar ? "رقم الموبايل" : "Mobile number"}
                   className={inp}
                   dir="ltr"
@@ -278,17 +294,23 @@ export default function CheckoutPage() {
                   </span>
                 )}
               </div>
-              <p className="text-xs text-ink-soft">
-                {ar
-                  ? "عند تأكيد الطلب سنرسل كود تحقق عبر واتساب أو SMS. لن نطلب التأكيد مرة أخرى للأرقام التي سبق التحقق منها."
-                  : "When you place the order we'll send a verification code via WhatsApp or SMS. We won't ask again for numbers you've already verified."}
-              </p>
+              <div>
+                <input
+                  type="date"
+                  value={birthday}
+                  max={maxBirthday}
+                  onChange={(e) => setBirthday(e.target.value)}
+                  className={`${inp} text-ink-muted`}
+                  dir="ltr"
+                />
+                <p className="mt-1 text-xs text-ink-soft">🎂 {ar ? "تاريخ ميلادك (اختياري) — لنحتفل معك بهدية كل عام" : "Your birthday (optional) — for a yearly gift"}</p>
+              </div>
             </div>
           </section>
 
-          {/* Shipping + delivery scheduling */}
-          <section className="animate-fade-up rounded-2xl border border-line bg-white p-4 shadow-card sm:p-5" style={{ animationDelay: "120ms" }}>
-            <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-ink"><span>📍</span>{ar ? "عنوان الشحن" : "Shipping address"}</h2>
+          {/* Shipping */}
+          <section className="animate-fade-up rounded-2xl border border-line bg-white p-4 shadow-card sm:p-5" style={{ animationDelay: "100ms" }}>
+            <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-ink"><span>📍</span>{ar ? "عنوان التوصيل" : "Delivery address"}</h2>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <select value={gov} onChange={(e) => setGov(e.target.value)} className={inp}>
                 <option value="">{ar ? "المحافظة" : "Governorate"}</option>
@@ -298,177 +320,61 @@ export default function CheckoutPage() {
               <input value={address} onChange={(e) => setAddress(e.target.value)} placeholder={ar ? "العنوان بالتفصيل" : "Street address"} className={`${inp} sm:col-span-2`} />
               <input value={note} onChange={(e) => setNote(e.target.value)} placeholder={ar ? "ملاحظات للتوصيل (اختياري)" : "Delivery note (optional)"} className={`${inp} sm:col-span-2`} />
             </div>
-
-            {/* Delivery speed */}
-            <h3 className="mb-2 mt-5 flex items-center gap-2 text-sm font-semibold text-ink"><span>🕒</span>{ar ? "موعد التوصيل" : "Delivery time"}</h3>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => chooseSpeed("standard")}
-                className={`rounded-xl border-2 p-3 text-start transition ${speed === "standard" ? "border-brand-500 bg-brand-50/40" : "border-line hover:border-brand-200"}`}
-              >
-                <div className="text-sm font-semibold text-ink">🚚 {ar ? "توصيل قياسي" : "Standard"}</div>
-                <div className="text-xs text-ink-soft">{ar ? "خلال ٢–٤ أيام · مجاني" : "2–4 days · free"}</div>
-              </button>
-              <button
-                type="button"
-                onClick={() => chooseSpeed("scheduled")}
-                className={`rounded-xl border-2 p-3 text-start transition ${speed === "scheduled" ? "border-brand-500 bg-brand-50/40" : "border-line hover:border-brand-200"}`}
-              >
-                <div className="text-sm font-semibold text-ink">📅 {ar ? "جدولة التوصيل" : "Schedule"}</div>
-                <div className="text-xs text-ink-soft">{ar ? "اختاري اليوم والوقت" : "Pick day & time"}</div>
-              </button>
-            </div>
-
-            {speed === "scheduled" && (
-              <div className="animate-slide-down mt-4 space-y-3 overflow-hidden">
-                <div>
-                  <div className="mb-1.5 text-xs font-medium text-ink-muted">{ar ? "اليوم" : "Day"}</div>
-                  <div className="flex flex-wrap gap-2">
-                    {days.map((d) => {
-                      const v = ymd(d);
-                      const active = deliveryDate === v;
-                      return (
-                        <button
-                          key={v}
-                          type="button"
-                          onClick={() => setDeliveryDate(v)}
-                          className={`rounded-xl border-2 px-3 py-2 text-center text-xs transition ${active ? "border-brand-500 bg-brand-50 text-brand-700" : "border-line text-ink hover:border-brand-200"}`}
-                        >
-                          <div className="font-semibold">{d.toLocaleDateString(ar ? "ar-EG" : "en-GB", { weekday: "short" })}</div>
-                          <div className="text-ink-soft">{d.toLocaleDateString(ar ? "ar-EG" : "en-GB", { day: "numeric", month: "short" })}</div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-                <div>
-                  <div className="mb-1.5 text-xs font-medium text-ink-muted">{ar ? "الوقت" : "Time"}</div>
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    {DELIVERY_SLOTS.map((s) => {
-                      const active = deliverySlot === s.id;
-                      return (
-                        <button
-                          key={s.id}
-                          type="button"
-                          onClick={() => setDeliverySlot(s.id)}
-                          className={`rounded-xl border-2 px-2 py-2 text-center text-xs font-medium transition ${active ? "border-brand-500 bg-brand-50 text-brand-700" : "border-line text-ink hover:border-brand-200"}`}
-                        >
-                          {ar ? s.ar : s.en}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            )}
-          </section>
-
-          {/* Gift options */}
-          <section className="animate-fade-up rounded-2xl border border-line bg-white p-4 shadow-card sm:p-5" style={{ animationDelay: "180ms" }}>
-            <label className="flex cursor-pointer items-center gap-3">
-              <input type="checkbox" checked={giftWrap} onChange={(e) => setGiftWrap(e.target.checked)} className="h-5 w-5 accent-brand-600" />
-              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-50 text-lg">🎁</span>
-              <span>
-                <span className="block text-sm font-semibold text-ink">{ar ? "أضيفي تغليف هدية" : "Add gift wrapping"}</span>
-                <span className="block text-xs text-ink-soft">{ar ? "تغليف أنيق مجاني + بطاقة إهداء" : "Free elegant wrap + a greeting card"}</span>
-              </span>
-            </label>
-            {giftWrap && (
-              <textarea
-                value={giftMessage}
-                onChange={(e) => setGiftMessage(e.target.value)}
-                placeholder={ar ? "رسالة الإهداء (اختياري)" : "Gift message (optional)"}
-                rows={2}
-                maxLength={140}
-                className="animate-slide-down mt-3 w-full rounded-xl border border-line bg-surface-page px-3 py-2 text-sm outline-none transition focus:border-brand-600 focus:bg-white focus:ring-2 focus:ring-brand-100"
-              />
-            )}
-          </section>
-
-          {/* Payment */}
-          <section className="animate-fade-up rounded-2xl border border-line bg-white p-4 shadow-card sm:p-5" style={{ animationDelay: "240ms" }}>
-            <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-ink"><span>💳</span>{ar ? "طريقة الدفع" : "Payment"}</h2>
-            <div className="flex items-center gap-3 rounded-xl border-2 border-brand-500 bg-brand-50/40 p-3">
-              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-lg">💵</span>
-              <div>
-                <div className="text-sm font-semibold text-ink">{ar ? "الدفع عند الاستلام (COD)" : "Cash on delivery (COD)"}</div>
-                <div className="text-xs text-ink-soft">{ar ? "ادفعي نقداً عند وصول الطلب" : "Pay in cash when your order arrives"}</div>
-              </div>
-              <span className="ms-auto text-brand-600">●</span>
-            </div>
+            <p className="mt-2 text-xs text-ink-soft">💵 {ar ? "الدفع عند الاستلام — لا حاجة لأي دفع الآن." : "Cash on delivery — nothing to pay now."}</p>
           </section>
         </div>
 
         {/* Summary */}
         <div className="lg:col-span-2">
-          <div className="animate-fade-up rounded-2xl border border-line bg-white p-4 shadow-card sm:p-5 lg:sticky lg:top-20" style={{ animationDelay: "100ms" }}>
-            {/* Free shipping banner */}
-            <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-3">
-              <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-emerald-700">
-                <span className="animate-pulse-ring flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500 text-xs text-white">🚚</span>
-                {ar ? "مبروك! الشحن مجاني على طلبك 🎉" : "Free shipping unlocked on your order 🎉"}
-              </div>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-emerald-100">
-                <div className="h-full w-full animate-shimmer rounded-full bg-gradient-to-r from-emerald-400 via-emerald-500 to-emerald-400 bg-[length:200%_100%]" />
-              </div>
-            </div>
-
+          <div className="animate-fade-up rounded-2xl border border-line bg-white p-4 shadow-card sm:p-5 lg:sticky lg:top-20" style={{ animationDelay: "80ms" }}>
             <h2 className="mb-3 text-sm font-semibold text-ink">{ar ? "ملخص الطلب" : "Order summary"}</h2>
             <div className="max-h-56 space-y-3 overflow-y-auto">
-              {items.map((i) => (
-                <div key={i.itemId} className="flex items-center gap-3">
-                  <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-line bg-surface-page">
-                    {i.imageUrl && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={i.imageUrl} alt="" className="h-full w-full object-cover" />
-                    )}
-                    <span className="absolute -end-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-ink px-1 text-xs font-bold text-white">{i.quantity}</span>
+              {items.map((i) => {
+                const low = i.maxAvailable > 0 && i.maxAvailable <= LOW_STOCK;
+                return (
+                  <div key={i.itemId} className="flex items-center gap-3">
+                    <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-line bg-surface-page">
+                      {i.imageUrl && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={i.imageUrl} alt="" className="h-full w-full object-cover" />
+                      )}
+                      <span className="absolute -end-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-ink px-1 text-xs font-bold text-white">{i.quantity}</span>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="line-clamp-1 text-sm font-medium">{i.productName}</div>
+                      {i.variantTitle && <div className="text-xs text-ink-soft">{i.variantTitle}</div>}
+                      {low && <div className="text-xs font-medium text-amber-600">⏳ {ar ? `باقي ${num(i.maxAvailable, lang)} فقط` : `Only ${num(i.maxAvailable, lang)} left`}</div>}
+                    </div>
+                    <div className="text-sm font-semibold">{egp(i.price * i.quantity, lang)}</div>
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="line-clamp-1 text-sm font-medium">{i.productName}</div>
-                    {i.variantTitle && <div className="text-xs text-ink-soft">{i.variantTitle}</div>}
-                  </div>
-                  <div className="text-sm font-semibold">{egp(i.price * i.quantity, lang)}</div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
-            {/* Offers */}
-            <div className="mt-4 border-t border-line pt-4">
-              <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-ink"><span>🎟️</span>{ar ? "عروض وكوبونات" : "Offers & coupons"}</div>
+            {/* Coupon (collapsible) */}
+            <div className="mt-4 border-t border-line pt-3">
               {appliedCoupon && discountResult.ok ? (
                 <div className="animate-pop-in flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
-                  <span className="text-sm font-semibold text-emerald-700">✓ {appliedCoupon}</span>
+                  <span className="text-sm font-semibold text-emerald-700">🎟️ {appliedCoupon}</span>
                   <button onClick={removeCoupon} className="text-xs font-medium text-emerald-700 hover:underline">{ar ? "إزالة" : "Remove"}</button>
                 </div>
-              ) : (
+              ) : showCoupon ? (
                 <div className="flex gap-2">
                   <input
                     value={couponInput}
                     onChange={(e) => { setCouponInput(e.target.value.toUpperCase()); setCouponErr(null); }}
                     onKeyDown={(e) => { if (e.key === "Enter") applyCoupon(); }}
-                    placeholder={ar ? "أدخلي كود الخصم" : "Enter coupon code"}
+                    placeholder={ar ? "كود الخصم" : "Coupon code"}
                     className={inp}
                     dir="ltr"
+                    autoFocus
                   />
                   <button onClick={() => applyCoupon()} className="btn-outline h-11 shrink-0 px-4 text-sm">{ar ? "تطبيق" : "Apply"}</button>
                 </div>
+              ) : (
+                <button onClick={() => setShowCoupon(true)} className="text-sm font-medium text-brand-600 hover:underline">🎟️ {ar ? "لديك كود خصم؟" : "Have a coupon?"}</button>
               )}
               {couponErr && <p className="mt-1.5 text-xs text-rose-600">{couponErr}</p>}
-              {!appliedCoupon && (
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {OFFERS.map((o) => (
-                    <button
-                      key={o.code}
-                      onClick={() => applyCoupon(o.code)}
-                      className="rounded-full border border-dashed border-brand-300 bg-brand-50/50 px-2.5 py-1 text-xs font-medium text-brand-700 transition hover:bg-brand-50"
-                    >
-                      {o.code} · {ar ? o.labelAr : o.labelEn}
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
 
             {/* Totals */}
@@ -482,26 +388,25 @@ export default function CheckoutPage() {
               )}
               <div className="flex justify-between"><span className="text-ink-muted">{ar ? "الشحن" : "Shipping"}</span><span className="font-medium text-emerald-600">{ar ? "مجاني" : "Free"}</span></div>
               <div className="flex justify-between border-t border-line pt-2 text-base font-bold"><span>{ar ? "الإجمالي" : "Total"}</span><span>{egp(total, lang)}</span></div>
-              {discount > 0 && (
-                <div className="text-end text-xs font-medium text-emerald-600">{ar ? `وفّرتِ ${egp(discount, lang)}` : `You saved ${egp(discount, lang)}`}</div>
-              )}
             </div>
+
+            {social > 0 && (
+              <p className="mt-3 text-center text-xs font-medium text-ink-muted">✅ {ar ? `انضمي لأكثر من ${num(social, lang)} طلب` : `Join ${num(social, lang)}+ orders placed`}</p>
+            )}
 
             {err && <p className="mt-3 text-sm text-rose-600">{err}</p>}
 
-            <button onClick={startCheckout} disabled={placing} className="btn-primary mt-4 w-full justify-center py-3 text-base shadow-pop transition hover:-translate-y-0.5 disabled:opacity-60 max-lg:hidden">
-              {placing ? (ar ? "جارٍ تأكيد الطلب…" : "Placing order…") : (ar ? "تأكيد الطلب · الدفع عند الاستلام" : "Place order · COD")}
+            <button onClick={startCheckout} disabled={placing} className="btn-primary mt-4 w-full justify-center py-3.5 text-base font-bold shadow-pop transition hover:-translate-y-0.5 disabled:opacity-60 max-lg:hidden">
+              {placing ? (ar ? "جارٍ تأكيد الطلب…" : "Placing order…") : (ar ? "تأكيد الطلب · الدفع عند الاستلام" : "Place order · Cash on delivery")}
             </button>
 
-            {/* Security row */}
             <div className="mt-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[11px] text-ink-soft">
-              <span>🔒 {ar ? "بياناتك مشفّرة" : "Encrypted"}</span>
+              <span>🔒 {ar ? "دفع آمن" : "Secure"}</span>
               <span>·</span>
-              <span>🛡️ {ar ? "حماية المشتري" : "Buyer protection"}</span>
+              <span>💵 {ar ? "الدفع عند الاستلام" : "Pay on delivery"}</span>
               <span>·</span>
-              <span>↩️ {ar ? "إرجاع سهل" : "Easy returns"}</span>
+              <span>↩️ {ar ? "إرجاع خلال ١٤ يوم" : "14-day returns"}</span>
             </div>
-            <p className="mt-2 text-center text-xs text-ink-soft">{ar ? "بتأكيد الطلب أنت توافقين على الشراء بالدفع عند الاستلام." : "By placing the order you agree to pay on delivery."}</p>
           </div>
         </div>
       </div>
@@ -509,7 +414,7 @@ export default function CheckoutPage() {
       {/* Spacer so the sticky mobile bar never covers the last content */}
       <div className="h-24 lg:hidden" aria-hidden />
 
-      {/* Sticky mobile checkout bar — total + place order always reachable */}
+      {/* Sticky mobile checkout bar */}
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white/95 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-4px_20px_rgba(15,23,42,0.08)] backdrop-blur lg:hidden">
         {err && <p className="mb-2 text-center text-xs text-rose-600">{err}</p>}
         <div className="flex items-center gap-3">
@@ -518,7 +423,7 @@ export default function CheckoutPage() {
             <div className="mt-0.5 text-base font-bold text-ink">{egp(total, lang)}</div>
             {discount > 0 && <div className="text-[10px] font-medium text-emerald-600">{ar ? `وفّرتِ ${egp(discount, lang)}` : `Saved ${egp(discount, lang)}`}</div>}
           </div>
-          <button onClick={startCheckout} disabled={placing} className="btn-primary flex-1 justify-center py-3 text-base shadow-pop disabled:opacity-60">
+          <button onClick={startCheckout} disabled={placing} className="btn-primary flex-1 justify-center py-3.5 text-base font-bold shadow-pop disabled:opacity-60">
             {placing ? (ar ? "جارٍ…" : "Placing…") : (ar ? "تأكيد الطلب · الدفع عند الاستلام" : "Place order · COD")}
           </button>
         </div>

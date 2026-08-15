@@ -1,7 +1,7 @@
 "use server";
 
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
-import { computeDiscount, slotLabel } from "@/lib/offers";
+import { computeDiscount, slotLabel, isBirthday } from "@/lib/offers";
 
 export type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -157,6 +157,17 @@ const OTP_WEBHOOK_URL =
   process.env.OTP_WEBHOOK_URL || "https://n8n.srv1155688.hstgr.cloud/webhook/send-otp";
 
 /**
+ * n8n "order relay" flow: on every placed order we POST the order + customer +
+ * per-item supplier mapping here. n8n then creates a draft order on the supplier
+ * Shopify store and emails the customer a checkout link. See
+ * docs/n8n-order-relay.md. Fire-and-forget: a webhook failure never blocks the
+ * order from being placed on our own store.
+ */
+const ORDER_RELAY_WEBHOOK_URL =
+  process.env.ORDER_RELAY_WEBHOOK_URL ||
+  "https://n8n.srv1155688.hstgr.cloud/webhook/order-relay";
+
+/**
  * Generate a code, store it, and deliver it via the n8n OTP webhook.
  * `sent` reflects whether the webhook accepted the request; if it fails we fall
  * back to returning the code (`devCode`) so testing still works.
@@ -225,6 +236,96 @@ export async function verifyOtp(
   }
 }
 
+// ---- Passwordless customer profiles (phone = account) -----------------------
+export type CustomerProfile = {
+  name: string | null;
+  email: string | null;
+  birthday: string | null;
+  governorate: string | null;
+  city: string | null;
+  address: string | null;
+  note: string | null;
+};
+
+/**
+ * Returns whether the phone is verified and, if so, its saved profile so the
+ * checkout can autofill returning customers. A profile is ONLY revealed for
+ * verified numbers — typing someone else's number leaks nothing.
+ */
+export async function getCustomer(
+  phone: string,
+): Promise<ActionResult<{ verified: boolean; profile: CustomerProfile | null }>> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  try {
+    const supabase = getServerSupabase();
+    const ph = normalizePhone(phone);
+    const { data: v } = await supabase
+      .from("verified_phones")
+      .select("phone")
+      .eq("phone", ph)
+      .maybeSingle();
+    if (!v) return { ok: true, data: { verified: false, profile: null } };
+
+    const { data } = await supabase
+      .from("store_customers")
+      .select("name,email,birthday,governorate,city,address,note")
+      .eq("phone", ph)
+      .maybeSingle();
+    const profile: CustomerProfile | null = data
+      ? {
+          name: (data.name as string) ?? null,
+          email: (data.email as string) ?? null,
+          birthday: data.birthday ? String(data.birthday) : null,
+          governorate: (data.governorate as string) ?? null,
+          city: (data.city as string) ?? null,
+          address: (data.address as string) ?? null,
+          note: (data.note as string) ?? null,
+        }
+      : null;
+    return { ok: true, data: { verified: true, profile } };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+/** Save/patch a customer's birthday (verified numbers only). */
+export async function setCustomerBirthday(phone: string, birthday: string): Promise<ActionResult> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  try {
+    const supabase = getServerSupabase();
+    const ph = normalizePhone(phone);
+    const { data: v } = await supabase
+      .from("verified_phones")
+      .select("phone")
+      .eq("phone", ph)
+      .maybeSingle();
+    if (!v) return { ok: false, error: "not_verified" };
+    await supabase
+      .from("store_customers")
+      .upsert({ phone: ph, birthday, updated_at: new Date().toISOString() }, { onConflict: "phone" });
+    return { ok: true, data: undefined };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+/** Lightweight storefront counts for social-proof UI. */
+export async function getStoreStats(): Promise<ActionResult<{ orders: number; customers: number }>> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  try {
+    const supabase = getServerSupabase();
+    const { count: orders } = await supabase
+      .from("store_orders")
+      .select("*", { count: "exact", head: true });
+    const { count: customers } = await supabase
+      .from("store_customers")
+      .select("*", { count: "exact", head: true });
+    return { ok: true, data: { orders: orders ?? 0, customers: customers ?? 0 } };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
 // ---- Place a COD order ------------------------------------------------------
 export type CartLine = {
   itemId: string;
@@ -238,11 +339,13 @@ export type CartLine = {
 export type OrderPayload = {
   customerName: string;
   phone: string;
+  email?: string | null; // needed so the supplier can email the checkout link
   governorate: string;
   city: string;
   address: string;
   note?: string;
   couponCode?: string | null;
+  birthday?: string | null; // yyyy-mm-dd, saved to the customer profile
   deliverySpeed?: "standard" | "scheduled";
   deliveryDate?: string | null; // yyyy-mm-dd
   deliverySlot?: string | null; // slot id from DELIVERY_SLOTS
@@ -250,6 +353,68 @@ export type OrderPayload = {
   giftMessage?: string | null;
   items: CartLine[];
 };
+
+/**
+ * Build the relay payload (order + customer + per-item supplier mapping) and POST
+ * it to the n8n order-relay webhook. Enriches each cart line with the supplier
+ * mapping columns (supplier_variant_id / supplier_url / supplier_title) and the
+ * vendor, so n8n can either use an exact supplier variant or search the supplier
+ * store by the brand-stripped title. Never throws — relay problems must not fail
+ * an order that already succeeded on our store.
+ */
+async function fireOrderRelay(
+  supabase: ReturnType<typeof getServerSupabase>,
+  orderNumber: string,
+  payload: OrderPayload,
+  phone: string,
+  email: string | null,
+  total: number,
+): Promise<void> {
+  try {
+    const ids = [...new Set(payload.items.map((i) => i.itemId))];
+    const { data: mapRows } = await supabase
+      .from("inventory_items")
+      .select("id, vendor, supplier_variant_id, supplier_url, supplier_title")
+      .in("id", ids);
+    const byId = new Map((mapRows ?? []).map((r: Row) => [String(r.id), r]));
+
+    const items = payload.items.map((i) => {
+      const m = byId.get(i.itemId) ?? {};
+      return {
+        title: i.productName,
+        variantTitle: i.variantTitle,
+        sku: i.sku,
+        quantity: i.quantity,
+        price: i.price,
+        vendor: (m.vendor as string) ?? null,
+        supplierVariantId: (m.supplier_variant_id as string) ?? null,
+        supplierUrl: (m.supplier_url as string) ?? null,
+        supplierTitle: (m.supplier_title as string) ?? null,
+      };
+    });
+
+    await fetch(ORDER_RELAY_WEBHOOK_URL, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        orderNumber,
+        total,
+        customer: {
+          name: payload.customerName.trim(),
+          phone,
+          email,
+          governorate: payload.governorate.trim() || null,
+          city: payload.city.trim() || null,
+          address: payload.address.trim() || null,
+          note: payload.note?.trim() || null,
+        },
+        items,
+      }),
+    });
+  } catch {
+    // swallow — the order is already placed; relay is best-effort.
+  }
+}
 
 export async function placeOrder(
   payload: OrderPayload,
@@ -272,7 +437,22 @@ export async function placeOrder(
     const shipping = 0; // free shipping for the test flow
 
     // Validate any coupon server-side (never trust the client for pricing).
-    const disc = computeDiscount(payload.couponCode, subtotal);
+    // The BIRTHDAY coupon is only honored on the customer's real birthday,
+    // checked against the birthday they entered now or saved on their profile.
+    let isBday = false;
+    if ((payload.couponCode || "").trim().toUpperCase() === "BIRTHDAY") {
+      let bday = payload.birthday || null;
+      if (!bday) {
+        const { data: c } = await supabase
+          .from("store_customers")
+          .select("birthday")
+          .eq("phone", ph)
+          .maybeSingle();
+        bday = c?.birthday ? String(c.birthday) : null;
+      }
+      isBday = isBirthday(bday, new Date());
+    }
+    const disc = computeDiscount(payload.couponCode, subtotal, { birthday: isBday });
     const discount = disc.ok ? disc.discount : 0;
     const total = Math.max(0, subtotal - discount + shipping);
     const orderNumber = "BB" + Date.now().toString().slice(-8);
@@ -322,6 +502,40 @@ export async function placeOrder(
       }
       return { ok: false, error: rpcErr.message };
     }
+
+    // Upsert the passwordless customer profile (keyed by the verified phone) so
+    // returning customers get autofilled next time. Birthday only overwrites
+    // when provided, so we never wipe a saved one.
+    const emailIn = payload.email?.trim() || null;
+    await supabase.from("store_customers").upsert(
+      {
+        phone: ph,
+        name: payload.customerName.trim() || null,
+        ...(emailIn ? { email: emailIn } : {}),
+        governorate: payload.governorate.trim() || null,
+        city: payload.city.trim() || null,
+        address: payload.address.trim() || null,
+        ...(payload.birthday ? { birthday: payload.birthday } : {}),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "phone" },
+    );
+
+    // Fall back to the saved profile email if none was entered this time, so the
+    // supplier can still email the checkout link.
+    let relayEmail = emailIn;
+    if (!relayEmail) {
+      const { data: prof } = await supabase
+        .from("store_customers")
+        .select("email")
+        .eq("phone", ph)
+        .maybeSingle();
+      relayEmail = (prof?.email as string) ?? null;
+    }
+
+    // Relay to the supplier via n8n (draft order + checkout-link email). Awaited
+    // so it runs before the serverless function returns, but never fails the order.
+    await fireOrderRelay(supabase, orderNumber, payload, ph, relayEmail, total);
 
     return { ok: true, data: { orderNumber } };
   } catch (e) {

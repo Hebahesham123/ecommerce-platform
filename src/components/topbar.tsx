@@ -1,13 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useI18n } from "@/lib/i18n";
 import { Sidebar } from "./sidebar";
+import { useCommandPalette } from "./command-palette";
 import { IcSearch, IcBell, IcGlobe, IcMenu } from "./icons";
 
 export function Topbar() {
   const { t, lang, toggle } = useI18n();
+  const { setOpen } = useCommandPalette();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [isMac, setIsMac] = useState(false);
+
+  useEffect(() => {
+    setIsMac(/Mac|iPhone|iPad|iPod/.test(navigator.platform));
+  }, []);
 
   return (
     <>
@@ -20,13 +27,17 @@ export function Topbar() {
           <IcMenu />
         </button>
 
-        <div className="relative hidden max-w-md flex-1 sm:block">
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="relative hidden h-10 max-w-md flex-1 items-center rounded-xl border border-line bg-surface-page ps-10 pe-3 text-start text-sm text-ink-soft transition hover:border-brand-600 hover:bg-white sm:flex"
+        >
           <IcSearch className="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-soft" />
-          <input
-            placeholder={t("search")}
-            className="h-10 w-full rounded-xl border border-line bg-surface-page ps-10 pe-3 text-sm outline-none transition focus:border-brand-600 focus:bg-white focus:ring-2 focus:ring-brand-100"
-          />
-        </div>
+          <span className="flex-1 truncate">{t("search")}</span>
+          <kbd className="ms-2 hidden shrink-0 rounded-md border border-line bg-white px-1.5 py-0.5 text-[11px] font-medium text-ink-soft md:block">
+            {isMac ? "⌘K" : "Ctrl K"}
+          </kbd>
+        </button>
 
         <div className="ms-auto flex items-center gap-1.5">
           <button
