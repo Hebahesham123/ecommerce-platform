@@ -17,7 +17,7 @@ import {
 } from "./actions";
 
 const inputCls =
-  "h-10 w-full rounded-xl border border-line bg-surface-page px-3 text-sm outline-none transition focus:border-brand-600 focus:bg-white focus:ring-2 focus:ring-brand-100";
+  "h-10 w-full rounded-xl border border-line bg-surface-page px-3 text-sm outline-none transition focus:border-brand-600 focus:bg-surface focus:ring-2 focus:ring-brand-100";
 
 function Section({ title, children, action }: { title: string; children: React.ReactNode; action?: React.ReactNode }) {
   return (
@@ -150,7 +150,7 @@ fbq('track', 'PageView');
 
       {!c.configured && (
         <Card className="mb-4 flex items-center gap-3 bg-amber-50/60 p-3.5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-amber-600 shadow-card">
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-surface text-amber-600 shadow-card">
             <IcAlert className="h-4 w-4" />
           </span>
           <span className="text-sm font-medium text-amber-800">{t("meta_app_missing")}</span>

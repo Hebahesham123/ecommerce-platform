@@ -28,8 +28,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="ar" dir="rtl" className={tajawal.variable}>
+    <html lang="ar" dir="rtl" className={tajawal.variable} suppressHydrationWarning>
       <head>
+        {/* Apply the theme before paint to avoid a flash. Admin defaults to dark
+            unless the user picked light; the storefront (/store) stays light. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{var s=location.pathname.indexOf('/store')===0;if(!s&&localStorage.getItem('theme')!=='light')document.documentElement.classList.add('dark')}catch(e){}`,
+          }}
+        />
         {/* Meta Pixel */}
         <script
           dangerouslySetInnerHTML={{

@@ -221,7 +221,7 @@ export function ProductEditor({
       <div className="flex min-h-full justify-center p-3 sm:p-5">
         <div className="w-full max-w-5xl rounded-2xl bg-surface-page shadow-xl">
           {/* Sticky header */}
-          <div className="sticky top-0 z-10 flex items-center justify-between gap-3 rounded-t-2xl border-b border-line bg-white/95 px-5 py-3 backdrop-blur">
+          <div className="sticky top-0 z-10 flex items-center justify-between gap-3 rounded-t-2xl border-b border-line bg-surface/95 px-5 py-3 backdrop-blur">
             <div className="flex items-center gap-3">
               <button onClick={onClose} className="btn-ghost h-9 w-9 p-0">
                 <IcX className="h-4 w-4" />
@@ -234,7 +234,7 @@ export function ProductEditor({
               <select
                 value={draft.status}
                 onChange={(e) => set("status", e.target.value as ProductStatus)}
-                className="h-9 rounded-xl border border-line bg-white px-3 text-sm text-ink outline-none focus:border-brand-600"
+                className="h-9 rounded-xl border border-line bg-surface px-3 text-sm text-ink outline-none focus:border-brand-600"
               >
                 <option value="active">{t("st_active")}</option>
                 <option value="draft">{t("st_draft")}</option>
@@ -751,7 +751,7 @@ function MediaGallery({
                   <button
                     type="button"
                     onClick={() => onPrimary(img)}
-                    className="rounded-md bg-white/90 px-1.5 py-0.5 text-[10px] font-medium text-ink"
+                    className="rounded-md bg-surface/90 px-1.5 py-0.5 text-[10px] font-medium text-ink"
                   >
                     {t("media_primary")}
                   </button>
@@ -759,7 +759,7 @@ function MediaGallery({
                 <button
                   type="button"
                   onClick={() => onRemove(img)}
-                  className="ms-auto rounded-md bg-white/90 p-1 text-rose-600"
+                  className="ms-auto rounded-md bg-surface/90 p-1 text-rose-600"
                   aria-label="remove image"
                 >
                   <IcTrash className="h-3.5 w-3.5" />

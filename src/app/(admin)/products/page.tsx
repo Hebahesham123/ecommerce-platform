@@ -331,7 +331,7 @@ export default function ProductsPage() {
           <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filtered.map((p) => (
               <div key={p.key} onClick={() => openProduct(p)}
-                className="cursor-pointer overflow-hidden rounded-2xl border border-line bg-white transition-shadow hover:shadow-pop">
+                className="cursor-pointer overflow-hidden rounded-2xl border border-line bg-surface transition-shadow hover:shadow-pop">
                 <div className="flex aspect-square items-center justify-center overflow-hidden bg-gradient-to-br from-brand-50 to-slate-50">
                   {p.image ? (
                     // eslint-disable-next-line @next/next/no-img-element

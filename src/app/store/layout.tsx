@@ -1,12 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { useI18n, egp } from "@/lib/i18n";
 import { CartProvider, useCart } from "./cart";
 import { IcX } from "@/components/icons";
 
 export default function StoreLayout({ children }: { children: ReactNode }) {
+  // The storefront is always light (its surfaces aren't dark-themed), even when
+  // the admin default is dark.
+  useEffect(() => {
+    document.documentElement.classList.remove("dark");
+  }, []);
   return (
     <CartProvider>
       <div className="min-h-screen bg-white text-ink">

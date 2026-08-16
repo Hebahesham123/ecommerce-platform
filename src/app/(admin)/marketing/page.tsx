@@ -274,10 +274,10 @@ export default function MarketingPage() {
                   lang === "ar" ? "اكتب رسالة العرض التي سترسل للعملاء…" : "Write the offer message to broadcast…"
                 }
                 rows={4}
-                className="w-full resize-none rounded-xl border border-line bg-surface-page p-3 text-sm outline-none focus:border-brand-600 focus:bg-white"
+                className="w-full resize-none rounded-xl border border-line bg-surface-page p-3 text-sm outline-none focus:border-brand-600 focus:bg-surface"
               />
               <div className="flex items-center gap-3 rounded-xl bg-emerald-50/60 p-3">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-emerald-600 shadow-card">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-surface text-emerald-600 shadow-card">
                   🌙
                 </span>
                 <span className="text-xs font-medium text-emerald-800">{t("quiet_hours")}</span>

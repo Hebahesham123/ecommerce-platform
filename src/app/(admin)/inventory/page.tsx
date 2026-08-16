@@ -214,7 +214,7 @@ export default function InventoryPage() {
 
       {error === "not_configured" && (
         <Card className="mb-4 flex items-center gap-3 bg-amber-50/60 p-3.5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-amber-600 shadow-card">
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-surface text-amber-600 shadow-card">
             <IcAlert className="h-4 w-4" />
           </span>
           <span className="text-sm font-medium text-amber-800">
@@ -554,7 +554,7 @@ function EditableQty({
       onKeyDown={(e) => {
         if (e.key === "Enter") (e.target as HTMLInputElement).blur();
       }}
-      className="h-9 w-16 rounded-lg border border-line bg-white px-2 text-end text-sm font-semibold text-ink outline-none focus:border-brand-600 disabled:opacity-50"
+      className="h-9 w-16 rounded-lg border border-line bg-surface px-2 text-end text-sm font-semibold text-ink outline-none focus:border-brand-600 disabled:opacity-50"
     />
   );
 }

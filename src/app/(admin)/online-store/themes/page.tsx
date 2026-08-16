@@ -131,7 +131,7 @@ export default function ThemesPage() {
 
       {error === "not_configured" ? (
         <Card className="mb-4 flex items-center gap-3 bg-amber-50/60 p-3.5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-amber-600 shadow-card">
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-surface text-amber-600 shadow-card">
             <IcAlert className="h-4 w-4" />
           </span>
           <span className="text-sm font-medium text-amber-800">{t("supabase_missing")}</span>
@@ -155,7 +155,7 @@ export default function ThemesPage() {
         }}
         onClick={() => inputRef.current?.click()}
         className={`mb-5 cursor-pointer rounded-2xl border-2 border-dashed p-8 text-center transition-colors ${
-          dragOver ? "border-brand-600 bg-brand-50" : "border-line bg-white hover:bg-surface-page"
+          dragOver ? "border-brand-600 bg-brand-50" : "border-line bg-surface hover:bg-surface-page"
         }`}
       >
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-brand-600">
@@ -254,7 +254,7 @@ export default function ThemesPage() {
               >
                 <ThemeThumb theme={th} />
                 <span className="absolute inset-0 flex items-center justify-center bg-ink/0 opacity-0 transition hover:bg-ink/20 hover:opacity-100">
-                  <span className="flex items-center gap-1.5 rounded-xl bg-white px-3 py-1.5 text-xs font-semibold text-ink shadow-card">
+                  <span className="flex items-center gap-1.5 rounded-xl bg-surface px-3 py-1.5 text-xs font-semibold text-ink shadow-card">
                     <IcEye className="h-4 w-4" /> {t("preview")}
                   </span>
                 </span>

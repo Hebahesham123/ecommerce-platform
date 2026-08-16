@@ -132,7 +132,7 @@ export default function DiscountsPage() {
 
       {error === "not_configured" && (
         <Card className="mb-4 flex items-center gap-3 bg-amber-50/60 p-3.5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-amber-600 shadow-card">
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-surface text-amber-600 shadow-card">
             <IcAlert className="h-4 w-4" />
           </span>
           <span className="text-sm font-medium text-amber-800">
@@ -165,7 +165,7 @@ export default function DiscountsPage() {
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder={t("search")}
-              className="h-9 w-56 rounded-xl border border-line bg-surface-page ps-9 pe-3 text-sm outline-none focus:border-brand-600 focus:bg-white"
+              className="h-9 w-56 rounded-xl border border-line bg-surface-page ps-9 pe-3 text-sm outline-none focus:border-brand-600 focus:bg-surface"
             />
           </div>
         </div>

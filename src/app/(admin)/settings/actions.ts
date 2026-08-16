@@ -17,7 +17,7 @@ export async function getSettings(): Promise<SettingsResult<SettingsData>> {
       .from("store_settings")
       .select("data")
       .eq("id", "default")
-      .single();
+      .maybeSingle(); // no error when the row doesn't exist yet
     if (error) return { ok: false, error: error.message };
     return { ok: true, data: (data?.data as SettingsData) ?? {} };
   } catch (e) {
@@ -36,13 +36,14 @@ export async function updateSection(
       .from("store_settings")
       .select("data")
       .eq("id", "default")
-      .single();
+      .maybeSingle();
     const current = (row?.data as SettingsData) ?? {};
     const merged = { ...current, [section]: sectionData };
+    // Upsert so the save persists even if the seed row is missing (a plain
+    // UPDATE would match 0 rows and "succeed" without saving anything).
     const { error } = await supabase
       .from("store_settings")
-      .update({ data: merged })
-      .eq("id", "default");
+      .upsert({ id: "default", data: merged }, { onConflict: "id" });
     if (error) return { ok: false, error: error.message };
     revalidatePath("/settings");
     revalidatePath(`/settings/${section}`);

@@ -68,9 +68,9 @@ function buildCustomers(): Customer[] {
 }
 
 const segmentTone: Record<"vip" | "repeat" | "new", string> = {
-  vip: "bg-violet-50 text-violet-700",
-  repeat: "bg-sky-50 text-sky-700",
-  new: "bg-emerald-50 text-emerald-700",
+  vip: "bg-violet-500/10 text-violet-600 dark:text-violet-400",
+  repeat: "bg-sky-500/10 text-sky-600 dark:text-sky-400",
+  new: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
 };
 
 export default function CustomersPage() {
@@ -338,7 +338,7 @@ export default function CustomersPage() {
                         target="_blank"
                         rel="noreferrer"
                         onClick={(e) => e.stopPropagation()}
-                        className="btn-ghost inline-flex h-8 w-8 items-center justify-center p-0 text-emerald-600 opacity-0 hover:bg-emerald-50 group-hover:opacity-100"
+                        className="btn-ghost inline-flex h-8 w-8 items-center justify-center p-0 text-emerald-600 opacity-0 hover:bg-emerald-500/10 group-hover:opacity-100 dark:text-emerald-400"
                         aria-label="WhatsApp"
                       >
                         <IcWhatsApp className="h-4 w-4" />

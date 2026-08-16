@@ -30,6 +30,8 @@ import { IcFile, IcX, IcChevron, IcCash, IcCourier } from "@/components/icons";
 type Tab = "all" | "unfulfilled" | "unpaid" | "open" | "attention";
 type SortKey = "newest" | "oldest" | "total_high" | "total_low";
 
+const PAGE_SIZE = 12;
+
 const paymentPill: Record<Payment, PillTone> = {
   pending: "warning",
   authorized: "info",
@@ -65,6 +67,7 @@ export default function OrdersPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [detail, setDetail] = useState<Order | null>(null);
   const [placed, setPlaced] = useState<Row[]>([]);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     (async () => {
@@ -174,6 +177,11 @@ export default function OrdersPage() {
     return sorted;
   }, [orders, tab, q, payment, fulfillment, method, sort]);
 
+  useEffect(() => { setPage(1); }, [tab, q, payment, fulfillment, method, sort]);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount);
+  const paged = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
   const filtersActive = q !== "" || payment !== "all" || fulfillment !== "all" || method !== "all";
   const allSelected = filtered.length > 0 && filtered.every((o) => selected.has(o.id));
   const someSelected = filtered.some((o) => selected.has(o.id));
@@ -205,30 +213,6 @@ export default function OrdersPage() {
           </>
         }
       />
-
-      <div className="mb-4">
-        <KpiStrip
-          period={
-            <span className="inline-flex items-center gap-1.5">
-              {ar ? "اليوم" : "Today"}
-              <IcChevron className="h-3.5 w-3.5 rotate-90 text-ink-soft" />
-            </span>
-          }
-          segments={[
-            { label: t("kpi_orders"), value: num(kpi.count, lang), delta: 12, data: ordersSpark, tone: "brand" },
-            { label: t("kpi_revenue"), value: egp(kpi.revenue, lang), delta: 8, data: salesSpark, tone: "emerald" },
-            { label: t("kpi_cod_share"), value: `${kpi.codShare}%`, delta: -4, data: ordersSpark, tone: "slate" },
-            {
-              label: t("f_unfulfilled"),
-              value: num(kpi.unfulfilled, lang),
-              tone: "slate",
-              active: tab === "unfulfilled",
-              onClick: () => setTab(tab === "unfulfilled" ? "all" : "unfulfilled"),
-            },
-            { label: t("f_delivered"), value: num(kpi.delivered, lang), data: ordersSpark, tone: "emerald" },
-          ]}
-        />
-      </div>
 
       <Card className="overflow-hidden">
         {/* Tabs */}
@@ -309,7 +293,7 @@ export default function OrdersPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((o) => {
+              {paged.map((o) => {
                 const sel = selected.has(o.id);
                 return (
                   <tr
@@ -379,6 +363,24 @@ export default function OrdersPage() {
             </div>
           )}
         </div>
+
+        {filtered.length > 0 && pageCount > 1 && (
+          <div className="flex items-center justify-between gap-2 border-t border-line px-5 py-3 text-sm">
+            <span className="text-ink-soft">
+              {num((safePage - 1) * PAGE_SIZE + 1, lang)}–{num(Math.min(safePage * PAGE_SIZE, filtered.length), lang)} {ar ? "من" : "of"} {num(filtered.length, lang)}
+            </span>
+            <div className="flex items-center gap-1">
+              <button onClick={() => setPage(Math.max(1, safePage - 1))} disabled={safePage <= 1} className="btn-ghost h-8 px-2.5 text-xs disabled:opacity-40">{ar ? "السابق" : "Prev"}</button>
+              {Array.from({ length: Math.min(pageCount, 7) }).map((_, i) => {
+                const p = i + 1;
+                return (
+                  <button key={p} onClick={() => setPage(p)} className={`h-8 min-w-8 rounded-lg px-2 text-xs font-medium ${p === safePage ? "bg-brand text-white" : "text-ink-muted hover:bg-surface-hover"}`}>{num(p, lang)}</button>
+                );
+              })}
+              <button onClick={() => setPage(Math.min(pageCount, safePage + 1))} disabled={safePage >= pageCount} className="btn-ghost h-8 px-2.5 text-xs disabled:opacity-40">{ar ? "التالي" : "Next"}</button>
+            </div>
+          </div>
+        )}
       </Card>
 
       {detail && (
@@ -431,7 +433,7 @@ function OrderDetailDrawer({ order: o, onClose }: { order: Order; onClose: () =>
   return (
     <div className="fixed inset-0 z-50 flex">
       <div className="flex-1 bg-black/30" onClick={onClose} />
-      <div className="flex h-full w-full max-w-lg flex-col bg-white shadow-xl">
+      <div className="flex h-full w-full max-w-lg flex-col bg-surface shadow-xl">
         {/* Header */}
         <div className="flex items-start justify-between border-b border-line px-5 py-4">
           <div>

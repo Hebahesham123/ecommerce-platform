@@ -71,7 +71,7 @@ function encode(type: EditableType, kind: Kind, target: string): string {
 }
 
 const selectCls =
-  "h-9 rounded-xl border border-line bg-surface-page px-2.5 text-sm text-ink outline-none focus:border-brand-600 focus:bg-white";
+  "h-9 rounded-xl border border-line bg-surface-page px-2.5 text-sm text-ink outline-none focus:border-brand-600 focus:bg-surface";
 
 export function LinkPicker({
   type,

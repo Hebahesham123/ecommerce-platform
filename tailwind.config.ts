@@ -2,27 +2,32 @@ import type { Config } from "tailwindcss";
 
 const config: Config = {
   content: ["./src/**/*.{js,ts,jsx,tsx,mdx}"],
+  darkMode: "class",
   theme: {
     extend: {
       colors: {
+        // Theme-aware tokens. Values live as RGB channels in globals.css under
+        // :root (light) and .dark (dark), so every text-ink/bg-surface/border-line
+        // utility flips with the theme. Neutral graphite accent (no pink).
         brand: {
-          DEFAULT: "#e11d48",
-          50: "#fff1f3",
-          100: "#ffe4e9",
-          600: "#e11d48",
-          700: "#be123c",
+          DEFAULT: "rgb(var(--brand-600) / <alpha-value>)",
+          50: "rgb(var(--brand-50) / <alpha-value>)",
+          100: "rgb(var(--brand-100) / <alpha-value>)",
+          500: "rgb(var(--brand-500) / <alpha-value>)",
+          600: "rgb(var(--brand-600) / <alpha-value>)",
+          700: "rgb(var(--brand-700) / <alpha-value>)",
         },
         ink: {
-          DEFAULT: "#0f172a",
-          muted: "#64748b",
-          soft: "#94a3b8",
+          DEFAULT: "rgb(var(--ink) / <alpha-value>)",
+          muted: "rgb(var(--ink-muted) / <alpha-value>)",
+          soft: "rgb(var(--ink-soft) / <alpha-value>)",
         },
         surface: {
-          DEFAULT: "#ffffff",
-          page: "#f6f7f9",
-          hover: "#f1f5f9",
+          DEFAULT: "rgb(var(--surface) / <alpha-value>)",
+          page: "rgb(var(--surface-page) / <alpha-value>)",
+          hover: "rgb(var(--surface-hover) / <alpha-value>)",
         },
-        line: "#e7eaee",
+        line: "rgb(var(--line) / <alpha-value>)",
       },
       fontFamily: {
         sans: ["var(--font-app)", "system-ui", "sans-serif"],

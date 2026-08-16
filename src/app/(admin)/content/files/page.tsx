@@ -181,7 +181,7 @@ export default function FilesPage() {
 
       {error === "not_configured" && (
         <Card className="mb-4 flex items-center gap-3 bg-amber-50/60 p-3.5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-amber-600 shadow-card">
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-surface text-amber-600 shadow-card">
             <IcAlert className="h-4 w-4" />
           </span>
           <span className="text-sm font-medium text-amber-800">{t("supabase_missing")}</span>
@@ -204,7 +204,7 @@ export default function FilesPage() {
         className={`mb-4 cursor-pointer rounded-2xl border-2 border-dashed p-8 text-center transition-colors ${
           dragOver
             ? "border-brand-600 bg-brand-50"
-            : "border-line bg-white hover:bg-surface-page"
+            : "border-line bg-surface hover:bg-surface-page"
         }`}
       >
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-brand-600">
@@ -224,7 +224,7 @@ export default function FilesPage() {
               onChange={(e) => setUrlVal(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleAddUrl()}
               placeholder={t("url_placeholder")}
-              className="h-10 w-full rounded-xl border border-line bg-surface-page ps-10 pe-3 text-sm outline-none focus:border-brand-600 focus:bg-white"
+              className="h-10 w-full rounded-xl border border-line bg-surface-page ps-10 pe-3 text-sm outline-none focus:border-brand-600 focus:bg-surface"
               dir="ltr"
             />
           </div>
@@ -256,7 +256,7 @@ export default function FilesPage() {
             <select
               value={sort}
               onChange={(e) => setSort(e.target.value as Sort)}
-              className="h-9 rounded-xl border border-line bg-surface-page px-3 text-sm outline-none focus:border-brand-600 focus:bg-white"
+              className="h-9 rounded-xl border border-line bg-surface-page px-3 text-sm outline-none focus:border-brand-600 focus:bg-surface"
             >
               <option value="newest">{t("sort_newest")}</option>
               <option value="oldest">{t("sort_oldest")}</option>
@@ -269,7 +269,7 @@ export default function FilesPage() {
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 placeholder={t("search")}
-                className="h-9 w-48 rounded-xl border border-line bg-surface-page ps-9 pe-3 text-sm outline-none focus:border-brand-600 focus:bg-white"
+                className="h-9 w-48 rounded-xl border border-line bg-surface-page ps-9 pe-3 text-sm outline-none focus:border-brand-600 focus:bg-surface"
               />
             </div>
           </div>
@@ -310,14 +310,14 @@ export default function FilesPage() {
                   >
                     <button
                       onClick={() => copyUrl(f.url)}
-                      className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/90 text-ink-muted shadow-card hover:text-ink"
+                      className="flex h-7 w-7 items-center justify-center rounded-lg bg-surface/90 text-ink-muted shadow-card hover:text-ink"
                       title={t("copy_url")}
                     >
                       <IcCopy className="h-3.5 w-3.5" />
                     </button>
                     <button
                       onClick={() => quickDelete(f.id)}
-                      className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/90 text-rose-500 shadow-card hover:text-rose-700"
+                      className="flex h-7 w-7 items-center justify-center rounded-lg bg-surface/90 text-rose-500 shadow-card hover:text-rose-700"
                       title={t("delete")}
                     >
                       <IcTrash className="h-3.5 w-3.5" />

@@ -91,7 +91,7 @@ export default function LocationsPage() {
 
       {error === "not_configured" && (
         <Card className="mb-4 flex items-center gap-3 bg-amber-50/60 p-3.5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-amber-600 shadow-card">
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-surface text-amber-600 shadow-card">
             <IcAlert className="h-4 w-4" />
           </span>
           <span className="text-sm font-medium text-amber-800">
@@ -250,7 +250,7 @@ function LocationDrawer({
   return (
     <div className="fixed inset-0 z-50 flex">
       <div className="flex-1 bg-black/30" onClick={onClose} />
-      <div className="flex h-full w-full max-w-md flex-col bg-white shadow-xl">
+      <div className="flex h-full w-full max-w-md flex-col bg-surface shadow-xl">
         <div className="flex items-center justify-between border-b border-line px-5 py-4">
           <h2 className="text-base font-bold text-ink">
             {isNew ? t("new_location") : t("edit_location")}

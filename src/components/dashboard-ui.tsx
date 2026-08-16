@@ -14,7 +14,7 @@ const SPARK_HEX: Record<SparkTone, string> = {
   rose: "#f43f5e",
   sky: "#0ea5e9",
   slate: "#94a3b8",
-  brand: "#e11d48",
+  brand: "#8b5cf6", // violet (was the old rose/pink)
 };
 
 /** Tiny dependency-free SVG sparkline (area + line). */
@@ -56,7 +56,7 @@ export function Sparkline({
 function Delta({ v }: { v: number }) {
   const up = v >= 0;
   return (
-    <span className={`inline-flex items-center gap-0.5 text-xs font-medium ${up ? "text-emerald-600" : "text-rose-600"}`}>
+    <span className={`inline-flex items-center gap-0.5 text-xs font-medium ${up ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>
       {up ? <IcUp className="h-3 w-3" /> : <IcDown className="h-3 w-3" />}
       {Math.abs(v)}%
     </span>
@@ -122,13 +122,14 @@ export type PillTone =
   | "attention"
   | "critical";
 
+// Subtle color-tinted fills that read well on BOTH light and dark surfaces.
 const PILL: Record<PillTone, { wrap: string; dot: string }> = {
-  neutral: { wrap: "bg-slate-100 text-slate-700", dot: "bg-slate-400" },
-  info: { wrap: "bg-sky-100 text-sky-800", dot: "bg-sky-500" },
-  success: { wrap: "bg-emerald-100 text-emerald-800", dot: "bg-emerald-500" },
-  warning: { wrap: "bg-amber-100 text-amber-900", dot: "bg-amber-500" },
-  attention: { wrap: "bg-yellow-100 text-yellow-900", dot: "bg-yellow-500" },
-  critical: { wrap: "bg-rose-100 text-rose-800", dot: "bg-rose-500" },
+  neutral: { wrap: "bg-slate-500/10 text-slate-600 dark:text-slate-300", dot: "bg-slate-400" },
+  info: { wrap: "bg-sky-500/10 text-sky-600 dark:text-sky-400", dot: "bg-sky-500" },
+  success: { wrap: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400", dot: "bg-emerald-500" },
+  warning: { wrap: "bg-amber-500/10 text-amber-600 dark:text-amber-400", dot: "bg-amber-500" },
+  attention: { wrap: "bg-yellow-500/10 text-yellow-600 dark:text-yellow-400", dot: "bg-yellow-500" },
+  critical: { wrap: "bg-rose-500/10 text-rose-600 dark:text-rose-400", dot: "bg-rose-500" },
 };
 
 export function StatusPill({
@@ -209,13 +210,13 @@ export function Checkbox({
 export type Accent = "brand" | "sky" | "emerald" | "amber" | "rose" | "violet" | "slate";
 
 const ACCENTS: Record<Accent, string> = {
-  brand: "bg-brand-50 text-brand-600",
-  sky: "bg-sky-50 text-sky-600",
-  emerald: "bg-emerald-50 text-emerald-600",
-  amber: "bg-amber-50 text-amber-600",
-  rose: "bg-rose-50 text-rose-600",
-  violet: "bg-violet-50 text-violet-600",
-  slate: "bg-slate-100 text-slate-500",
+  brand: "bg-brand-100 text-brand-600",
+  sky: "bg-sky-500/10 text-sky-600 dark:text-sky-400",
+  emerald: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
+  amber: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
+  rose: "bg-rose-500/10 text-rose-600 dark:text-rose-400",
+  violet: "bg-violet-500/10 text-violet-600 dark:text-violet-400",
+  slate: "bg-slate-500/10 text-slate-500 dark:text-slate-300",
 };
 
 /** Grid wrapper for a row of stat tiles. */
@@ -273,7 +274,7 @@ export function StatTile({
           <span className="truncate text-xs text-ink-soft">{label}</span>
           {delta !== undefined && (
             <span
-              className={`badge ${up ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}
+              className={`badge ${up ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : "bg-rose-500/10 text-rose-600 dark:text-rose-400"}`}
             >
               {up ? <IcUp className="h-3 w-3" /> : <IcDown className="h-3 w-3" />}
               {Math.abs(delta)}%
@@ -314,7 +315,7 @@ export function SearchInput({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="h-9 w-full rounded-xl border border-line bg-surface-page ps-9 pe-3 text-sm outline-none focus:border-brand-600 focus:bg-white"
+        className="h-9 w-full rounded-xl border border-line bg-surface-page ps-9 pe-3 text-sm outline-none focus:border-brand-600 focus:bg-surface"
       />
     </div>
   );
@@ -335,7 +336,7 @@ export function Select({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="h-9 appearance-none rounded-xl border border-line bg-surface-page ps-3 pe-8 text-sm text-ink outline-none focus:border-brand-600 focus:bg-white"
+        className="h-9 appearance-none rounded-xl border border-line bg-surface-page ps-3 pe-8 text-sm text-ink outline-none focus:border-brand-600 focus:bg-surface"
       >
         {children}
       </select>
@@ -359,7 +360,7 @@ export function SegBtn({
       onClick={onClick}
       className={`badge gap-1.5 px-3 py-1.5 text-sm transition-colors ${
         active
-          ? "bg-ink text-white"
+          ? "bg-brand text-white"
           : "bg-surface-page text-ink-muted hover:bg-surface-hover"
       }`}
     >

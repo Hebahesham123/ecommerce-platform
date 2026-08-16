@@ -55,7 +55,7 @@ export function Avatar({ name, online }: { name: string; online?: boolean }) {
         {initial}
       </div>
       {online && (
-        <span className="absolute -bottom-0.5 -end-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-500" />
+        <span className="absolute -bottom-0.5 -end-0.5 h-2.5 w-2.5 rounded-full border-2 border-surface bg-emerald-500" />
       )}
     </div>
   );

@@ -62,7 +62,7 @@ export default function InboxPage() {
         actions={
           <div className="flex items-center gap-2">
             {/* Zoom control */}
-            <div className="flex items-center gap-1 rounded-xl border border-line bg-white p-1">
+            <div className="flex items-center gap-1 rounded-xl border border-line bg-surface p-1">
               <button
                 onClick={() => stepZoom(-1)}
                 disabled={zoom === ZOOM_STEPS[0]}

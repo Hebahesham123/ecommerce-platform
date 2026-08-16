@@ -10,7 +10,7 @@ export default function AdminLayout({
   return (
     <CommandPaletteProvider>
       <div className="flex min-h-screen bg-surface-page">
-        <aside className="sticky top-0 hidden h-screen w-64 shrink-0 border-e border-line bg-white lg:block">
+        <aside className="sticky top-0 hidden h-screen w-64 shrink-0 border-e border-line bg-surface lg:block">
           <Sidebar />
         </aside>
         <div className="flex min-w-0 flex-1 flex-col">

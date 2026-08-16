@@ -95,7 +95,7 @@ function Row({
   const canNest = depth < MAX_DEPTH;
 
   return (
-    <div className="rounded-xl border border-line bg-white">
+    <div className="rounded-xl border border-line bg-surface">
       <div className="flex flex-wrap items-center gap-2 p-2.5">
         <div className="flex flex-col text-ink-soft">
           <button
@@ -120,7 +120,7 @@ function Row({
           value={item.title}
           onChange={(e) => onPatch({ title: e.target.value })}
           placeholder={ar ? "اسم العنصر" : "Item name"}
-          className="h-9 min-w-[120px] flex-1 rounded-xl border border-line bg-surface-page px-3 text-sm font-medium text-ink outline-none focus:border-brand-600 focus:bg-white"
+          className="h-9 min-w-[120px] flex-1 rounded-xl border border-line bg-surface-page px-3 text-sm font-medium text-ink outline-none focus:border-brand-600 focus:bg-surface"
         />
 
         <div className="min-w-[220px] flex-1">

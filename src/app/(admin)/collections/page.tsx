@@ -155,7 +155,7 @@ export default function CollectionsPage() {
 
       {error === "migration_missing" ? (
         <Card className="mb-4 flex items-start gap-3 bg-amber-50/60 p-3.5">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-amber-600 shadow-card">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface text-amber-600 shadow-card">
             <IcAlert className="h-4 w-4" />
           </span>
           <div className="text-sm text-amber-800">
@@ -167,7 +167,7 @@ export default function CollectionsPage() {
         </Card>
       ) : error === "not_configured" ? (
         <Card className="mb-4 flex items-center gap-3 bg-amber-50/60 p-3.5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-amber-600 shadow-card">
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-surface text-amber-600 shadow-card">
             <IcAlert className="h-4 w-4" />
           </span>
           <span className="text-sm font-medium text-amber-800">{t("supabase_missing")}</span>

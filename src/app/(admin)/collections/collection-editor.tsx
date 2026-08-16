@@ -482,7 +482,7 @@ export function CollectionEditor({
 }
 
 const inputCls =
-  "h-9 w-full rounded-xl border border-line bg-surface-page px-3 text-sm text-ink outline-none focus:border-brand-600 focus:bg-white";
+  "h-9 w-full rounded-xl border border-line bg-surface-page px-3 text-sm text-ink outline-none focus:border-brand-600 focus:bg-surface";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (

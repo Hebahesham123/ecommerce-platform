@@ -63,12 +63,12 @@ export function FileDrawer({
   }
 
   const inputCls =
-    "h-10 w-full rounded-xl border border-line bg-surface-page px-3 text-sm outline-none transition focus:border-brand-600 focus:bg-white focus:ring-2 focus:ring-brand-100";
+    "h-10 w-full rounded-xl border border-line bg-surface-page px-3 text-sm outline-none transition focus:border-brand-600 focus:bg-surface focus:ring-2 focus:ring-brand-100";
 
   return (
     <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-ink/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="absolute inset-y-0 end-0 flex w-full max-w-md flex-col bg-white shadow-pop">
+      <div className="absolute inset-y-0 end-0 flex w-full max-w-md flex-col bg-surface shadow-pop">
         <div className="flex items-center justify-between border-b border-line px-5 py-4">
           <h3 className="text-sm font-semibold text-ink">{t("file_details")}</h3>
           <button onClick={onClose} className="btn-ghost p-2" aria-label="Close">

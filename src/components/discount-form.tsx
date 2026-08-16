@@ -52,7 +52,7 @@ function Field({
 }
 
 const inputCls =
-  "h-10 w-full rounded-xl border border-line bg-surface-page px-3 text-sm outline-none transition focus:border-brand-600 focus:bg-white focus:ring-2 focus:ring-brand-100";
+  "h-10 w-full rounded-xl border border-line bg-surface-page px-3 text-sm outline-none transition focus:border-brand-600 focus:bg-surface focus:ring-2 focus:ring-brand-100";
 
 function Segmented<T extends string>({
   options,
@@ -71,7 +71,7 @@ function Segmented<T extends string>({
           type="button"
           onClick={() => onChange(o.value)}
           className={`rounded-lg px-4 py-1.5 text-sm font-medium transition-colors ${
-            value === o.value ? "bg-white text-ink shadow-card" : "text-ink-muted hover:text-ink"
+            value === o.value ? "bg-surface text-ink shadow-card" : "text-ink-muted hover:text-ink"
           }`}
         >
           {o.label}

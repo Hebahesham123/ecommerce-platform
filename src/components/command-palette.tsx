@@ -264,7 +264,7 @@ function Palette() {
         className="absolute inset-0 cursor-default bg-ink/40 backdrop-blur-sm"
         onClick={() => setOpen(false)}
       />
-      <div className="absolute inset-x-0 top-[12vh] mx-auto w-[92%] max-w-xl animate-pop-in overflow-hidden rounded-2xl border border-line bg-white shadow-pop">
+      <div className="absolute inset-x-0 top-[12vh] mx-auto w-[92%] max-w-xl animate-pop-in overflow-hidden rounded-2xl border border-line bg-surface shadow-pop">
         {/* Search input */}
         <div className="flex items-center gap-3 border-b border-line px-4">
           <IcSearch className="h-5 w-5 shrink-0 text-ink-soft" />
