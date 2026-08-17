@@ -4,14 +4,18 @@ import { useEffect, useMemo, useState } from "react";
 import { useI18n, egp, num } from "@/lib/i18n";
 import {
   collectionHandle,
+  matchesRule,
+  parseRuleValues,
   ruleTypeKey,
+  serializeRuleValues,
+  tagCounts,
   type Collection,
   type CollectionRuleType,
 } from "@/lib/collections";
 import { type InventoryItem, totalAvailable } from "@/lib/inventory";
 import { saveCollection } from "./actions";
 import { Checkbox, SearchInput } from "@/components/dashboard-ui";
-import { IcX, IcImage, IcSearch, IcTrash } from "@/components/icons";
+import { IcX, IcImage, IcSearch, IcTrash, IcPlus } from "@/components/icons";
 
 /** A pickable product: the inventory items that share one product_name. */
 export type PickerProduct = {
@@ -86,6 +90,8 @@ export function CollectionEditor({
   const [q, setQ] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Feedback after pulling a tag's products in. */
+  const [justAdded, setJustAdded] = useState<{ tag: string; count: number } | null>(null);
 
   // Keep the handle in step with the title until the user edits it by hand.
   useEffect(() => {
@@ -108,18 +114,35 @@ export function CollectionEditor({
     return [...set].sort();
   }, [catalog, ruleType]);
 
+  /** Every tag with a product count, for the chip pickers. */
+  const tags = useMemo(() => tagCounts(catalog), [catalog]);
+  const selectedRuleValues = useMemo(() => parseRuleValues(ruleValue), [ruleValue]);
+
   /** What the collection will actually contain once saved. */
   const preview = useMemo(() => {
     if (ruleType === "manual")
       return picked.map((n) => byName.get(n)).filter((p): p is PickerProduct => Boolean(p));
-    const v = ruleValue.trim().toLowerCase();
-    if (!v) return [];
-    return catalog.filter((p) => {
-      if (ruleType === "category") return (p.category ?? "").toLowerCase() === v;
-      if (ruleType === "vendor") return (p.vendor ?? "").toLowerCase() === v;
-      return p.tags.some((tag) => tag.toLowerCase() === v);
-    });
+    return catalog.filter((p) => matchesRule(p, ruleType, ruleValue));
   }, [ruleType, ruleValue, picked, byName, catalog]);
+
+  /** Pull every product carrying a tag into the manual selection. */
+  function addByTag(tag: string) {
+    const matching = catalog
+      .filter((p) => p.tags.some((t) => t.toLowerCase() === tag.toLowerCase()))
+      .map((p) => p.productName);
+    setPicked((cur) => {
+      const added = matching.filter((n) => !cur.includes(n));
+      setJustAdded(added.length ? { tag, count: added.length } : { tag, count: 0 });
+      return [...cur, ...added];
+    });
+  }
+
+  function toggleRuleValue(value: string) {
+    const next = selectedRuleValues.some((v) => v.toLowerCase() === value.toLowerCase())
+      ? selectedRuleValues.filter((v) => v.toLowerCase() !== value.toLowerCase())
+      : [...selectedRuleValues, value];
+    setRuleValue(serializeRuleValues(next));
+  }
 
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -308,19 +331,105 @@ export function CollectionEditor({
 
           {ruleType !== "manual" && (
             <Field label={t("coll_rule_value")}>
+              {/* Chips carry counts, so you can see the size before committing. */}
+              {(ruleType === "tag" ? tags.map((x) => x.tag) : ruleOptions).length > 0 && (
+                <div className="mb-2 flex flex-wrap gap-1.5">
+                  {(ruleType === "tag"
+                    ? tags
+                    : ruleOptions.map((o) => ({
+                        tag: o,
+                        count: catalog.filter((p) =>
+                          matchesRule(p, ruleType, o),
+                        ).length,
+                      }))
+                  ).map(({ tag, count }) => {
+                    const on = selectedRuleValues.some(
+                      (v) => v.toLowerCase() === tag.toLowerCase(),
+                    );
+                    return (
+                      <button
+                        key={tag}
+                        onClick={() => toggleRuleValue(tag)}
+                        className={`badge px-2.5 py-1 text-xs transition-colors ${
+                          on
+                            ? "bg-brand-600 text-white"
+                            : "bg-surface-page text-ink-muted hover:bg-surface-hover"
+                        }`}
+                      >
+                        {tag}
+                        <span className={on ? "text-white/70" : "text-ink-soft"}>{count}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
               <input
                 list="rule-options"
                 value={ruleValue}
                 onChange={(e) => setRuleValue(e.target.value)}
                 placeholder={ar ? "اكتب أو اختر…" : "Type or choose…"}
-                className={inputCls}
+                className={`${inputCls} font-mono text-xs`}
               />
               <datalist id="rule-options">
                 {ruleOptions.map((o) => (
                   <option key={o} value={o} />
                 ))}
               </datalist>
+              {selectedRuleValues.length > 1 && (
+                <p className="mt-1 text-[11px] text-ink-soft">
+                  {ar
+                    ? "يشمل المنتج إذا طابق أي قيمة."
+                    : "A product is included if it matches any one of these."}
+                </p>
+              )}
             </Field>
+          )}
+
+          {/* Fill the collection straight from a tag, then fine-tune by hand. */}
+          {ruleType === "manual" && tags.length > 0 && (
+            <div className="rounded-xl border border-line bg-surface-page p-2.5">
+              <div className="mb-1.5 flex items-center gap-2">
+                <span className="text-xs font-medium text-ink-muted">
+                  {ar ? "أضف كل منتجات وسم" : "Add every product with a tag"}
+                </span>
+                {justAdded && (
+                  <span
+                    className={`badge text-[10px] ${
+                      justAdded.count
+                        ? "bg-emerald-50 text-emerald-700"
+                        : "bg-slate-100 text-ink-muted"
+                    }`}
+                  >
+                    {justAdded.count
+                      ? ar
+                        ? `أُضيف ${justAdded.count}`
+                        : `added ${justAdded.count}`
+                      : ar
+                        ? "كلها مضافة"
+                        : "already added"}
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {tags.map(({ tag, count }) => (
+                  <button
+                    key={tag}
+                    onClick={() => addByTag(tag)}
+                    className="badge bg-surface px-2.5 py-1 text-xs text-ink-muted transition-colors hover:bg-brand-50 hover:text-brand-700"
+                    title={ar ? `أضف ${count} منتج` : `Add ${count} products`}
+                  >
+                    <IcPlus className="h-3 w-3" />
+                    {tag}
+                    <span className="text-ink-soft">{count}</span>
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1.5 text-[11px] text-ink-soft">
+                {ar
+                  ? "تُضاف المنتجات للقائمة ويمكنك ترتيبها أو حذف أي منها. للتحديث التلقائي اختر «حسب الوسم»."
+                  : "Products are copied into the list — reorder or remove any of them. For a collection that updates itself, use “By tag” instead."}
+              </p>
+            </div>
           )}
 
           {/* Product picker */}

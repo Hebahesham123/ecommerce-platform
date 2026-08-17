@@ -180,8 +180,9 @@ var a=f.getAttribute("action");var n=fix(a);if(a&&n!==a)f.setAttribute("action",
  * is pointer-events:none so it never swallows hovers or clicks; only the small
  * label is clickable, and clicking it jumps to that section's code.
  */
-function inspectScript(): string {
+function inspectScript(mount: string): string {
   return `<script>(function(){
+var M=${JSON.stringify(mount)};
 var box,label,cur=null;
 function ensure(){
   if(box)return;
@@ -224,10 +225,31 @@ window.addEventListener("resize",function(){ if(cur)place(cur); });
 document.addEventListener("click",function(e){
   if(label&&e.target===label){ e.preventDefault(); e.stopPropagation(); if(cur) post("code",cur); }
 },true);
-// The panel can ask us to highlight a section it is showing.
+// Report scroll so the panel can restore it after a live re-render.
+var sy=0;
+window.addEventListener("scroll",function(){
+  sy=window.scrollY||0;
+  try{parent.postMessage({source:"sf-inspect",kind:"scroll",y:sy},"*");}catch(e){}
+},{passive:true});
+// Links navigate the DRAFT, not the saved page: tell the panel to re-render
+// at that path instead of loading the real URL and losing unsaved edits.
+document.addEventListener("click",function(e){
+  var a=e.target&&e.target.closest?e.target.closest("a[href]"):null;
+  if(!a)return;
+  var h=a.getAttribute("href")||"";
+  if(!h||h.charAt(0)==="#"||/^(?:[a-z][a-z0-9+.-]*:)/i.test(h))return;
+  if(a.target&&a.target!=="_self")return;
+  var p=h;
+  if(M&&p.indexOf(M)===0)p=p.slice(M.length)||"/";
+  if(p.charAt(0)!=="/")return;
+  e.preventDefault();
+  try{parent.postMessage({source:"sf-inspect",kind:"navigate",path:p},"*");}catch(err){}
+},true);
+// The panel can ask us to highlight a section, or restore scroll.
 window.addEventListener("message",function(e){
   var d=e.data;
   if(!d||d.source!=="sf-panel")return;
+  if(d.kind==="scroll"){window.scrollTo(0,Number(d.y)||0);return;}
   if(d.kind==="clear"){hide();return;}
   var el=document.querySelector('[data-sf-key="'+String(d.key).replace(/"/g,'')+'"]');
   if(el){cur=el;place(el);el.scrollIntoView({behavior:"smooth",block:"center"});}
@@ -1139,7 +1161,7 @@ export async function renderThemePage(input: RenderInput): Promise<string> {
   const cssLinks = cssAssets
     .map((href) => `<link rel="stylesheet" href="${href}" media="all">`)
     .join("");
-  const headInject = `<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">${cssLinks}${bridgeScript(mount, currency)}${input.inspect ? inspectScript() : ""}`;
+  const headInject = `<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">${cssLinks}${bridgeScript(mount, currency)}${input.inspect ? inspectScript(mount) : ""}`;
   html = /<head[^>]*>/i.test(html)
     ? html.replace(/<head[^>]*>/i, (m) => `${m}${headInject}`)
     : /<html[^>]*>/i.test(html)

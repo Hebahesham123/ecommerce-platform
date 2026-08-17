@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useI18n, num } from "@/lib/i18n";
 import {
   emptyCollection,
+  matchesRule,
   ruleTypeKey,
   type Collection,
 } from "@/lib/collections";
@@ -66,13 +67,7 @@ export default function CollectionsPage() {
   function countFor(c: Collection): number {
     if (c.ruleType === "manual")
       return c.products.filter((p) => byName.has(p.productName)).length;
-    const v = (c.ruleValue ?? "").toLowerCase();
-    if (!v) return 0;
-    return catalog.filter((p) => {
-      if (c.ruleType === "category") return (p.category ?? "").toLowerCase() === v;
-      if (c.ruleType === "vendor") return (p.vendor ?? "").toLowerCase() === v;
-      return p.tags.some((tag) => tag.toLowerCase() === v);
-    }).length;
+    return catalog.filter((p) => matchesRule(p, c.ruleType, c.ruleValue)).length;
   }
 
   const shown = useMemo(() => {

@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import "server-only";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
+import { matchesRule } from "@/lib/collections";
 
 /**
  * Turns the dashboard's inventory into the Shopify-shaped drops a Liquid theme
@@ -404,14 +405,19 @@ function membersOf(def: CollectionDef, products: ProductDrop[]): ProductDrop[] {
       .map((n) => byName.get(n.trim().toLowerCase()))
       .filter((p): p is ProductDrop => Boolean(p));
   }
-  const v = (def.ruleValue ?? "").trim().toLowerCase();
-  if (!v) return [];
-  return products.filter((p) => {
-    if (def.ruleType === "category")
-      return String(p.category ?? "").toLowerCase() === v;
-    if (def.ruleType === "vendor") return String(p.vendor ?? "").toLowerCase() === v;
-    return (p.tags ?? []).some((tag) => tag.toLowerCase() === v);
-  });
+  // Same matcher the admin uses, so the preview count always equals what the
+  // storefront renders.
+  return products.filter((p) =>
+    matchesRule(
+      {
+        category: (p.category as string | null) ?? null,
+        vendor: (p.vendor as string | null) ?? null,
+        tags: p.tags ?? [],
+      },
+      def.ruleType,
+      def.ruleValue,
+    ),
+  );
 }
 
 /**

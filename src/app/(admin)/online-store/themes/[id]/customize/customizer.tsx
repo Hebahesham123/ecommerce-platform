@@ -18,6 +18,7 @@ import {
   type CustomizerData,
 } from "./actions";
 import { LinkPicker, ListPicker } from "@/components/link-picker";
+import { useLivePreview } from "@/components/use-live-preview";
 import { Card } from "@/components/ui";
 import {
   IcAlert,
@@ -95,19 +96,41 @@ export function Customizer({ themeId }: { themeId: string }) {
     };
   }, [themeId, path, nonce]);
 
-  // `inspect=1` tags each section and injects the hover inspector.
-  const previewSrc = `/online-store/themes/${themeId}/preview${path === "/" ? "" : path}?inspect=1${
-    nonce ? `&r=${nonce}` : ""
-  }`;
+  const previewSrc = `/online-store/themes/${themeId}/preview${path === "/" ? "" : path}?inspect=1`;
+
+  // Live preview: re-render from the unsaved draft on every edit.
+  const { html: previewHtml, rendering, render, frameRef, onFrameLoad, noteScroll } =
+    useLivePreview(themeId);
+
+  useEffect(() => {
+    if (loading || error) return;
+    render({ path, customization: draft });
+  }, [draft, path, loading, error, render, nonce]);
 
   // Follow the cursor: hovering a section in the preview opens it here.
   useEffect(() => {
     function onMessage(e: MessageEvent) {
-      const d = e.data as { source?: string; kind?: string; key?: string; type?: string };
-      if (!d || d.source !== "sf-inspect" || !d.key) return;
+      const d = e.data as {
+        source?: string;
+        kind?: string;
+        key?: string;
+        type?: string;
+        path?: string;
+        y?: number;
+      };
+      if (!d || d.source !== "sf-inspect") return;
 
+      if (d.kind === "scroll") {
+        noteScroll(Number(d.y) || 0);
+        return;
+      }
+      // Links inside the preview move the draft, so unsaved edits survive.
+      if (d.kind === "navigate" && d.path) {
+        setPath(d.path);
+        return;
+      }
+      if (!d.key) return;
       if (d.kind === "code") {
-        // The label in the preview jumps straight to that section's source.
         window.location.href = `/online-store/themes/${themeId}/code?path=${encodeURIComponent(
           `sections/${d.type}.liquid`,
         )}`;
@@ -118,7 +141,7 @@ export function Customizer({ themeId }: { themeId: string }) {
     }
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [themeId]);
+  }, [themeId, noteScroll]);
 
   // Scroll the panel to whichever section the cursor is over.
   useEffect(() => {
@@ -183,8 +206,7 @@ export function Customizer({ themeId }: { themeId: string }) {
     const res = await saveCustomization(themeId, draft);
     setSaving(false);
     if (res.ok) {
-      setDirty(false);
-      setNonce((n) => n + 1); // reload the preview with the saved values
+      setDirty(false); // the preview is already showing this draft
     } else {
       setError(res.error);
     }
@@ -504,10 +526,16 @@ export function Customizer({ themeId }: { themeId: string }) {
               <IcLink className="h-4 w-4" />
             </a>
           </div>
-          <div className="flex min-h-0 flex-1 justify-center bg-surface-page p-2">
+          <div className="relative flex min-h-0 flex-1 justify-center bg-surface-page p-2">
+            {rendering && (
+              <span className="absolute end-4 top-4 z-10 rounded-full bg-ink/80 px-2 py-0.5 text-[10px] font-medium text-white">
+                {ar ? "تحديث…" : "updating…"}
+              </span>
+            )}
             <iframe
-              key={previewSrc}
-              src={previewSrc}
+              ref={frameRef}
+              srcDoc={previewHtml ?? undefined}
+              onLoad={onFrameLoad}
               title="preview"
               className={`h-full rounded-xl border-0 bg-white shadow-card ${
                 device === "mobile" ? "w-[390px] max-w-full" : "w-full"
