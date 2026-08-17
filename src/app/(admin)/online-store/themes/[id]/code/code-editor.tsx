@@ -196,6 +196,20 @@ export function ThemeCodeEditor({ themeId }: { themeId: string }) {
     [themeId, dirty, ar],
   );
 
+  // Arriving from the customizer with ?path=sections/x.liquid opens that file.
+  const openedFromQuery = useRef(false);
+  useEffect(() => {
+    if (openedFromQuery.current || loading || files.length === 0) return;
+    const wanted = new URLSearchParams(window.location.search).get("path");
+    if (!wanted) return;
+    openedFromQuery.current = true;
+    // Match on the tail too, so a zip's wrapper folder doesn't matter.
+    const hit =
+      files.find((f) => f.path === wanted) ??
+      files.find((f) => f.path.endsWith(`/${wanted}`));
+    if (hit) openFile(hit.path);
+  }, [loading, files, openFile]);
+
   const onSave = useCallback(async () => {
     if (!path || !editable || !dirty) return;
     setBusy(true);

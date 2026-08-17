@@ -170,6 +170,7 @@ async function storefrontGet(req: Request, config: MountConfig): Promise<Respons
   }
 
   const fresh = query.fresh === "1";
+  const inspect = query.inspect === "1";
   const res = await renderStorefront({
     themeId,
     mount,
@@ -178,6 +179,7 @@ async function storefrontGet(req: Request, config: MountConfig): Promise<Respons
     cartLines: lines,
     fresh,
     shopName,
+    inspect,
   });
   return toResponse(res);
 }

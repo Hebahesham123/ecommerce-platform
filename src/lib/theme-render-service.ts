@@ -272,6 +272,8 @@ export type StorefrontRequest = {
   customization?: ThemeCustomization;
   /** Receives the anchors found on the page, for the customizer's link list. */
   collectLinks?: (links: FoundLink[]) => void;
+  /** Tag sections + inject the hover inspector (admin customizer only). */
+  inspect?: boolean;
 };
 
 export type StorefrontResponse = { html: string; status: number };
@@ -418,6 +420,7 @@ export async function renderStorefront(
       shopName: req.shopName,
       customization: req.customization ?? (await loadCustomization(req.themeId)),
       collectLinks: req.collectLinks,
+      inspect: req.inspect,
     });
     return { status, html: injectHead(html, pixel) };
   } catch (e) {

@@ -54,6 +54,11 @@ export type RenderInput = {
   /** Merchant overrides: where each link/button points. */
   customization?: ThemeCustomization;
   /**
+   * Tag each section in the markup and inject the hover inspector, so the
+   * customizer can follow the cursor. Only used by the admin preview.
+   */
+  inspect?: boolean;
+  /**
    * When set, the anchors found on the page (before URL rewriting) are pushed
    * here so the customizer can list hardcoded buttons.
    */
@@ -164,6 +169,69 @@ var oo=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(){
 try{arguments[1]=fix(arguments[1]);}catch(e){}return oo.apply(this,arguments);};
 document.addEventListener("submit",function(e){var f=e.target;if(f&&f.tagName==="FORM"){
 var a=f.getAttribute("action");var n=fix(a);if(a&&n!==a)f.setAttribute("action",n);}},true);
+})();</script>`;
+}
+
+/**
+ * Hover inspector for the customizer preview.
+ *
+ * Outlines whatever section the cursor is over and tells the parent window
+ * which one it is, so the settings panel can follow along. The outline itself
+ * is pointer-events:none so it never swallows hovers or clicks; only the small
+ * label is clickable, and clicking it jumps to that section's code.
+ */
+function inspectScript(): string {
+  return `<script>(function(){
+var box,label,cur=null;
+function ensure(){
+  if(box)return;
+  box=document.createElement("div");
+  box.style.cssText="position:absolute;z-index:2147483646;border:2px solid #7c3aed;border-radius:6px;pointer-events:none;transition:all .06s ease-out;box-shadow:0 0 0 9999px rgba(124,58,237,.04)";
+  label=document.createElement("button");
+  label.style.cssText="position:absolute;top:-24px;left:0;z-index:2147483647;background:#7c3aed;color:#fff;font:600 11px/1 system-ui,sans-serif;padding:5px 8px;border:0;border-radius:5px;cursor:pointer;pointer-events:auto;white-space:nowrap";
+  box.appendChild(label);
+  document.body.appendChild(box);
+}
+function place(el){
+  ensure();
+  var r=el.getBoundingClientRect();
+  box.style.top=(r.top+window.scrollY)+"px";
+  box.style.left=(r.left+window.scrollX)+"px";
+  box.style.width=r.width+"px";
+  box.style.height=r.height+"px";
+  box.style.display="block";
+  label.textContent=(el.getAttribute("data-sf-name")||el.getAttribute("data-sf-type")||"Section")+"  ‹ ›";
+}
+function hide(){ if(box) box.style.display="none"; cur=null; }
+function post(kind,el){
+  try{parent.postMessage({source:"sf-inspect",kind:kind,
+    key:el.getAttribute("data-sf-key"),
+    type:el.getAttribute("data-sf-type"),
+    name:el.getAttribute("data-sf-name")},"*");}catch(e){}
+}
+document.addEventListener("mouseover",function(e){
+  var t=e.target;
+  if(!t||!t.closest)return;
+  var el=t.closest("[data-sf-key]");
+  if(!el){return;}
+  if(el===cur)return;
+  cur=el; place(el); post("hover",el);
+},true);
+document.addEventListener("mouseleave",function(){hide();},false);
+window.addEventListener("scroll",function(){ if(cur)place(cur); },true);
+window.addEventListener("resize",function(){ if(cur)place(cur); });
+// Clicking the label opens that section's code; it never navigates.
+document.addEventListener("click",function(e){
+  if(label&&e.target===label){ e.preventDefault(); e.stopPropagation(); if(cur) post("code",cur); }
+},true);
+// The panel can ask us to highlight a section it is showing.
+window.addEventListener("message",function(e){
+  var d=e.data;
+  if(!d||d.source!=="sf-panel")return;
+  if(d.kind==="clear"){hide();return;}
+  var el=document.querySelector('[data-sf-key="'+String(d.key).replace(/"/g,'')+'"]');
+  if(el){cur=el;place(el);el.scrollIntoView({behavior:"smooth",block:"center"});}
+});
 })();</script>`;
 }
 
@@ -943,9 +1011,14 @@ export async function renderThemePage(input: RenderInput): Promise<string> {
       index0: 0,
       shopify_attributes: "",
     };
+    // In the customizer these attributes are what the hover inspector reads to
+    // tell the panel which section the cursor is over.
+    const inspectAttrs = input.inspect
+      ? ` data-sf-key="${escapeHtml(sectionKey(scope, String(id)))}" data-sf-name="${escapeHtml(sc.name || type)}" data-sf-type="${escapeHtml(type)}"`
+      : "";
     try {
       const html = await engine.parseAndRender(src, { ...globals, section });
-      return `<div class="shopify-section shopify-section--${type}" id="shopify-section-${id}">${html}</div>`;
+      return `<div class="shopify-section shopify-section--${type}" id="shopify-section-${id}"${inspectAttrs}>${html}</div>`;
     } catch (e) {
       return `<!-- section "${type}" failed: ${escapeHtml((e as Error).message)} -->`;
     }
@@ -1066,7 +1139,7 @@ export async function renderThemePage(input: RenderInput): Promise<string> {
   const cssLinks = cssAssets
     .map((href) => `<link rel="stylesheet" href="${href}" media="all">`)
     .join("");
-  const headInject = `<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">${cssLinks}${bridgeScript(mount, currency)}`;
+  const headInject = `<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">${cssLinks}${bridgeScript(mount, currency)}${input.inspect ? inspectScript() : ""}`;
   html = /<head[^>]*>/i.test(html)
     ? html.replace(/<head[^>]*>/i, (m) => `${m}${headInject}`)
     : /<html[^>]*>/i.test(html)

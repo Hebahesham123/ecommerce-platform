@@ -22,6 +22,7 @@ import { Card } from "@/components/ui";
 import {
   IcAlert,
   IcChevron,
+  IcCode,
   IcDesktop,
   IcLink,
   IcMobile,
@@ -62,6 +63,8 @@ export function Customizer({ themeId }: { themeId: string }) {
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<Record<string, boolean>>({});
+  /** Section key the cursor is currently over in the preview. */
+  const [hovered, setHovered] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -92,9 +95,46 @@ export function Customizer({ themeId }: { themeId: string }) {
     };
   }, [themeId, path, nonce]);
 
-  const previewSrc = `/online-store/themes/${themeId}/preview${path === "/" ? "" : path}${
-    nonce ? `?r=${nonce}` : ""
+  // `inspect=1` tags each section and injects the hover inspector.
+  const previewSrc = `/online-store/themes/${themeId}/preview${path === "/" ? "" : path}?inspect=1${
+    nonce ? `&r=${nonce}` : ""
   }`;
+
+  // Follow the cursor: hovering a section in the preview opens it here.
+  useEffect(() => {
+    function onMessage(e: MessageEvent) {
+      const d = e.data as { source?: string; kind?: string; key?: string; type?: string };
+      if (!d || d.source !== "sf-inspect" || !d.key) return;
+
+      if (d.kind === "code") {
+        // The label in the preview jumps straight to that section's source.
+        window.location.href = `/online-store/themes/${themeId}/code?path=${encodeURIComponent(
+          `sections/${d.type}.liquid`,
+        )}`;
+        return;
+      }
+      setHovered(d.key);
+      setOpen((s) => (s[d.key!] ? s : { ...s, [d.key!]: true }));
+    }
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [themeId]);
+
+  // Scroll the panel to whichever section the cursor is over.
+  useEffect(() => {
+    if (!hovered) return;
+    const el = document.querySelector<HTMLElement>(`[data-sf-panel-key="${CSS.escape(hovered)}"]`);
+    el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [hovered]);
+
+  /** Highlight a section in the preview when its panel row is hovered. */
+  function highlightInPreview(key: string | null) {
+    const frame = document.querySelector<HTMLIFrameElement>("iframe[title='preview']");
+    frame?.contentWindow?.postMessage(
+      key ? { source: "sf-panel", kind: "show", key } : { source: "sf-panel", kind: "clear" },
+      "*",
+    );
+  }
 
   // ---- Draft mutation -------------------------------------------------------
   function setGlobal(id: string, value: unknown) {
@@ -306,6 +346,12 @@ export function Customizer({ themeId }: { themeId: string }) {
                           openState={open}
                           setOpen={setOpen}
                           id={sec.key}
+                          panelKey={sec.key}
+                          highlighted={hovered === sec.key}
+                          onHover={highlightInPreview}
+                          codeHref={`/online-store/themes/${themeId}/code?path=${encodeURIComponent(
+                            `sections/${sec.type}.liquid`,
+                          )}`}
                         >
                           {sec.settings.map((s) => (
                             <FieldRow key={s.id} def={s} ar={ar}>
@@ -534,6 +580,10 @@ function Group({
   openState,
   setOpen,
   defaultOpen,
+  panelKey,
+  highlighted,
+  onHover,
+  codeHref,
   children,
 }: {
   id: string;
@@ -542,25 +592,49 @@ function Group({
   openState: Record<string, boolean>;
   setOpen: (fn: (s: Record<string, boolean>) => Record<string, boolean>) => void;
   defaultOpen?: boolean;
+  /** Marks the row so the preview's hover can scroll to it. */
+  panelKey?: string;
+  highlighted?: boolean;
+  onHover?: (key: string | null) => void;
+  /** Opens this section's Liquid source in the code editor. */
+  codeHref?: string;
   children: React.ReactNode;
 }) {
   const expanded = openState[id] ?? Boolean(defaultOpen);
   return (
-    <div className="rounded-xl border border-line">
-      <button
-        className="flex w-full items-center gap-2 px-3 py-2 text-start"
-        onClick={() => setOpen((s) => ({ ...s, [id]: !expanded }))}
-      >
-        <IcChevron
-          className={`h-3 w-3 shrink-0 text-ink-soft transition-transform ${
-            expanded ? "rotate-90" : ""
-          } rtl:-scale-x-100`}
-        />
-        <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{title}</span>
-        {subtitle && (
-          <span className="shrink-0 font-mono text-[10px] text-ink-soft">{subtitle}</span>
+    <div
+      data-sf-panel-key={panelKey}
+      onMouseEnter={() => panelKey && onHover?.(panelKey)}
+      onMouseLeave={() => onHover?.(null)}
+      className={`rounded-xl border transition-colors ${
+        highlighted ? "border-violet-400 bg-violet-50/40 ring-1 ring-violet-300" : "border-line"
+      }`}
+    >
+      <div className="flex items-center gap-2 px-3 py-2">
+        <button
+          className="flex min-w-0 flex-1 items-center gap-2 text-start"
+          onClick={() => setOpen((s) => ({ ...s, [id]: !expanded }))}
+        >
+          <IcChevron
+            className={`h-3 w-3 shrink-0 text-ink-soft transition-transform ${
+              expanded ? "rotate-90" : ""
+            } rtl:-scale-x-100`}
+          />
+          <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{title}</span>
+          {subtitle && (
+            <span className="shrink-0 font-mono text-[10px] text-ink-soft">{subtitle}</span>
+          )}
+        </button>
+        {codeHref && (
+          <a
+            href={codeHref}
+            className="shrink-0 rounded-lg px-1.5 py-1 text-ink-soft hover:bg-surface-hover hover:text-ink"
+            title="Edit this section's code"
+          >
+            <IcCode className="h-3.5 w-3.5" />
+          </a>
         )}
-      </button>
+      </div>
       {expanded && <div className="border-t border-line px-3 pb-2">{children}</div>}
     </div>
   );
