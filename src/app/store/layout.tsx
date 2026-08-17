@@ -14,7 +14,7 @@ export default function StoreLayout({ children }: { children: ReactNode }) {
   }, []);
   return (
     <CartProvider>
-      <div className="min-h-screen bg-white text-ink">
+      <div className="store-theme min-h-screen bg-white text-ink">
         <StoreHeader />
         <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>
         <footer className="border-t border-line py-8 text-center text-sm text-ink-soft">

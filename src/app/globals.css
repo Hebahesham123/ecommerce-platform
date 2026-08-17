@@ -40,6 +40,18 @@
   --brand-ink: 255 255 255; /* white text on the violet button */
 }
 
+/* The storefront keeps the pink/crimson BeautyBar brand (the admin uses violet).
+   Scoped via .store-theme on the store layout root so `bg-brand`, `text-brand`,
+   `btn-primary`, etc. resolve to pink only inside the shop. */
+.store-theme {
+  --brand-50: 255 241 242;
+  --brand-100: 255 228 230;
+  --brand-500: 244 63 94;
+  --brand-600: 225 29 72;
+  --brand-700: 190 18 60;
+  --brand-ink: 255 255 255;
+}
+
 html,
 body {
   padding: 0;

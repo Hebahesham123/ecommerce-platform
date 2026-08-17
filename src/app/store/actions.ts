@@ -309,6 +309,28 @@ export async function setCustomerBirthday(phone: string, birthday: string): Prom
   }
 }
 
+/** Save the customer's post-purchase choices on the thank-you page:
+ *  preferred delivery date/time and a 1–5 star rating. Keyed by order number. */
+export async function setOrderExperience(
+  orderNumber: string,
+  patch: { deliveryDate?: string | null; deliverySlot?: string | null; rating?: number | null },
+): Promise<ActionResult> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  try {
+    const supabase = getServerSupabase();
+    const update: Record<string, unknown> = {};
+    if (patch.deliveryDate !== undefined) update.preferred_delivery_date = patch.deliveryDate;
+    if (patch.deliverySlot !== undefined) update.preferred_delivery_slot = patch.deliverySlot;
+    if (patch.rating !== undefined) update.rating = patch.rating;
+    if (Object.keys(update).length === 0) return { ok: true, data: undefined };
+    const { error } = await supabase.from("store_orders").update(update).eq("order_number", orderNumber);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, data: undefined };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
 /** Lightweight storefront counts for social-proof UI. */
 export async function getStoreStats(): Promise<ActionResult<{ orders: number; customers: number }>> {
   if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
