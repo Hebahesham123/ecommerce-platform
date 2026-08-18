@@ -571,6 +571,38 @@ function Control({
         onChange={(e) => onChange(e.target.value)}
       />
     );
+  if (def.type === "checkbox") {
+    const on = value === true || value === "true";
+    return (
+      <button
+        onClick={() => onChange(!on)}
+        className={`flex h-9 items-center gap-2 rounded-xl px-3 text-sm font-medium transition-colors ${
+          on ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-ink-muted"
+        }`}
+      >
+        <span
+          className={`h-3.5 w-3.5 rounded border ${
+            on ? "border-emerald-600 bg-emerald-600" : "border-line bg-surface"
+          }`}
+        />
+        {on ? (ar ? "مفعّل" : "On") : ar ? "معطّل" : "Off"}
+      </button>
+    );
+  }
+  if (def.type === "select")
+    return (
+      <select
+        className="h-9 w-full rounded-xl border border-line bg-surface-page px-2.5 text-sm text-ink outline-none focus:border-brand-600 focus:bg-white"
+        value={String(value ?? "")}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        {(def.options ?? []).map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    );
   if (def.type === "collection_list" || def.type === "product_list")
     return (
       <ListPicker type={def.type} value={value} targets={targets} ar={ar} onChange={onChange} />

@@ -20,8 +20,13 @@ export const LINKABLE_TYPES = [
 ] as const;
 
 export type LinkableType = (typeof LINKABLE_TYPES)[number];
-/** `text` is included only for button captions, so a link can be renamed. */
-export type EditableType = LinkableType | "text";
+/**
+ * `text` is included for button captions, and `checkbox`/`select` because they
+ * are what themes use to switch layout modes — like the header's "show the menu
+ * name with a +", which decides whether a drawer lists your menu items or wraps
+ * them in one collapsible row.
+ */
+export type EditableType = LinkableType | "text" | "checkbox" | "select";
 
 export type SettingDef = {
   id: string;
@@ -29,6 +34,8 @@ export type SettingDef = {
   label: string;
   info?: string;
   default: unknown;
+  /** Choices for a `select` setting. */
+  options?: { value: string; label: string }[];
 };
 
 export type BlockDef = {
@@ -113,6 +120,25 @@ function toSettingDef(s: any): SettingDef | null {
       label: String(s.label ?? s.id),
       info: s.info ? String(s.info) : undefined,
       default: s.default ?? "",
+    };
+  if (type === "checkbox")
+    return {
+      id: String(s.id),
+      type: "checkbox",
+      label: String(s.label ?? s.id),
+      info: s.info ? String(s.info) : undefined,
+      default: s.default ?? false,
+    };
+  if (type === "select" && Array.isArray(s.options))
+    return {
+      id: String(s.id),
+      type: "select",
+      label: String(s.label ?? s.id),
+      info: s.info ? String(s.info) : undefined,
+      default: s.default ?? "",
+      options: s.options
+        .filter((o: any) => o?.value !== undefined)
+        .map((o: any) => ({ value: String(o.value), label: String(o.label ?? o.value) })),
     };
   return null;
 }
