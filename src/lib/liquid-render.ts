@@ -8,6 +8,8 @@ import {
   scanLinks,
   sectionKey,
   themeSettingsData,
+  globalSettingTypes,
+  OBJECT_SETTING_TYPES,
   EMPTY_CUSTOMIZATION,
   type FoundLink,
   type ThemeCustomization,
@@ -552,6 +554,44 @@ export async function renderThemePage(input: RenderInput): Promise<string> {
     },
   });
 
+  /**
+   * Shopify hands themes an OBJECT for `collection`, `product` and `link_list`
+   * settings, not the stored handle. Without this a theme doing
+   * `settings.menu.links` or `settings.featured.url` silently gets nothing —
+   * or renders the wrong thing entirely.
+   */
+  function resolveTypedSettings(
+    values: Record<string, unknown>,
+    types: Record<string, string>,
+  ): Record<string, unknown> {
+    let out: Record<string, unknown> | null = null;
+    for (const [id, type] of Object.entries(types)) {
+      if (!OBJECT_SETTING_TYPES.has(type)) continue;
+      const raw = values[id];
+      if (raw == null || raw === "") continue;
+      // Already an object (a previous resolve, or a literal in the JSON).
+      if (typeof raw === "object" && !Array.isArray(raw)) continue;
+
+      let resolved: unknown;
+      if (type === "collection") resolved = collectionsByHandle[String(raw)] ?? null;
+      else if (type === "product") resolved = allProducts[String(raw)] ?? null;
+      else if (type === "link_list") resolved = (linklists as any)[String(raw)] ?? null;
+      else if (type === "collection_list")
+        resolved = (Array.isArray(raw) ? raw : [raw])
+          .map((h) => collectionsByHandle[String(h)])
+          .filter(Boolean);
+      else
+        resolved = (Array.isArray(raw) ? raw : [raw])
+          .map((h) => allProducts[String(h)])
+          .filter(Boolean);
+
+      if (resolved == null) continue;
+      out = out ?? { ...values };
+      out[id] = resolved;
+    }
+    return out ?? values;
+  }
+
   const canonicalPath = `${mount}${route.path === "/" ? "/" : route.path}`;
   const pageTitleFor = (): string => {
     if (route.type === "product" && route.product) return `${route.product.title} — ${shopName}`;
@@ -566,7 +606,9 @@ export async function renderThemePage(input: RenderInput): Promise<string> {
     route.type === "list-collections" ? "list-collections" : route.type;
 
   const globals: Record<string, unknown> = {
-    settings,
+    // A global `link_list` / `collection` setting must reach the theme as the
+    // object it expects, not the stored handle.
+    settings: resolveTypedSettings(settings, globalSettingTypes(files)),
     shop: {
       name: shopName,
       email: catalog.shop.email,
@@ -998,11 +1040,14 @@ export async function renderThemePage(input: RenderInput): Promise<string> {
       return {
         id: bid,
         type: bt,
-        settings: {
-          ...(sc.blockTypes[bt]?.defaults ?? {}),
-          ...(b.settings ?? {}),
-          ...(override.blocks?.[bid] ?? {}),
-        },
+        settings: resolveTypedSettings(
+          {
+            ...(sc.blockTypes[bt]?.defaults ?? {}),
+            ...(b.settings ?? {}),
+            ...(override.blocks?.[bid] ?? {}),
+          },
+          sc.blockTypes[bt]?.types ?? {},
+        ),
         shopify_attributes: "",
       };
     });
@@ -1021,11 +1066,14 @@ export async function renderThemePage(input: RenderInput): Promise<string> {
     const section = {
       id,
       type,
-      settings: {
-        ...sc.allDefaults,
-        ...(instance?.settings ?? {}),
-        ...(override.settings ?? {}),
-      },
+      settings: resolveTypedSettings(
+        {
+          ...sc.allDefaults,
+          ...(instance?.settings ?? {}),
+          ...(override.settings ?? {}),
+        },
+        sc.types,
+      ),
       blocks,
       blocks_count: blocks.length,
       location: "",

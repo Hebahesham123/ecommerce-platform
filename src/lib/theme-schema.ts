@@ -123,9 +123,32 @@ export type ParsedSchema = {
   settings: SettingDef[];
   /** Defaults for EVERY setting, so rendering keeps its current behaviour. */
   allDefaults: Record<string, unknown>;
-  blockTypes: Record<string, { name: string; settings: SettingDef[]; defaults: Record<string, unknown> }>;
+  /**
+   * Declared type of every setting ("collection", "link_list", …). Themes are
+   * handed an OBJECT for these, not the stored handle, so the renderer needs
+   * the type to know what to look up.
+   */
+  types: Record<string, string>;
+  blockTypes: Record<
+    string,
+    {
+      name: string;
+      settings: SettingDef[];
+      defaults: Record<string, unknown>;
+      types: Record<string, string>;
+    }
+  >;
   presetBlocks: { type: string; settings: Record<string, unknown> }[];
 };
+
+/** Setting types that resolve to a Shopify object rather than a plain value. */
+export const OBJECT_SETTING_TYPES = new Set([
+  "collection",
+  "product",
+  "link_list",
+  "collection_list",
+  "product_list",
+]);
 
 /** Parse the `{% schema %}` block out of a section's Liquid source. */
 export function parseSectionSchema(src: string): ParsedSchema {
@@ -133,6 +156,7 @@ export function parseSectionSchema(src: string): ParsedSchema {
     name: "",
     settings: [],
     allDefaults: {},
+    types: {},
     blockTypes: {},
     presetBlocks: [],
   };
@@ -141,11 +165,20 @@ export function parseSectionSchema(src: string): ParsedSchema {
   const schema = tryJSON<any>(m[1]);
   if (!schema) return empty;
 
-  const out: ParsedSchema = { ...empty, name: String(schema.name ?? ""), settings: [], allDefaults: {}, blockTypes: {}, presetBlocks: [] };
+  const out: ParsedSchema = {
+    ...empty,
+    name: String(schema.name ?? ""),
+    settings: [],
+    allDefaults: {},
+    types: {},
+    blockTypes: {},
+    presetBlocks: [],
+  };
 
   for (const s of schema.settings ?? []) {
     if (!s?.id) continue;
     out.allDefaults[s.id] = s.default ?? "";
+    out.types[s.id] = String(s.type ?? "");
     const def = toSettingDef(s);
     if (def) out.settings.push(def);
   }
@@ -153,14 +186,16 @@ export function parseSectionSchema(src: string): ParsedSchema {
   for (const b of schema.blocks ?? []) {
     if (!b?.type) continue;
     const defaults: Record<string, unknown> = {};
+    const types: Record<string, string> = {};
     const settings: SettingDef[] = [];
     for (const s of b.settings ?? []) {
       if (!s?.id) continue;
       defaults[s.id] = s.default ?? "";
+      types[s.id] = String(s.type ?? "");
       const def = toSettingDef(s);
       if (def) settings.push(def);
     }
-    out.blockTypes[b.type] = { name: String(b.name ?? b.type), settings, defaults };
+    out.blockTypes[b.type] = { name: String(b.name ?? b.type), settings, defaults, types };
   }
 
   const preset = Array.isArray(schema.presets) ? schema.presets[0] : null;
@@ -260,6 +295,16 @@ function globalDefs(files: FileMap): { settings: SettingDef[]; defaults: Record<
         if (def) settings.push({ ...def, label: `${panel?.name ? `${panel.name} · ` : ""}${def.label}` });
       }
   return { settings, defaults };
+}
+
+/** Declared type of every GLOBAL theme setting, keyed by id. */
+export function globalSettingTypes(files: FileMap): Record<string, string> {
+  const schema = tryJSON<any[]>(files["config/settings_schema.json"]);
+  const types: Record<string, string> = {};
+  if (Array.isArray(schema))
+    for (const panel of schema)
+      for (const s of panel?.settings ?? []) if (s?.id) types[s.id] = String(s.type ?? "");
+  return types;
 }
 
 /** Values saved in config/settings_data.json (the theme author's own choices). */
