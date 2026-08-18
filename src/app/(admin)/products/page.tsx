@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useI18n, egp, num } from "@/lib/i18n";
 import { products as demoProducts } from "@/lib/data";
+import { collectionHandle } from "@/lib/collections";
 import {
   type InventoryItem,
   type Location,
@@ -315,7 +316,21 @@ export default function ProductsPage() {
                       </td>
                       <td className="px-3 py-3"><StatusPill label={t(`st_${p.status}`)} tone={statusPill[p.status]} /></td>
                       <td className={`px-3 py-3 ${invTone(withStatus(p))}`}>{invLabel(p)}</td>
-                      <td className="px-3 py-3"><Badge className="bg-slate-100 text-ink-muted">{p.category}</Badge></td>
+                      <td className="px-3 py-3">
+                        {p.category && p.category !== "—" ? (
+                          // Categories drive collections, so open the matching one.
+                          <a
+                            href={`/collections?edit=${encodeURIComponent(collectionHandle(p.category))}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="badge bg-slate-100 text-ink-muted transition-colors hover:bg-brand-50 hover:text-brand-700"
+                            title={lang === "ar" ? "تعديل التصنيف" : "Edit this collection"}
+                          >
+                            {p.category}
+                          </a>
+                        ) : (
+                          <Badge className="bg-slate-100 text-ink-muted">{p.category}</Badge>
+                        )}
+                      </td>
                       <td className="px-5 py-3 text-end font-semibold text-ink">{priceLabel(p)}</td>
                     </tr>
                   );

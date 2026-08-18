@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useI18n, num } from "@/lib/i18n";
 import {
   emptyCollection,
@@ -32,6 +32,7 @@ import {
   IcAlert,
   IcLink,
   IcEye,
+  IcEdit,
 } from "@/components/icons";
 
 export default function CollectionsPage() {
@@ -59,6 +60,20 @@ export default function CollectionsPage() {
   useEffect(() => {
     load();
   }, []);
+
+  // Anywhere a collection is referenced links here as ?edit=<handle|id>, so
+  // arriving from Navigation or the theme customizer opens it straight away.
+  const openedFromQuery = useRef(false);
+  useEffect(() => {
+    if (openedFromQuery.current || loading || collections.length === 0) return;
+    const wanted = new URLSearchParams(window.location.search).get("edit");
+    if (!wanted) return;
+    openedFromQuery.current = true;
+    const hit = collections.find(
+      (c) => c.handle === wanted || c.id === wanted,
+    );
+    if (hit) setEditing(hit);
+  }, [loading, collections]);
 
   const catalog: PickerProduct[] = useMemo(() => groupPickerProducts(items), [items]);
   const byName = useMemo(() => new Map(catalog.map((p) => [p.productName, p])), [catalog]);
@@ -277,6 +292,13 @@ export default function CollectionsPage() {
                     {c.isPublished ? t("coll_published") : t("coll_hidden")}
                   </button>
 
+                  <button
+                    className="btn-ghost h-8 shrink-0 px-2"
+                    onClick={() => setEditing(c)}
+                    title={ar ? "تعديل" : "Edit"}
+                  >
+                    <IcEdit className="h-4 w-4" />
+                  </button>
                   <a
                     className="btn-ghost h-8 shrink-0 px-2"
                     href={`/shop/collections/${encodeURIComponent(c.handle)}`}

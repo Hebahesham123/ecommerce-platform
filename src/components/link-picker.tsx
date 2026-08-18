@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { EditableType } from "@/lib/theme-schema";
+import { IcEdit } from "@/components/icons";
 
 /** Everything a link can point at, read from the live catalog. */
 export type LinkTargets = {
@@ -132,18 +133,21 @@ export function LinkPicker({
             cta={ar ? "أنشئ تصنيفاً" : "Create one"}
           />
         ) : (
-          <select
-            className={`${selectCls} min-w-[150px] flex-1`}
-            value={target}
-            onChange={(e) => onChange(encode(type, "collection", e.target.value))}
-          >
-            <option value="">{ar ? "اختر تصنيفاً…" : "Choose a collection…"}</option>
-            {targets.collections.map((c) => (
-              <option key={c.handle} value={c.handle}>
-                {c.title} ({c.count})
-              </option>
-            ))}
-          </select>
+          <>
+            <select
+              className={`${selectCls} min-w-[150px] flex-1`}
+              value={target}
+              onChange={(e) => onChange(encode(type, "collection", e.target.value))}
+            >
+              <option value="">{ar ? "اختر تصنيفاً…" : "Choose a collection…"}</option>
+              {targets.collections.map((c) => (
+                <option key={c.handle} value={c.handle}>
+                  {c.title} ({c.count})
+                </option>
+              ))}
+            </select>
+            <EditCollectionLink handle={target} ar={ar} />
+          </>
         ))}
 
       {kind === "product" &&
@@ -177,6 +181,27 @@ export function LinkPicker({
         />
       )}
     </div>
+  );
+}
+
+/**
+ * Jump straight to a referenced collection's editor.
+ *
+ * Opens in a new tab on purpose: this appears inside the theme customizer and
+ * the navigation editor, where navigating away would throw out unsaved work.
+ */
+export function EditCollectionLink({ handle, ar }: { handle: string; ar: boolean }) {
+  if (!handle) return null;
+  return (
+    <a
+      href={`/collections?edit=${encodeURIComponent(handle)}`}
+      target="_blank"
+      rel="noreferrer"
+      title={ar ? "تعديل هذا التصنيف" : "Edit this collection"}
+      className="flex h-9 shrink-0 items-center rounded-lg px-2 text-ink-soft transition-colors hover:bg-surface-hover hover:text-brand-600"
+    >
+      <IcEdit className="h-3.5 w-3.5" />
+    </a>
   );
 }
 

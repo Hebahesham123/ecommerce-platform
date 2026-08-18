@@ -11,7 +11,17 @@ import {
   updateItem,
   type NavItem,
 } from "@/lib/navigation";
-import { LinkPicker, type LinkTargets } from "@/components/link-picker";
+import {
+  EditCollectionLink,
+  LinkPicker,
+  type LinkTargets,
+} from "@/components/link-picker";
+
+/** "/collections/bags" → "bags"; anything else → "". */
+function collectionHandleOf(url: string): string {
+  const m = String(url ?? "").match(/^\/collections\/([^/?#]+)$/);
+  return m && m[1] !== "all" ? decodeURIComponent(m[1]) : "";
+}
 import { IcPlus, IcTrash, IcChevron } from "@/components/icons";
 
 /**
@@ -132,6 +142,9 @@ function Row({
             onChange={(url) => onPatch({ url })}
           />
         </div>
+
+        {/* A menu entry pointing at a collection can be edited from here. */}
+        <EditCollectionLink handle={collectionHandleOf(item.url)} ar={ar} />
 
         {canNest && (
           <button
