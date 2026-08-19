@@ -15,7 +15,8 @@
     "next": "^15.5.20",
     "react": "19.0.0",
     "react-dom": "19.0.0",
-    "recharts": "2.15.0"
+    "recharts": "2.15.0",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
   },
   "devDependencies": {
     "@types/node": "22.10.7",

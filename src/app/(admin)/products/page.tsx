@@ -15,6 +15,7 @@ import {
 } from "@/lib/inventory";
 import { listInventory, listLocations } from "../inventory/actions";
 import { ProductEditor } from "../inventory/product-editor";
+import { ProductImport } from "@/components/product-import";
 import { PageHeader } from "@/components/page-header";
 import { Card, Badge } from "@/components/ui";
 import {
@@ -28,7 +29,7 @@ import {
   SegBtn,
   type PillTone,
 } from "@/components/dashboard-ui";
-import { IcPlus, IcInventory, IcImage } from "@/components/icons";
+import { IcPlus, IcInventory, IcImage, IcUpload } from "@/components/icons";
 
 type StatusTab = "all" | ProductStatus;
 type StockFilter = "all" | "in_stock" | "low_stock" | "out_stock";
@@ -118,6 +119,7 @@ export default function ProductsPage() {
   const [view, setView] = useState<View>("list");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editItem, setEditItem] = useState<InventoryItem | null>(null);
+  const [importing, setImporting] = useState(false);
 
   async function load() {
     const [inv, locs] = await Promise.all([listInventory(), listLocations()]);
@@ -215,6 +217,9 @@ export default function ProductsPage() {
         subtitle={ar ? "الكتالوج، التنويعات، والمخزون" : "Catalog, variants & inventory"}
         actions={
           <>
+            <button className="btn-outline" onClick={() => setImporting(true)}>
+              <IcUpload className="h-4 w-4" /> {ar ? "استيراد" : "Import"}
+            </button>
             <button className="btn-outline" onClick={() => router.push("/inventory")}>
               <IcInventory className="h-4 w-4" /> {t("manage_inventory")}
             </button>
@@ -381,6 +386,14 @@ export default function ProductsPage() {
             setEditItem(null);
             load();
           }}
+        />
+      )}
+
+      {importing && (
+        <ProductImport
+          locations={locations}
+          onClose={() => setImporting(false)}
+          onImported={load}
         />
       )}
     </>

@@ -249,16 +249,27 @@ export async function setLocationActive(
 // =============================================================================
 // Inventory items + levels
 // =============================================================================
+// PostgREST caps a single response at 1000 rows, so a catalog larger than that
+// has to be read page by page or the grid silently shows only the first slice.
+const PAGE_SIZE = 1000;
+
 export async function listInventory(): Promise<ActionResult<InventoryItem[]>> {
   if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
   try {
     const supabase = getServerSupabase();
-    const { data, error } = await supabase
-      .from("inventory_items")
-      .select("*, inventory_levels(*)")
-      .order("created_at", { ascending: true });
-    if (error) return { ok: false, error: error.message };
-    return { ok: true, data: (data ?? []).map(rowToItem) };
+    const rows: Row[] = [];
+    for (let from = 0; ; from += PAGE_SIZE) {
+      const { data, error } = await supabase
+        .from("inventory_items")
+        .select("*, inventory_levels(*)")
+        .order("created_at", { ascending: true })
+        .range(from, from + PAGE_SIZE - 1);
+      if (error) return { ok: false, error: error.message };
+      const page = (data ?? []) as Row[];
+      rows.push(...page);
+      if (page.length < PAGE_SIZE) break;
+    }
+    return { ok: true, data: rows.map(rowToItem) };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }

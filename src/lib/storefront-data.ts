@@ -635,12 +635,22 @@ export async function getCatalog(mount = ""): Promise<Catalog> {
   let rows: Row[] = [];
   try {
     const supabase = getServerSupabase();
-    const { data, error } = await supabase
-      .from("inventory_items")
-      .select("*, inventory_levels(on_hand,committed,incoming)")
-      .order("created_at", { ascending: true });
-    if (error) throw new Error(error.message);
-    rows = (data ?? []) as Row[];
+    // PostgREST returns at most 1000 rows per request — page through so the
+    // whole catalog reaches the storefront, not just the oldest 1000 variants.
+    const PAGE = 1000;
+    const all: Row[] = [];
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await supabase
+        .from("inventory_items")
+        .select("*, inventory_levels(on_hand,committed,incoming)")
+        .order("created_at", { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (error) throw new Error(error.message);
+      const page = (data ?? []) as Row[];
+      all.push(...page);
+      if (page.length < PAGE) break;
+    }
+    rows = all;
   } catch {
     // The storefront must still render (empty) if the catalog query fails.
     return buildCatalog([], shop, mount);
