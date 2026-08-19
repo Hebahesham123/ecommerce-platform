@@ -188,11 +188,37 @@ function parseStatus(v: unknown): ImportRow["status"] {
   return "active";
 }
 
-export function rowToImport(row: unknown[], mapping: Mapping): ImportRow {
-  const at = (f: ImportField): unknown => {
-    const i = mapping[f];
-    return i == null ? undefined : row[i];
-  };
+/**
+ * Fields that describe the PRODUCT rather than the variant.
+ *
+ * Exports from Shopify (and most catalogue tools) print these only on a
+ * product's first row and leave them blank on its remaining variant rows, so
+ * they are the ones safe to carry downwards. Variant-level cells — sku, price,
+ * quantity, barcode, the variant name itself — are never inherited, or every
+ * variant would end up a copy of the first.
+ */
+const PRODUCT_LEVEL_FIELDS: ImportField[] = [
+  "productName",
+  "category",
+  "vendor",
+  "productType",
+  "tags",
+  "status",
+];
+
+type Cells = Partial<Record<ImportField, unknown>>;
+
+function readCells(row: unknown[], mapping: Mapping): Cells {
+  const cells: Cells = {};
+  for (const spec of IMPORT_FIELDS) {
+    const i = mapping[spec.field];
+    if (i != null) cells[spec.field] = row[i];
+  }
+  return cells;
+}
+
+function cellsToImport(cells: Cells): ImportRow {
+  const at = (f: ImportField): unknown => cells[f];
   const primary = orNull(at("imageUrl"));
   const gallery = parseList(at("images"));
   return {
@@ -222,19 +248,56 @@ export type ParsedSheet = {
   skipped: RowIssue[];
   /** Rows imported but that will not show on the storefront. */
   warnings: RowIssue[];
+  /** Rows rescued by inheriting product-level cells from the row above. */
+  filledDown: number;
 };
 
-/** Turn raw sheet rows into import rows, separating the unusable ones. */
-export function prepareRows(raw: unknown[][], mapping: Mapping): ParsedSheet {
+/** Single row conversion, kept for callers that don't need fill-down. */
+export function rowToImport(row: unknown[], mapping: Mapping): ImportRow {
+  return cellsToImport(readCells(row, mapping));
+}
+
+/**
+ * Turn raw sheet rows into import rows, separating the unusable ones.
+ *
+ * With `fillDown` (the default), a row whose product-level cells are blank
+ * continues the product above it — which is how multi-variant exports are
+ * shaped. Without it those rows have no product name and are dropped.
+ */
+export function prepareRows(
+  raw: unknown[][],
+  mapping: Mapping,
+  opts: { fillDown?: boolean } = {},
+): ParsedSheet {
+  const fillDown = opts.fillDown !== false;
   const rows: ImportRow[] = [];
   const skipped: RowIssue[] = [];
   const warnings: RowIssue[] = [];
+  let filledDown = 0;
+
+  const carried: Cells = {};
 
   raw.forEach((r, i) => {
     // +2 = one for the header row, one for 1-based spreadsheet numbering.
     const line = i + 2;
     if (r.every((c) => text(c) === "")) return; // blank row
-    const parsed = rowToImport(r, mapping);
+
+    const cells = readCells(r, mapping);
+
+    if (fillDown) {
+      const hadName = text(cells.productName) !== "";
+      if (hadName) {
+        // A named row starts a new product: it becomes the source to inherit
+        // from, and stale values from the previous product are dropped.
+        for (const f of PRODUCT_LEVEL_FIELDS) carried[f] = cells[f];
+      } else {
+        for (const f of PRODUCT_LEVEL_FIELDS)
+          if (text(cells[f]) === "" && text(carried[f]) !== "") cells[f] = carried[f];
+        if (text(cells.productName) !== "") filledDown++;
+      }
+    }
+
+    const parsed = cellsToImport(cells);
     if (!parsed.productName) {
       skipped.push({ row: line, problem: "no product name" });
       return;
@@ -244,7 +307,7 @@ export function prepareRows(raw: unknown[][], mapping: Mapping): ParsedSheet {
     rows.push(parsed);
   });
 
-  return { rows, skipped, warnings };
+  return { rows, skipped, warnings, filledDown };
 }
 
 /** Products (grouped by name) and variants a prepared sheet would produce. */

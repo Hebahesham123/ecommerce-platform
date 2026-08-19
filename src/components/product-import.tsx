@@ -36,6 +36,8 @@ export function ProductImport({
   const [mapping, setMapping] = useState<Mapping>({});
   const [locationId, setLocationId] = useState(locations[0]?.id ?? "");
   const [updateExisting, setUpdateExisting] = useState(true);
+  /** Multi-variant exports leave the product name blank after the first row. */
+  const [fillDown, setFillDown] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [summary, setSummary] = useState<ImportSummary | null>(null);
@@ -74,7 +76,10 @@ export function ProductImport({
     }
   }
 
-  const prepared = useMemo(() => prepareRows(raw, mapping), [raw, mapping]);
+  const prepared = useMemo(
+    () => prepareRows(raw, mapping, { fillDown }),
+    [raw, mapping, fillDown],
+  );
   const stats = useMemo(() => importStats(prepared.rows), [prepared.rows]);
   const missingRequired = IMPORT_FIELDS.filter(
     (f) => f.required && mapping[f.field] == null,
@@ -240,6 +245,36 @@ export function ProductImport({
                   </div>
                 </div>
               )}
+
+              {/* The single biggest reason rows go missing, so it sits above
+                  the warnings rather than buried in options. */}
+              <label className="flex cursor-pointer items-start gap-2 rounded-xl border border-line p-3">
+                <input
+                  type="checkbox"
+                  checked={fillDown}
+                  onChange={(e) => setFillDown(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-line accent-brand-600"
+                />
+                <span className="text-sm">
+                  <span className="font-medium text-ink">
+                    {ar
+                      ? "الصفوف بدون اسم تُكمل المنتج الذي فوقها"
+                      : "Rows with no name continue the product above"}
+                  </span>
+                  <span className="block text-[11px] text-ink-soft">
+                    {ar
+                      ? "ملفات التصدير تكتب اسم المنتج في أول صف فقط وتترك بقية صفوف التنويعات فارغة. الاسم والفئة والماركة تُورَّث؛ الـ SKU والسعر والكمية لا."
+                      : "Exports print the product name only on its first row and leave the variant rows blank. Name, category, vendor and tags are inherited — SKU, price and quantity never are."}
+                  </span>
+                  {prepared.filledDown > 0 && (
+                    <span className="mt-1 block text-[11px] font-medium text-emerald-600">
+                      {ar
+                        ? `${num(prepared.filledDown, lang)} صف تم إنقاذها بهذا الخيار`
+                        : `${num(prepared.filledDown, lang)} rows recovered by this`}
+                    </span>
+                  )}
+                </span>
+              </label>
 
               {(prepared.skipped.length > 0 || prepared.warnings.length > 0) && (
                 <Card className="bg-amber-50/60 p-3 text-xs text-amber-800">
