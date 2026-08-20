@@ -13,6 +13,7 @@ import {
   listModifiedFiles,
 } from "./actions";
 import { Card } from "@/components/ui";
+import { useLivePreview } from "@/components/use-live-preview";
 import {
   IcChevron,
   IcFile,
@@ -151,6 +152,23 @@ export function ThemeCodeEditor({ themeId }: { themeId: string }) {
   const [showPreview, setShowPreview] = useState(false);
   const [nonce, setNonce] = useState(0);
   const [caret, setCaret] = useState({ line: 1, col: 1 });
+  /** Which storefront page the live preview shows. */
+  const [previewPath, setPreviewPath] = useState("/");
+
+  const { html: previewHtml, rendering, render, frameRef, onFrameLoad, noteScroll } =
+    useLivePreview(themeId, 500);
+
+  // Keep scroll across re-renders, and follow links inside the preview.
+  useEffect(() => {
+    function onMessage(e: MessageEvent) {
+      const d = e.data as { source?: string; kind?: string; path?: string; y?: number };
+      if (!d || d.source !== "sf-inspect") return;
+      if (d.kind === "scroll") noteScroll(Number(d.y) || 0);
+      else if (d.kind === "navigate" && d.path) setPreviewPath(d.path);
+    }
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [noteScroll]);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const gutterRef = useRef<HTMLDivElement>(null);
@@ -300,9 +318,11 @@ export function ThemeCodeEditor({ themeId }: { themeId: string }) {
     });
   }
 
-  // `fresh=1` bypasses the server's cached copy of the theme's files, so the
-  // preview shows the file that was just written rather than a stale bundle.
-  const previewSrc = `/online-store/themes/${themeId}/preview?fresh=1&r=${nonce}`;
+  // The preview renders the buffer you are typing in — no save required.
+  useEffect(() => {
+    if (!showPreview || !path || !editable) return;
+    render({ path: previewPath, fileOverrides: { [path]: content } });
+  }, [showPreview, path, editable, content, previewPath, render, nonce]);
 
   return (
     <div className="flex h-[calc(100vh-7rem)] flex-col gap-3">
@@ -469,19 +489,33 @@ export function ThemeCodeEditor({ themeId }: { themeId: string }) {
               <span className="text-xs font-medium text-ink-muted">
                 {ar ? "معاينة مباشرة" : "Live preview"}
               </span>
+              <span className="truncate font-mono text-[10px] text-ink-soft">{previewPath}</span>
+              {rendering && (
+                <span className="shrink-0 text-[10px] text-brand-600">
+                  {ar ? "تحديث…" : "updating…"}
+                </span>
+              )}
               <button
                 className="btn-ghost ms-auto h-7 px-2"
                 onClick={() => setNonce((n) => n + 1)}
+                title={ar ? "إعادة العرض" : "Re-render"}
               >
                 <IcRefresh className="h-3.5 w-3.5" />
               </button>
-              <a className="btn-ghost h-7 px-2" href={previewSrc} target="_blank" rel="noreferrer">
+              <a
+                className="btn-ghost h-7 px-2"
+                href={`/online-store/themes/${themeId}/preview?fresh=1`}
+                target="_blank"
+                rel="noreferrer"
+                title={ar ? "فتح المحفوظ في تبويب" : "Open the saved version in a tab"}
+              >
                 <IcLink className="h-3.5 w-3.5" />
               </a>
             </div>
             <iframe
-              key={previewSrc}
-              src={previewSrc}
+              ref={frameRef}
+              srcDoc={previewHtml ?? undefined}
+              onLoad={onFrameLoad}
               title="preview"
               className="min-h-0 flex-1 border-0 bg-white"
               sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals"

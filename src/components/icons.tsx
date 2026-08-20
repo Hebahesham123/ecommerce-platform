@@ -209,6 +209,12 @@ export const IcEye = (p: P) => (
     <circle cx="12" cy="12" r="3" />
   </svg>
 );
+export const IcEdit = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M12 20h9" />
+    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+  </svg>
+);
 export const IcCode = (p: P) => (
   <svg {...base(p)}>
     <path d="m16 18 6-6-6-6" />

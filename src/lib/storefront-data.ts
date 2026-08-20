@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import "server-only";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
+import { matchesRule } from "@/lib/collections";
 
 /**
  * Turns the dashboard's inventory into the Shopify-shaped drops a Liquid theme
@@ -406,14 +407,19 @@ function membersOf(def: CollectionDef, products: ProductDrop[]): ProductDrop[] {
       .map((n) => byName.get(n.trim().toLowerCase()))
       .filter((p): p is ProductDrop => Boolean(p));
   }
-  const v = (def.ruleValue ?? "").trim().toLowerCase();
-  if (!v) return [];
-  return products.filter((p) => {
-    if (def.ruleType === "category")
-      return String(p.category ?? "").toLowerCase() === v;
-    if (def.ruleType === "vendor") return String(p.vendor ?? "").toLowerCase() === v;
-    return (p.tags ?? []).some((tag) => tag.toLowerCase() === v);
-  });
+  // Same matcher the admin uses, so the preview count always equals what the
+  // storefront renders.
+  return products.filter((p) =>
+    matchesRule(
+      {
+        category: (p.category as string | null) ?? null,
+        vendor: (p.vendor as string | null) ?? null,
+        tags: p.tags ?? [],
+      },
+      def.ruleType,
+      def.ruleValue,
+    ),
+  );
 }
 
 /**
@@ -631,12 +637,22 @@ export async function getCatalog(mount = ""): Promise<Catalog> {
   let rows: Row[] = [];
   try {
     const supabase = getServerSupabase();
-    const { data, error } = await supabase
-      .from("inventory_items")
-      .select("*, inventory_levels(on_hand,committed,incoming)")
-      .order("created_at", { ascending: true });
-    if (error) throw new Error(error.message);
-    rows = (data ?? []) as Row[];
+    // PostgREST returns at most 1000 rows per request — page through so the
+    // whole catalog reaches the storefront, not just the oldest 1000 variants.
+    const PAGE = 1000;
+    const all: Row[] = [];
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await supabase
+        .from("inventory_items")
+        .select("*, inventory_levels(on_hand,committed,incoming)")
+        .order("created_at", { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (error) throw new Error(error.message);
+      const page = (data ?? []) as Row[];
+      all.push(...page);
+      if (page.length < PAGE) break;
+    }
+    rows = all;
   } catch {
     // The storefront must still render (empty) if the catalog query fails.
     return buildCatalog([], shop, mount);

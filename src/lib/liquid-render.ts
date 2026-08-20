@@ -8,6 +8,8 @@ import {
   scanLinks,
   sectionKey,
   themeSettingsData,
+  globalSettingTypes,
+  OBJECT_SETTING_TYPES,
   EMPTY_CUSTOMIZATION,
   type FoundLink,
   type ThemeCustomization,
@@ -180,8 +182,9 @@ var a=f.getAttribute("action");var n=fix(a);if(a&&n!==a)f.setAttribute("action",
  * is pointer-events:none so it never swallows hovers or clicks; only the small
  * label is clickable, and clicking it jumps to that section's code.
  */
-function inspectScript(): string {
+function inspectScript(mount: string): string {
   return `<script>(function(){
+var M=${JSON.stringify(mount)};
 var box,label,cur=null;
 function ensure(){
   if(box)return;
@@ -224,10 +227,31 @@ window.addEventListener("resize",function(){ if(cur)place(cur); });
 document.addEventListener("click",function(e){
   if(label&&e.target===label){ e.preventDefault(); e.stopPropagation(); if(cur) post("code",cur); }
 },true);
-// The panel can ask us to highlight a section it is showing.
+// Report scroll so the panel can restore it after a live re-render.
+var sy=0;
+window.addEventListener("scroll",function(){
+  sy=window.scrollY||0;
+  try{parent.postMessage({source:"sf-inspect",kind:"scroll",y:sy},"*");}catch(e){}
+},{passive:true});
+// Links navigate the DRAFT, not the saved page: tell the panel to re-render
+// at that path instead of loading the real URL and losing unsaved edits.
+document.addEventListener("click",function(e){
+  var a=e.target&&e.target.closest?e.target.closest("a[href]"):null;
+  if(!a)return;
+  var h=a.getAttribute("href")||"";
+  if(!h||h.charAt(0)==="#"||/^(?:[a-z][a-z0-9+.-]*:)/i.test(h))return;
+  if(a.target&&a.target!=="_self")return;
+  var p=h;
+  if(M&&p.indexOf(M)===0)p=p.slice(M.length)||"/";
+  if(p.charAt(0)!=="/")return;
+  e.preventDefault();
+  try{parent.postMessage({source:"sf-inspect",kind:"navigate",path:p},"*");}catch(err){}
+},true);
+// The panel can ask us to highlight a section, or restore scroll.
 window.addEventListener("message",function(e){
   var d=e.data;
   if(!d||d.source!=="sf-panel")return;
+  if(d.kind==="scroll"){window.scrollTo(0,Number(d.y)||0);return;}
   if(d.kind==="clear"){hide();return;}
   var el=document.querySelector('[data-sf-key="'+String(d.key).replace(/"/g,'')+'"]');
   if(el){cur=el;place(el);el.scrollIntoView({behavior:"smooth",block:"center"});}
@@ -530,6 +554,44 @@ export async function renderThemePage(input: RenderInput): Promise<string> {
     },
   });
 
+  /**
+   * Shopify hands themes an OBJECT for `collection`, `product` and `link_list`
+   * settings, not the stored handle. Without this a theme doing
+   * `settings.menu.links` or `settings.featured.url` silently gets nothing —
+   * or renders the wrong thing entirely.
+   */
+  function resolveTypedSettings(
+    values: Record<string, unknown>,
+    types: Record<string, string>,
+  ): Record<string, unknown> {
+    let out: Record<string, unknown> | null = null;
+    for (const [id, type] of Object.entries(types)) {
+      if (!OBJECT_SETTING_TYPES.has(type)) continue;
+      const raw = values[id];
+      if (raw == null || raw === "") continue;
+      // Already an object (a previous resolve, or a literal in the JSON).
+      if (typeof raw === "object" && !Array.isArray(raw)) continue;
+
+      let resolved: unknown;
+      if (type === "collection") resolved = collectionsByHandle[String(raw)] ?? null;
+      else if (type === "product") resolved = allProducts[String(raw)] ?? null;
+      else if (type === "link_list") resolved = (linklists as any)[String(raw)] ?? null;
+      else if (type === "collection_list")
+        resolved = (Array.isArray(raw) ? raw : [raw])
+          .map((h) => collectionsByHandle[String(h)])
+          .filter(Boolean);
+      else
+        resolved = (Array.isArray(raw) ? raw : [raw])
+          .map((h) => allProducts[String(h)])
+          .filter(Boolean);
+
+      if (resolved == null) continue;
+      out = out ?? { ...values };
+      out[id] = resolved;
+    }
+    return out ?? values;
+  }
+
   const canonicalPath = `${mount}${route.path === "/" ? "/" : route.path}`;
   const pageTitleFor = (): string => {
     if (route.type === "product" && route.product) return `${route.product.title} — ${shopName}`;
@@ -544,7 +606,9 @@ export async function renderThemePage(input: RenderInput): Promise<string> {
     route.type === "list-collections" ? "list-collections" : route.type;
 
   const globals: Record<string, unknown> = {
-    settings,
+    // A global `link_list` / `collection` setting must reach the theme as the
+    // object it expects, not the stored handle.
+    settings: resolveTypedSettings(settings, globalSettingTypes(files)),
     shop: {
       name: shopName,
       email: catalog.shop.email,
@@ -976,11 +1040,14 @@ export async function renderThemePage(input: RenderInput): Promise<string> {
       return {
         id: bid,
         type: bt,
-        settings: {
-          ...(sc.blockTypes[bt]?.defaults ?? {}),
-          ...(b.settings ?? {}),
-          ...(override.blocks?.[bid] ?? {}),
-        },
+        settings: resolveTypedSettings(
+          {
+            ...(sc.blockTypes[bt]?.defaults ?? {}),
+            ...(b.settings ?? {}),
+            ...(override.blocks?.[bid] ?? {}),
+          },
+          sc.blockTypes[bt]?.types ?? {},
+        ),
         shopify_attributes: "",
       };
     });
@@ -999,11 +1066,14 @@ export async function renderThemePage(input: RenderInput): Promise<string> {
     const section = {
       id,
       type,
-      settings: {
-        ...sc.allDefaults,
-        ...(instance?.settings ?? {}),
-        ...(override.settings ?? {}),
-      },
+      settings: resolveTypedSettings(
+        {
+          ...sc.allDefaults,
+          ...(instance?.settings ?? {}),
+          ...(override.settings ?? {}),
+        },
+        sc.types,
+      ),
       blocks,
       blocks_count: blocks.length,
       location: "",
@@ -1139,7 +1209,7 @@ export async function renderThemePage(input: RenderInput): Promise<string> {
   const cssLinks = cssAssets
     .map((href) => `<link rel="stylesheet" href="${href}" media="all">`)
     .join("");
-  const headInject = `<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">${cssLinks}${bridgeScript(mount, currency)}${input.inspect ? inspectScript() : ""}`;
+  const headInject = `<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">${cssLinks}${bridgeScript(mount, currency)}${input.inspect ? inspectScript(mount) : ""}`;
   html = /<head[^>]*>/i.test(html)
     ? html.replace(/<head[^>]*>/i, (m) => `${m}${headInject}`)
     : /<html[^>]*>/i.test(html)

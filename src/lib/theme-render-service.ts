@@ -144,6 +144,29 @@ async function loadBundle(
   return bundle;
 }
 
+/**
+ * The code editor addresses files by storage path, which may carry the zip's
+ * wrapper folder ("my-theme/sections/hero.liquid"), while bundle keys have it
+ * stripped. Match each override onto the key the renderer actually uses.
+ */
+function resolveOverrideKeys(
+  files: FileMap,
+  overrides: Record<string, string>,
+): FileMap {
+  const out: FileMap = {};
+  for (const [path, content] of Object.entries(overrides)) {
+    if (path in files) {
+      out[path] = content;
+      continue;
+    }
+    const hit = Object.keys(files).find(
+      (k) => path === k || path.endsWith(`/${k}`) || k.endsWith(`/${path}`),
+    );
+    if (hit) out[hit] = content;
+  }
+  return out;
+}
+
 // ---- Merchant customization (where links point) -----------------------------
 /**
  * Load a theme's link/setting overrides. Returns the empty set when the
@@ -274,6 +297,11 @@ export type StorefrontRequest = {
   collectLinks?: (links: FoundLink[]) => void;
   /** Tag sections + inject the hover inspector (admin customizer only). */
   inspect?: boolean;
+  /**
+   * Unsaved file contents, keyed like the bundle ("sections/hero.liquid").
+   * Lets the code editor render what you are typing without writing it first.
+   */
+  fileOverrides?: Record<string, string>;
 };
 
 export type StorefrontResponse = { html: string; status: number };
@@ -410,8 +438,15 @@ export async function renderStorefront(
   route.cart = buildCart(req.cartLines, catalog, mount);
 
   try {
+    // Unsaved edits win over what is in storage, so the preview shows the
+    // file as it currently reads in the editor.
+    const overrides = req.fileOverrides;
+    const files = overrides
+      ? { ...bundle.files, ...resolveOverrideKeys(bundle.files, overrides) }
+      : bundle.files;
+
     const html = await renderThemePage({
-      files: bundle.files,
+      files,
       assetBase: bundle.assetBase,
       mount,
       catalog,

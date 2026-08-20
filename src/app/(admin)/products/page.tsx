@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useI18n, egp, num } from "@/lib/i18n";
 import { products as demoProducts } from "@/lib/data";
+import { collectionHandle } from "@/lib/collections";
 import {
   type InventoryItem,
   type Location,
@@ -14,6 +15,7 @@ import {
 } from "@/lib/inventory";
 import { listInventory, listLocations } from "../inventory/actions";
 import { ProductEditor } from "../inventory/product-editor";
+import { ProductImport } from "@/components/product-import";
 import { PageHeader } from "@/components/page-header";
 import { Card, Badge } from "@/components/ui";
 import {
@@ -27,7 +29,7 @@ import {
   SegBtn,
   type PillTone,
 } from "@/components/dashboard-ui";
-import { IcPlus, IcInventory, IcImage } from "@/components/icons";
+import { IcPlus, IcInventory, IcImage, IcUpload } from "@/components/icons";
 
 type StatusTab = "all" | ProductStatus;
 type StockFilter = "all" | "in_stock" | "low_stock" | "out_stock";
@@ -117,6 +119,7 @@ export default function ProductsPage() {
   const [view, setView] = useState<View>("list");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editItem, setEditItem] = useState<InventoryItem | null>(null);
+  const [importing, setImporting] = useState(false);
 
   async function load() {
     const [inv, locs] = await Promise.all([listInventory(), listLocations()]);
@@ -214,6 +217,9 @@ export default function ProductsPage() {
         subtitle={ar ? "الكتالوج، التنويعات، والمخزون" : "Catalog, variants & inventory"}
         actions={
           <>
+            <button className="btn-outline" onClick={() => setImporting(true)}>
+              <IcUpload className="h-4 w-4" /> {ar ? "استيراد" : "Import"}
+            </button>
             <button className="btn-outline" onClick={() => router.push("/inventory")}>
               <IcInventory className="h-4 w-4" /> {t("manage_inventory")}
             </button>
@@ -315,7 +321,21 @@ export default function ProductsPage() {
                       </td>
                       <td className="px-3 py-3"><StatusPill label={t(`st_${p.status}`)} tone={statusPill[p.status]} /></td>
                       <td className={`px-3 py-3 ${invTone(withStatus(p))}`}>{invLabel(p)}</td>
-                      <td className="px-3 py-3"><Badge className="bg-slate-100 text-ink-muted">{p.category}</Badge></td>
+                      <td className="px-3 py-3">
+                        {p.category && p.category !== "—" ? (
+                          // Categories drive collections, so open the matching one.
+                          <a
+                            href={`/collections?edit=${encodeURIComponent(collectionHandle(p.category))}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="badge bg-slate-100 text-ink-muted transition-colors hover:bg-brand-50 hover:text-brand-700"
+                            title={lang === "ar" ? "تعديل التصنيف" : "Edit this collection"}
+                          >
+                            {p.category}
+                          </a>
+                        ) : (
+                          <Badge className="bg-slate-100 text-ink-muted">{p.category}</Badge>
+                        )}
+                      </td>
                       <td className="px-5 py-3 text-end font-semibold text-ink">{priceLabel(p)}</td>
                     </tr>
                   );
@@ -366,6 +386,14 @@ export default function ProductsPage() {
             setEditItem(null);
             load();
           }}
+        />
+      )}
+
+      {importing && (
+        <ProductImport
+          locations={locations}
+          onClose={() => setImporting(false)}
+          onImported={load}
         />
       )}
     </>
