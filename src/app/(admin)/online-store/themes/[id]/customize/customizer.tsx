@@ -18,6 +18,7 @@ import {
   type CustomizerData,
 } from "./actions";
 import { LinkPicker, ListPicker } from "@/components/link-picker";
+import { uploadFile } from "@/app/(admin)/content/files/actions";
 import { Card } from "@/components/ui";
 import {
   IcAlert,
@@ -535,6 +536,8 @@ function Control({
   ar: boolean;
   onChange: (v: unknown) => void;
 }) {
+  if (def.type === "image_picker")
+    return <ImagePicker value={String(value ?? "")} ar={ar} onChange={onChange} />;
   if (def.type === "text")
     return (
       <input
@@ -549,6 +552,71 @@ function Control({
     );
   return (
     <LinkPicker type={def.type} value={value} targets={targets} ar={ar} onChange={onChange} />
+  );
+}
+
+/** Image setting: upload a file (reuses the media library's uploadFile) or paste a URL. */
+function ImagePicker({
+  value,
+  ar,
+  onChange,
+}: {
+  value: string;
+  ar: boolean;
+  onChange: (v: unknown) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  return (
+    <div className="space-y-2">
+      {value ? (
+        <div className="relative overflow-hidden rounded-xl border border-line bg-surface-page">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={value} alt="" className="h-28 w-full object-contain" />
+          <button
+            type="button"
+            onClick={() => onChange("")}
+            className="absolute end-1.5 top-1.5 rounded-lg bg-black/60 px-2 py-1 text-xs font-medium text-white"
+          >
+            {ar ? "إزالة" : "Remove"}
+          </button>
+        </div>
+      ) : (
+        <label
+          className={`flex h-24 cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed border-line text-xs text-ink-soft transition hover:border-brand-500 ${busy ? "opacity-60" : ""}`}
+        >
+          <span className="text-lg">🖼️</span>
+          <span>{busy ? (ar ? "جارٍ الرفع…" : "Uploading…") : (ar ? "اختاري صورة من جهازك" : "Upload from your device")}</span>
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            disabled={busy}
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              e.currentTarget.value = "";
+              if (!file) return;
+              setErr(null);
+              setBusy(true);
+              const fd = new FormData();
+              fd.append("file", file);
+              const res = await uploadFile(fd);
+              setBusy(false);
+              if (res.ok) onChange(res.data.url);
+              else setErr(res.error === "not_configured" ? (ar ? "التخزين يحتاج Supabase" : "Storage needs Supabase") : (ar ? "تعذّر رفع الصورة" : "Upload failed"));
+            }}
+          />
+        </label>
+      )}
+      <input
+        className="h-9 w-full rounded-xl border border-line bg-surface-page px-3 text-sm text-ink outline-none focus:border-brand-600 focus:bg-white"
+        placeholder={ar ? "أو الصقي رابط صورة" : "or paste an image URL"}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        dir="ltr"
+      />
+      {err && <p className="text-xs text-rose-600">{err}</p>}
+    </div>
   );
 }
 

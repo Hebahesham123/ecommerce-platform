@@ -287,6 +287,8 @@ function buildProduct(rows: Row[], handle: string, mount: string): ProductDrop {
     metafields: {},
     template_suffix: "",
     gift_card: false,
+    // Shopify search templates gate on this; without it search.results render blank.
+    object_type: "product",
     // convenience mirrors used by some themes
     category,
     quantity_available: variants.reduce((s, v) => s + v.inventory_quantity, 0),

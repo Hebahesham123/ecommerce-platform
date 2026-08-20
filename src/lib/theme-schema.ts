@@ -20,8 +20,8 @@ export const LINKABLE_TYPES = [
 ] as const;
 
 export type LinkableType = (typeof LINKABLE_TYPES)[number];
-/** `text` is included only for button captions, so a link can be renamed. */
-export type EditableType = LinkableType | "text";
+/** `text` is for button captions; `image_picker` for uploadable section images. */
+export type EditableType = LinkableType | "text" | "image_picker";
 
 export type SettingDef = {
   id: string;
@@ -105,6 +105,14 @@ function toSettingDef(s: any): SettingDef | null {
       label: String(s.label ?? s.id),
       info: s.info ? String(s.info) : undefined,
       default: s.default ?? "",
+    };
+  if (type === "image_picker" || type === "image")
+    return {
+      id: String(s.id),
+      type: "image_picker",
+      label: String(s.label ?? s.id),
+      info: s.info ? String(s.info) : undefined,
+      default: typeof s.default === "string" ? s.default : "",
     };
   if (type === "text" && BUTTON_TEXT_RE.test(String(s.id)))
     return {
