@@ -125,6 +125,14 @@ const CSS_URL_RE = /url\(\s*(['"]?)([^)'"]+)\1\s*\)/gi;
 
 function rewriteUrls(html: string, assetBase: string, mount: string): string {
   const fix = makeUrlResolver(assetBase, mount);
+  // Protect <script> blocks: theme JS often builds markup like
+  // `'<img src="' + img + '"'`, and rewriting that fragment as a real `src`
+  // attribute injects the asset base into the JS string and breaks it.
+  const scripts: string[] = [];
+  html = html.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, (s) => {
+    scripts.push(s);
+    return `￼${scripts.length - 1}￼`;
+  });
   let out = html.replace(URL_ATTR_RE, (m, attr, dq, sq) => {
     const val = dq !== undefined ? dq : sq;
     const next = fix(val);
@@ -147,6 +155,8 @@ function rewriteUrls(html: string, assetBase: string, mount: string): string {
     const next = fix(val);
     return next === val ? m : `url(${q}${next}${q})`;
   });
+  // Restore the protected <script> blocks untouched.
+  out = out.replace(/￼(\d+)￼/g, (_m, i) => scripts[Number(i)] ?? "");
   return out;
 }
 

@@ -377,7 +377,10 @@ async function loadShop(): Promise<ShopInfo> {
 }
 
 // ---- Catalog assembly + cache ----------------------------------------------
-const CACHE_MS = 15_000;
+// Catalog assembly over thousands of products is expensive; cache it longer so
+// most navigations hit a warm catalog instead of rebuilding. Stock/price display
+// can lag up to this long, but checkout re-validates stock live.
+const CACHE_MS = 120_000;
 // Keyed by mount: the storefront and the theme preview bake different URLs
 // into their drops, so they can't share one entry.
 const cache = new Map<string, { at: number; value: Catalog }>();

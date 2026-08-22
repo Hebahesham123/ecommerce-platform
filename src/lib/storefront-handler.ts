@@ -417,8 +417,9 @@ async function storefrontGet(req: Request, config: MountConfig): Promise<Respons
       vendor: p.vendor ?? "",
       // Image drops stringify to their URL — force strings so the widget never
       // gets "[object Object]" as an <img src>.
-      featured_image: p.featured_image ? optimizeUrl(String(p.featured_image)) : null,
-      images: Array.isArray(p.images) ? p.images.map((im: any) => optimizeUrl(String(im))) : [],
+      // Raw URLs: the bundle widget applies its own `_300x300` sizing.
+      featured_image: p.featured_image ? String(p.featured_image) : null,
+      images: Array.isArray(p.images) ? p.images.map((im: any) => String(im)) : [],
       variants: Array.isArray(p.variants)
         ? p.variants.map((v: any) => ({
             id: v.id,
