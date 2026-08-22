@@ -564,6 +564,17 @@ export async function renderThemePage(input: RenderInput): Promise<string> {
     values: Record<string, unknown>,
     types: Record<string, string>,
   ): Record<string, unknown> {
+    // Printing a resolved object directly ({{ settings.x }}) must show its title
+    // like Shopify — not the raw "[object Object]".
+    const labelObj = (o: unknown): void => {
+      if (o && typeof o === "object" && !Array.isArray(o)) {
+        const r = o as Record<string, unknown>;
+        if (!Object.prototype.hasOwnProperty.call(r, "toString")) {
+          const label = String(r.title ?? r.name ?? r.handle ?? "");
+          Object.defineProperty(r, "toString", { value: () => label, enumerable: false, configurable: true });
+        }
+      }
+    };
     let out: Record<string, unknown> | null = null;
     for (const [id, type] of Object.entries(types)) {
       if (!OBJECT_SETTING_TYPES.has(type)) continue;
@@ -586,6 +597,8 @@ export async function renderThemePage(input: RenderInput): Promise<string> {
           .filter(Boolean);
 
       if (resolved == null) continue;
+      if (Array.isArray(resolved)) resolved.forEach(labelObj);
+      else labelObj(resolved);
       out = out ?? { ...values };
       out[id] = resolved;
     }
