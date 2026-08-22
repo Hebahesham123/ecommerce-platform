@@ -74,7 +74,11 @@ export function buildCart(
     const hit = catalog.variantById.get(line.id);
     if (!hit) return; // variant deleted in the dashboard → silently drop the line
     const { variant, product } = hit;
-    const qty = line.quantity;
+    // Never show / check out more than is in stock (tracked variants only).
+    const tracked = variant.inventory_management === "shopify";
+    const cap = tracked ? Math.max(0, Number(variant.inventory_quantity) || 0) : line.quantity;
+    const qty = Math.min(line.quantity, cap);
+    if (qty <= 0) return; // sold out → drop the line entirely
     const linePrice = variant.price * qty;
     const original =
       (variant.compare_at_price && variant.compare_at_price > variant.price

@@ -786,6 +786,14 @@ export async function renderThemePage(input: RenderInput): Promise<string> {
       return `<img src="${imgUrl(u)}" loading="lazy"${alt}${cls}>`;
     },
     img_tag: (u, alt = "") => `<img src="${imgUrl(u)}" alt="${escapeHtml(alt)}" loading="lazy">`,
+    // Shopify does INTEGER division when both operands are integers (liquidjs
+    // does float) — that's why a sale % rendered as -58.3416…% instead of -58%.
+    divided_by: (a: any, b: any) => {
+      const x = Number(a) || 0;
+      const y = Number(b) || 0;
+      if (!y) return 0;
+      return Number.isInteger(Number(a)) && Number.isInteger(Number(b)) ? Math.floor(x / y) : x / y;
+    },
     t: translate,
     translate,
     money,
