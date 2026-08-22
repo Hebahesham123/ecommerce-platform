@@ -1,3 +1,5 @@
+
+
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import "server-only";
 import {
@@ -89,6 +91,81 @@ function apply(nodes){nodes.forEach(function(n){var s=n.nodeValue,k=s.trim(),v=c
 function run(nodes){var need=[],seen={};nodes.forEach(function(n){var k=n.nodeValue.trim();if(!cache[k]&&!seen[k]){seen[k]=1;need.push(k)}});if(!need.length){apply(nodes);return}var i=0;(function nx(){if(i>=need.length){try{sessionStorage.setItem(CK,JSON.stringify(cache))}catch(e){}apply(nodes);return}var c=need.slice(i,i+40);i+=40;fetch(M+'/translate',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({q:c})}).then(function(r){return r.json()}).then(function(j){var t=(j&&j.t)||[];c.forEach(function(s,x){if(t[x])cache[s]=t[x]});nx()}).catch(function(){nx()})})()}
 document.addEventListener('DOMContentLoaded',function(){run(collect(document.body));var mo=new MutationObserver(function(ms){var ns=[];ms.forEach(function(m){[].forEach.call(m.addedNodes,function(x){if(x.nodeType===3){if(x.nodeValue&&x.nodeValue.trim())ns.push(x)}else if(x.nodeType===1){ns=ns.concat(collect(x))}})});if(ns.length)run(ns)});mo.observe(document.body,{childList:true,subtree:true})});
 })();</script>`;
+}
+
+// ---- Bundle / "you may also like" recommendations ---------------------------
+/** Pick up to `limit` random, buyable products, excluding the current one.
+ *  Powers the theme's product-recommendations API (and the bundle widget) so it
+ *  fills with real products without anyone having to build a collection. */
+function recommendationProducts(catalog: any, excludeId: string, limit: number): any[] {
+  const all: any[] = Array.from(catalog.productByHandle?.values?.() ?? []);
+  const pool = all.filter((p) => {
+    if (!p) return false;
+    if (String(p.id) === excludeId) return false;
+    if (Array.isArray(p.variants) && p.variants.some((v: any) => String(v.id) === excludeId)) return false;
+    return p.available !== false; // don't recommend sold-out products
+  });
+  // Fisher–Yates shuffle (server-side, so Math.random is fine).
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const t = pool[i];
+    pool[i] = pool[j];
+    pool[j] = t;
+  }
+  return pool.slice(0, Math.max(0, limit));
+}
+
+// ---- Quantity stepper stock guard (injected on every page) ------------------
+/** Client script: cap every quantity input to live stock and block the "+" at
+ *  the ceiling. The server already refuses to oversell — this keeps the on-page
+ *  stepper honest since the uploaded theme's own JS ignores stock. */
+async function stockGuardScript(mount: string, path: string, lines: CartLine[]): Promise<string> {
+  let catalog: any;
+  try {
+    catalog = await getStorefrontCatalog(mount);
+  } catch {
+    return "";
+  }
+  const stock: Record<string, number | null> = {};
+  const add = (v: any) => {
+    if (!v || v.id == null) return;
+    const tracked = v.inventory_management === "shopify";
+    stock[String(v.id)] = tracked ? Math.max(0, Number(v.inventory_quantity) || 0) : null;
+  };
+  const pm = path.match(/^\/products\/([^/]+)/);
+  if (pm) {
+    let handle = pm[1];
+    try {
+      handle = decodeURIComponent(handle);
+    } catch {
+      /* keep raw handle */
+    }
+    const product: any = catalog.productByHandle?.get(handle);
+    if (product?.variants) for (const v of product.variants) add(v);
+  }
+  for (const l of lines) {
+    const hit = catalog.variantById?.get(l.id);
+    if (hit) add(hit.variant);
+  }
+  const GUARD = `(function(){
+if(window.__BB_SG__)return;window.__BB_SG__=1;
+var S=window.__BB_STOCK__||{};
+function stockOf(id){if(id==null)return Infinity;var c=S[id];return (c==null)?Infinity:c;}
+function digits(s){var o='';for(var i=0;i<s.length;i++){var c=s[i];if(c>='0'&&c<='9')o+=c;else break;}return o;}
+function idFor(input){var n=input.getAttribute('name')||'';if(n.indexOf('updates[')===0){var e=n.indexOf(']');if(e>8)return n.slice(8,e);}var d=input.getAttribute('data-quantity-variant-id')||input.getAttribute('data-variant-id')||input.getAttribute('data-id');if(d)return d;var f=input.closest&&input.closest('form');if(f){var el=f.querySelector('[name="id"]');if(el&&el.value)return el.value;}var row=input.closest&&input.closest('[class*="cart-item"],[class*="cart__row"],[class*="line-item"],[class*="CartItem"],tr,li');if(row){var a=row.querySelector('a[href*="variant="]');if(a){var h=a.getAttribute('href')||'';var q=h.indexOf('variant=');if(q>=0){var num=digits(h.slice(q+8));if(num)return num;}}}return null;}
+function isQty(input){if(!input||input.tagName!=='INPUT')return false;var t=(input.getAttribute('type')||'').toLowerCase();var n=input.getAttribute('name')||'';return t==='number'||n==='quantity'||n.indexOf('updates[')===0||(input.className||'').indexOf('quantity')>-1;}
+function capFor(input){var c=stockOf(idFor(input));if(c===Infinity){var mx=parseInt(input.getAttribute('max')||'',10);return isNaN(mx)?Infinity:mx;}return c;}
+function note(input,cap){var host=(input.closest&&(input.closest('.quantity')||input.closest('[class*=quantity]')||input.closest('[class*=qty]')))||input.parentElement;if(!host||!host.parentElement)return;var el=host.parentElement.querySelector('.bb-stock-note');if(!el){el=document.createElement('div');el.className='bb-stock-note';el.style.cssText='font:600 12px system-ui,-apple-system,sans-serif;color:#b91c1c;margin-top:6px';host.parentElement.insertBefore(el,host.nextSibling);}el.textContent=(cap<=0?'Out of stock':'Only '+cap+' left in stock');clearTimeout(el._t);el._t=setTimeout(function(){if(el)el.textContent='';},2600);}
+function clamp(input,silent){if(!isQty(input))return;var cap=capFor(input);if(cap===Infinity)return;input.setAttribute('max',cap<1?1:cap);var v=parseInt(input.value||'1',10);if(isNaN(v))v=1;if(v>cap){input.value=(cap<1?1:cap);if(!silent)note(input,cap);}}
+function plusHit(t){if(!t.getAttribute)return false;var s=((t.getAttribute('name')||'')+' '+(t.getAttribute('data-action')||'')+' '+(t.className||'')+' '+(t.getAttribute('aria-label')||'')).toLowerCase();if(/plus|increase|increment|qty-up|quantity-up/.test(s))return true;return (t.textContent||'').replace(/\\s/g,'')==='+';}
+document.addEventListener('click',function(e){var t=e.target&&e.target.closest&&e.target.closest('button,a,[role="button"],span,div,input');if(!t||!plusHit(t))return;var wrap=(t.closest&&(t.closest('.quantity')||t.closest('[class*=quantity]')||t.closest('[class*=qty]')))||t.parentElement;var input=wrap&&(wrap.querySelector('input[type=number]')||wrap.querySelector('input[name=quantity]')||wrap.querySelector('input[name^=updates]'));if(!input||!isQty(input))return;var cap=capFor(input);if(cap===Infinity)return;var cur=parseInt(input.value||'1',10);if(isNaN(cur))cur=1;if(cur>=cap){e.preventDefault();e.stopPropagation();if(e.stopImmediatePropagation)e.stopImmediatePropagation();note(input,cap);}},true);
+['input','change'].forEach(function(ev){document.addEventListener(ev,function(e){if(e.target&&e.target.tagName==='INPUT')clamp(e.target,ev==='input');},true);});
+var pend=false;function scan(){pend=false;var ns=document.querySelectorAll('input[type=number],input[name=quantity],input[name^=updates]');for(var i=0;i<ns.length;i++)clamp(ns[i],true);}
+function schedule(){if(pend)return;pend=true;(window.requestAnimationFrame||setTimeout)(scan);}
+if(document.readyState!=='loading')scan();else document.addEventListener('DOMContentLoaded',scan);
+new MutationObserver(schedule).observe(document.documentElement,{childList:true,subtree:true});
+})();`;
+  return `<script>window.__BB_STOCK__=${JSON.stringify(stock)};${GUARD}</script>`;
 }
 
 /**
@@ -250,6 +327,37 @@ async function storefrontGet(req: Request, config: MountConfig): Promise<Respons
     const results = searchProducts(catalog, terms).slice(0, 8);
     return html(predictiveSearchHtml(results, mount, terms));
   }
+  // Product recommendations (Shopify's API): power "you may also like" and the
+  // bundle widget with real, random products so no collection is required.
+  if (path.startsWith("/recommendations/products")) {
+    const catalog = await getStorefrontCatalog(mount);
+    const excludeId = String(query.product_id ?? "");
+    const limit = Math.max(1, Math.min(12, Number(query.limit) || 4));
+    const recs = recommendationProducts(catalog, excludeId, limit).map((p: any) => ({
+      id: p.id,
+      title: p.title,
+      handle: p.handle,
+      url: p.url,
+      price: p.price,
+      compare_at_price: p.compare_at_price ?? null,
+      available: p.available !== false,
+      vendor: p.vendor ?? "",
+      // Image drops stringify to their URL — force strings so the widget never
+      // gets "[object Object]" as an <img src>.
+      featured_image: p.featured_image ? String(p.featured_image) : null,
+      images: Array.isArray(p.images) ? p.images.map((im: any) => String(im)) : [],
+      variants: Array.isArray(p.variants)
+        ? p.variants.map((v: any) => ({
+            id: v.id,
+            title: v.title,
+            price: v.price,
+            available: v.available !== false,
+            inventory_quantity: v.inventory_quantity,
+          }))
+        : [],
+    }));
+    return json({ products: recs });
+  }
   if (path.startsWith("/recommendations/")) {
     return html('<div class="predictive-search"></div>');
   }
@@ -284,10 +392,13 @@ async function storefrontGet(req: Request, config: MountConfig): Promise<Respons
     shopName,
     inspect,
   });
-  // Inject the language toggle + on-the-fly Arabic translation on every page.
+  // Inject the language toggle + Arabic translation, plus a stock guard that
+  // caps every quantity stepper to live stock, on every page.
+  const stockGuard = await stockGuardScript(mount, path, lines);
+  const inject = `${stockGuard}${localizationScript(mount)}`;
   const withLoc = res.html.includes("</body>")
-    ? res.html.replace(/<\/body>/i, `${localizationScript(mount)}</body>`)
-    : res.html + localizationScript(mount);
+    ? res.html.replace(/<\/body>/i, `${inject}</body>`)
+    : res.html + inject;
   // Safety net: a linked/object setting printed directly by the theme renders as
   // the literal "[object Object]". A shopper must never see that — strip it.
   const clean = withLoc.replace(/\[object Object\]/g, "");

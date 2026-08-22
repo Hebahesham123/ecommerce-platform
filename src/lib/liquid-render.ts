@@ -618,6 +618,24 @@ export async function renderThemePage(input: RenderInput): Promise<string> {
   const templateName =
     route.type === "list-collections" ? "list-collections" : route.type;
 
+  // Random product recommendations for the product page (powers "you may also
+  // like" and bundle widgets that read `recommendations.products` inline —
+  // no collection required).
+  const recProducts = (() => {
+    if (route.type !== "product") return [] as unknown[];
+    const curId = route.product ? String((route.product as any).id) : "";
+    const pool = catalog.products.filter(
+      (p) => String((p as any).id) !== curId && (p as any).available !== false,
+    );
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const t = pool[i];
+      pool[i] = pool[j];
+      pool[j] = t;
+    }
+    return pool.slice(0, 4);
+  })();
+
   const globals: Record<string, unknown> = {
     // A global `link_list` / `collection` setting must reach the theme as the
     // object it expects, not the stored handle.
@@ -713,6 +731,13 @@ export async function renderThemePage(input: RenderInput): Promise<string> {
     product: route.product ?? null,
     variant: route.variant ?? null,
     collection: route.collection ?? null,
+    // Shopify's product-recommendations object (bundle / "you may also like").
+    recommendations: {
+      performed: route.type === "product",
+      products: recProducts,
+      products_count: recProducts.length,
+      intent: "related",
+    },
     // Shopify exposes an array of every collection on list-collections pages.
     all_collections: catalog.collections,
   };
