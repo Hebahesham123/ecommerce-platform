@@ -103,6 +103,7 @@ function recommendationProducts(catalog: any, excludeId: string, limit: number):
     if (!p) return false;
     if (String(p.id) === excludeId) return false;
     if (Array.isArray(p.variants) && p.variants.some((v: any) => String(v.id) === excludeId)) return false;
+    if (!p.featured_image) return false; // never recommend an imageless product
     return p.available !== false; // don't recommend sold-out products
   });
   // Fisher–Yates shuffle (server-side, so Math.random is fine).
@@ -132,6 +133,9 @@ async function stockGuardScript(mount: string, path: string, lines: CartLine[]):
     const tracked = v.inventory_management === "shopify";
     stock[String(v.id)] = tracked ? Math.max(0, Number(v.inventory_quantity) || 0) : null;
   };
+  // Fallback cap for the product page's own quantity input, used when we can't
+  // map the input to a specific variant id (theme markup varies wildly).
+  let pageMax: number | null = null;
   const pm = path.match(/^\/products\/([^/]+)/);
   if (pm) {
     let handle = pm[1];
@@ -141,7 +145,17 @@ async function stockGuardScript(mount: string, path: string, lines: CartLine[]):
       /* keep raw handle */
     }
     const product: any = catalog.productByHandle?.get(handle);
-    if (product?.variants) for (const v of product.variants) add(v);
+    if (product?.variants?.length) {
+      for (const v of product.variants) add(v);
+      const tracked = product.variants.filter((v: any) => v.inventory_management === "shopify");
+      // Only set a page cap when every variant is tracked, so an untracked
+      // variant is never wrongly limited. Min across variants = safe ceiling.
+      if (tracked.length === product.variants.length) {
+        pageMax = Math.min(
+          ...tracked.map((v: any) => Math.max(0, Number(v.inventory_quantity) || 0)),
+        );
+      }
+    }
   }
   for (const l of lines) {
     const hit = catalog.variantById?.get(l.id);
@@ -154,7 +168,7 @@ function stockOf(id){if(id==null)return Infinity;var c=S[id];return (c==null)?In
 function digits(s){var o='';for(var i=0;i<s.length;i++){var c=s[i];if(c>='0'&&c<='9')o+=c;else break;}return o;}
 function idFor(input){var n=input.getAttribute('name')||'';if(n.indexOf('updates[')===0){var e=n.indexOf(']');if(e>8)return n.slice(8,e);}var d=input.getAttribute('data-quantity-variant-id')||input.getAttribute('data-variant-id')||input.getAttribute('data-id');if(d)return d;var f=input.closest&&input.closest('form');if(f){var el=f.querySelector('[name="id"]');if(el&&el.value)return el.value;}var row=input.closest&&input.closest('[class*="cart-item"],[class*="cart__row"],[class*="line-item"],[class*="CartItem"],tr,li');if(row){var a=row.querySelector('a[href*="variant="]');if(a){var h=a.getAttribute('href')||'';var q=h.indexOf('variant=');if(q>=0){var num=digits(h.slice(q+8));if(num)return num;}}}return null;}
 function isQty(input){if(!input||input.tagName!=='INPUT')return false;var t=(input.getAttribute('type')||'').toLowerCase();var n=input.getAttribute('name')||'';return t==='number'||n==='quantity'||n.indexOf('updates[')===0||(input.className||'').indexOf('quantity')>-1;}
-function capFor(input){var c=stockOf(idFor(input));if(c===Infinity){var mx=parseInt(input.getAttribute('max')||'',10);return isNaN(mx)?Infinity:mx;}return c;}
+function capFor(input){var id=idFor(input);if(id!=null){var s=S[id];if(s!=null)return s;}var pmx=window.__BB_PAGE_MAX__;if(pmx!=null&&(input.getAttribute('name')==='quantity'))return pmx;var mx=parseInt(input.getAttribute('max')||'',10);return isNaN(mx)?Infinity:mx;}
 function note(input,cap){var host=(input.closest&&(input.closest('.quantity')||input.closest('[class*=quantity]')||input.closest('[class*=qty]')))||input.parentElement;if(!host||!host.parentElement)return;var el=host.parentElement.querySelector('.bb-stock-note');if(!el){el=document.createElement('div');el.className='bb-stock-note';el.style.cssText='font:600 12px system-ui,-apple-system,sans-serif;color:#b91c1c;margin-top:6px';host.parentElement.insertBefore(el,host.nextSibling);}el.textContent=(cap<=0?'Out of stock':'Only '+cap+' left in stock');clearTimeout(el._t);el._t=setTimeout(function(){if(el)el.textContent='';},2600);}
 function clamp(input,silent){if(!isQty(input))return;var cap=capFor(input);if(cap===Infinity)return;input.setAttribute('max',cap<1?1:cap);var v=parseInt(input.value||'1',10);if(isNaN(v))v=1;if(v>cap){input.value=(cap<1?1:cap);if(!silent)note(input,cap);}}
 function plusHit(t){if(!t.getAttribute)return false;var s=((t.getAttribute('name')||'')+' '+(t.getAttribute('data-action')||'')+' '+(t.className||'')+' '+(t.getAttribute('aria-label')||'')).toLowerCase();if(/plus|increase|increment|qty-up|quantity-up/.test(s))return true;return (t.textContent||'').replace(/\\s/g,'')==='+';}
@@ -164,8 +178,9 @@ var pend=false;function scan(){pend=false;var ns=document.querySelectorAll('inpu
 function schedule(){if(pend)return;pend=true;(window.requestAnimationFrame||setTimeout)(scan);}
 if(document.readyState!=='loading')scan();else document.addEventListener('DOMContentLoaded',scan);
 new MutationObserver(schedule).observe(document.documentElement,{childList:true,subtree:true});
+setInterval(scan,500);
 })();`;
-  return `<script>window.__BB_STOCK__=${JSON.stringify(stock)};${GUARD}</script>`;
+  return `<script>window.__BB_STOCK__=${JSON.stringify(stock)};window.__BB_PAGE_MAX__=${JSON.stringify(pageMax)};${GUARD}</script>`;
 }
 
 /**
@@ -401,7 +416,11 @@ async function storefrontGet(req: Request, config: MountConfig): Promise<Respons
     : res.html + inject;
   // Safety net: a linked/object setting printed directly by the theme renders as
   // the literal "[object Object]". A shopper must never see that — strip it.
-  const clean = withLoc.replace(/\[object Object\]/g, "");
+  const clean = withLoc
+    .replace(/\[object Object\]/g, "")
+    // Perf: lazy-load + async-decode any image the theme didn't already flag, so
+    // image-heavy pages stop blocking on every full-size image up front.
+    .replace(/<img (?![^>]*\bloading=)/gi, '<img loading="lazy" decoding="async" ');
   return html(clean, res.status);
 }
 

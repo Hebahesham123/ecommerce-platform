@@ -625,7 +625,10 @@ export async function renderThemePage(input: RenderInput): Promise<string> {
     if (route.type !== "product") return [] as unknown[];
     const curId = route.product ? String((route.product as any).id) : "";
     const pool = catalog.products.filter(
-      (p) => String((p as any).id) !== curId && (p as any).available !== false,
+      (p) =>
+        String((p as any).id) !== curId &&
+        (p as any).available !== false &&
+        (p as any).featured_image,
     );
     for (let i = pool.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
