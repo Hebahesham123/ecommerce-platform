@@ -93,6 +93,48 @@ document.addEventListener('DOMContentLoaded',function(){run(collect(document.bod
 })();</script>`;
 }
 
+// ---- Image optimization -----------------------------------------------------
+/** Route a Supabase-hosted raster image through Next's optimizer (WebP + resize).
+ *  Non-Supabase, non-raster, SVG and data: URLs are left untouched. */
+function optimizeUrl(src: string, w = 1200): string {
+  if (!/^https?:\/\//i.test(src)) return src;
+  let host = "";
+  try {
+    host = new URL(src).host;
+  } catch {
+    return src;
+  }
+  if (/\.(svg|gif)(\?|$)/i.test(src)) return src; // don't touch vector/animated
+  if (src.replace(/\?.*$/, "").endsWith("/")) return src; // empty/directory URL
+  // Shopify's CDN resizes and serves WebP itself (via the Accept header), so
+  // just ask it for the right width — no Vercel optimizer cost. (1115KB PNG ->
+  // ~112KB WebP measured.)
+  if (/(^|\.)shopify\.com$/i.test(host)) {
+    if (/[?&]width=/i.test(src)) return src; // already sized
+    return src + (src.includes("?") ? "&" : "?") + "width=" + w;
+  }
+  // Merchant uploads on Supabase go through Next's optimizer -> WebP.
+  if (/(^|\.)supabase\.co$/i.test(host)) {
+    return `/_next/image?url=${encodeURIComponent(src)}&w=${w}&q=75`;
+  }
+  return src;
+}
+
+/** Rewrite every <img> in rendered HTML to serve an optimized WebP src. */
+function optimizeImages(html: string): string {
+  return html.replace(/<img\b[^>]*>/gi, (tag) => {
+    const m = tag.match(/\ssrc\s*=\s*["']([^"']+)["']/i);
+    if (!m) return tag;
+    const opt = optimizeUrl(m[1]);
+    if (opt === m[1]) return tag; // not eligible — leave as-is
+    let out = tag.replace(/\ssrc\s*=\s*["'][^"']+["']/i, ` src="${opt}"`);
+    // Drop the theme's own srcset/sizes so the optimized WebP src is what loads.
+    out = out.replace(/\ssrcset\s*=\s*["'][^"']*["']/i, "");
+    out = out.replace(/\ssizes\s*=\s*["'][^"']*["']/i, "");
+    return out;
+  });
+}
+
 // ---- Bundle / "you may also like" recommendations ---------------------------
 /** Pick up to `limit` random, buyable products, excluding the current one.
  *  Powers the theme's product-recommendations API (and the bundle widget) so it
@@ -375,8 +417,8 @@ async function storefrontGet(req: Request, config: MountConfig): Promise<Respons
       vendor: p.vendor ?? "",
       // Image drops stringify to their URL — force strings so the widget never
       // gets "[object Object]" as an <img src>.
-      featured_image: p.featured_image ? String(p.featured_image) : null,
-      images: Array.isArray(p.images) ? p.images.map((im: any) => String(im)) : [],
+      featured_image: p.featured_image ? optimizeUrl(String(p.featured_image)) : null,
+      images: Array.isArray(p.images) ? p.images.map((im: any) => optimizeUrl(String(im))) : [],
       variants: Array.isArray(p.variants)
         ? p.variants.map((v: any) => ({
             id: v.id,
@@ -432,11 +474,13 @@ async function storefrontGet(req: Request, config: MountConfig): Promise<Respons
     : res.html + inject;
   // Safety net: a linked/object setting printed directly by the theme renders as
   // the literal "[object Object]". A shopper must never see that — strip it.
-  const clean = withLoc
-    .replace(/\[object Object\]/g, "")
-    // Perf: lazy-load + async-decode any image the theme didn't already flag, so
-    // image-heavy pages stop blocking on every full-size image up front.
-    .replace(/<img (?![^>]*\bloading=)/gi, '<img loading="lazy" decoding="async" ');
+  const clean = optimizeImages(
+    withLoc
+      .replace(/\[object Object\]/g, "")
+      // Perf: lazy-load + async-decode any image the theme didn't already flag,
+      // so image-heavy pages stop blocking on every full-size image up front.
+      .replace(/<img (?![^>]*\bloading=)/gi, '<img loading="lazy" decoding="async" '),
+  );
   return html(clean, res.status);
 }
 
