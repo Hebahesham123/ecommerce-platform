@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useI18n, egp } from "@/lib/i18n";
@@ -38,6 +38,31 @@ export default function CheckoutPage() {
   const ar = lang === "ar";
   const router = useRouter();
   const { items, subtotal, clear } = useCart();
+
+  // Keep checkout static on mobile: no pinch-zoom, and no iOS auto-zoom when a
+  // field is focused. Scoped to this page — restored on unmount.
+  useEffect(() => {
+    const meta = document.querySelector('meta[name="viewport"]') as HTMLMetaElement | null;
+    const prev = meta?.getAttribute("content") ?? null;
+    const created = !meta;
+    const el = meta ?? document.createElement("meta");
+    el.setAttribute("name", "viewport");
+    el.setAttribute(
+      "content",
+      "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no",
+    );
+    if (created) document.head.appendChild(el);
+    // iOS ignores user-scalable on focus unless the field is >= 16px.
+    const style = document.createElement("style");
+    style.textContent =
+      "@media (max-width:640px){.bb-checkout input,.bb-checkout select,.bb-checkout textarea{font-size:16px!important}}";
+    document.head.appendChild(style);
+    return () => {
+      style.remove();
+      if (created) el.remove();
+      else if (prev != null) el.setAttribute("content", prev);
+    };
+  }, []);
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -210,7 +235,7 @@ export default function CheckoutPage() {
   const check = "h-5 w-5 rounded border-slate-300 accent-rose-600";
 
   return (
-    <div className="-mx-4 -my-6">
+    <div className="bb-checkout -mx-4 -my-6">
       <div className="grid grid-cols-1 lg:grid-cols-2">
         {/* LEFT — form */}
         <div className="order-2 px-4 py-8 lg:order-1 lg:ms-auto lg:w-full lg:max-w-[560px] lg:px-8">
