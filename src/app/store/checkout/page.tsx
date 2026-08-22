@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useI18n, egp } from "@/lib/i18n";
+import { egp } from "@/lib/i18n";
 import { useCart } from "../cart";
 import {
   sendOtp, verifyOtp, placeOrder, getCustomer, type CustomerProfile,
@@ -34,8 +34,10 @@ function isLocallyVerified(p: string) {
 }
 
 export default function CheckoutPage() {
-  const { lang } = useI18n();
-  const ar = lang === "ar";
+  // Checkout always renders in English by default, regardless of the store's
+  // Arabic-first language setting.
+  const lang = "en" as const;
+  const ar = false;
   const router = useRouter();
   const { items, subtotal, clear } = useCart();
 
@@ -235,7 +237,7 @@ export default function CheckoutPage() {
   const check = "h-5 w-5 rounded border-slate-300 accent-rose-600";
 
   return (
-    <div className="bb-checkout -mx-4 -my-6">
+    <div className="bb-checkout -mx-4 -my-6" dir="ltr">
       <div className="grid grid-cols-1 lg:grid-cols-2">
         {/* LEFT — form */}
         <div className="order-2 px-4 py-8 lg:order-1 lg:ms-auto lg:w-full lg:max-w-[560px] lg:px-8">
