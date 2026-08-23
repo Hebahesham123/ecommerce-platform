@@ -29,6 +29,8 @@ type CartCtx = {
   setQty: (itemId: string, qty: number) => void;
   remove: (itemId: string) => void;
   clear: () => void;
+  /** Replace the cart wholesale — used for the theme → checkout handoff. */
+  seed: (items: CartItem[]) => void;
   open: boolean;
   setOpen: (v: boolean) => void;
 };
@@ -80,11 +82,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const clear = () => setItems([]);
 
+  const seed: CartCtx["seed"] = (next) => setItems(next);
+
   const count = items.reduce((s, i) => s + i.quantity, 0);
   const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
 
   return (
-    <Ctx.Provider value={{ items, hydrated, count, subtotal, add, setQty, remove, clear, open, setOpen }}>
+    <Ctx.Provider value={{ items, hydrated, count, subtotal, add, setQty, remove, clear, seed, open, setOpen }}>
       {children}
     </Ctx.Provider>
   );

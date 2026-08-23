@@ -354,16 +354,6 @@ function pathAndQuery(req: Request, mount: string) {
   return { path: path.replace(/\/+$/, "") || "/", query, url };
 }
 
-/** Handoff page: copies the theme cart into the existing checkout's storage. */
-function checkoutBridge(lines: unknown[], mount: string): string {
-  return `<!doctype html><html><head><meta charset="utf-8"><title>Checkout…</title>
-<style>body{font:15px/1.6 system-ui,sans-serif;display:grid;place-items:center;height:100vh;margin:0;color:#475569}</style></head>
-<body><p>Taking you to checkout…</p>
-<script>try{localStorage.setItem("bb_cart",${JSON.stringify(JSON.stringify(lines))});}catch(e){}
-location.replace(${JSON.stringify(lines.length ? "/store/checkout" : `${mount}/cart`)});</script>
-</body></html>`;
-}
-
 function crashPage(e: unknown): Response {
   return html(
     `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font:15px/1.7 system-ui,-apple-system,Segoe UI,sans-serif;padding:48px;max-width:640px;margin:0 auto;color:#475569}code{background:#f1f5f9;padding:2px 6px;border-radius:6px;word-break:break-all}</style></head><body><h1 style="color:#0f172a">Storefront error</h1><p><code>${String(
@@ -469,20 +459,10 @@ async function storefrontGet(req: Request, config: MountConfig): Promise<Respons
 
   // --- Checkout handoff to the existing COD flow ---------------------------
   if (path === "/checkout" || path === "/cart/checkout") {
-    const catalog = await getStorefrontCatalog(mount);
-    const cart = buildCart(lines, catalog, mount);
-    const items = (cart.items as any[]).map((i) => ({
-      itemId: String(i.variant_id ?? i.id),
-      productName: String(i.product_title ?? ""),
-      variantTitle: i.variant_title ?? null,
-      sku: i.sku ?? null,
-      imageUrl: i.image ? String(i.image) : null,
-      // The React checkout works in decimal currency; Liquid works in minor units.
-      price: Number(i.price) / 100,
-      quantity: Number(i.quantity),
-      maxAvailable: Number((i.variant as any)?.inventory_quantity ?? 99),
-    }));
-    return html(checkoutBridge(items, mount));
+    // /store/checkout reads the same sf_cart cookie server-side, so we can hand
+    // straight over — no interstitial page copying the cart into localStorage.
+    if (!lines.length) return redirect(`${mount}/cart`);
+    return redirect("/store/checkout");
   }
 
   const fresh = query.fresh === "1";
