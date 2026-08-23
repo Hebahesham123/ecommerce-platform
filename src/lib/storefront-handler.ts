@@ -322,6 +322,19 @@ function toResponse(res: StorefrontResponse): Response {
 }
 
 // ---- Path helpers -----------------------------------------------------------
+/**
+ * Resolve a `return_to` param to a same-origin path under the mount.
+ *
+ * Only plain relative paths are honoured ("/checkout"), never a scheme or a
+ * protocol-relative "//evil.com" — otherwise the cart link becomes an open
+ * redirect. Returns null when the value can't be trusted.
+ */
+function safeReturnTo(raw: string, mount: string): string | null {
+  const v = raw.trim();
+  if (!v.startsWith("/") || v.startsWith("//") || v.includes("\\")) return null;
+  return v.startsWith(mount) ? v : `${mount}${v}`;
+}
+
 function pathAndQuery(req: Request, mount: string) {
   const url = new URL(req.url);
   // Handles can be non-latin (Arabic categories), so the pathname arrives
@@ -376,6 +389,24 @@ async function storefrontGet(req: Request, config: MountConfig): Promise<Respons
   const { mount, themeId, shopName } = config;
   const { path, query } = pathAndQuery(req, mount);
   const lines = readCart(req);
+
+  // The theme's "Buy it now" is a plain link, not a form post:
+  //   GET /cart/add?id=<variant>&quantity=1&return_to=/checkout
+  // Add the line, then honour return_to so the shopper lands on checkout
+  // rather than the cart page.
+  if (path === "/cart/add") {
+    const id = String(query.id ?? "");
+    const qty = Math.max(1, Number(query.quantity ?? 1) || 1);
+    const catalog = await getStorefrontCatalog(mount);
+    const next = clampLinesToStock(catalog, id ? addLine(lines, id, qty) : lines);
+    const cookie = cartCookie(next);
+    // Sold out or already at the stock ceiling → show the cart, not an empty
+    // checkout, so the shopper sees what actually happened.
+    const added = next.find((l) => l.id === id)?.quantity ?? 0;
+    if (id && added === 0) return redirect(`${mount}/cart`, cookie);
+    const dest = safeReturnTo(String(query.return_to ?? ""), mount);
+    return redirect(dest ?? `${mount}/cart`, cookie);
+  }
 
   // --- Shopify AJAX / JSON endpoints ---------------------------------------
   if (path === "/cart.js" || path === "/cart.json") {
@@ -584,6 +615,14 @@ async function storefrontPost(req: Request, config: MountConfig): Promise<Respon
         );
       }
       return json(added ?? cart, 200, cookie);
+    }
+    // "Buy it now" posts the same product form with checkout=1 — skip the cart
+    // page and go straight to checkout. If the line was clamped away (sold out
+    // or already at the stock ceiling) fall back to the cart so the shopper
+    // sees what actually happened instead of an empty checkout.
+    const addedQty = next.find((l) => l.id === id)?.quantity ?? 0;
+    if (body.checkout !== undefined && (!id || addedQty > 0)) {
+      return redirect(`${mount}/checkout`, cookie);
     }
     return redirect(`${mount}/cart`, cookie);
   }

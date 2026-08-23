@@ -280,7 +280,9 @@ const FALLBACK_CSS = `<style>
 .sf-t{font-size:14px;margin:0 0 4px}
 .sf-p{font-weight:700}
 .sf-mut{color:#64748b;font-size:13px}
-.sf-btn{display:inline-block;background:#0f172a;color:#fff;border:0;border-radius:10px;padding:10px 18px;font-size:14px;cursor:pointer}
+.sf-btn{display:block;width:100%;background:#0f172a;color:#fff;border:1px solid #0f172a;border-radius:10px;padding:13px 18px;font-size:15px;cursor:pointer;margin-top:10px}
+.sf-btn--alt{background:#fff;color:#0f172a}
+.sf-btn[disabled]{opacity:.5;cursor:not-allowed}
 .sf-row{display:flex;gap:24px;flex-wrap:wrap}
 .sf-row>*{flex:1 1 320px}
 table.sf-tb{width:100%;border-collapse:collapse}table.sf-tb td,table.sf-tb th{border-bottom:1px solid #e2e8f0;padding:10px;text-align:start}
@@ -320,7 +322,8 @@ function fallbackTemplate(
       <form method="post" action="${mount}/cart/add" style="margin-top:16px">
         <select name="id" style="padding:10px;border-radius:10px;border:1px solid #cbd5e1">${opts}</select>
         <input type="hidden" name="quantity" value="1">
-        <button class="sf-btn" type="submit"${p.available ? "" : " disabled"}>${p.available ? "Add to cart" : "Sold out"}</button>
+        <button class="sf-btn sf-btn--alt" type="submit" name="add" value="1"${p.available ? "" : " disabled"}>${p.available ? "Add to cart" : "Sold out"}</button>
+        ${p.available ? `<button class="sf-btn" type="submit" name="checkout" value="1">Buy it now</button>` : ""}
       </form></div></div>`);
   }
 
@@ -906,6 +909,15 @@ export async function renderThemePage(input: RenderInput): Promise<string> {
     color_contrast: () => 1,
     color_difference: () => 0,
     hex_to_rgba: (v: any) => v,
+
+    // {{ form | payment_button }} — Shopify's dynamic checkout button. Ours
+    // submits the same product form, but flags the post so /cart/add sends the
+    // shopper straight to checkout instead of the cart page. The Shopify class
+    // names are kept so the theme's own button CSS still applies.
+    payment_button: () =>
+      `<div class="shopify-payment-button"><button type="submit" name="checkout" value="1" class="shopify-payment-button__button shopify-payment-button__button--unbranded">Buy it now</button></div>`,
+    // Installment messaging — no provider here, so it renders nothing.
+    payment_terms: () => "",
   };
   for (const [name, fn] of Object.entries(filters)) engine.registerFilter(name, fn);
 

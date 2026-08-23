@@ -2,6 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useI18n, egp, num } from "@/lib/i18n";
 import { getStoreProduct, type StoreProduct, type StoreVariant } from "../../actions";
 import { useCart } from "../../cart";
@@ -12,6 +13,7 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
   const { lang } = useI18n();
   const ar = lang === "ar";
   const { add } = useCart();
+  const router = useRouter();
   const [product, setProduct] = useState<StoreProduct | null>(null);
   const [loading, setLoading] = useState(true);
   const [variant, setVariant] = useState<StoreVariant | null>(null);
@@ -37,6 +39,22 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
   const compareAt = variant?.compareAt ?? null;
   const onSale = compareAt != null && price != null && compareAt > price;
   const soldOut = (variant?.available ?? 0) <= 0;
+
+  /** Add the selected variant to the cart. Returns false if there's nothing to add. */
+  function addToCart(): boolean {
+    if (!variant || soldOut) return false;
+    add({
+      itemId: variant.id,
+      productName: product!.name,
+      variantTitle: variant.variantTitle,
+      sku: variant.sku,
+      imageUrl: product!.image,
+      price: variant.price ?? 0,
+      maxAvailable: variant.available,
+    }, qty);
+    return true;
+  }
+
 
   return (
     <>
@@ -115,30 +133,33 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
             </div>
           )}
 
-          {/* Qty + add */}
-          <div className="mt-5 flex items-center gap-3">
-            <div className="flex items-center rounded-xl border border-line">
-              <button onClick={() => setQty((q) => Math.max(1, q - 1))} className="px-3 py-2.5 text-ink-muted">−</button>
+          {/* Quantity + the Shopify product form: "Add to cart" over "Buy it now". */}
+          <div className="mt-5">
+            <div className="mb-3 text-sm font-medium text-ink">{ar ? "الكمية" : "Quantity"}</div>
+            <div className="inline-flex items-center rounded-xl border border-line">
+              <button onClick={() => setQty((q) => Math.max(1, q - 1))} className="px-4 py-2.5 text-ink-muted">−</button>
               <span className="w-10 text-center font-medium">{qty}</span>
-              <button onClick={() => setQty((q) => Math.min(variant?.available ?? 1, q + 1))} disabled={qty >= (variant?.available ?? 0)} className="px-3 py-2.5 text-ink-muted disabled:opacity-30">+</button>
+              <button onClick={() => setQty((q) => Math.min(variant?.available ?? 1, q + 1))} disabled={qty >= (variant?.available ?? 0)} className="px-4 py-2.5 text-ink-muted disabled:opacity-30">+</button>
             </div>
+          </div>
+
+          <div className="mt-4 space-y-3">
             <button
               disabled={soldOut || !variant}
-              onClick={() =>
-                variant && add({
-                  itemId: variant.id,
-                  productName: product.name,
-                  variantTitle: variant.variantTitle,
-                  sku: variant.sku,
-                  imageUrl: product.image,
-                  price: variant.price ?? 0,
-                  maxAvailable: variant.available,
-                }, qty)
-              }
-              className="btn-primary flex-1 justify-center py-3 text-base disabled:opacity-50"
+              onClick={() => addToCart()}
+              className="w-full rounded-xl border border-ink bg-white py-3.5 text-base font-semibold text-ink transition hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
             >
               {soldOut ? (ar ? "نفد المخزون" : "Sold out") : (ar ? "أضيفي إلى السلة" : "Add to cart")}
             </button>
+            {!soldOut && (
+              <button
+                disabled={!variant}
+                onClick={() => { if (addToCart()) router.push("/store/checkout"); }}
+                className="w-full rounded-xl bg-brand py-3.5 text-base font-semibold text-white transition hover:bg-brand-700 disabled:opacity-50"
+              >
+                {ar ? "اشتري الآن" : "Buy it now"}
+              </button>
+            )}
           </div>
 
           <div className="mt-3 text-sm text-ink-soft">
