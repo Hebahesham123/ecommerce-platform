@@ -21,6 +21,8 @@ export type CartItem = {
 
 type CartCtx = {
   items: CartItem[];
+  /** False until the cart has been read back from localStorage. */
+  hydrated: boolean;
   count: number;
   subtotal: number;
   add: (item: Omit<CartItem, "quantity">, qty?: number) => void;
@@ -82,7 +84,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
 
   return (
-    <Ctx.Provider value={{ items, count, subtotal, add, setQty, remove, clear, open, setOpen }}>
+    <Ctx.Provider value={{ items, hydrated, count, subtotal, add, setQty, remove, clear, open, setOpen }}>
       {children}
     </Ctx.Provider>
   );

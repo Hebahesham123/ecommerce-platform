@@ -143,7 +143,7 @@ export default function CheckoutPage() {
   // Arabic-first language setting.
   const ar = false;
   const router = useRouter();
-  const { items, subtotal, clear } = useCart();
+  const { items, subtotal, clear, hydrated } = useCart();
 
   // Keep checkout static on mobile: no pinch-zoom, and no iOS auto-zoom when a
   // field is focused. Scoped to this page - restored on unmount.
@@ -430,6 +430,20 @@ export default function CheckoutPage() {
   );
 
   /* ------------------------------- empty cart ------------------------------- */
+
+  // The cart lives in localStorage, so on a fresh document (arriving from the
+  // theme's "Buy it now" handoff) `items` is empty until the provider has read
+  // it back. Showing "your cart is empty" before then is a lie — wait.
+  if (!hydrated) {
+    return (
+      <div className="co-root bb-checkout min-h-screen" dir="ltr">
+        <CheckoutHeader ar={ar} />
+        <div className="mx-auto w-full max-w-[600px] bg-white px-5 py-20 text-center">
+          <p className="text-[15px] text-[#6b7177]">{ar ? "جارٍ التحميل…" : "Loading…"}</p>
+        </div>
+      </div>
+    );
+  }
 
   if (items.length === 0 && !placing) {
     return (
