@@ -157,3 +157,186 @@ body {
 .dark .border-amber-200   { border-color: rgb(245 158 11 / 0.3); }
 .dark .border-sky-200     { border-color: rgb(14 165 233 / 0.3); }
 .dark .border-rose-200    { border-color: rgb(244 63 94 / 0.3); }
+
+/* ==================================================================
+   Shopify-style checkout (mirrors beauty-bareg.net/checkouts).
+   All tokens are scoped to .co-root so nothing leaks into the rest of
+   the storefront or the admin. Logical properties keep it RTL-correct.
+   ================================================================== */
+.co-root {
+  --co-bg: #ece8f3;          /* page gutters */
+  --co-summary: #f2f0f7;     /* order-summary surface */
+  --co-line: #d9d9d9;        /* field borders */
+  --co-line-soft: #e5e5e5;   /* dividers */
+  --co-text: #1a1a1a;
+  --co-muted: #6b7177;
+  --co-accent: #c8134e;
+  --co-accent-hover: #a80f41;
+  --co-accent-soft: #fdf1f5;
+  --co-radius: 8px;
+
+  background: var(--co-bg);
+  color: var(--co-text);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+/* ---- Fields: 52px tall, floating label, accent focus ring ---- */
+.co-field {
+  position: relative;
+}
+.co-field > input,
+.co-field > select,
+.co-field > textarea {
+  width: 100%;
+  height: 52px;
+  padding-inline: 14px;
+  padding-top: 17px;
+  border: 1px solid var(--co-line);
+  border-radius: var(--co-radius);
+  background: #fff;
+  color: var(--co-text);
+  font-size: 15px;
+  font-family: inherit;
+  outline: none;
+  appearance: none;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+.co-field > select {
+  padding-inline-end: 40px;
+  cursor: pointer;
+}
+.co-field > input:hover,
+.co-field > select:hover {
+  border-color: #b8b8b8;
+}
+.co-field > input:focus,
+.co-field > select:focus {
+  border-color: var(--co-accent);
+  box-shadow: 0 0 0 1px var(--co-accent);
+}
+.co-field > label {
+  position: absolute;
+  inset-inline-start: 15px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 15px;
+  color: var(--co-muted);
+  pointer-events: none;
+  transition: top 0.12s ease-out, font-size 0.12s ease-out, transform 0.12s ease-out;
+}
+/* Floated state: focused, filled, or any <select> (always shows a value). */
+.co-field > input:focus ~ label,
+.co-field > input:not(:placeholder-shown) ~ label,
+.co-field > select ~ label {
+  top: 9px;
+  transform: none;
+  font-size: 11px;
+}
+.co-field.co-invalid > input,
+.co-field.co-invalid > select {
+  border-color: #d72c0d;
+  box-shadow: 0 0 0 1px #d72c0d;
+}
+/* Trailing affordance (help "?" bubble, lock, chevron) */
+.co-field > .co-affix {
+  position: absolute;
+  inset-inline-end: 13px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #8c9196;
+  pointer-events: none;
+  display: flex;
+}
+
+/* ---- Checkbox ---- */
+.co-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  color: var(--co-text);
+  cursor: pointer;
+}
+.co-check > input {
+  appearance: none;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border: 1px solid #b5b5b5;
+  border-radius: 5px;
+  background: #fff;
+  cursor: pointer;
+  transition: background 0.1s ease, border-color 0.1s ease;
+}
+.co-check > input:checked {
+  background: var(--co-accent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23fff' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 8.5l3.2 3.2L13 5'/%3E%3C/svg%3E") center/14px no-repeat;
+  border-color: var(--co-accent);
+}
+.co-check > input:focus-visible {
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--co-accent);
+}
+
+/* ---- Radio ---- */
+.co-radio {
+  appearance: none;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border: 1px solid #b5b5b5;
+  border-radius: 999px;
+  background: #fff;
+  cursor: pointer;
+  transition: box-shadow 0.1s ease, border-color 0.1s ease;
+}
+.co-radio:checked {
+  border-color: var(--co-accent);
+  box-shadow: inset 0 0 0 7px var(--co-accent);
+}
+
+/* ---- Method list (payment / billing): one bordered card, hairline rows ---- */
+.co-list {
+  border: 1px solid var(--co-line);
+  border-radius: var(--co-radius);
+  overflow: hidden;
+  background: #fff;
+}
+.co-list > * + * {
+  border-top: 1px solid var(--co-line-soft);
+}
+.co-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 16px 14px;
+  text-align: start;
+  font-size: 15px;
+  background: #fff;
+  cursor: pointer;
+}
+.co-row.co-on {
+  background: var(--co-accent-soft);
+}
+/* The selected row draws its own accent outline over the card border. */
+.co-list.co-single {
+  border-color: var(--co-accent);
+}
+
+.co-link {
+  color: var(--co-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.co-link:hover {
+  color: var(--co-accent-hover);
+}
+
+/* Country/Region is fixed to Egypt — keep it reading like a normal field
+   rather than a greyed-out disabled control. */
+.co-field > select:disabled {
+  opacity: 1;
+  color: var(--co-text);
+  background: #fff;
+  cursor: default;
+}

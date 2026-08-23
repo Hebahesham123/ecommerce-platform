@@ -1,17 +1,32 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 import { useI18n, egp } from "@/lib/i18n";
 import { CartProvider, useCart } from "./cart";
 import { IcX } from "@/components/icons";
 
 export default function StoreLayout({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
+  // Checkout is a standalone funnel (like Shopify's): no shop nav, no footer,
+  // no cart drawer — it brings its own header and order summary.
+  const bare = pathname?.startsWith("/store/checkout") ?? false;
+
   // The storefront is always light (its surfaces aren't dark-themed), even when
   // the admin default is dark.
   useEffect(() => {
     document.documentElement.classList.remove("dark");
   }, []);
+
+  if (bare) {
+    return (
+      <CartProvider>
+        <div className="store-theme min-h-screen">{children}</div>
+      </CartProvider>
+    );
+  }
+
   return (
     <CartProvider>
       <div className="store-theme min-h-screen bg-white text-ink">
