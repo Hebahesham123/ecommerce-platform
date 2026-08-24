@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useI18n } from "@/lib/i18n";
 import type { Theme } from "@/lib/themes";
 import { IcX, IcDesktop, IcMobile, IcLink, IcRefresh } from "@/components/icons";
@@ -24,10 +24,19 @@ export function ThemePreview({ theme, onClose }: { theme: Theme; onClose: () => 
 
   // Served by our own route as text/html, wired to live products/collections.
   const base = `/online-store/themes/${theme.id}/preview`;
+  // Refresh re-requests the page but does NOT pass fresh=1: that would skip the
+  // cached bundle and re-fetch the theme file by file, costing several seconds.
+  // Editing or re-uploading a theme purges that cache on its own, so a plain
+  // reload already shows current content.
   const src = useMemo(
-    () => `${base}${path === "/" ? "" : path}${nonce ? `${path.includes("?") ? "&" : "?"}fresh=1&r=${nonce}` : ""}`,
+    () => `${base}${path === "/" ? "" : path}${nonce ? `${path.includes("?") ? "&" : "?"}r=${nonce}` : ""}`,
     [base, path, nonce],
   );
+
+  // Any change of address means a fresh paint, so show the loader again.
+  useEffect(() => {
+    setLoaded(false);
+  }, [src]);
 
   function go(next: string) {
     setLoaded(false);
@@ -114,16 +123,28 @@ export function ThemePreview({ theme, onClose }: { theme: Theme; onClose: () => 
           }`}
         >
           {!loaded && (
-            <div className="absolute inset-0 flex items-center justify-center text-sm text-ink-soft">
-              {t("processing")}
+            <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-surface">
+              <span className="h-7 w-7 animate-spin rounded-full border-2 border-line border-t-brand-600" />
+              <span className="text-sm font-medium text-ink-muted">
+                {ar ? "جارٍ تجهيز المعاينة…" : "Building the preview…"}
+              </span>
+              <span className="max-w-[260px] text-center text-xs text-ink-soft">
+                {ar
+                  ? "أول فتح بعد النشر أبطأ؛ بعدها يصبح فورياً."
+                  : "The first load after a deploy is slower — later ones are instant."}
+              </span>
             </div>
           )}
+          {/* Kept transparent until it has painted: an empty iframe renders as
+              an opaque white sheet and would cover the message above. */}
           <iframe
             key={src}
             src={src}
             title={theme.name}
             onLoad={() => setLoaded(true)}
-            className="h-full w-full border-0"
+            className={`h-full w-full border-0 transition-opacity duration-200 ${
+              loaded ? "opacity-100" : "opacity-0"
+            }`}
             sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals"
           />
         </div>

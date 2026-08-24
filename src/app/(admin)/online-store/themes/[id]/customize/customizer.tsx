@@ -533,14 +533,24 @@ export function Customizer({ themeId }: { themeId: string }) {
                 {ar ? "تحديث…" : "updating…"}
               </span>
             )}
+            {/* Until the first render arrives the iframe is an opaque white
+                sheet, which reads as a broken page rather than a loading one. */}
+            {previewHtml == null && (
+              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3">
+                <span className="h-7 w-7 animate-spin rounded-full border-2 border-line border-t-brand-600" />
+                <span className="text-sm font-medium text-ink-muted">
+                  {ar ? "جارٍ تجهيز المعاينة…" : "Building the preview…"}
+                </span>
+              </div>
+            )}
             <iframe
               ref={frameRef}
               srcDoc={previewHtml ?? undefined}
               onLoad={onFrameLoad}
               title="preview"
-              className={`h-full rounded-xl border-0 bg-white shadow-card ${
-                device === "mobile" ? "w-[390px] max-w-full" : "w-full"
-              }`}
+              className={`h-full rounded-xl border-0 bg-white shadow-card transition-opacity duration-200 ${
+                previewHtml == null ? "opacity-0" : "opacity-100"
+              } ${device === "mobile" ? "w-[390px] max-w-full" : "w-full"}`}
               sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals"
             />
           </div>

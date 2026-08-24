@@ -504,7 +504,7 @@ export function ThemeCodeEditor({ themeId }: { themeId: string }) {
               </button>
               <a
                 className="btn-ghost h-7 px-2"
-                href={`/online-store/themes/${themeId}/preview?fresh=1`}
+                href={`/online-store/themes/${themeId}/preview`}
                 target="_blank"
                 rel="noreferrer"
                 title={ar ? "فتح المحفوظ في تبويب" : "Open the saved version in a tab"}
@@ -512,14 +512,28 @@ export function ThemeCodeEditor({ themeId }: { themeId: string }) {
                 <IcLink className="h-3.5 w-3.5" />
               </a>
             </div>
-            <iframe
-              ref={frameRef}
-              srcDoc={previewHtml ?? undefined}
-              onLoad={onFrameLoad}
-              title="preview"
-              className="min-h-0 flex-1 border-0 bg-white"
-              sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals"
-            />
+            {/* An iframe with no document yet paints opaque white, which looks
+                like a broken page rather than one that is still loading. */}
+            <div className="relative flex min-h-0 flex-1">
+              {previewHtml == null && (
+                <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-surface">
+                  <span className="h-6 w-6 animate-spin rounded-full border-2 border-line border-t-brand-600" />
+                  <span className="text-xs text-ink-muted">
+                    {ar ? "جارٍ تجهيز المعاينة…" : "Building the preview…"}
+                  </span>
+                </div>
+              )}
+              <iframe
+                ref={frameRef}
+                srcDoc={previewHtml ?? undefined}
+                onLoad={onFrameLoad}
+                title="preview"
+                className={`min-h-0 flex-1 border-0 bg-white transition-opacity duration-200 ${
+                  previewHtml == null ? "opacity-0" : "opacity-100"
+                }`}
+                sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals"
+              />
+            </div>
           </Card>
         )}
       </div>
