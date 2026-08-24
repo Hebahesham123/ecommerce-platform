@@ -56,6 +56,9 @@ function StoreHeader() {
         </Link>
         <nav className="ms-4 hidden gap-4 text-sm text-ink-muted sm:flex">
           <Link href="/store" className="hover:text-ink">{ar ? "كل المنتجات" : "All products"}</Link>
+          {/* /store/account redirects to login when signed out, so the header
+              needs no session of its own. */}
+          <Link href="/store/account" className="hover:text-ink">{ar ? "حسابي" : "Account"}</Link>
         </nav>
         <div className="ms-auto flex items-center gap-2">
           <button onClick={toggle} className="rounded-lg px-2.5 py-1.5 text-sm text-ink-muted hover:bg-surface-hover">

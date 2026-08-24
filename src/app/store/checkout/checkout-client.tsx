@@ -532,7 +532,7 @@ export default function CheckoutClient({ initialItems }: { initialItems: CartIte
             <section>
               <div className="mb-4 flex items-baseline justify-between gap-4">
                 <h2 className="text-[19px] font-semibold text-[#1a1a1a]">{ar ? "معلومات التواصل" : "Contact"}</h2>
-                <Link href="/store" className="co-link text-[15px]">{ar ? "تسجيل الدخول" : "Sign in"}</Link>
+                <Link href="/store/login" className="co-link text-[15px]">{ar ? "تسجيل الدخول" : "Sign in"}</Link>
               </div>
               <Field label={ar ? "البريد الإلكتروني" : "Email"} value={email} onChange={setEmail} type="email" inputMode="email" dir="ltr" help />
               <div className="mt-4">

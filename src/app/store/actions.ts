@@ -2,6 +2,7 @@
 
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
 import { computeDiscount, slotLabel, isBirthday } from "@/lib/offers";
+import { normalizePhone } from "@/lib/phone";
 
 export type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -139,18 +140,6 @@ export async function isPhoneVerified(phone: string): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-/**
- * Normalize any Egyptian phone to the same international form n8n stores,
- * e.g. "01027546062", "201027546062", "+20 102 754 6062" → "+201027546062".
- */
-function normalizePhone(p: string): string {
-  let d = (p || "").replace(/\D/g, "");
-  if (d.startsWith("0020")) d = d.slice(4);
-  else if (d.startsWith("20") && d.length >= 12) d = d.slice(2);
-  else if (d.startsWith("0")) d = d.slice(1);
-  return "+20" + d;
 }
 
 const OTP_WEBHOOK_URL =
