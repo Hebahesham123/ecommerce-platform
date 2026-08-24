@@ -4,7 +4,7 @@ import JSZip from "jszip";
 import { revalidatePath } from "next/cache";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
 import { mimeForPath, pickEntry, type Theme, type ThemeStatus } from "@/lib/themes";
-import { invalidateThemeBundle } from "@/lib/theme-render-service";
+import { purgeThemeBundle } from "@/lib/theme-render-service";
 
 const BUCKET = "themes";
 
@@ -144,7 +144,7 @@ export async function uploadTheme(form: FormData): Promise<ThemeResult<Theme>> {
       await removeFolder(themeId);
       return { ok: false, error: error.message };
     }
-    invalidateThemeBundle(themeId);
+    await purgeThemeBundle(themeId);
     revalidatePath("/online-store/themes");
     return { ok: true, data: rowToTheme(data) };
   } catch (e) {
@@ -264,7 +264,7 @@ export async function deleteTheme(id: string): Promise<ThemeResult> {
     await removeFolder(prefix);
     const { error } = await supabase.from("themes").delete().eq("id", id);
     if (error) return { ok: false, error: error.message };
-    invalidateThemeBundle(id);
+    await purgeThemeBundle(id);
     revalidatePath("/online-store/themes");
     return { ok: true, data: undefined };
   } catch (e) {

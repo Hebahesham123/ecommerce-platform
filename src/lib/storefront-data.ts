@@ -643,17 +643,35 @@ export async function getCatalog(mount = ""): Promise<Catalog> {
     // PostgREST returns at most 1000 rows per request — page through so the
     // whole catalog reaches the storefront, not just the oldest 1000 variants.
     const PAGE = 1000;
+
+    // Ask for named columns rather than "*": `description` alone is ~40% of the
+    // payload and is only ever needed on a single product's page, where it is
+    // fetched on demand (loadProductDescriptions below).
+    const COLUMNS =
+      "id,product_name,variant_title,sku,barcode,category,vendor,product_type," +
+      "tags,price,compare_at_price,status,tracked,image_url,images,created_at," +
+      "updated_at,inventory_levels(on_hand,committed,incoming)";
+
+    const { count } = await supabase
+      .from("inventory_items")
+      .select("id", { count: "exact", head: true });
+
+    // Pages are independent, so fetch them together instead of walking the
+    // catalog one blocking round trip at a time.
+    const pages = Math.max(1, Math.ceil((count ?? 0) / PAGE));
+    const results = await Promise.all(
+      Array.from({ length: pages }, (_, i) =>
+        supabase
+          .from("inventory_items")
+          .select(COLUMNS)
+          .order("created_at", { ascending: true })
+          .range(i * PAGE, i * PAGE + PAGE - 1),
+      ),
+    );
     const all: Row[] = [];
-    for (let from = 0; ; from += PAGE) {
-      const { data, error } = await supabase
-        .from("inventory_items")
-        .select("*, inventory_levels(on_hand,committed,incoming)")
-        .order("created_at", { ascending: true })
-        .range(from, from + PAGE - 1);
+    for (const { data, error } of results) {
       if (error) throw new Error(error.message);
-      const page = (data ?? []) as Row[];
-      all.push(...page);
-      if (page.length < PAGE) break;
+      all.push(...((data ?? []) as unknown as Row[]));
     }
     rows = all;
   } catch {
@@ -665,6 +683,28 @@ export async function getCatalog(mount = ""): Promise<Catalog> {
   const value = buildCatalog(rows, shop, mount, collectionDefs, menus);
   cache.set(mount, { at: Date.now(), value });
   return value;
+}
+
+/**
+ * Fetch the description for one product's rows.
+ *
+ * Descriptions are excluded from the catalog query because they dominate its
+ * payload, so the product page pulls back just the one it is about to render.
+ */
+export async function loadProductDescription(product: ProductDrop): Promise<string> {
+  if (!isSupabaseConfigured()) return "";
+  try {
+    const supabase = getServerSupabase();
+    const { data } = await supabase
+      .from("inventory_items")
+      .select("description")
+      .eq("product_name", String(product.title))
+      .not("description", "is", null)
+      .limit(1);
+    return String(data?.[0]?.description ?? "");
+  } catch {
+    return "";
+  }
 }
 
 /** Simple relevance search used by the theme's /search route. */

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
-import { invalidateThemeBundle } from "@/lib/theme-render-service";
+import { purgeThemeBundle } from "@/lib/theme-render-service";
 import { mimeForPath, isEditablePath } from "@/lib/themes";
 
 const BUCKET = "themes";
@@ -141,7 +141,7 @@ export async function saveThemeFile(
       });
     if (error) return { ok: false, error: error.message };
 
-    invalidateThemeBundle(themeId);
+    await purgeThemeBundle(themeId);
     revalidatePath(`/online-store/themes/${themeId}/code`);
     return { ok: true, data: { modified } };
   } catch (e) {
@@ -182,7 +182,7 @@ export async function revertThemeFile(
       .eq("theme_id", themeId)
       .eq("path", path);
 
-    invalidateThemeBundle(themeId);
+    await purgeThemeBundle(themeId);
     revalidatePath(`/online-store/themes/${themeId}/code`);
     return { ok: true, data: { content: original } };
   } catch (e) {

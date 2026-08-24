@@ -2,7 +2,12 @@
 import "server-only";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
 import { renderThemePage, type FileMap, type RenderRoute } from "@/lib/liquid-render";
-import { getCatalog, searchProducts, type ProductDrop } from "@/lib/storefront-data";
+import {
+  getCatalog,
+  loadProductDescription,
+  searchProducts,
+  type ProductDrop,
+} from "@/lib/storefront-data";
 import { buildCart, type CartLine } from "@/lib/storefront-cart";
 import { pixelBaseCode } from "@/lib/meta";
 import {
@@ -15,7 +20,9 @@ import {
 
 const BUCKET = "themes";
 /** How long a theme's source files stay in memory. Catalog data is NOT cached here. */
-const BUNDLE_TTL_MS = 5 * 60_000;
+// Theme files only change through upload or the code editor, and both purge
+// this cache explicitly, so it can be held far longer than a guessed refresh.
+const BUNDLE_TTL_MS = 30 * 60_000;
 
 type StoredFile = { path: string; url: string };
 
@@ -38,10 +45,64 @@ type Bundle = LiquidBundle | StaticBundle;
 
 const bundleCache = new Map<string, { at: number; bundle: Bundle }>();
 
+/**
+ * Building a bundle from scratch costs ~100 storage round trips (a recursive
+ * directory walk plus one fetch per file) to move roughly 200 KB — several
+ * seconds of pure latency. The assembled result is therefore also written to
+ * storage as a single blob, so a cold process reads it in one request.
+ *
+ * It lives OUTSIDE the theme's own prefix: an extra folder under the prefix
+ * would add a second entry to the top-level set below and break the
+ * single-wrapper-folder detection, which would relocate every asset URL.
+ */
+const bundleBlobPath = (id: string) => `_bundles/${id}.json`;
+
 /** Drop cached theme sources (call after a re-upload). */
 export function invalidateThemeBundle(id?: string): void {
   if (id) bundleCache.delete(id);
   else bundleCache.clear();
+}
+
+/**
+ * Drop the shared blob as well as this process's copy.
+ *
+ * In-memory caches are per-instance, so on a serverless deploy clearing only
+ * memory would leave other instances serving the previous theme until their
+ * own TTL lapsed.
+ */
+export async function purgeThemeBundle(id: string): Promise<void> {
+  invalidateThemeBundle(id);
+  try {
+    await getServerSupabase().storage.from(BUCKET).remove([bundleBlobPath(id)]);
+  } catch {
+    /* nothing cached yet */
+  }
+}
+
+async function readBundleBlob(id: string): Promise<Bundle | null> {
+  try {
+    const supabase = getServerSupabase();
+    const { data, error } = await supabase.storage.from(BUCKET).download(bundleBlobPath(id));
+    if (error || !data) return null;
+    const parsed = JSON.parse(await data.text()) as Bundle;
+    return parsed?.kind === "liquid" || parsed?.kind === "static" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+async function writeBundleBlob(id: string, bundle: Bundle): Promise<void> {
+  try {
+    const supabase = getServerSupabase();
+    await supabase.storage
+      .from(BUCKET)
+      .upload(bundleBlobPath(id), new TextEncoder().encode(JSON.stringify(bundle)), {
+        contentType: "application/json; charset=utf-8",
+        upsert: true,
+      });
+  } catch {
+    /* caching is best-effort — a failure just means the slow path next time */
+  }
 }
 
 async function listAll(prefix: string): Promise<StoredFile[]> {
@@ -70,6 +131,15 @@ async function loadBundle(
 ): Promise<Bundle | { error: string }> {
   const hit = bundleCache.get(id);
   if (!fresh && hit && Date.now() - hit.at < BUNDLE_TTL_MS) return hit.bundle;
+
+  // One request for the whole theme, instead of ~100.
+  if (!fresh) {
+    const cached = await readBundleBlob(id);
+    if (cached) {
+      bundleCache.set(id, { at: Date.now(), bundle: cached });
+      return cached;
+    }
+  }
 
   const supabase = getServerSupabase();
   const { data: row, error } = await supabase
@@ -141,6 +211,7 @@ async function loadBundle(
   }
 
   bundleCache.set(id, { at: Date.now(), bundle });
+  await writeBundleBlob(id, bundle);
   return bundle;
 }
 
@@ -364,7 +435,7 @@ export async function renderStorefront(
   let route: RenderRoute = { type: "index", path: "/", query: req.query, page };
   let status = 200;
 
-  const productRoute = (handle: string): RenderRoute | null => {
+  const productRoute = async (handle: string): Promise<RenderRoute | null> => {
     const product = catalog.productByHandle.get(handle);
     if (!product) return null;
     const variantId = req.query.variant;
@@ -372,6 +443,8 @@ export async function renderStorefront(
       (variantId && product.variants.find((v) => v.id === variantId)) ||
       product.selected_or_first_available_variant ||
       null;
+    // Descriptions are kept out of the catalog payload, so fetch this one.
+    const description = await loadProductDescription(product);
     return {
       type: "product",
       path: `/products/${handle}`,
@@ -379,6 +452,8 @@ export async function renderStorefront(
       page,
       product: {
         ...product,
+        description,
+        content: description,
         selected_variant: variantId ? variant : null,
         selected_or_first_available_variant: variant,
       } as ProductDrop,
@@ -411,12 +486,12 @@ export async function renderStorefront(
     if (segments.length === 1) {
       route = { type: "list-collections", path: "/collections", query: req.query, page };
     } else if (segments.length >= 4 && segments[2] === "products") {
-      route = productRoute(segments[3]) ?? notFound();
+      route = (await productRoute(segments[3])) ?? notFound();
     } else {
       route = collectionRoute(segments[1]) ?? notFound();
     }
   } else if (segments[0] === "products" && segments[1]) {
-    route = productRoute(segments[1]) ?? notFound();
+    route = (await productRoute(segments[1])) ?? notFound();
   } else if (segments[0] === "search") {
     const terms = req.query.q ?? "";
     route = {
