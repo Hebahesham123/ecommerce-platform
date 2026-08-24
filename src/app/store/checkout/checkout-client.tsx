@@ -9,6 +9,12 @@ import {
 } from "../actions";
 import { computeDiscount, isBirthday } from "@/lib/offers";
 
+/**
+ * Where "home" is for a shopper in checkout: the published theme at /shop,
+ * which is what they were browsing. (/store is the separate React storefront.)
+ */
+const STOREFRONT_HOME = "/shop";
+
 const GOVERNORATES = [
   "القاهرة", "الجيزة", "الإسكندرية", "القليوبية", "الدقهلية", "الشرقية",
   "المنوفية", "الغربية", "كفر الشيخ", "البحيرة", "دمياط", "بورسعيد",
@@ -471,7 +477,7 @@ export default function CheckoutClient({ initialItems }: { initialItems: CartIte
         <div className="mx-auto w-full max-w-[600px] bg-white px-5 py-20 text-center">
           <p className="text-[15px] text-[#6b7177]">{ar ? "سلتك فارغة" : "Your cart is empty"}</p>
           <Link
-            href="/store"
+            href={STOREFRONT_HOME}
             className="mt-5 inline-flex h-[52px] items-center rounded-[8px] bg-[var(--co-accent)] px-7 text-[16px] font-semibold text-white hover:bg-[var(--co-accent-hover)]"
           >
             {ar ? "تسوّقي الآن" : "Continue shopping"}
@@ -761,16 +767,24 @@ export default function CheckoutClient({ initialItems }: { initialItems: CartIte
 /* --------------------------------- header --------------------------------- */
 
 function CheckoutHeader({ ar }: { ar: boolean }) {
+  // Shoppers reach checkout from the published theme at /shop, so "home" is
+  // there — not /store, which is the separate React storefront. The footer's
+  // policy links already point at /shop, so the header was the odd one out.
+  //
   // The cart drawer lives in the shop layout, which checkout deliberately
-  // skips — so the bag returns to the shop instead of opening a dead drawer.
+  // skips — so the bag goes to the cart page rather than opening a dead drawer.
   return (
     <header className="border-b border-[#e5e5e5] bg-white">
       <div className="mx-auto flex w-full max-w-[600px] items-center justify-between px-5 py-5 lg:max-w-[1120px] lg:px-10">
-        <Link href="/store" className="text-[22px] font-bold uppercase tracking-[0.01em] text-[#1a1a1a]">
+        <Link
+          href={STOREFRONT_HOME}
+          aria-label={ar ? "الصفحة الرئيسية" : "Home"}
+          className="text-[22px] font-bold uppercase tracking-[0.01em] text-[#1a1a1a] transition hover:opacity-70"
+        >
           {ar ? "بيوتي بار" : "Beauty Bar"}
         </Link>
         <Link
-          href="/store"
+          href={`${STOREFRONT_HOME}/cart`}
           aria-label={ar ? "السلة" : "Cart"}
           className="text-[var(--co-accent)] transition hover:text-[var(--co-accent-hover)]"
         >
