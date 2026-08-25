@@ -46,6 +46,9 @@ export type RenderInput = {
   files: FileMap;
   /** Public URL of the theme root, with a trailing slash. */
   assetBase: string;
+  /** Cache-busting token appended to theme-asset URLs (e.g. "?v=<token>"), so
+   *  those URLs can be cached immutably for a year yet bust on any edit. */
+  assetVersion?: string;
   /** URL prefix the storefront is mounted at, e.g. "/shop" (no trailing slash). */
   mount: string;
   catalog: Catalog;
@@ -102,18 +105,26 @@ const STOREFRONT_RE =
  *  - relative paths + /assets/… resolve against the theme's storage root
  *  - storefront paths (/collections/…, /cart, …) get the mount prefix
  */
-function makeUrlResolver(assetBase: string, mount: string) {
+/** Append the theme's cache-busting token to an asset URL, correctly whether or
+ *  not the URL already carries a query string. Empty token → unchanged. */
+function withVersion(url: string, version: string): string {
+  if (!version) return url;
+  if (/[?&]v=/.test(url)) return url; // already versioned
+  return url + (url.includes("?") ? "&" : "?") + "v=" + version;
+}
+
+function makeUrlResolver(assetBase: string, mount: string, version = "") {
   return (raw: string): string => {
     const u = raw.trim();
     if (!u || EXTERNAL_RE.test(u)) return raw;
     if (u.startsWith("/")) {
-      if (THEME_ASSET_RE.test(u)) return assetBase + u.slice(1);
+      if (THEME_ASSET_RE.test(u)) return withVersion(assetBase + u.slice(1), version);
       if (mount && u.startsWith(`${mount}/`)) return raw;
       if (u === "/") return mount ? `${mount}/` : raw;
       if (mount && STOREFRONT_RE.test(u)) return mount + u;
       return raw;
     }
-    return assetBase + u.replace(/^\.\//, "");
+    return withVersion(assetBase + u.replace(/^\.\//, ""), version);
   };
 }
 
@@ -123,8 +134,8 @@ const SRCSET_ATTR_RE =
   /\b(srcset|data-srcset|imagesrcset)\s*=\s*(?:"([^"]*)"|'([^']*)')/gi;
 const CSS_URL_RE = /url\(\s*(['"]?)([^)'"]+)\1\s*\)/gi;
 
-function rewriteUrls(html: string, assetBase: string, mount: string): string {
-  const fix = makeUrlResolver(assetBase, mount);
+function rewriteUrls(html: string, assetBase: string, mount: string, version = ""): string {
+  const fix = makeUrlResolver(assetBase, mount, version);
   // Protect <script> blocks: theme JS often builds markup like
   // `'<img src="' + img + '"'`, and rewriting that fragment as a real `src`
   // attribute injects the asset base into the JS string and breaks it.
@@ -466,11 +477,12 @@ export async function renderThemePage(input: RenderInput): Promise<string> {
   const customization = input.customization ?? EMPTY_CUSTOMIZATION;
   const mount = input.mount.replace(/\/$/, "");
   const assetBase = input.assetBase.endsWith("/") ? input.assetBase : `${input.assetBase}/`;
+  const assetVersion = input.assetVersion ?? "";
   const currency = catalog.shop.currency || "EGP";
   const shopName = input.shopName || catalog.shop.name || "Store";
 
   const asset = (name: unknown) =>
-    `${assetBase}assets/${String(name ?? "").replace(/^\//, "")}`;
+    withVersion(`${assetBase}assets/${String(name ?? "").replace(/^\//, "")}`, assetVersion);
 
   // ---- Theme settings -------------------------------------------------------
   const schema = tryJSON<any[]>(files["config/settings_schema.json"]);
@@ -1351,10 +1363,10 @@ export async function renderThemePage(input: RenderInput): Promise<string> {
   // values, so overrides stay valid whichever prefix the storefront is on.
   if (input.collectLinks) input.collectLinks(scanLinks(html));
   html = applyLinkOverrides(html, customization.links);
-  html = rewriteUrls(html, assetBase, mount);
+  html = rewriteUrls(html, assetBase, mount, assetVersion);
 
   const cssLinks = cssAssets
-    .map((href) => `<link rel="stylesheet" href="${href}" media="all">`)
+    .map((href) => `<link rel="stylesheet" href="${withVersion(href, assetVersion)}" media="all">`)
     .join("");
   const headInject = `<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">${cssLinks}${bridgeScript(mount, currency)}${input.inspect ? inspectScript(mount) : ""}`;
   html = /<head[^>]*>/i.test(html)

@@ -93,6 +93,27 @@ document.addEventListener('DOMContentLoaded',function(){run(collect(document.bod
 })();</script>`;
 }
 
+/** A shared edge-cached page always ships the cart-LESS variant, so its cart
+ *  badge reads empty. This tiny script re-syncs the common cart-count elements
+ *  from /cart.js on load, so a returning shopper with items always sees the
+ *  right count even on a cached shell — independent of whether the CDN honored
+ *  our `Vary: Cookie`. It only ever rewrites numeric/empty badges, never rich
+ *  markup, so it can't corrupt a theme's header. */
+function cartCountSyncScript(mount: string): string {
+  return `<script>(function(){try{
+var M=${JSON.stringify(mount)};
+fetch(M+'/cart.js',{headers:{accept:'application/json'},credentials:'same-origin'}).then(function(r){return r.ok?r.json():null;}).then(function(c){
+if(!c)return;var n=c.item_count||0;
+var sel='[data-cart-count],[data-cart-item-count],.cart-count,.cart-count-bubble,.js-cart-count,.cart-link__bubble,.site-header__cart-count,.header__cart-count,#cart-icon-bubble .cart-count-bubble';
+var els=document.querySelectorAll(sel);
+for(var i=0;i<els.length;i++){var e=els[i];var t=(e.textContent||'').trim();
+if(e.children.length===0&&(t===''||/^[0-9]+$/.test(t)))e.textContent=String(n);
+if(n>0){e.removeAttribute&&e.removeAttribute('hidden');e.classList&&e.classList.remove('hidden','visually-hidden');}}
+try{document.dispatchEvent(new CustomEvent('cart:refresh',{bubbles:true,detail:{cart:c}}));}catch(_e){}
+}).catch(function(){});
+}catch(_e){}})();</script>`;
+}
+
 // ---- Image optimization -----------------------------------------------------
 /** Route a Supabase-hosted raster image through Next's optimizer (WebP + resize).
  *  Non-Supabase, non-raster, SVG and data: URLs are left untouched. */
@@ -120,17 +141,59 @@ function optimizeUrl(src: string, w = 1200): string {
   return src;
 }
 
-/** Rewrite every <img> in rendered HTML to serve an optimized WebP src. */
+/** Width a `srcset` descriptor asks for (`600w` → 600, `2x` → ~2× a base).
+ *  Capped so we never encode anything larger than a full-bleed hero. */
+function descriptorWidth(descriptor: string): number {
+  const w = /^(\d+)w$/i.exec(descriptor);
+  if (w) return Math.min(1600, Math.max(64, parseInt(w[1], 10)));
+  const x = /^(\d+(?:\.\d+)?)x$/i.exec(descriptor);
+  if (x) return Math.min(1600, Math.round(parseFloat(x[1]) * 800));
+  return 1200;
+}
+
+/** Optimize every candidate URL in a `srcset`, sized to its own descriptor.
+ *  The uploaded themes emit a `srcset` whose entries all point at the SAME
+ *  full-size image (their `image_url: width:` filter ignores the width), so the
+ *  descriptors were a lie. Re-encoding each candidate at the width it claims
+ *  makes the `srcset` honest — the browser, guided by the theme's own layout
+ *  `sizes`, now downloads a right-sized WebP instead of the full raster. */
+function optimizeSrcset(value: string): string {
+  return value
+    .split(",")
+    .map((part) => {
+      const seg = part.trim();
+      if (!seg) return "";
+      let url = seg;
+      let descriptor = "";
+      const sp = seg.lastIndexOf(" ");
+      if (sp > 0 && /^\d+(?:\.\d+)?[wx]$/i.test(seg.slice(sp + 1).trim())) {
+        url = seg.slice(0, sp).trim();
+        descriptor = seg.slice(sp + 1).trim();
+      }
+      const opt = optimizeUrl(url, descriptorWidth(descriptor));
+      return descriptor ? `${opt} ${descriptor}` : opt;
+    })
+    .filter(Boolean)
+    .join(", ");
+}
+
+/** Rewrite every <img> in rendered HTML to serve optimized WebP: the `src` and,
+ *  crucially, each `srcset` candidate at its own width. The theme's `sizes`
+ *  attribute is preserved so responsive selection stays layout-correct. */
 function optimizeImages(html: string): string {
   let out = html.replace(/<img\b[^>]*>/gi, (tag) => {
+    let t = tag;
     const m = tag.match(/\ssrc\s*=\s*["']([^"']+)["']/i);
-    if (!m) return tag;
-    const opt = optimizeUrl(m[1]);
-    if (opt === m[1]) return tag; // not eligible — leave as-is
-    let t = tag.replace(/\ssrc\s*=\s*["'][^"']+["']/i, ` src="${opt}"`);
-    // Drop the theme's own srcset/sizes so the optimized WebP src is what loads.
-    t = t.replace(/\ssrcset\s*=\s*["'][^"']*["']/i, "");
-    t = t.replace(/\ssizes\s*=\s*["'][^"']*["']/i, "");
+    if (m) {
+      const opt = optimizeUrl(m[1]);
+      if (opt !== m[1]) t = t.replace(/\ssrc\s*=\s*["'][^"']+["']/i, ` src="${opt}"`);
+    }
+    // Keep (don't strip) srcset/sizes — re-point each srcset URL at an optimized,
+    // correctly-sized WebP so the responsive image machinery actually pays off.
+    t = t.replace(/\ssrcset\s*=\s*["']([^"']*)["']/i, (_m, val: string) => {
+      const next = optimizeSrcset(val);
+      return next ? ` srcset="${next}"` : "";
+    });
     return t;
   });
 
@@ -145,11 +208,14 @@ function optimizeImages(html: string): string {
     const m = tag.match(/\shref\s*=\s*["']([^"']+)["']/i);
     if (!m) return tag;
     const opt = optimizeUrl(m[1]);
-    if (opt === m[1]) return tag;
-    let t = tag.replace(/\shref\s*=\s*["'][^"']+["']/i, ` href="${opt}"`);
-    // The <img> lost its srcset, so a preload keyed to one would never match.
-    t = t.replace(/\simagesrcset\s*=\s*["'][^"']*["']/i, "");
-    t = t.replace(/\simagesizes\s*=\s*["'][^"']*["']/i, "");
+    let t = opt === m[1] ? tag : tag.replace(/\shref\s*=\s*["'][^"']+["']/i, ` href="${opt}"`);
+    // The <img> now keeps an optimized srcset, so optimize the preload's
+    // imagesrcset the same way (and leave imagesizes as authored). The preloaded
+    // resource then matches exactly what the browser selects — no double fetch.
+    t = t.replace(/\simagesrcset\s*=\s*["']([^"']*)["']/i, (_m, val: string) => {
+      const next = optimizeSrcset(val);
+      return next ? ` imagesrcset="${next}"` : "";
+    });
     return t;
   });
 
@@ -291,6 +357,12 @@ export type MountConfig = {
   /** URL prefix, no trailing slash — e.g. "/shop". */
   mount: string;
   shopName?: string;
+  /**
+   * Allow the CDN to cache shared, non-personalized responses at the edge.
+   * Only the *public* storefront sets this — the admin theme preview must never
+   * cache, so a merchant always sees their edits instantly.
+   */
+  edgeCache?: boolean;
 };
 
 // ---- Cookie helpers ---------------------------------------------------------
@@ -332,20 +404,34 @@ function clampLinesToStock(catalog: any, lines: CartLine[]): CartLine[] {
 
 const HTML = "text/html; charset=utf-8";
 
-function html(body: string, status = 200, cookie?: string): Response {
+// ---- Cache policy -----------------------------------------------------------
+export const NO_STORE = "no-store";
+// Shared, catalog-derived responses (product JSON, recommendations, search
+// suggestions): identical for every shopper, so cache them at the edge. A short
+// fresh window keeps stock/price current (matching the 120s catalog cache);
+// stale-while-revalidate keeps TTFB instant by serving the stale copy while a
+// fresh one is fetched in the background.
+export const PUBLIC_SHARED = "public, s-maxage=30, stale-while-revalidate=300";
+
+function html(body: string, status = 200, cookie?: string, cache = NO_STORE): Response {
+  // Never let a response that sets a cookie be shared-cached.
+  const cc = cookie ? NO_STORE : cache;
   const headers: Record<string, string> = {
     "Content-Type": HTML,
-    "Cache-Control": "no-store",
+    "Cache-Control": cc,
   };
+  if (cc !== NO_STORE) headers["Vary"] = "Cookie";
   if (cookie) headers["Set-Cookie"] = cookie;
   return new Response(body, { status, headers });
 }
 
-function json(data: unknown, status = 200, cookie?: string): Response {
+function json(data: unknown, status = 200, cookie?: string, cache = NO_STORE): Response {
+  const cc = cookie ? NO_STORE : cache;
   const headers: Record<string, string> = {
     "Content-Type": "application/json; charset=utf-8",
-    "Cache-Control": "no-store",
+    "Cache-Control": cc,
   };
+  if (cc !== NO_STORE) headers["Vary"] = "Cookie";
   if (cookie) headers["Set-Cookie"] = cookie;
   return new Response(JSON.stringify(data), { status, headers });
 }
@@ -418,6 +504,9 @@ async function storefrontGet(req: Request, config: MountConfig): Promise<Respons
   const { mount, themeId, shopName } = config;
   const { path, query } = pathAndQuery(req, mount);
   const lines = readCart(req);
+  // Cache policy for catalog-derived, non-personalized responses. Off (no-store)
+  // for the admin preview, which must always reflect unsaved edits.
+  const shared = config.edgeCache ? PUBLIC_SHARED : NO_STORE;
 
   // The theme's "Buy it now" is a plain link, not a form post:
   //   GET /cart/add?id=<variant>&quantity=1&return_to=/checkout
@@ -439,6 +528,7 @@ async function storefrontGet(req: Request, config: MountConfig): Promise<Respons
 
   // --- Shopify AJAX / JSON endpoints ---------------------------------------
   if (path === "/cart.js" || path === "/cart.json") {
+    // Personalized (this shopper's cart) — never share-cache.
     const catalog = await getStorefrontCatalog(mount);
     return json(cartJson(buildCart(lines, catalog, mount)));
   }
@@ -448,17 +538,17 @@ async function storefrontGet(req: Request, config: MountConfig): Promise<Respons
     const catalog = await getStorefrontCatalog(mount);
     const product = catalog.productByHandle.get(handle);
     if (!product) return json({ error: "not_found" }, 404);
-    return json(product);
+    return json(product, 200, undefined, shared);
   }
 
   // Predictive (typeahead) search: return real matching products so the theme's
   // search dropdown populates as the shopper types.
   if (path === "/search/suggest") {
     const terms = String(query.q ?? "").trim();
-    if (!terms) return html('<div class="predictive-search"></div>');
+    if (!terms) return html('<div class="predictive-search"></div>', 200, undefined, shared);
     const catalog = await getStorefrontCatalog(mount);
     const results = searchProducts(catalog, terms).slice(0, 8);
-    return html(predictiveSearchHtml(results, mount, terms));
+    return html(predictiveSearchHtml(results, mount, terms), 200, undefined, shared);
   }
   // Product recommendations (Shopify's API): power "you may also like" and the
   // bundle widget with real, random products so no collection is required.
@@ -490,10 +580,10 @@ async function storefrontGet(req: Request, config: MountConfig): Promise<Respons
           }))
         : [],
     }));
-    return json({ products: recs });
+    return json({ products: recs }, 200, undefined, shared);
   }
   if (path.startsWith("/recommendations/")) {
-    return html('<div class="predictive-search"></div>');
+    return html('<div class="predictive-search"></div>', 200, undefined, shared);
   }
 
   // --- Checkout handoff to the existing COD flow ---------------------------
@@ -534,7 +624,11 @@ async function storefrontGet(req: Request, config: MountConfig): Promise<Respons
   // Inject the language toggle + Arabic translation, plus a stock guard that
   // caps every quantity stepper to live stock, on every page.
   const stockGuard = await stockGuardScript(mount, path, renderLines);
-  const inject = `${stockGuard}${localizationScript(mount)}`;
+  // Catalogue pages are rendered cart-LESS so they can be shared-cached; re-sync
+  // the cart badge from /cart.js so a returning shopper still sees their real
+  // item count. Only on the public storefront (the admin preview isn't cached).
+  const cartSync = config.edgeCache ? cartCountSyncScript(mount) : "";
+  const inject = `${stockGuard}${localizationScript(mount)}${cartSync}`;
   const withLoc = res.html.includes("</body>")
     ? res.html.replace(/<\/body>/i, `${inject}</body>`)
     : res.html + inject;

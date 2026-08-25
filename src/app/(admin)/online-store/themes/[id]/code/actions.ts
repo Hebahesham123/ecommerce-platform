@@ -138,6 +138,7 @@ export async function saveThemeFile(
       .upload(full, new TextEncoder().encode(content), {
         contentType: mimeForPath(path),
         upsert: true,
+        cacheControl: "31536000",
       });
     if (error) return { ok: false, error: error.message };
 
@@ -173,6 +174,7 @@ export async function revertThemeFile(
       .upload(`${prefix}/${path}`, new TextEncoder().encode(original), {
         contentType: mimeForPath(path),
         upsert: true,
+        cacheControl: "31536000",
       });
     if (upErr) return { ok: false, error: upErr.message };
 

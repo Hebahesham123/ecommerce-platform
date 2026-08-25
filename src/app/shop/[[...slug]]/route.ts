@@ -6,6 +6,11 @@ import {
 import { getPublishedThemeId } from "@/lib/theme-render-service";
 
 export const dynamic = "force-dynamic";
+// Run this function in Frankfurt, colocated with the Supabase database
+// (eu-central-1) and close to the Egypt/MENA audience. Every per-request DB
+// round trip is now local instead of crossing the Atlantic from Virginia.
+// If the database region ever changes, update this and vercel.json to match.
+export const preferredRegion = "fra1";
 
 const MOUNT = "/shop";
 
@@ -16,7 +21,9 @@ const NO_THEME = `<!doctype html><html><head><meta charset="utf-8"><meta name="v
 
 async function config(): Promise<MountConfig | null> {
   const themeId = await getPublishedThemeId();
-  return themeId ? { themeId, mount: MOUNT } : null;
+  // Public storefront: let the CDN edge-cache shared, non-personalized responses
+  // (see storefront-handler). The admin preview route deliberately omits this.
+  return themeId ? { themeId, mount: MOUNT, edgeCache: true } : null;
 }
 
 function noTheme(): Response {

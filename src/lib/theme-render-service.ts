@@ -24,7 +24,37 @@ const BUCKET = "themes";
 // this cache explicitly, so it can be held far longer than a guessed refresh.
 const BUNDLE_TTL_MS = 30 * 60_000;
 
-type StoredFile = { path: string; url: string };
+// ---- Hot-path lookup caches -------------------------------------------------
+// These three lookups are the SAME for every shopper and change only when the
+// merchant publishes a theme / edits the customizer / toggles the pixel — yet
+// they used to run a Supabase round trip on *every single page view*. From a
+// compute region that isn't colocated with the database that is ~3 serial
+// cross-region round trips added to every request's TTFB. Cache them in memory
+// with a short TTL (self-heals within a minute) plus explicit invalidation from
+// the admin actions that change them, so a warm instance serves pages without
+// touching the database at all.
+const LOOKUP_TTL_MS = 60_000;
+
+let publishedThemeCache: { at: number; id: string | null } | null = null;
+/** Forget the published-theme id (call after publish/unpublish/delete). */
+export function invalidatePublishedTheme(): void {
+  publishedThemeCache = null;
+}
+
+let pixelCache: { at: number; snippet: string } | null = null;
+/** Forget the cached Meta Pixel snippet (call after the pixel is changed). */
+export function invalidatePixelSnippet(): void {
+  pixelCache = null;
+}
+
+const customizationCache = new Map<string, { at: number; value: ThemeCustomization }>();
+/** Forget a theme's cached customization (call after the customizer saves). */
+export function invalidateCustomization(id?: string): void {
+  if (id) customizationCache.delete(id);
+  else customizationCache.clear();
+}
+
+type StoredFile = { path: string; url: string; mtime?: string };
 
 // ---- Theme bundle (sources + asset base), cached in memory ------------------
 type LiquidBundle = {
@@ -33,6 +63,8 @@ type LiquidBundle = {
   files: FileMap;
   assetBase: string;
   cssAssets: string[];
+  /** Cache-busting token appended to asset URLs (newest file mtime). */
+  version: string;
 };
 type StaticBundle = {
   kind: "static";
@@ -107,22 +139,42 @@ async function writeBundleBlob(id: string, bundle: Bundle): Promise<void> {
 
 async function listAll(prefix: string): Promise<StoredFile[]> {
   const supabase = getServerSupabase();
+  type Item = {
+    name: string;
+    id: string | null;
+    updated_at?: string;
+    metadata?: { lastModified?: string } | null;
+  };
   async function walk(dir: string): Promise<StoredFile[]> {
     const { data } = await supabase.storage.from(BUCKET).list(dir, { limit: 1000 });
     if (!data) return [];
     const out: StoredFile[] = [];
-    for (const item of data as { name: string; id: string | null }[]) {
+    for (const item of data as Item[]) {
       const full = dir ? `${dir}/${item.name}` : item.name;
       if (item.id === null) out.push(...(await walk(full)));
       else
         out.push({
           path: full.slice(prefix.length + 1),
           url: supabase.storage.from(BUCKET).getPublicUrl(full).data.publicUrl,
+          mtime: item.updated_at ?? item.metadata?.lastModified ?? undefined,
         });
     }
     return out;
   }
   return walk(prefix);
+}
+
+/** A short cache-busting token for a theme's assets: the newest file mtime.
+ *  Changes whenever any file is (re)uploaded or edited in place, so a 1-year
+ *  immutable asset cache never serves a stale file after an edit. */
+function assetVersionOf(files: StoredFile[]): string {
+  let latest = 0;
+  for (const f of files) {
+    if (!f.mtime) continue;
+    const t = Date.parse(f.mtime);
+    if (Number.isFinite(t) && t > latest) latest = t;
+  }
+  return latest ? Math.floor(latest / 1000).toString(36) : "";
 }
 
 async function loadBundle(
@@ -207,6 +259,7 @@ async function loadBundle(
       cssAssets: all
         .filter((f) => /^assets\/[^/]+\.css$/i.test(rel(f.path)))
         .map((f) => f.url),
+      version: assetVersionOf(all),
     };
   }
 
@@ -245,22 +298,29 @@ function resolveOverrideKeys(
  */
 export async function loadCustomization(themeId: string): Promise<ThemeCustomization> {
   if (!isSupabaseConfigured()) return EMPTY_CUSTOMIZATION;
-  try {
-    const supabase = getServerSupabase();
-    const { data, error } = await supabase
-      .from("theme_customizations")
-      .select("settings, sections, links")
-      .eq("theme_id", themeId)
-      .maybeSingle();
-    if (error || !data) return EMPTY_CUSTOMIZATION;
-    return {
-      settings: (data.settings ?? {}) as Record<string, unknown>,
-      sections: (data.sections ?? {}) as ThemeCustomization["sections"],
-      links: Array.isArray(data.links) ? (data.links as ThemeCustomization["links"]) : [],
-    };
-  } catch {
-    return EMPTY_CUSTOMIZATION;
-  }
+  const hit = customizationCache.get(themeId);
+  if (hit && Date.now() - hit.at < LOOKUP_TTL_MS) return hit.value;
+  const resolve = async (): Promise<ThemeCustomization> => {
+    try {
+      const supabase = getServerSupabase();
+      const { data, error } = await supabase
+        .from("theme_customizations")
+        .select("settings, sections, links")
+        .eq("theme_id", themeId)
+        .maybeSingle();
+      if (error || !data) return EMPTY_CUSTOMIZATION;
+      return {
+        settings: (data.settings ?? {}) as Record<string, unknown>,
+        sections: (data.sections ?? {}) as ThemeCustomization["sections"],
+        links: Array.isArray(data.links) ? (data.links as ThemeCustomization["links"]) : [],
+      };
+    } catch {
+      return EMPTY_CUSTOMIZATION;
+    }
+  };
+  const value = await resolve();
+  customizationCache.set(themeId, { at: Date.now(), value });
+  return value;
 }
 
 /** The customizer's editable view of a theme: sections, settings, templates. */
@@ -278,6 +338,8 @@ export async function getThemeMap(
 
 // ---- Meta Pixel -------------------------------------------------------------
 async function getPixelSnippet(): Promise<string> {
+  if (pixelCache && Date.now() - pixelCache.at < LOOKUP_TTL_MS) return pixelCache.snippet;
+  let snippet = "";
   try {
     const supabase = getServerSupabase();
     const { data } = await supabase
@@ -285,11 +347,12 @@ async function getPixelSnippet(): Promise<string> {
       .select("pixel_id, pixel_enabled")
       .eq("id", "default")
       .single();
-    if (data?.pixel_enabled && data?.pixel_id) return pixelBaseCode(data.pixel_id as string);
+    if (data?.pixel_enabled && data?.pixel_id) snippet = pixelBaseCode(data.pixel_id as string);
   } catch {
     /* no pixel configured */
   }
-  return "";
+  pixelCache = { at: Date.now(), snippet };
+  return snippet;
 }
 
 function injectHead(html: string, snippet: string): string {
@@ -309,27 +372,34 @@ function injectBase(html: string, base: string): string {
 // ---- Which theme is live ----------------------------------------------------
 export async function getPublishedThemeId(): Promise<string | null> {
   if (!isSupabaseConfigured()) return null;
-  try {
-    const supabase = getServerSupabase();
-    const { data } = await supabase
-      .from("themes")
-      .select("id")
-      .eq("is_current", true)
-      .limit(1)
-      .maybeSingle();
-    if (data?.id) return String(data.id);
-    // Nothing published yet — fall back to the most recent upload so the
-    // storefront still has something to show.
-    const { data: latest } = await supabase
-      .from("themes")
-      .select("id")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    return latest?.id ? String(latest.id) : null;
-  } catch {
-    return null;
-  }
+  if (publishedThemeCache && Date.now() - publishedThemeCache.at < LOOKUP_TTL_MS)
+    return publishedThemeCache.id;
+  const resolve = async (): Promise<string | null> => {
+    try {
+      const supabase = getServerSupabase();
+      const { data } = await supabase
+        .from("themes")
+        .select("id")
+        .eq("is_current", true)
+        .limit(1)
+        .maybeSingle();
+      if (data?.id) return String(data.id);
+      // Nothing published yet — fall back to the most recent upload so the
+      // storefront still has something to show.
+      const { data: latest } = await supabase
+        .from("themes")
+        .select("id")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return latest?.id ? String(latest.id) : null;
+    } catch {
+      return null;
+    }
+  };
+  const id = await resolve();
+  publishedThemeCache = { at: Date.now(), id };
+  return id;
 }
 
 // ---- Route dispatch ---------------------------------------------------------
@@ -530,6 +600,7 @@ export async function renderStorefront(
     const html = await renderThemePage({
       files,
       assetBase: bundle.assetBase,
+      assetVersion: bundle.version,
       mount,
       catalog,
       route,

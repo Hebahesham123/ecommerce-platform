@@ -4,7 +4,7 @@ import JSZip from "jszip";
 import { revalidatePath } from "next/cache";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
 import { mimeForPath, pickEntry, type Theme, type ThemeStatus } from "@/lib/themes";
-import { purgeThemeBundle } from "@/lib/theme-render-service";
+import { purgeThemeBundle, invalidatePublishedTheme } from "@/lib/theme-render-service";
 
 const BUCKET = "themes";
 
@@ -98,6 +98,9 @@ export async function uploadTheme(form: FormData): Promise<ThemeResult<Theme>> {
           .upload(`${themeId}/${rel}`, bytes, {
             contentType: mimeForPath(rel),
             upsert: true,
+            // Theme assets are immutable per URL (edits bust via the ?v= token
+            // the renderer appends), so let browsers/CDN keep them for a year.
+            cacheControl: "31536000",
           });
         if (upErr) return { ok: false, error: upErr.message };
         paths.push(rel);
@@ -112,6 +115,7 @@ export async function uploadTheme(form: FormData): Promise<ThemeResult<Theme>> {
         .upload(`${themeId}/${rel}`, bytes, {
           contentType: "text/html; charset=utf-8",
           upsert: true,
+          cacheControl: "31536000",
         });
       if (upErr) return { ok: false, error: upErr.message };
       entryPath = rel;
@@ -145,6 +149,9 @@ export async function uploadTheme(form: FormData): Promise<ThemeResult<Theme>> {
       return { ok: false, error: error.message };
     }
     await purgeThemeBundle(themeId);
+    // A first upload (with nothing published yet) becomes the storefront's
+    // fallback theme, so drop the cached published-theme id too.
+    invalidatePublishedTheme();
     revalidatePath("/online-store/themes");
     return { ok: true, data: rowToTheme(data) };
   } catch (e) {
@@ -163,6 +170,9 @@ export async function publishTheme(id: string): Promise<ThemeResult> {
       .update({ is_current: true, status: "published" })
       .eq("id", id);
     if (error) return { ok: false, error: error.message };
+    // The live storefront resolves its theme through a cached lookup — force it
+    // to pick up the newly published theme on the next request.
+    invalidatePublishedTheme();
     revalidatePath("/online-store/themes");
     return { ok: true, data: undefined };
   } catch (e) {
@@ -265,6 +275,8 @@ export async function deleteTheme(id: string): Promise<ThemeResult> {
     const { error } = await supabase.from("themes").delete().eq("id", id);
     if (error) return { ok: false, error: error.message };
     await purgeThemeBundle(id);
+    // Deleting the live/fallback theme changes which theme the storefront serves.
+    invalidatePublishedTheme();
     revalidatePath("/online-store/themes");
     return { ok: true, data: undefined };
   } catch (e) {

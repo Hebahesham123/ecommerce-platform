@@ -10,6 +10,7 @@ import {
   type CatalogItem,
   type Named,
 } from "@/lib/meta";
+import { invalidatePixelSnippet } from "@/lib/theme-render-service";
 import { products } from "@/lib/data";
 
 export type MetaResult<T = void> =
@@ -96,6 +97,8 @@ export async function updateSelection(patch: {
 
     const { error } = await supabase.from("meta_connection").update(update).eq("id", "default");
     if (error) return { ok: false, error: error.message };
+    // The storefront injects the pixel snippet from a cached lookup — refresh it.
+    invalidatePixelSnippet();
     revalidatePath("/channels/meta");
     return { ok: true, data: undefined };
   } catch (e) {
@@ -121,6 +124,7 @@ export async function disconnect(): Promise<MetaResult> {
       })
       .eq("id", "default");
     if (error) return { ok: false, error: error.message };
+    invalidatePixelSnippet();
     revalidatePath("/channels/meta");
     return { ok: true, data: undefined };
   } catch (e) {

@@ -7,6 +7,7 @@ import {
   loadCustomization,
   renderStorefront,
   invalidateThemeBundle,
+  invalidateCustomization,
 } from "@/lib/theme-render-service";
 import { getCatalog } from "@/lib/storefront-data";
 import {
@@ -95,6 +96,7 @@ export async function saveCustomization(
     if (error) return { ok: false, error: mapError(error.message) };
     // Rendered output is derived from these values — drop any cached bundle.
     invalidateThemeBundle(themeId);
+    invalidateCustomization(themeId);
     revalidatePath(`/online-store/themes/${themeId}/customize`);
     return { ok: true, data: undefined };
   } catch (e) {
@@ -112,6 +114,7 @@ export async function resetCustomization(themeId: string): Promise<ActionResult>
       .eq("theme_id", themeId);
     if (error) return { ok: false, error: mapError(error.message) };
     invalidateThemeBundle(themeId);
+    invalidateCustomization(themeId);
     revalidatePath(`/online-store/themes/${themeId}/customize`);
     return { ok: true, data: undefined };
   } catch (e) {
