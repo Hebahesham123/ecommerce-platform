@@ -4,7 +4,7 @@ import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
 import { renderThemePage, type FileMap, type RenderRoute } from "@/lib/liquid-render";
 import {
   getCatalog,
-  loadProductDescription,
+  loadProductDetail,
   searchProducts,
   type ProductDrop,
 } from "@/lib/storefront-data";
@@ -443,8 +443,11 @@ export async function renderStorefront(
       (variantId && product.variants.find((v) => v.id === variantId)) ||
       product.selected_or_first_available_variant ||
       null;
-    // Descriptions are kept out of the catalog payload, so fetch this one.
-    const description = await loadProductDescription(product);
+    // Description and gallery are kept out of the catalog payload — fetch the
+    // ones belonging to this product.
+    const detail = await loadProductDetail(product);
+    const images = detail.images.length ? detail.images : (product.images as unknown[]);
+    const featured = (images as unknown[])[0] ?? product.featured_image;
     return {
       type: "product",
       path: `/products/${handle}`,
@@ -452,8 +455,12 @@ export async function renderStorefront(
       page,
       product: {
         ...product,
-        description,
-        content: description,
+        description: detail.description,
+        content: detail.description,
+        images,
+        media: images,
+        featured_image: featured,
+        featured_media: featured,
         selected_variant: variantId ? variant : null,
         selected_or_first_available_variant: variant,
       } as ProductDrop,

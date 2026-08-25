@@ -647,9 +647,12 @@ export async function getCatalog(mount = ""): Promise<Catalog> {
     // Ask for named columns rather than "*": `description` alone is ~40% of the
     // payload and is only ever needed on a single product's page, where it is
     // fetched on demand (loadProductDescriptions below).
+    // `description` and `images` are ~60% of the payload between them and are
+    // only read on a product's own page, where loadProductDetail fetches them.
+    // Listings need the primary image_url, which stays.
     const COLUMNS =
       "id,product_name,variant_title,sku,barcode,category,vendor,product_type," +
-      "tags,price,compare_at_price,status,tracked,image_url,images,created_at," +
+      "tags,price,compare_at_price,status,tracked,image_url,created_at," +
       "updated_at,inventory_levels(on_hand,committed,incoming)";
 
     const { count } = await supabase
@@ -686,24 +689,36 @@ export async function getCatalog(mount = ""): Promise<Catalog> {
 }
 
 /**
- * Fetch the description for one product's rows.
+ * Fetch the parts of a product that are too heavy to keep in the catalog.
  *
- * Descriptions are excluded from the catalog query because they dominate its
- * payload, so the product page pulls back just the one it is about to render.
+ * `description` and the `images` gallery are together ~60% of the catalog
+ * payload but are only ever read on a single product's own page. Listings need
+ * nothing more than the primary `image_url`, which the catalog does carry, so
+ * both are fetched here for the one product about to be rendered.
  */
-export async function loadProductDescription(product: ProductDrop): Promise<string> {
-  if (!isSupabaseConfigured()) return "";
+export async function loadProductDetail(
+  product: ProductDrop,
+): Promise<{ description: string; images: ImageDrop[] }> {
+  const empty = { description: "", images: [] as ImageDrop[] };
+  if (!isSupabaseConfigured()) return empty;
   try {
     const supabase = getServerSupabase();
     const { data } = await supabase
       .from("inventory_items")
-      .select("description")
-      .eq("product_name", String(product.title))
-      .not("description", "is", null)
-      .limit(1);
-    return String(data?.[0]?.description ?? "");
+      .select("description,images,image_url")
+      .eq("product_name", String(product.title));
+    const rows = (data ?? []) as Row[];
+    if (!rows.length) return empty;
+
+    const description = String(rows.find((r) => str(r.description))?.description ?? "");
+    const gallery = imagesOf(rows);
+    const title = String(product.title);
+    return {
+      description,
+      images: gallery.map((src, i) => imageDrop(src, title, i + 1)),
+    };
   } catch {
-    return "";
+    return empty;
   }
 }
 
