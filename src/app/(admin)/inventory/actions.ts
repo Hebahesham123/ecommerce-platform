@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
+import { invalidateCatalog } from "@/lib/storefront-data";
 import type {
   InventoryItem,
   Level,
@@ -159,6 +160,7 @@ export async function createLocation(
       .single();
     if (error) return { ok: false, error: error.message };
     revalidatePath("/inventory/locations");
+    invalidateCatalog();
     revalidatePath("/inventory");
     return { ok: true, data: { id: String(data.id) } };
   } catch (e) {
@@ -197,6 +199,7 @@ export async function deleteLocation(id: string): Promise<ActionResult> {
     const { error } = await supabase.from("locations").delete().eq("id", id);
     if (error) return { ok: false, error: error.message };
     revalidatePath("/inventory/locations");
+    invalidateCatalog();
     revalidatePath("/inventory");
     return { ok: true, data: undefined };
   } catch (e) {
@@ -301,6 +304,7 @@ export async function createItem(
         .eq("item_id", id)
         .eq("location_id", lv.locationId);
     }
+    invalidateCatalog();
     revalidatePath("/inventory");
     return { ok: true, data: { id } };
   } catch (e) {
@@ -343,6 +347,7 @@ export async function createItems(
           .eq("location_id", lv.locationId);
       }
     }
+    invalidateCatalog();
     revalidatePath("/inventory");
     return { ok: true, data: { count: ids.length } };
   } catch (e) {
@@ -362,6 +367,7 @@ export async function updateItem(
       .update(itemToRow(item))
       .eq("id", id);
     if (error) return { ok: false, error: error.message };
+    invalidateCatalog();
     revalidatePath("/inventory");
     return { ok: true, data: undefined };
   } catch (e) {
@@ -375,6 +381,7 @@ export async function deleteItem(id: string): Promise<ActionResult> {
     const supabase = getServerSupabase();
     const { error } = await supabase.from("inventory_items").delete().eq("id", id);
     if (error) return { ok: false, error: error.message };
+    invalidateCatalog();
     revalidatePath("/inventory");
     return { ok: true, data: undefined };
   } catch (e) {
@@ -409,6 +416,7 @@ export async function setLevel(
         { onConflict: "item_id,location_id" },
       );
     if (error) return { ok: false, error: error.message };
+    invalidateCatalog();
     revalidatePath("/inventory");
     return { ok: true, data: undefined };
   } catch (e) {

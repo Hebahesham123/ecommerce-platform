@@ -209,6 +209,54 @@ document.addEventListener("submit",function(e){
   if(f&&f.tagName==="FORM"&&/\\/cart\\//.test(f.getAttribute("action")||""))setTimeout(syncCart,600);
 },true);
 window.sfSyncCart=syncCart;
+// Warm the next page while the shopper is still deciding. Catalogue pages are
+// CDN-cached and carry a browser max-age, so a page fetched on hover is reused
+// straight from cache on click — the navigation costs no network at all.
+// Roughly 300ms of hover intent is a strong click signal; touch devices get it
+// on touchstart, which lands ~100ms before the click.
+(function(){
+  try{
+    var c=navigator.connection;
+    if(c&&(c.saveData||/(^|-)2g$/.test(c.effectiveType||"")))return; // respect metered/slow links
+  }catch(e){}
+  var done={},count=0,timer=null,MAX=25;
+  function eligible(a){
+    if(!a||!a.href||count>=MAX)return null;
+    if(a.hasAttribute("download")||a.target&&a.target!=="_self")return null;
+    var u;try{u=new URL(a.href,location.href)}catch(e){return null}
+    if(u.origin!==location.origin)return null;
+    if(u.hash&&u.pathname===location.pathname)return null;
+    var p=u.pathname;
+    if(M&&p.indexOf(M)!==0)return null;
+    var rest=M?p.slice(M.length):p;
+    // Never warm anything that mutates or is shopper-specific.
+    if(/^\\/(cart|checkout|account)(\\/|$)/.test(rest))return null;
+    if(/\\.(js|json)$/.test(rest))return null;
+    var key=u.href;
+    return done[key]?null:key;
+  }
+  function warm(key){
+    done[key]=1;count++;
+    var l=document.createElement("link");
+    l.rel="prefetch";l.href=key;l.as="document";
+    document.head.appendChild(l);
+  }
+  function onIn(e){
+    var a=e.target&&e.target.closest?e.target.closest("a[href]"):null;
+    var key=eligible(a);
+    if(!key)return;
+    clearTimeout(timer);
+    timer=setTimeout(function(){warm(key)},300);
+  }
+  function onOut(){clearTimeout(timer)}
+  document.addEventListener("mouseover",onIn,{passive:true});
+  document.addEventListener("mouseout",onOut,{passive:true});
+  document.addEventListener("touchstart",function(e){
+    var a=e.target&&e.target.closest?e.target.closest("a[href]"):null;
+    var key=eligible(a);
+    if(key)warm(key);
+  },{passive:true});
+})();
 })();</script>`;
 }
 

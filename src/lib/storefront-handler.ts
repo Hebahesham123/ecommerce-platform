@@ -552,12 +552,17 @@ async function storefrontGet(req: Request, config: MountConfig): Promise<Respons
     status: res.status,
     headers: {
       "Content-Type": HTML,
-      // s-maxage lets the shared CDN answer instead of the origin;
-      // stale-while-revalidate means the refresh happens in the background so
-      // nobody ever waits for it. max-age=0 keeps the browser itself honest, so
-      // a price change is never pinned in someone's local cache.
+      // stale-while-revalidate is what makes this fast: the edge always answers
+      // immediately and refreshes in the background, so s-maxage governs how
+      // stale a page may be, NOT how fast it is served. That makes a short
+      // window nearly free — 15s instead of 60s costs no perceived speed and
+      // means a price or stock edit reaches shoppers four times sooner.
+      //
+      // The matching browser max-age lets a prefetched page be reused on click
+      // without a revalidation round trip, which is what makes navigation feel
+      // instant. It also bounds how long one shopper can hold a stale price.
       "Cache-Control": cacheable
-        ? "public, max-age=0, s-maxage=60, stale-while-revalidate=86400"
+        ? "public, max-age=15, s-maxage=15, stale-while-revalidate=86400"
         : "private, no-store",
     },
   });
