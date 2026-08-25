@@ -506,19 +506,34 @@ async function storefrontGet(req: Request, config: MountConfig): Promise<Respons
 
   const fresh = query.fresh === "1";
   const inspect = query.inspect === "1";
+
+  /**
+   * Catalogue pages hold nothing specific to a shopper: locale and customer are
+   * applied client-side, the cart badge is hydrated from /cart.js, and the only
+   * other cart trace was the stock map below listing the cart's variants.
+   * Rendering them with an empty cart makes the bytes identical for everyone,
+   * which is what lets a shared CDN serve them instead of the origin.
+   *
+   * Cart, checkout and account genuinely differ per shopper and stay private.
+   */
+  const shopperSpecific =
+    /^\/(cart|checkout|account)(?:[/?#]|$)/i.test(path) || inspect || fresh;
+  const cacheable = !shopperSpecific;
+  const renderLines = cacheable ? [] : lines;
+
   const res = await renderStorefront({
     themeId,
     mount,
     path,
     query,
-    cartLines: lines,
+    cartLines: renderLines,
     fresh,
     shopName,
     inspect,
   });
   // Inject the language toggle + Arabic translation, plus a stock guard that
   // caps every quantity stepper to live stock, on every page.
-  const stockGuard = await stockGuardScript(mount, path, lines);
+  const stockGuard = await stockGuardScript(mount, path, renderLines);
   const inject = `${stockGuard}${localizationScript(mount)}`;
   const withLoc = res.html.includes("</body>")
     ? res.html.replace(/<\/body>/i, `${inject}</body>`)
@@ -532,7 +547,20 @@ async function storefrontGet(req: Request, config: MountConfig): Promise<Respons
       // so image-heavy pages stop blocking on every full-size image up front.
       .replace(/<img (?![^>]*\bloading=)/gi, '<img loading="lazy" decoding="async" '),
   );
-  return html(clean, res.status);
+
+  return new Response(clean, {
+    status: res.status,
+    headers: {
+      "Content-Type": HTML,
+      // s-maxage lets the shared CDN answer instead of the origin;
+      // stale-while-revalidate means the refresh happens in the background so
+      // nobody ever waits for it. max-age=0 keeps the browser itself honest, so
+      // a price change is never pinned in someone's local cache.
+      "Cache-Control": cacheable
+        ? "public, max-age=0, s-maxage=60, stale-while-revalidate=86400"
+        : "private, no-store",
+    },
+  });
 }
 
 // ---- POST -------------------------------------------------------------------

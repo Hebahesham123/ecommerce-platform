@@ -181,6 +181,34 @@ var oo=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(){
 try{arguments[1]=fix(arguments[1]);}catch(e){}return oo.apply(this,arguments);};
 document.addEventListener("submit",function(e){var f=e.target;if(f&&f.tagName==="FORM"){
 var a=f.getAttribute("action");var n=fix(a);if(a&&n!==a)f.setAttribute("action",n);}},true);
+// Cart count is fetched here rather than rendered server-side. That keeps every
+// listing page byte-identical for all shoppers, which is what lets the CDN cache
+// them; baking the number in would make each page private to one visitor.
+function paintCart(n){
+  var sel="#cart-badge,.cart-badge,.cart-count,#CartCount,[data-cart-count],.cart-count-bubble span[aria-hidden]";
+  var els=document.querySelectorAll(sel);
+  for(var i=0;i<els.length;i++){
+    els[i].textContent=String(n);
+    els[i].setAttribute("data-cart-count",String(n));
+    if(els[i].hasAttribute("hidden")&&n>0)els[i].removeAttribute("hidden");
+  }
+}
+function syncCart(){
+  try{
+    of_.call(window,M+"/cart.js",{headers:{accept:"application/json"}})
+      .then(function(r){return r.json()})
+      .then(function(c){if(c&&typeof c.item_count==="number")paintCart(c.item_count)})
+      .catch(function(){});
+  }catch(e){}
+}
+if(document.readyState!=="loading")syncCart();else document.addEventListener("DOMContentLoaded",syncCart);
+// Re-read after anything that mutates the cart.
+window.addEventListener("pageshow",syncCart);
+document.addEventListener("submit",function(e){
+  var f=e.target;
+  if(f&&f.tagName==="FORM"&&/\\/cart\\//.test(f.getAttribute("action")||""))setTimeout(syncCart,600);
+},true);
+window.sfSyncCart=syncCart;
 })();</script>`;
 }
 
