@@ -122,17 +122,56 @@ function optimizeUrl(src: string, w = 1200): string {
 
 /** Rewrite every <img> in rendered HTML to serve an optimized WebP src. */
 function optimizeImages(html: string): string {
-  return html.replace(/<img\b[^>]*>/gi, (tag) => {
+  let out = html.replace(/<img\b[^>]*>/gi, (tag) => {
     const m = tag.match(/\ssrc\s*=\s*["']([^"']+)["']/i);
     if (!m) return tag;
     const opt = optimizeUrl(m[1]);
     if (opt === m[1]) return tag; // not eligible — leave as-is
-    let out = tag.replace(/\ssrc\s*=\s*["'][^"']+["']/i, ` src="${opt}"`);
+    let t = tag.replace(/\ssrc\s*=\s*["'][^"']+["']/i, ` src="${opt}"`);
     // Drop the theme's own srcset/sizes so the optimized WebP src is what loads.
-    out = out.replace(/\ssrcset\s*=\s*["'][^"']*["']/i, "");
-    out = out.replace(/\ssizes\s*=\s*["'][^"']*["']/i, "");
-    return out;
+    t = t.replace(/\ssrcset\s*=\s*["'][^"']*["']/i, "");
+    t = t.replace(/\ssizes\s*=\s*["'][^"']*["']/i, "");
+    return t;
   });
+
+  // A theme that preloads its hero still names the ORIGINAL file, while the
+  // <img> above now points at the optimizer. Left alone the browser fetches the
+  // largest image on the page twice — once full size for a preload nothing
+  // consumes, then again optimized — which delays LCP and is what Chrome warns
+  // about ("preloaded ... but not used within a few seconds").
+  out = out.replace(/<link\b[^>]*>/gi, (tag) => {
+    if (!/\brel\s*=\s*["']preload["']/i.test(tag)) return tag;
+    if (!/\bas\s*=\s*["']image["']/i.test(tag)) return tag;
+    const m = tag.match(/\shref\s*=\s*["']([^"']+)["']/i);
+    if (!m) return tag;
+    const opt = optimizeUrl(m[1]);
+    if (opt === m[1]) return tag;
+    let t = tag.replace(/\shref\s*=\s*["'][^"']+["']/i, ` href="${opt}"`);
+    // The <img> lost its srcset, so a preload keyed to one would never match.
+    t = t.replace(/\simagesrcset\s*=\s*["'][^"']*["']/i, "");
+    t = t.replace(/\simagesizes\s*=\s*["'][^"']*["']/i, "");
+    return t;
+  });
+
+  // <picture> sources bypass the <img> rewrite entirely and would win over it.
+  out = out.replace(/<source\b[^>]*>/gi, (tag) => {
+    const m = tag.match(/\ssrcset\s*=\s*["']([^"']+)["']/i);
+    if (!m) return tag;
+    const next = m[1]
+      .split(",")
+      .map((part) => {
+        const t = part.trim();
+        if (!t) return t;
+        const [url, ...rest] = t.split(/\s+/);
+        return [optimizeUrl(url), ...rest].join(" ");
+      })
+      .join(", ");
+    return next === m[1]
+      ? tag
+      : tag.replace(/\ssrcset\s*=\s*["'][^"']+["']/i, ` srcset="${next}"`);
+  });
+
+  return out;
 }
 
 // ---- Bundle / "you may also like" recommendations ---------------------------
