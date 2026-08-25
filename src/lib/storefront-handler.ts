@@ -115,6 +115,17 @@ try{document.dispatchEvent(new CustomEvent('cart:refresh',{bubbles:true,detail:{
 }
 
 // ---- Image optimization -----------------------------------------------------
+// Next's image optimizer returns HTTP 400 for any `w` that isn't one of the
+// widths in `images.deviceSizes ∪ images.imageSizes`. next.config.mjs doesn't
+// override those, so these are Next's defaults. EVERY `w` we hand to
+// /_next/image must be snapped onto this list or the image fails to load.
+const NEXT_WIDTHS = [16, 32, 48, 64, 96, 128, 256, 384, 640, 750, 828, 1080, 1200, 1920, 2048];
+/** Round a requested width UP to the nearest width Next will actually serve. */
+function snapWidth(w: number): number {
+  for (const allowed of NEXT_WIDTHS) if (allowed >= w) return allowed;
+  return NEXT_WIDTHS[NEXT_WIDTHS.length - 1];
+}
+
 /** Route a Supabase-hosted raster image through Next's optimizer (WebP + resize).
  *  Non-Supabase, non-raster, SVG and data: URLs are left untouched. */
 function optimizeUrl(src: string, w = 1200): string {
@@ -134,9 +145,10 @@ function optimizeUrl(src: string, w = 1200): string {
     if (/[?&]width=/i.test(src)) return src; // already sized
     return src + (src.includes("?") ? "&" : "?") + "width=" + w;
   }
-  // Merchant uploads on Supabase go through Next's optimizer -> WebP.
+  // Merchant uploads on Supabase go through Next's optimizer -> WebP. The width
+  // MUST be one Next allows, else it 400s and the image never loads.
   if (/(^|\.)supabase\.co$/i.test(host)) {
-    return `/_next/image?url=${encodeURIComponent(src)}&w=${w}&q=75`;
+    return `/_next/image?url=${encodeURIComponent(src)}&w=${snapWidth(w)}&q=75`;
   }
   return src;
 }
