@@ -20,6 +20,7 @@ import {
   type CartLine,
 } from "@/lib/storefront-cart";
 import { searchProducts, type ProductDrop } from "@/lib/storefront-data";
+import { getServerSupabase } from "@/lib/supabase/server";
 
 const escHtml = (s: string) =>
   s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] as string);
@@ -441,6 +442,47 @@ function clampLinesToStock(catalog: any, lines: CartLine[]): CartLine[] {
   return out;
 }
 
+/**
+ * Clamp a cart to live stock without building the catalog.
+ *
+ * A form post that ends in a redirect needs nothing but the caps for the
+ * variants in the cart, yet the catalog build fetches every product in the
+ * store — which is what made "Buy it now" wait on a cold instance. AJAX cart
+ * endpoints still need the full catalog, because they answer with cart JSON.
+ */
+async function clampLinesToStockDirect(lines: CartLine[]): Promise<CartLine[]> {
+  if (!lines.length) return lines;
+  try {
+    const { data, error } = await getServerSupabase()
+      .from("inventory_items")
+      .select("id,tracked,inventory_levels(on_hand,committed)")
+      .in(
+        "id",
+        lines.map((l) => l.id),
+      );
+    if (error || !data) return lines; // never block a shopper on a stock read
+    const caps = new Map<string, number>();
+    for (const r of data as any[]) {
+      const available = (r.inventory_levels ?? []).reduce(
+        (s: number, l: any) => s + Math.max(0, Number(l.on_hand ?? 0) - Number(l.committed ?? 0)),
+        0,
+      );
+      caps.set(String(r.id), r.tracked === false ? Infinity : available);
+    }
+    const out: CartLine[] = [];
+    for (const l of lines) {
+      // A variant missing from the result no longer exists — drop it.
+      const cap = caps.get(l.id);
+      if (cap === undefined) continue;
+      const q = Math.min(l.quantity, cap);
+      if (q > 0) out.push({ id: l.id, quantity: q });
+    }
+    return out;
+  } catch {
+    return lines;
+  }
+}
+
 const HTML = "text/html; charset=utf-8";
 
 // ---- Cache policy -----------------------------------------------------------
@@ -789,11 +831,13 @@ async function storefrontPost(req: Request, config: MountConfig): Promise<Respon
     } else if (id) {
       next = addLine(next, id, qty);
     }
-    const catalog = await catalogFor();
     const wanted = next.find((l) => l.id === id)?.quantity ?? 0;
-    next = clampLinesToStock(catalog, next);
-    const cookie = cartCookie(next);
+
+    // Only an AJAX reply needs the catalog, because it answers with cart JSON.
     if (ajax) {
+      const catalog = await catalogFor();
+      next = clampLinesToStock(catalog, next);
+      const cookie = cartCookie(next);
       const cart = cartJson(buildCart(next, catalog, mount));
       const added = (cart.items as any[]).find((i) => String(i.id) === id) ?? null;
       const got = next.find((l) => l.id === id)?.quantity ?? 0;
@@ -808,6 +852,12 @@ async function storefrontPost(req: Request, config: MountConfig): Promise<Respon
       }
       return json(added ?? cart, 200, cookie);
     }
+
+    // A plain form post just redirects, so it clamps against a targeted stock
+    // read — this is the "Buy it now" path, where building the whole catalog
+    // was the wait.
+    next = await clampLinesToStockDirect(next);
+    const cookie = cartCookie(next);
     // "Buy it now" posts the same product form with checkout=1 — skip the cart
     // page and go straight to checkout. If the line was clamped away (sold out
     // or already at the stock ceiling) fall back to the cart so the shopper
@@ -827,13 +877,14 @@ async function storefrontPost(req: Request, config: MountConfig): Promise<Respon
     let id = body.id ? String(body.id) : null;
     if (!id && body.line) id = lineIdAt(lines, Number(body.line) || 0);
     if (id) next = setLine(next, id, qty);
-    const catalog = await catalogFor();
-    next = clampLinesToStock(catalog, next);
-    const cookie = cartCookie(next);
     if (ajax) {
+      const catalog = await catalogFor();
+      next = clampLinesToStock(catalog, next);
+      const cookie = cartCookie(next);
       return json(cartJson(buildCart(next, catalog, mount)), 200, cookie);
     }
-    return redirect(`${mount}/cart`, cookie);
+    next = await clampLinesToStockDirect(next);
+    return redirect(`${mount}/cart`, cartCookie(next));
   }
 
   if (base === "/cart/clear") {
@@ -860,13 +911,16 @@ async function storefrontPost(req: Request, config: MountConfig): Promise<Respon
       for (const [id, v] of Object.entries(body.updates as Record<string, unknown>))
         next = setLine(next, id, Number(v) || 0);
     }
-    const catalog = await catalogFor();
-    next = clampLinesToStock(catalog, next);
-    const cookie = cartCookie(next);
     if (ajax) {
-      return json(cartJson(buildCart(next, catalog, mount)), 200, cookie);
+      const catalog = await catalogFor();
+      next = clampLinesToStock(catalog, next);
+      return json(cartJson(buildCart(next, catalog, mount)), 200, cartCookie(next));
     }
-    if (body.checkout !== undefined) return redirect(`${mount}/checkout`, cookie);
+    next = await clampLinesToStockDirect(next);
+    const cookie = cartCookie(next);
+    // The cart page's Checkout button — same shortcut as "Buy it now", rather
+    // than bouncing through {mount}/checkout.
+    if (body.checkout !== undefined) return redirect("/store/checkout", cookie);
     return redirect(`${mount}/cart`, cookie);
   }
 
