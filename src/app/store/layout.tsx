@@ -61,6 +61,18 @@ function StoreHeader() {
           <Link href="/store/account" className="hover:text-ink">{ar ? "حسابي" : "Account"}</Link>
         </nav>
         <div className="ms-auto flex items-center gap-2">
+          {/* The nav above is hidden below sm, so mobile gets its own account
+              icon — otherwise there is no way in on a phone. */}
+          <Link
+            href="/store/account"
+            aria-label={ar ? "حسابي" : "Account"}
+            className="rounded-lg p-2 text-ink-muted hover:bg-surface-hover sm:hidden"
+          >
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="8" r="3.5" />
+              <path d="M4.5 20a7.5 7.5 0 0 1 15 0" />
+            </svg>
+          </Link>
           <button onClick={toggle} className="rounded-lg px-2.5 py-1.5 text-sm text-ink-muted hover:bg-surface-hover">
             {ar ? "EN" : "ع"}
           </button>

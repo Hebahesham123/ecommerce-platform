@@ -275,6 +275,33 @@ function recommendationProducts(catalog: any, excludeId: string, limit: number):
   return pool.slice(0, Math.max(0, limit));
 }
 
+// ---- Account entry point (injected on every page) ---------------------------
+/**
+ * The uploaded theme ships no account link, so add one to the header's icon
+ * row next to the cart.
+ *
+ * Injected client-side rather than edited into the theme: re-uploading the
+ * theme can't drop it, and a theme without `.site-header__icons` simply gets
+ * nothing instead of broken markup.
+ */
+function accountLinkScript(mount: string): string {
+  return `<script>(function(){
+  try {
+    var row = document.querySelector(".site-header__icons");
+    if (!row || row.querySelector("[data-bb-account]")) return;
+    var a = document.createElement("a");
+    a.href = ${JSON.stringify(`${mount}/account`)};
+    a.className = "header-icon";
+    a.setAttribute("data-bb-account", "1");
+    a.setAttribute("aria-label", "Account");
+    a.style.cssText = "display:inline-flex;align-items:center;justify-content:center";
+    a.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.5"></circle><path d="M4.5 20a7.5 7.5 0 0 1 15 0"></path></svg>';
+    var cart = row.querySelector('a[href$="/cart"]');
+    if (cart) row.insertBefore(a, cart); else row.appendChild(a);
+  } catch (e) {}
+})();</script>`;
+}
+
 // ---- Quantity stepper stock guard (injected on every page) ------------------
 /** Client script: cap every quantity input to live stock and block the "+" at
  *  the ceiling. The server already refuses to oversell — this keeps the on-page
@@ -599,6 +626,12 @@ async function storefrontGet(req: Request, config: MountConfig): Promise<Respons
   }
 
   // --- Checkout handoff to the existing COD flow ---------------------------
+  // The theme has no account templates of its own — hand account routes to the
+  // React store, which redirects to login when there's no session.
+  if (path === "/account" || path.startsWith("/account/")) {
+    return redirect("/store/account");
+  }
+
   if (path === "/checkout" || path === "/cart/checkout") {
     // /store/checkout reads the same sf_cart cookie server-side, so we can hand
     // straight over — no interstitial page copying the cart into localStorage.
@@ -640,7 +673,8 @@ async function storefrontGet(req: Request, config: MountConfig): Promise<Respons
   // the cart badge from /cart.js so a returning shopper still sees their real
   // item count. Only on the public storefront (the admin preview isn't cached).
   const cartSync = config.edgeCache ? cartCountSyncScript(mount) : "";
-  const inject = `${stockGuard}${localizationScript(mount)}${cartSync}`;
+  // The account icon is identical for every shopper, so it stays cache-safe.
+  const inject = `${stockGuard}${localizationScript(mount)}${cartSync}${accountLinkScript(mount)}`;
   const withLoc = res.html.includes("</body>")
     ? res.html.replace(/<\/body>/i, `${inject}</body>`)
     : res.html + inject;
