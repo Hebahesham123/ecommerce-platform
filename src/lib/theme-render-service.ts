@@ -117,7 +117,12 @@ async function readBundleBlob(id: string): Promise<Bundle | null> {
     const { data, error } = await supabase.storage.from(BUCKET).download(bundleBlobPath(id));
     if (error || !data) return null;
     const parsed = JSON.parse(await data.text()) as Bundle;
-    return parsed?.kind === "liquid" || parsed?.kind === "static" ? parsed : null;
+    // A blob written before `version` existed carries none, and an empty token
+    // makes withVersion() a no-op — so assets would be served with a one-year
+    // immutable cache and no way to bust it. Treat such a blob as stale and
+    // rebuild, rather than silently disabling the cache buster indefinitely.
+    if (parsed?.kind === "liquid") return parsed.version ? parsed : null;
+    return parsed?.kind === "static" ? parsed : null;
   } catch {
     return null;
   }
