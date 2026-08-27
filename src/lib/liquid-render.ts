@@ -186,10 +186,26 @@ window.Shopify=window.Shopify||{};window.Shopify.shop="";window.Shopify.locale="
 window.Shopify.currency={active:${JSON.stringify(currency)},rate:"1.0"};
 window.Shopify.routes=window.Shopify.routes||{root:M+"/"};window.Shopify.designMode=false;
 window.Shopify.formatMoney=window.Shopify.formatMoney||function(c){return (Number(c)/100).toFixed(2);};
-var of_=window.fetch;if(of_)window.fetch=function(i,o){try{if(typeof i==="string")i=fix(i);
-else if(i&&typeof i.url==="string")i=new Request(fix(i.url),i);}catch(e){}return of_.call(this,i,o);};
+// Anything that changes the cart has to trigger a re-read of the badge below.
+// Themes add to the cart over AJAX (bundle widgets, quick-add, sticky "add to
+// cart"), and those never fire a form submit — without this the count sits at
+// its page-load value until the shopper reloads.
+function mutatesCart(u){
+  try{
+    var p=String(u||"");var q=p.indexOf("?");if(q>=0)p=p.slice(0,q);
+    return /\\/cart\\/(add|change|update|clear)(\\.js|\\.json)?$/.test(p);
+  }catch(e){return false}
+}
+var of_=window.fetch;if(of_)window.fetch=function(i,o){var u="";
+try{if(typeof i==="string"){u=fix(i);i=u;}
+else if(i&&typeof i.url==="string"){u=fix(i.url);i=new Request(u,i);}}catch(e){}
+var p=of_.call(this,i,o);
+try{if(mutatesCart(u))p.then(function(r){if(r&&r.ok)queueSync();},function(){});}catch(e){}
+return p;};
 var oo=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(){
-try{arguments[1]=fix(arguments[1]);}catch(e){}return oo.apply(this,arguments);};
+try{arguments[1]=fix(arguments[1]);
+if(mutatesCart(arguments[1]))this.addEventListener("load",function(){queueSync();});}catch(e){}
+return oo.apply(this,arguments);};
 document.addEventListener("submit",function(e){var f=e.target;if(f&&f.tagName==="FORM"){
 var a=f.getAttribute("action");var n=fix(a);if(a&&n!==a)f.setAttribute("action",n);}},true);
 // Cart count is fetched here rather than rendered server-side. That keeps every
@@ -212,6 +228,10 @@ function syncCart(){
       .catch(function(){});
   }catch(e){}
 }
+// Coalesce bursts: a theme that fires its own cart events on top of the add
+// request would otherwise re-read /cart.js several times for one click.
+var syncT=null;
+function queueSync(){clearTimeout(syncT);syncT=setTimeout(syncCart,60);}
 if(document.readyState!=="loading")syncCart();else document.addEventListener("DOMContentLoaded",syncCart);
 // Re-read after anything that mutates the cart.
 window.addEventListener("pageshow",syncCart);
@@ -219,6 +239,11 @@ document.addEventListener("submit",function(e){
   var f=e.target;
   if(f&&f.tagName==="FORM"&&/\\/cart\\//.test(f.getAttribute("action")||""))setTimeout(syncCart,600);
 },true);
+// Themes announce their own cart mutations with these; honour them too, so a
+// quick-add that bypasses fetch still repaints the count.
+["cart:refresh","cart:updated","cart-update"].forEach(function(ev){
+  document.addEventListener(ev,queueSync);
+});
 window.sfSyncCart=syncCart;
 // Warm the next page while the shopper is still deciding. Catalogue pages are
 // CDN-cached and carry a browser max-age, so a page fetched on hover is reused
