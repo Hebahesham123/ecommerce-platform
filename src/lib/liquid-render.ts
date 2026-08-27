@@ -230,7 +230,7 @@ window.sfSyncCart=syncCart;
     var c=navigator.connection;
     if(c&&(c.saveData||/(^|-)2g$/.test(c.effectiveType||"")))return; // respect metered/slow links
   }catch(e){}
-  var done={},count=0,timer=null,MAX=25;
+  var done={},count=0,timer=null,MAX=70;
   function eligible(a){
     if(!a||!a.href||count>=MAX)return null;
     if(a.hasAttribute("download")||a.target&&a.target!=="_self")return null;
@@ -267,6 +267,48 @@ window.sfSyncCart=syncCart;
     var key=eligible(a);
     if(key)warm(key);
   },{passive:true});
+
+  // Collection links additionally warm as they scroll into view, so browsing
+  // the collections page leaves every collection the shopper has actually seen
+  // ready to open instantly.
+  //
+  // Deliberately viewport-driven rather than warming all of them on load: at
+  // ~124KB a page, 53 collections is ~6.4MB, which is a lot to spend on mobile
+  // data for someone who opens one of them. The 400px margin still gets each
+  // one warm before it is reachable.
+  try{
+    if(!("IntersectionObserver" in window))return;
+    var io=new IntersectionObserver(function(entries){
+      for(var i=0;i<entries.length;i++){
+        var en=entries[i];
+        if(!en.isIntersecting)continue;
+        io.unobserve(en.target);
+        var key=eligible(en.target);
+        if(key)warm(key);
+      }
+    },{rootMargin:"400px"});
+    var seen={};
+    function observeCollectionLinks(root){
+      var as=(root||document).querySelectorAll?(root||document).querySelectorAll("a[href]"):[];
+      for(var i=0;i<as.length;i++){
+        var a=as[i],h=a.getAttribute("href")||"";
+        // A collection's own page, not the index and not "all".
+        if(!/\\/collections\\/[^\\/?#]+$/.test(h))continue;
+        if(seen[h])continue;
+        seen[h]=1;
+        io.observe(a);
+      }
+    }
+    if(document.readyState!=="loading")observeCollectionLinks(document);
+    else document.addEventListener("DOMContentLoaded",function(){observeCollectionLinks(document)});
+    // Themes reveal collection grids lazily; pick those up too.
+    new MutationObserver(function(ms){
+      for(var i=0;i<ms.length;i++){
+        var added=ms[i].addedNodes;
+        for(var j=0;j<added.length;j++)if(added[j].nodeType===1)observeCollectionLinks(added[j]);
+      }
+    }).observe(document.documentElement,{childList:true,subtree:true});
+  }catch(e){}
 })();
 })();</script>`;
 }
