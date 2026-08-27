@@ -820,18 +820,21 @@ async function storefrontPost(req: Request, config: MountConfig): Promise<Respon
   const catalogFor = async () => getStorefrontCatalog(mount);
 
   if (base === "/cart/add") {
-    const id = String(body.id ?? body.items?.[0]?.id ?? "");
-    const qty = Number(body.quantity ?? body.items?.[0]?.quantity ?? 1) || 1;
-    // Multi-item AJAX add.
-    if (Array.isArray(body.items) && body.items.length) {
-      for (const it of body.items) {
-        const iid = String(it?.id ?? "");
-        if (iid) next = addLine(next, iid, Number(it?.quantity) || 1);
-      }
-    } else if (id) {
-      next = addLine(next, id, qty);
-    }
-    const wanted = next.find((l) => l.id === id)?.quantity ?? 0;
+    // Shopify takes either a single {id, quantity} or a multi-line
+    // {items:[{id, quantity}, ...]} — a bundle widget posts the latter.
+    const multi = Array.isArray(body.items) && body.items.length > 0;
+    const requested: CartLine[] = multi
+      ? (body.items as any[])
+          .map((it) => ({ id: String(it?.id ?? ""), quantity: Number(it?.quantity) || 1 }))
+          // A theme that mangles an id sends "null"/"undefined"/"" — never a line.
+          .filter((it) => it.id && it.id !== "null" && it.id !== "undefined")
+      : (() => {
+          const only = String(body.id ?? "");
+          return only ? [{ id: only, quantity: Number(body.quantity ?? 1) || 1 }] : [];
+        })();
+    const id = requested[0]?.id ?? "";
+
+    for (const it of requested) next = addLine(next, it.id, it.quantity);
 
     // Only an AJAX reply needs the catalog, because it answers with cart JSON.
     if (ajax) {
@@ -839,18 +842,30 @@ async function storefrontPost(req: Request, config: MountConfig): Promise<Respon
       next = clampLinesToStock(catalog, next);
       const cookie = cartCookie(next);
       const cart = cartJson(buildCart(next, catalog, mount));
-      const added = (cart.items as any[]).find((i) => String(i.id) === id) ?? null;
-      const got = next.find((l) => l.id === id)?.quantity ?? 0;
-      // Sold out, or already at the stock ceiling → Shopify-style 422 so the
-      // theme shows an "out of stock" message instead of silently overselling.
-      if (id && wanted > 0 && got === 0) {
+      const inCart = new Map((cart.items as any[]).map((i) => [String(i.id), i]));
+      const added = requested.map((r) => inCart.get(r.id)).filter(Boolean);
+
+      // Nothing asked for actually landed in the cart. Answering 200 here
+      // reports a success the cart never took — the theme then shows its
+      // "added!" toast over an unchanged cart. Shopify answers 422 in both
+      // cases, and themes are written to surface that.
+      if (requested.length && !added.length) {
+        const unknown = requested.every((r) => !catalog.variantById.get(r.id));
         return json(
-          { status: 422, message: "Sold out", description: "Sorry, this item is out of stock." },
+          unknown
+            ? {
+                status: 422,
+                message: "Cannot find variant",
+                description: "Sorry, that item is no longer available.",
+              }
+            : { status: 422, message: "Sold out", description: "Sorry, this item is out of stock." },
           422,
           cookie,
         );
       }
-      return json(added ?? cart, 200, cookie);
+      // Shopify replies with the added line for a single add, and {items:[…]}
+      // for a multi-line one.
+      return json(multi ? { items: added } : (added[0] ?? cart), 200, cookie);
     }
 
     // A plain form post just redirects, so it clamps against a targeted stock
