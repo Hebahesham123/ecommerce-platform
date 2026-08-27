@@ -814,7 +814,10 @@ async function storefrontPost(req: Request, config: MountConfig): Promise<Respon
     // sees what actually happened instead of an empty checkout.
     const addedQty = next.find((l) => l.id === id)?.quantity ?? 0;
     if (body.checkout !== undefined && (!id || addedQty > 0)) {
-      return redirect(`${mount}/checkout`, cookie);
+      // Straight to checkout rather than via {mount}/checkout, which only
+      // exists to bounce here — that hop cost a full round trip on the path a
+      // shopper is most impatient about.
+      return redirect("/store/checkout", cookie);
     }
     return redirect(`${mount}/cart`, cookie);
   }
