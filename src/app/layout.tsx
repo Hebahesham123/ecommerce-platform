@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { Tajawal } from "next/font/google";
 import "./globals.css";
-import { LangProvider } from "@/lib/i18n";
+import { cookies } from "next/headers";
+import { LangProvider, type Lang } from "@/lib/i18n";
 
 // Self-hosted Tajawal (bundled with the app) so an ad/privacy blocker or a
 // flaky network can never stop the font from loading — which used to break the
@@ -22,13 +23,23 @@ export const metadata: Metadata = {
 // Meta Pixel ID — verifying the pixel fires. Move to env/DB once OAuth is wired.
 const META_PIXEL_ID = "1042036368209197";
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // The storefront records the shopper's language in `sf_locale`. Resolving it
+  // here means the first paint — html dir/lang included — is already correct,
+  // instead of rendering Arabic and correcting it after hydration.
+  // No cookie means the admin, which is Arabic-first, so the default stands.
+  const locale = (await cookies()).get("sf_locale")?.value;
+  const initialLang: Lang | undefined =
+    locale === "ar" || locale === "en" ? locale : undefined;
+  const lang: Lang = initialLang ?? "ar";
+  const dir = lang === "ar" ? "rtl" : "ltr";
+
   return (
-    <html lang="ar" dir="rtl" className={tajawal.variable} suppressHydrationWarning>
+    <html lang={lang} dir={dir} className={tajawal.variable} suppressHydrationWarning>
       <head>
         {/* Apply the theme before paint to avoid a flash. Admin defaults to dark
             unless the user picked light; the storefront (/store) stays light. */}
@@ -59,7 +70,7 @@ fbq('track', 'PageView');`,
             __html: `<img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=${META_PIXEL_ID}&ev=PageView&noscript=1" alt="" />`,
           }}
         />
-        <LangProvider>{children}</LangProvider>
+        <LangProvider initialLang={initialLang}>{children}</LangProvider>
       </body>
     </html>
   );

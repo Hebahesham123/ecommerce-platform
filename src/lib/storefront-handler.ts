@@ -80,7 +80,7 @@ function localizationScript(mount: string): string {
 var M=${JSON.stringify(mount)};
 function ck(n){var m=document.cookie.match('(?:^|; )'+n+'=([^;]*)');return m?decodeURIComponent(m[1]):''}
 function setLoc(l){document.cookie='sf_locale='+l+';path=/;max-age=31536000;samesite=lax';location.reload()}
-var L=ck('sf_locale')||'en';
+var L=ck('sf_locale');if(L!=='ar'&&L!=='en'){L='en';document.cookie='sf_locale='+L+';path=/;max-age=31536000;samesite=lax'}
 function toggle(){if(document.getElementById('sf-lang-toggle'))return;var b=document.createElement('button');b.id='sf-lang-toggle';b.type='button';b.textContent=L==='ar'?'EN':'\\u0639\\u0631\\u0628\\u064a';b.style.cssText='position:fixed;z-index:2147483647;bottom:18px;'+(L==='ar'?'left':'right')+':18px;min-width:54px;height:44px;padding:0 14px;border-radius:24px;border:none;background:#111;color:#fff;font:700 14px system-ui;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.28)';b.onclick=function(){setLoc(L==='ar'?'en':'ar')};document.body.appendChild(b)}
 if(document.body)toggle();else document.addEventListener('DOMContentLoaded',toggle);
 if(L!=='ar')return;

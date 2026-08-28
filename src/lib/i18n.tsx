@@ -563,18 +563,39 @@ const dict = {
 
 export type DictKey = keyof typeof dict;
 
-type Ctx = { lang: Lang; dir: "rtl" | "ltr"; t: (k: DictKey) => string; toggle: () => void };
+type Ctx = {
+  lang: Lang;
+  dir: "rtl" | "ltr";
+  t: (k: DictKey) => string;
+  toggle: () => void;
+  /** Set the language outright (the storefront syncs it from `sf_locale`). */
+  setLang: (l: Lang) => void;
+};
 
 const LangContext = createContext<Ctx | null>(null);
 
-export function LangProvider({ children }: { children: ReactNode }) {
-  const [lang, setLang] = useState<Lang>("ar");
+export function LangProvider({
+  children,
+  initialLang,
+}: {
+  children: ReactNode;
+  /**
+   * Language resolved on the server from the storefront's `sf_locale` cookie.
+   * When supplied, the very first render is already in the right language, so
+   * there is no flash of the wrong one — and localStorage must not override it.
+   */
+  initialLang?: Lang;
+}) {
+  const [lang, setLang] = useState<Lang>(initialLang ?? "ar");
 
   useEffect(() => {
+    // The server already knew the language: trusting localStorage here would
+    // re-introduce exactly the flash `initialLang` exists to remove.
+    if (initialLang) return;
     const stored = (typeof window !== "undefined" &&
       window.localStorage.getItem("lang")) as Lang | null;
     if (stored === "ar" || stored === "en") setLang(stored);
-  }, []);
+  }, [initialLang]);
 
   useEffect(() => {
     const dir = lang === "ar" ? "rtl" : "ltr";
@@ -588,6 +609,7 @@ export function LangProvider({ children }: { children: ReactNode }) {
     dir: lang === "ar" ? "rtl" : "ltr",
     t: (k) => dict[k][lang],
     toggle: () => setLang((l) => (l === "ar" ? "en" : "ar")),
+    setLang,
   };
 
   return <LangContext.Provider value={value}>{children}</LangContext.Provider>;

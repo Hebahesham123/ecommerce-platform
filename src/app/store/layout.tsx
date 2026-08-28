@@ -6,9 +6,32 @@ import { useEffect, type ReactNode } from "react";
 import { useI18n, egp } from "@/lib/i18n";
 import { CartProvider, useCart } from "./cart";
 import { IcX } from "@/components/icons";
+import type { Lang } from "@/lib/i18n";
+
+/**
+ * Where "home" is for a shopper: the published theme at /shop, which is what
+ * they were browsing. (/store is the separate React storefront.) Checkout
+ * already uses this convention.
+ */
+const STOREFRONT_HOME = "/shop";
+
+/**
+ * The theme storefront keeps the shopper's chosen language in `sf_locale`, so
+ * that cookie — not this app's localStorage — is the site-wide language. Login,
+ * sign up and the account pages read it here so they open in the same language
+ * the shopper was just browsing in, instead of this app's Arabic default.
+ */
+const LOCALE_COOKIE = "sf_locale";
+
+function writeLocaleCookie(l: Lang) {
+  if (typeof document === "undefined") return;
+  document.cookie = `${LOCALE_COOKIE}=${l};path=/;max-age=31536000;samesite=lax`;
+}
 
 export default function StoreLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  // The language itself is resolved on the server (root layout reads the
+  // storefront's `sf_locale`), so there is nothing to adopt here.
   // Checkout is a standalone funnel (like Shopify's): no shop nav, no footer,
   // no cart drawer — it brings its own header and order summary.
   const bare = pathname?.startsWith("/store/checkout") ?? false;
@@ -42,13 +65,20 @@ export default function StoreLayout({ children }: { children: ReactNode }) {
 }
 
 function StoreHeader() {
-  const { lang, toggle } = useI18n();
+  const { lang, setLang } = useI18n();
   const ar = lang === "ar";
+  // Switching language here must also switch the theme storefront, or the two
+  // halves of the site would disagree the moment the shopper navigates back.
+  const switchLang = () => {
+    const next: Lang = ar ? "en" : "ar";
+    writeLocaleCookie(next);
+    setLang(next);
+  };
   const { count, setOpen } = useCart();
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-white/90 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3">
-        <Link href="/store" className="flex items-center gap-2">
+        <Link href={STOREFRONT_HOME} aria-label={ar ? "الصفحة الرئيسية" : "Home"} className="flex items-center gap-2">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-base font-bold text-white">
             B
           </span>
@@ -73,7 +103,7 @@ function StoreHeader() {
               <path d="M4.5 20a7.5 7.5 0 0 1 15 0" />
             </svg>
           </Link>
-          <button onClick={toggle} className="rounded-lg px-2.5 py-1.5 text-sm text-ink-muted hover:bg-surface-hover">
+          <button onClick={switchLang} className="rounded-lg px-2.5 py-1.5 text-sm text-ink-muted hover:bg-surface-hover">
             {ar ? "EN" : "ع"}
           </button>
           <button
