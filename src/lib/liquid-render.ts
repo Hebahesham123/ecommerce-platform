@@ -39,6 +39,10 @@ export type RenderRoute = {
   searchTerms?: string;
   searchResults?: ProductDrop[];
   cart?: Record<string, unknown>;
+  /** For a custom "page" route: the <title> and the ready-made body HTML that
+   *  drops straight into the theme layout (header/footer come from the theme). */
+  pageTitle?: string;
+  pageBody?: string;
 };
 
 export type RenderInput = {
@@ -780,6 +784,7 @@ export async function renderThemePage(input: RenderInput): Promise<string> {
     if (route.type === "search") return `Search — ${shopName}`;
     if (route.type === "cart") return `Cart — ${shopName}`;
     if (route.type === "404") return `Page not found — ${shopName}`;
+    if (route.type === "page" && route.pageTitle) return `${route.pageTitle} — ${shopName}`;
     return shopName;
   };
 
@@ -1403,9 +1408,15 @@ export async function renderThemePage(input: RenderInput): Promise<string> {
         : [route.type];
 
   let content: string | null = null;
-  for (const name of candidates) {
-    content = await renderTemplate(name);
-    if (content != null) break;
+  // A custom page (e.g. Reviews / Requests) supplies its own body HTML, which we
+  // drop straight into the theme layout so it inherits the store header & footer.
+  if (route.type === "page" && route.pageBody != null) {
+    content = route.pageBody;
+  } else {
+    for (const name of candidates) {
+      content = await renderTemplate(name);
+      if (content != null) break;
+    }
   }
   if (content == null) content = fallbackTemplate(route, catalog, mount, money);
 

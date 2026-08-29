@@ -448,6 +448,11 @@ export type StorefrontRequest = {
    * Lets the code editor render what you are typing without writing it first.
    */
   fileOverrides?: Record<string, string>;
+  /**
+   * A custom page (e.g. Reviews / Requests): its <title> and body HTML are
+   * dropped into the theme layout, so the page inherits the store header/footer.
+   */
+  customPage?: { title: string; body: string };
 };
 
 export type StorefrontResponse = { html: string; status: number };
@@ -562,7 +567,16 @@ export async function renderStorefront(
     return { type: "404", path: req.path, query: req.query, page };
   };
 
-  if (segments.length === 0) {
+  if (req.customPage) {
+    route = {
+      type: "page",
+      path: req.path,
+      query: req.query,
+      page,
+      pageTitle: req.customPage.title,
+      pageBody: req.customPage.body,
+    };
+  } else if (segments.length === 0) {
     route = { type: "index", path: "/", query: req.query, page };
   } else if (segments[0] === "collections") {
     if (segments.length === 1) {

@@ -115,6 +115,57 @@ try{document.dispatchEvent(new CustomEvent('cart:refresh',{bubbles:true,detail:{
 }catch(_e){}})();</script>`;
 }
 
+// ---- Custom storefront pages (Reviews / Requests) ---------------------------
+/** Self-contained customer widgets hosted at public/widgets/*.html, surfaced as
+ *  real storefront pages (path → page title) inside the theme's header/footer. */
+const WIDGET_PAGES: Record<string, string> = {
+  "/reviews": "Reviews",
+  "/requests": "Requests",
+};
+
+/** Absolute origin of this request (correct behind Vercel's proxy and locally).
+ *  Needed because the theme injects a <base href> at its asset host, so a
+ *  root-relative iframe src would wrongly resolve there. */
+function originOf(req: Request): string {
+  const u = new URL(req.url);
+  const proto = req.headers.get("x-forwarded-proto") || u.protocol.replace(":", "") || "https";
+  const host = req.headers.get("x-forwarded-host") || req.headers.get("host") || u.host;
+  return `${proto}://${host}`;
+}
+
+/** Body HTML for a widget page: the widget in an isolated, auto-sized iframe.
+ *  Dropped into the theme layout so the store header/footer wrap it. The iframe
+ *  is same-origin, so a tiny script can size it to its content (no inner scroll). */
+function widgetPageBody(origin: string, slug: string, title: string): string {
+  const src = `${origin}/widgets/${slug}.html`;
+  return `<div style="max-width:960px;margin:0 auto;padding:28px 16px 64px">
+<iframe id="bb-widget-frame" src="${src}" title="${escHtml(title)}" loading="lazy" scrolling="no" style="width:100%;min-height:820px;border:0;border-radius:16px;background:#fff;box-shadow:0 6px 24px rgba(0,0,0,.06);display:block"></iframe>
+</div>
+<script>(function(){var f=document.getElementById('bb-widget-frame');if(!f)return;function fit(){try{var d=f.contentWindow.document;var h=Math.max(d.body.scrollHeight,d.documentElement.scrollHeight);if(h>0)f.style.height=(h+24)+'px';}catch(e){}}f.addEventListener('load',fit);setInterval(fit,700);})();</script>`;
+}
+
+/** Best-effort: add Reviews & Requests into the theme's menu by cloning an
+ *  existing menu item so they inherit its styling. Purely additive + idempotent;
+ *  if no menu is found it does nothing (the pages still work by direct link, and
+ *  can be added natively from the dashboard's Navigation page). */
+function navLinksScript(mount: string): string {
+  return `<script>(function(){try{
+var M=${JSON.stringify(mount)};
+var LINKS=[['/reviews','Reviews'],['/requests','Requests']];
+function fill(li,href,label){var a=li.querySelector('a');if(!a)return false;a.setAttribute('href',href);a.removeAttribute('aria-expanded');a.removeAttribute('aria-current');var sp=a.querySelector('span');if(sp){sp.textContent=label;}else{a.textContent=label;}return true;}
+function addTo(list){
+  if(!list||list.__bbNav)return;
+  var kids=list.children,tpl=null;
+  for(var i=0;i<kids.length;i++){if(kids[i].tagName==='LI'&&kids[i].querySelector('a[href]')){tpl=kids[i];break;}}
+  if(!tpl)return; list.__bbNav=1;
+  LINKS.forEach(function(p){var href=M+p[0];if(list.querySelector('a[href="'+href+'"]'))return;var li=tpl.cloneNode(true);var subs=li.querySelectorAll('ul,details,summary,[class*=submenu],[class*=mega],[class*=dropdown]');for(var j=0;j<subs.length;j++)subs[j].remove();li.removeAttribute('aria-expanded');if(fill(li,href,p[1]))list.appendChild(li);});
+}
+function scan(){var ls=document.querySelectorAll('.list-menu,.menu-drawer__menu,.header__inline-menu ul,nav ul,ul[class*=menu],[class*=menu] > ul');for(var i=0;i<ls.length;i++)addTo(ls[i]);}
+if(document.readyState!=='loading')scan();else document.addEventListener('DOMContentLoaded',scan);
+setTimeout(scan,700);setTimeout(scan,1800);
+}catch(e){}})();</script>`;
+}
+
 // ---- Image optimization -----------------------------------------------------
 // Next's image optimizer returns HTTP 400 for any `w` that isn't one of the
 // widths in `images.deviceSizes ∪ images.imageSizes`. next.config.mjs doesn't
@@ -698,6 +749,13 @@ async function storefrontGet(req: Request, config: MountConfig): Promise<Respons
   const cacheable = !shopperSpecific;
   const renderLines = cacheable ? [] : lines;
 
+  // Reviews / Requests: our hosted widgets, rendered as real pages inside the
+  // theme (header/footer inherited from the store).
+  const widgetTitle = WIDGET_PAGES[path];
+  const customPage = widgetTitle
+    ? { title: widgetTitle, body: widgetPageBody(originOf(req), path.slice(1), widgetTitle) }
+    : undefined;
+
   const res = await renderStorefront({
     themeId,
     mount,
@@ -707,6 +765,7 @@ async function storefrontGet(req: Request, config: MountConfig): Promise<Respons
     fresh,
     shopName,
     inspect,
+    customPage,
   });
   // Inject the language toggle + Arabic translation, plus a stock guard that
   // caps every quantity stepper to live stock, on every page.
@@ -716,7 +775,8 @@ async function storefrontGet(req: Request, config: MountConfig): Promise<Respons
   // item count. Only on the public storefront (the admin preview isn't cached).
   const cartSync = config.edgeCache ? cartCountSyncScript(mount) : "";
   // The account icon is identical for every shopper, so it stays cache-safe.
-  const inject = `${stockGuard}${localizationScript(mount)}${cartSync}${accountLinkScript(mount)}`;
+  // navLinksScript adds Reviews & Requests into the store menu (both cache-safe).
+  const inject = `${stockGuard}${localizationScript(mount)}${cartSync}${accountLinkScript(mount)}${navLinksScript(mount)}`;
   const withLoc = res.html.includes("</body>")
     ? res.html.replace(/<\/body>/i, `${inject}</body>`)
     : res.html + inject;
