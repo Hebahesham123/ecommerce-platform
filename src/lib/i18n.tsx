@@ -41,6 +41,7 @@ const dict = {
   nav_couriers: { ar: "الشحن والمندوبين", en: "Couriers" },
   nav_inbox: { ar: "المحادثات", en: "Inbox" },
   nav_marketing: { ar: "التسويق", en: "Marketing" },
+  nav_email: { ar: "التسويق بالبريد", en: "Email" },
   nav_reviews: { ar: "التقييمات", en: "Reviews" },
   nav_requests: { ar: "الطلبات والاستفسارات", en: "Requests" },
   reviews_subtitle: { ar: "نموذج تقييم العملاء — مدمج", en: "Customer review form — embedded" },

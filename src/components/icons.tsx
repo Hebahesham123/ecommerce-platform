@@ -105,6 +105,12 @@ export const IcClipboard = (p: P) => (
     <path d="M9 12h6M9 16h4" />
   </svg>
 );
+export const IcMail = (p: P) => (
+  <svg {...base(p)}>
+    <rect x="3" y="5" width="18" height="14" rx="2" />
+    <path d="m3.5 7 8.5 6 8.5-6" />
+  </svg>
+);
 export const IcUp = (p: P) => (
   <svg {...base(p)}>
     <path d="M7 17 17 7M9 7h8v8" />
