@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Share Your Experience</title>
+  <style>
+    html, body { margin: 0; padding: 0; background: #fff7ed; }
+  </style>
+</head>
+<body>
+<div id="rvw-app">
+  <style>
+    #rvw-app * { box-sizing: border-box; }
+    #rvw-app {
+      max-width: 800px; margin: 24px auto; padding: 28px;
+      background: linear-gradient(to bottom, #fff7ed, #ffffff);
+      border-radius: 12px; box-shadow: 0 6px 18px rgba(249,115,22,.15);
+      font-family: 'Poppins', system-ui, sans-serif; color: #1f2937;
+    }
+    #rvw-app .rvw-title { text-align:center; color:#7c2d12; font-size:28px; font-weight:700; margin:0 0 6px; }
+    #rvw-app .rvw-subtitle { text-align:center; font-size:15px; color:#9a3412; margin:0 0 24px; }
+    #rvw-app .rvw-btn {
+      background-color:#f97316; border:none; border-radius:8px; color:#fff; cursor:pointer;
+      font-size:16px; font-weight:600; padding:12px 24px; margin-top:20px; width:100%;
+    }
+    #rvw-app .rvw-btn:hover { background-color:#ea580c; }
+    #rvw-app .rvw-btn:disabled { background-color:#fdba74; cursor:not-allowed; }
+    #rvw-app .rvw-group { margin-bottom:20px; }
+    #rvw-app .rvw-group > label { font-weight:600; color:#7c2d12; margin-bottom:8px; display:block; }
+    #rvw-app .rvw-box { border:1px solid #fed7aa; background-color:#fff7ed; border-radius:10px; padding:16px; margin-bottom:16px; }
+    #rvw-app .rvw-stars { display:flex; flex-direction:row-reverse; justify-content:flex-start; gap:6px; }
+    #rvw-app .rvw-stars input { display:none; }
+    #rvw-app .rvw-stars label {
+      font-size:28px; cursor:pointer; color:transparent; transition:transform .2s ease;
+      -webkit-text-stroke:1px #eab308; margin:0;
+    }
+    #rvw-app .rvw-stars input:checked ~ label,
+    #rvw-app .rvw-stars label:hover,
+    #rvw-app .rvw-stars label:hover ~ label { color:#eab308; transform:scale(1.1); }
+    #rvw-app .rvw-stars label::before { content:"★"; }
+    #rvw-app .rvw-exp { display:flex; gap:10px; margin-top:8px; flex-wrap:wrap; }
+    #rvw-app .rvw-exp input { display:none; }
+    #rvw-app .rvw-exp label {
+      padding:8px 18px; border:2px solid #fed7aa; border-radius:30px; background-color:#fff7ed;
+      color:#7c2d12; font-weight:500; font-size:14px; cursor:pointer; transition:all .3s ease; margin:0;
+    }
+    #rvw-app .rvw-exp input:checked + label { background-color:#f97316; border-color:#f97316; color:#fff; }
+    #rvw-app textarea, #rvw-app input[type="text"] {
+      width:100%; padding:10px; border-radius:6px; border:1px solid #fed7aa;
+      font-size:14px; font-family:inherit; background:#fff;
+    }
+    #rvw-app .rvw-thanks { display:none; text-align:center; padding:60px 20px; animation:rvwFade .6s ease; }
+    #rvw-app .rvw-thanks .rvw-icon { font-size:72px; margin-bottom:16px; animation:rvwPop .6s ease; }
+    #rvw-app .rvw-thanks h2 { color:#7c2d12; font-size:30px; font-weight:700; margin:0 0 10px; }
+    #rvw-app .rvw-thanks p { color:#9a3412; font-size:16px; margin:0 0 24px; }
+    #rvw-app .rvw-thanks .rvw-count { color:#f97316; font-weight:600; font-size:14px; }
+    @keyframes rvwFade { from { opacity:0; transform:translateY(10px);} to { opacity:1; transform:translateY(0);} }
+    @keyframes rvwPop { 0% { transform:scale(.5); opacity:0;} 70% { transform:scale(1.15); opacity:1;} 100% { transform:scale(1);} }
+  </style>
+
+  <!-- FORM VIEW -->
+  <div id="rvw-form-view">
+    <h2 class="rvw-title">Share Your Experience</h2>
+    <p class="rvw-subtitle">Tell us how your journey was with us ✨</p>
+
+    <form id="rvw-form">
+      <div class="rvw-group">
+        <label for="rvw-name">Your Name</label>
+        <input type="text" name="reviewer_name" id="rvw-name" placeholder="Leave blank to stay anonymous">
+      </div>
+
+      <div class="rvw-group rvw-box">
+        <label>Product Quality</label>
+        <div class="rvw-stars">
+          <input type="radio" name="product_rating" id="rvw-pq5" value="5"><label for="rvw-pq5"></label>
+          <input type="radio" name="product_rating" id="rvw-pq4" value="4"><label for="rvw-pq4"></label>
+          <input type="radio" name="product_rating" id="rvw-pq3" value="3"><label for="rvw-pq3"></label>
+          <input type="radio" name="product_rating" id="rvw-pq2" value="2"><label for="rvw-pq2"></label>
+          <input type="radio" name="product_rating" id="rvw-pq1" value="1"><label for="rvw-pq1"></label>
+        </div>
+      </div>
+
+      <div class="rvw-group rvw-box">
+        <label>Shipping Experience</label>
+        <div class="rvw-stars">
+          <input type="radio" name="shipping_rating" id="rvw-sh5" value="5"><label for="rvw-sh5"></label>
+          <input type="radio" name="shipping_rating" id="rvw-sh4" value="4"><label for="rvw-sh4"></label>
+          <input type="radio" name="shipping_rating" id="rvw-sh3" value="3"><label for="rvw-sh3"></label>
+          <input type="radio" name="shipping_rating" id="rvw-sh2" value="2"><label for="rvw-sh2"></label>
+          <input type="radio" name="shipping_rating" id="rvw-sh1" value="1"><label for="rvw-sh1"></label>
+        </div>
+      </div>
+
+      <div class="rvw-group rvw-box">
+        <label>Customer Support</label>
+        <div class="rvw-stars">
+          <input type="radio" name="support_rating" id="rvw-cs5" value="5"><label for="rvw-cs5"></label>
+          <input type="radio" name="support_rating" id="rvw-cs4" value="4"><label for="rvw-cs4"></label>
+          <input type="radio" name="support_rating" id="rvw-cs3" value="3"><label for="rvw-cs3"></label>
+          <input type="radio" name="support_rating" id="rvw-cs2" value="2"><label for="rvw-cs2"></label>
+          <input type="radio" name="support_rating" id="rvw-cs1" value="1"><label for="rvw-cs1"></label>
+        </div>
+      </div>
+
+      <div class="rvw-group rvw-box">
+        <label>Shopping Experience</label>
+        <div class="rvw-exp">
+          <input type="radio" name="experience_level" id="rvw-easy" value="Easy"><label for="rvw-easy">Easy</label>
+          <input type="radio" name="experience_level" id="rvw-medium" value="Medium"><label for="rvw-medium">Medium</label>
+          <input type="radio" name="experience_level" id="rvw-hard" value="Hard"><label for="rvw-hard">Hard</label>
+        </div>
+      </div>
+
+      <div class="rvw-group">
+        <label for="rvw-comment">Your Comment (optional)</label>
+        <textarea id="rvw-comment" name="review_comment" rows="4"></textarea>
+      </div>
+
+      <button type="submit" class="rvw-btn">Submit Review</button>
+    </form>
+  </div>
+
+  <!-- THANK YOU VIEW -->
+  <div id="rvw-thanks" class="rvw-thanks">
+    <div class="rvw-icon">🧡</div>
+    <h2>Thank You!</h2>
+    <p>Your review has been submitted successfully.<br>We truly appreciate your feedback ✨</p>
+    <div class="rvw-count">Returning to the form in <span id="rvw-count-num">5</span> seconds...</div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+  (function () {
+    // PUBLIC project URL + anon key — safe to expose. RLS protects your data.
+    var SUPABASE_URL = "https://vumykpkjirjhdtwlpzwe.supabase.co";
+    var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ1bXlrcGtqaXJqaGR0d2xwendlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyOTczMzQsImV4cCI6MjA5Nzg3MzMzNH0.sJLzH45T_Muox5Lc_zXU6nyw2r4Ea6IrT0zPZt70L8k";
+
+    var EG_FIRST = ["Ahmed","Mohamed","Mahmoud","Mostafa","Omar","Youssef","Khaled","Hassan","Amr","Tarek","Karim","Sherif","Ali","Ibrahim","Hossam","Tamer","Ramy","Wael","Sameh","Adel","Ayman","Hany","Magdy","Mariam","Nour","Habiba","Salma","Farida","Malak","Hana","Layla","Yasmin","Nada","Aya","Esraa","Mai","Dina","Heba","Mona","Rana","Reem","Sara","Amira","Menna","Doaa","Shaimaa","Eman","Asmaa","Noha","Dalia","Hala","Nourhan","Aliaa"];
+    var EG_LAST = ["Hassan","Mohamed","Ibrahim","Mahmoud","Abdelrahman","Farouk","Mansour","Saad","Adel","Gamal","Fathy","Zaki","Sabry","Shawky","Nabil","Fawzy","Lotfy","Helmy","Refaat","ElSayed","AbdelAziz","Kamel","Naguib","Hegazy","Sorour"];
+    function pick(a) { return a[Math.floor(Math.random() * a.length)]; }
+    function randomEgyptianName() { return pick(EG_FIRST) + " " + pick(EG_LAST); }
+
+    function init() {
+      var client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      var form = document.getElementById('rvw-form');
+      if (!form) return;
+      var formView = document.getElementById('rvw-form-view');
+      var thanks = document.getElementById('rvw-thanks');
+      var countNum = document.getElementById('rvw-count-num');
+      var btn = form.querySelector('.rvw-btn');
+
+      function numOrNull(v) { return (v === null || v === "") ? null : Number(v); }
+
+      form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        btn.disabled = true; btn.textContent = "Submitting...";
+
+        var data = new FormData(form);
+        var payload = {
+          reviewer_name: ((data.get('reviewer_name') || '').toString().trim()) || randomEgyptianName(),
+          product_rating: numOrNull(data.get('product_rating')),
+          shipping_rating: numOrNull(data.get('shipping_rating')),
+          support_rating: numOrNull(data.get('support_rating')),
+          experience_level: data.get('experience_level') || null,
+          review_comment: ((data.get('review_comment') || '').toString().trim()) || null
+        };
+
+        var res = await client.from('reviews').insert(payload);
+        btn.disabled = false; btn.textContent = "Submit Review";
+
+        if (res.error) {
+          alert('There was a problem submitting your review: ' + res.error.message);
+          return;
+        }
+
+        formView.style.display = 'none';
+        thanks.style.display = 'block';
+        form.reset();
+
+        var seconds = 5; countNum.textContent = seconds;
+        var t = setInterval(function () {
+          seconds--; countNum.textContent = seconds;
+          if (seconds <= 0) {
+            clearInterval(t);
+            thanks.style.display = 'none';
+            formView.style.display = 'block';
+            countNum.textContent = 5;
+          }
+        }, 1000);
+      });
+    }
+
+    // Wait for the Supabase CDN script to be ready.
+    if (window.supabase && window.supabase.createClient) {
+      init();
+    } else {
+      var check = setInterval(function () {
+        if (window.supabase && window.supabase.createClient) { clearInterval(check); init(); }
+      }, 50);
+    }
+  })();
+</script>
+</body>
+</html>

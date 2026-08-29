@@ -23,6 +23,8 @@ import {
   IcAccounting,
   IcCollection,
   IcMenu,
+  IcStar,
+  IcClipboard,
 } from "./icons";
 import type { ComponentType, SVGProps } from "react";
 
@@ -89,6 +91,8 @@ const groups: Group[] = [
     items: [
       { href: "/inbox", key: "nav_inbox", icon: IcInbox },
       { href: "/marketing", key: "nav_marketing", icon: IcMarketing },
+      { href: "/reviews", key: "nav_reviews", icon: IcStar },
+      { href: "/requests", key: "nav_requests", icon: IcClipboard },
     ],
   },
 ];

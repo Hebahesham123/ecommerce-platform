@@ -93,6 +93,18 @@ export const IcChat = (p: P) => (
     <path d="M9 11h6M9 14h4" />
   </svg>
 );
+export const IcStar = (p: P) => (
+  <svg {...base(p)}>
+    <path d="m12 3 2.6 5.3 5.9.9-4.2 4.1 1 5.8L12 16.9 6.7 19.6l1-5.8-4.2-4.1 5.9-.9L12 3Z" />
+  </svg>
+);
+export const IcClipboard = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M9 4h6a1 1 0 0 1 1 1v1H8V5a1 1 0 0 1 1-1Z" />
+    <path d="M8 5H6a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-2" />
+    <path d="M9 12h6M9 16h4" />
+  </svg>
+);
 export const IcUp = (p: P) => (
   <svg {...base(p)}>
     <path d="M7 17 17 7M9 7h8v8" />
