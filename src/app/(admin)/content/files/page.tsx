@@ -13,6 +13,7 @@ import { listFiles, uploadFile, addFromUrl } from "./actions";
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui";
 import { FileDrawer } from "@/components/file-drawer";
+import { Pagination, usePagination } from "@/components/dashboard-ui";
 import {
   IcSearch,
   IcUpload,
@@ -156,6 +157,9 @@ export default function FilesPage() {
     return r;
   }, [files, filter, q, sort]);
 
+  // Thumbnails are expensive to paint, so only a page of them is mounted.
+  const pg = usePagination(shown, { perPage: 24, resetKey: `${filter}|${q}|${sort}` });
+
   return (
     <>
       <PageHeader
@@ -288,7 +292,7 @@ export default function FilesPage() {
                   <div className="text-[11px] text-ink-soft">{t("uploading")}</div>
                 </div>
               ))}
-              {shown.map((f) => (
+              {pg.items.map((f) => (
                 <div
                   key={f.id}
                   className="group relative cursor-pointer rounded-xl border border-line p-2 transition-shadow hover:shadow-card"
@@ -346,6 +350,8 @@ export default function FilesPage() {
             </div>
           )}
         </div>
+
+        {!loading && <Pagination {...pg} />}
       </Card>
 
       {/* count */}

@@ -11,6 +11,8 @@ import {
   Toolbar,
   SearchInput,
   Select,
+  Pagination,
+  usePagination,
 } from "@/components/dashboard-ui";
 import { IcCourier, IcCash, IcAlert, IcOrders, IcLocation, IcX } from "@/components/icons";
 
@@ -56,6 +58,8 @@ export default function CouriersPage() {
     });
     return sorted;
   }, [q, zone, sort]);
+
+  const pg = usePagination(filtered, { perPage: 12, resetKey: `${q}|${zone}|${sort}` });
 
   const filtersActive = q !== "" || zone !== "all";
   function clearFilters() {
@@ -178,7 +182,7 @@ export default function CouriersPage() {
 
         {filtered.length > 0 ? (
           <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3">
-            {filtered.map((c) => {
+            {pg.items.map((c) => {
               const rate = courierRate(c);
               const barColor =
                 rate >= 90 ? "bg-emerald-400" : rate >= 70 ? "bg-amber-400" : "bg-rose-400";
@@ -272,6 +276,8 @@ export default function CouriersPage() {
             )}
           </div>
         )}
+
+        <Pagination {...pg} />
       </Card>
     </>
   );

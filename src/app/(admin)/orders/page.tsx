@@ -23,14 +23,14 @@ import {
   Toolbar,
   SearchInput,
   Select,
+  Pagination,
+  usePagination,
   type PillTone,
 } from "@/components/dashboard-ui";
 import { IcFile, IcX, IcChevron, IcCash, IcCourier } from "@/components/icons";
 
 type Tab = "all" | "unfulfilled" | "unpaid" | "open" | "attention";
 type SortKey = "newest" | "oldest" | "total_high" | "total_low";
-
-const PAGE_SIZE = 12;
 
 const paymentPill: Record<Payment, PillTone> = {
   pending: "warning",
@@ -67,7 +67,6 @@ export default function OrdersPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [detail, setDetail] = useState<Order | null>(null);
   const [placed, setPlaced] = useState<Row[]>([]);
-  const [page, setPage] = useState(1);
 
   useEffect(() => {
     (async () => {
@@ -177,19 +176,20 @@ export default function OrdersPage() {
     return sorted;
   }, [orders, tab, q, payment, fulfillment, method, sort]);
 
-  useEffect(() => { setPage(1); }, [tab, q, payment, fulfillment, method, sort]);
-  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const safePage = Math.min(page, pageCount);
-  const paged = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const pg = usePagination(filtered, {
+    perPage: 20,
+    resetKey: `${tab}|${q}|${payment}|${fulfillment}|${method}|${sort}`,
+  });
 
   const filtersActive = q !== "" || payment !== "all" || fulfillment !== "all" || method !== "all";
-  const allSelected = filtered.length > 0 && filtered.every((o) => selected.has(o.id));
-  const someSelected = filtered.some((o) => selected.has(o.id));
+  // Bulk selection acts on the visible page, the way every list app behaves.
+  const allSelected = pg.items.length > 0 && pg.items.every((o) => selected.has(o.id));
+  const someSelected = pg.items.some((o) => selected.has(o.id));
 
   function toggleAll() {
-    setSelected((prev) => {
+    setSelected(() => {
       if (allSelected) return new Set();
-      return new Set(filtered.map((o) => o.id));
+      return new Set(pg.items.map((o) => o.id));
     });
   }
   function toggleOne(id: string) {
@@ -293,7 +293,7 @@ export default function OrdersPage() {
               </tr>
             </thead>
             <tbody>
-              {paged.map((o) => {
+              {pg.items.map((o) => {
                 const sel = selected.has(o.id);
                 return (
                   <tr
@@ -364,23 +364,7 @@ export default function OrdersPage() {
           )}
         </div>
 
-        {filtered.length > 0 && pageCount > 1 && (
-          <div className="flex items-center justify-between gap-2 border-t border-line px-5 py-3 text-sm">
-            <span className="text-ink-soft">
-              {num((safePage - 1) * PAGE_SIZE + 1, lang)}–{num(Math.min(safePage * PAGE_SIZE, filtered.length), lang)} {ar ? "من" : "of"} {num(filtered.length, lang)}
-            </span>
-            <div className="flex items-center gap-1">
-              <button onClick={() => setPage(Math.max(1, safePage - 1))} disabled={safePage <= 1} className="btn-ghost h-8 px-2.5 text-xs disabled:opacity-40">{ar ? "السابق" : "Prev"}</button>
-              {Array.from({ length: Math.min(pageCount, 7) }).map((_, i) => {
-                const p = i + 1;
-                return (
-                  <button key={p} onClick={() => setPage(p)} className={`h-8 min-w-8 rounded-lg px-2 text-xs font-medium ${p === safePage ? "bg-brand text-white" : "text-ink-muted hover:bg-surface-hover"}`}>{num(p, lang)}</button>
-                );
-              })}
-              <button onClick={() => setPage(Math.min(pageCount, safePage + 1))} disabled={safePage >= pageCount} className="btn-ghost h-8 px-2.5 text-xs disabled:opacity-40">{ar ? "التالي" : "Next"}</button>
-            </div>
-          </div>
-        )}
+        <Pagination {...pg} />
       </Card>
 
       {detail && (

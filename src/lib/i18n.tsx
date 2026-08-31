@@ -498,6 +498,13 @@ const dict = {
   clear_filters: { ar: "مسح الفلاتر", en: "Clear filters" },
   results_word: { ar: "نتيجة", en: "results" },
 
+  // ---- Pagination (shared footer on every admin list) ----
+  pag_prev: { ar: "السابق", en: "Prev" },
+  pag_next: { ar: "التالي", en: "Next" },
+  pag_of: { ar: "من", en: "of" },
+  pag_per_page: { ar: "صفحة", en: "page" },
+  pag_page: { ar: "صفحة", en: "Page" },
+
   sort_label: { ar: "ترتيب", en: "Sort" },
   sort_name_az: { ar: "الاسم أ–ي", en: "Name A–Z" },
   sort_avail_high: { ar: "الأكثر مخزوناً", en: "Most available" },

@@ -23,7 +23,13 @@ import {
 } from "./collection-editor";
 import { PageHeader } from "@/components/page-header";
 import { Card, Badge } from "@/components/ui";
-import { KpiStrip, SearchInput, Toolbar } from "@/components/dashboard-ui";
+import {
+  KpiStrip,
+  SearchInput,
+  Toolbar,
+  Pagination,
+  usePagination,
+} from "@/components/dashboard-ui";
 import {
   IcPlus,
   IcCollection,
@@ -92,6 +98,8 @@ export default function CollectionsPage() {
       `${c.title} ${c.handle} ${c.ruleValue ?? ""}`.toLowerCase().includes(needle),
     );
   }, [collections, q]);
+
+  const pg = usePagination(shown, { perPage: 20, resetKey: q });
 
   const kpis = useMemo(() => {
     const published = collections.filter((c) => c.isPublished).length;
@@ -224,8 +232,11 @@ export default function CollectionsPage() {
           </div>
         ) : (
           <div className="divide-y divide-line">
-            {shown.map((c, i) => {
+            {pg.items.map((c) => {
               const count = countFor(c);
+              // Reordering moves the collection within the whole list, so the
+              // arrows work off its real position, not its position on the page.
+              const i = collections.indexOf(c);
               return (
                 <div
                   key={c.id}
@@ -243,7 +254,7 @@ export default function CollectionsPage() {
                     <button
                       className="leading-none hover:text-ink disabled:opacity-30"
                       onClick={() => onMove(i, 1)}
-                      disabled={i === shown.length - 1 || Boolean(q)}
+                      disabled={i === collections.length - 1 || Boolean(q)}
                       title={ar ? "لأسفل" : "Move down"}
                     >
                       ↓
@@ -320,6 +331,8 @@ export default function CollectionsPage() {
             })}
           </div>
         )}
+
+        {!loading && shown.length > 0 && <Pagination {...pg} />}
       </Card>
 
       {collections.length === 0 && !loading && !error && (

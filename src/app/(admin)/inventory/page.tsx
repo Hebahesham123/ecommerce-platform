@@ -21,7 +21,14 @@ import { listInventory, listLocations, setLevel, deleteItem } from "./actions";
 import { ProductEditor } from "./product-editor";
 import { PageHeader } from "@/components/page-header";
 import { Card, Badge } from "@/components/ui";
-import { StatTile, SegBtn, Select, SearchInput } from "@/components/dashboard-ui";
+import {
+  StatTile,
+  SegBtn,
+  Select,
+  SearchInput,
+  Pagination,
+  usePagination,
+} from "@/components/dashboard-ui";
 import {
   IcPlus,
   IcInventory,
@@ -130,6 +137,12 @@ export default function InventoryPage() {
     return sorted;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, q, status, stock, category, sort, loc, lang]);
+
+  // Only one page of rows is rendered; the KPIs below still span every match.
+  const pg = usePagination(filtered, {
+    perPage: 20,
+    resetKey: `${q}|${status}|${stock}|${category}|${sort}|${loc}`,
+  });
 
   // KPIs over the current filtered view (respecting the location).
   const kpi = useMemo(() => {
@@ -348,7 +361,7 @@ export default function InventoryPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((item) => {
+              {pg.items.map((item) => {
                 const available = availOf(item);
                 const st = stockStatus(available);
                 const barPct = Math.min(100, Math.round((Math.max(0, available) / maxAvail) * 100));
@@ -500,6 +513,8 @@ export default function InventoryPage() {
             </div>
           )}
         </div>
+
+        {!loading && <Pagination {...pg} />}
       </Card>
 
       {drawer && (

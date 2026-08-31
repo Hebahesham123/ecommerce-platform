@@ -27,6 +27,8 @@ import {
   SearchInput,
   Select,
   SegBtn,
+  Pagination,
+  usePagination,
   type PillTone,
 } from "@/components/dashboard-ui";
 import { IcPlus, IcInventory, IcImage, IcUpload } from "@/components/icons";
@@ -195,9 +197,16 @@ export default function ProductsPage() {
     return sorted;
   }, [allProducts, tab, q, category, stock, sort, ar]);
 
+  // Only the current page is rendered, so a large catalog stays fast to paint.
+  const pg = usePagination(filtered, {
+    perPage: 20,
+    resetKey: `${tab}|${q}|${category}|${stock}|${sort}|${view}`,
+  });
+
   const filtersActive = q !== "" || category !== "all" || stock !== "all";
-  const allSelected = filtered.length > 0 && filtered.every((p) => selected.has(p.key));
-  const someSelected = filtered.some((p) => selected.has(p.key));
+  // Bulk selection acts on the visible page, the way every list app behaves.
+  const allSelected = pg.items.length > 0 && pg.items.every((p) => selected.has(p.key));
+  const someSelected = pg.items.some((p) => selected.has(p.key));
 
   const invTone = (st: string) =>
     st === "out_stock" ? "text-rose-600" : st === "low_stock" ? "text-amber-600" : "text-ink-muted";
@@ -286,7 +295,7 @@ export default function ProductsPage() {
                 <tr className="border-b border-line text-xs text-ink-soft">
                   <th className="w-10 ps-5 pe-2 py-3">
                     <Checkbox checked={allSelected} indeterminate={someSelected}
-                      onChange={() => setSelected(allSelected ? new Set() : new Set(filtered.map((p) => p.key)))} />
+                      onChange={() => setSelected(allSelected ? new Set() : new Set(pg.items.map((p) => p.key)))} />
                   </th>
                   <th className="px-3 py-3 text-start font-medium">{t("col_product")}</th>
                   <th className="px-3 py-3 text-start font-medium">{t("col_status")}</th>
@@ -296,7 +305,7 @@ export default function ProductsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((p) => {
+                {pg.items.map((p) => {
                   const sel = selected.has(p.key);
                   return (
                     <tr key={p.key} onClick={() => openProduct(p)}
@@ -349,7 +358,7 @@ export default function ProductsPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {filtered.map((p) => (
+            {pg.items.map((p) => (
               <div key={p.key} onClick={() => openProduct(p)}
                 className="cursor-pointer overflow-hidden rounded-2xl border border-line bg-surface transition-shadow hover:shadow-pop">
                 <div className="flex aspect-square items-center justify-center overflow-hidden bg-gradient-to-br from-brand-50 to-slate-50">
@@ -375,6 +384,8 @@ export default function ProductsPage() {
             )}
           </div>
         )}
+
+        {!loading && <Pagination {...pg} />}
       </Card>
 
       {editItem && (

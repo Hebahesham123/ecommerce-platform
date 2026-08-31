@@ -14,7 +14,12 @@ import {
 } from "@/lib/collections";
 import { type InventoryItem, totalAvailable } from "@/lib/inventory";
 import { saveCollection } from "./actions";
-import { Checkbox, SearchInput } from "@/components/dashboard-ui";
+import {
+  Checkbox,
+  SearchInput,
+  Pagination,
+  usePagination,
+} from "@/components/dashboard-ui";
 import { IcX, IcImage, IcSearch, IcTrash, IcPlus } from "@/components/icons";
 
 /** A pickable product: the inventory items that share one product_name. */
@@ -153,6 +158,10 @@ export function CollectionEditor({
         .includes(needle),
     );
   }, [catalog, q]);
+
+  // The picker shows one page of the catalog at a time; "select all" below
+  // still applies to every search match, not just the visible page.
+  const pickerPg = usePagination(shown, { perPage: 20, resetKey: q });
 
   function toggle(productName: string) {
     setPicked((cur) =>
@@ -460,7 +469,7 @@ export function CollectionEditor({
                         : "No results"}
                   </div>
                 ) : (
-                  shown.map((p) => {
+                  pickerPg.items.map((p) => {
                     const on = picked.includes(p.productName);
                     return (
                       <button
@@ -501,6 +510,8 @@ export function CollectionEditor({
                   })
                 )}
               </div>
+
+              <Pagination {...pickerPg} perPageOptions={[10, 20, 50]} />
             </div>
           ) : (
             <div className="rounded-xl border border-line bg-surface-page p-3">

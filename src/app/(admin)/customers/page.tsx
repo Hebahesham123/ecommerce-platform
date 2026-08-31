@@ -5,7 +5,16 @@ import { useI18n, egp, num } from "@/lib/i18n";
 import { orders, labels, type PayMethod } from "@/lib/data";
 import { PageHeader } from "@/components/page-header";
 import { Card, Avatar, Badge } from "@/components/ui";
-import { KpiRow, StatTile, Toolbar, SearchInput, Select, SegBtn } from "@/components/dashboard-ui";
+import {
+  KpiRow,
+  StatTile,
+  Toolbar,
+  SearchInput,
+  Select,
+  SegBtn,
+  Pagination,
+  usePagination,
+} from "@/components/dashboard-ui";
 import { IcCustomers, IcCash, IcUp, IcLocation, IcWhatsApp, IcX } from "@/components/icons";
 
 // ---- Derived customer model --------------------------------------------
@@ -140,6 +149,11 @@ export default function CustomersPage() {
     return sorted;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customers, q, gov, segment, sort, vipThreshold]);
+
+  const pg = usePagination(filtered, {
+    perPage: 20,
+    resetKey: `${q}|${gov}|${segment}|${sort}`,
+  });
 
   const repeatCount = customers.filter((c) => c.isRepeat).length;
   const repeatShare = customers.length ? Math.round((repeatCount / customers.length) * 100) : 0;
@@ -293,7 +307,7 @@ export default function CustomersPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((c) => {
+              {pg.items.map((c) => {
                 const vip = isVip(c);
                 return (
                   <tr
@@ -373,6 +387,8 @@ export default function CustomersPage() {
             </div>
           )}
         </div>
+
+        <Pagination {...pg} />
       </Card>
     </>
   );

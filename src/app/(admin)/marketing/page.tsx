@@ -19,6 +19,8 @@ import {
   Toolbar,
   SearchInput,
   Select,
+  Pagination,
+  usePagination,
 } from "@/components/dashboard-ui";
 import {
   IcWhatsApp,
@@ -124,6 +126,11 @@ export default function MarketingPage() {
       return true;
     });
   }, [campaigns, q, channel, status]);
+
+  const pg = usePagination(filtered, {
+    perPage: 10,
+    resetKey: `${q}|${channel}|${status}`,
+  });
 
   const filtersActive = q !== "" || channel !== "all" || status !== "all";
   function clearFilters() {
@@ -349,7 +356,7 @@ export default function MarketingPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((c) => {
+              {pg.items.map((c) => {
                 const meta = CHANNEL_META[c.channel];
                 const st = STATUS_META[c.status];
                 const openRate = c.sent > 0 ? c.opened / c.sent : 0;
@@ -428,6 +435,8 @@ export default function MarketingPage() {
             </div>
           )}
         </div>
+
+        <Pagination {...pg} />
       </Card>
 
       {/* ---- Abandoned carts ---- */}

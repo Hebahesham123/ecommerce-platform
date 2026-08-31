@@ -16,6 +16,7 @@ import { listDiscounts, deleteDiscount, setDiscountStatus } from "./actions";
 import { PageHeader } from "@/components/page-header";
 import { Card, Badge } from "@/components/ui";
 import { summaryLine } from "@/components/discount-summary";
+import { Pagination, usePagination } from "@/components/dashboard-ui";
 import { IcSearch, IcPlus, IcDiscount, IcAlert } from "@/components/icons";
 
 type Tab = "all" | "active" | "scheduled" | "expired";
@@ -80,6 +81,8 @@ export default function DiscountsPage() {
       return true;
     });
   }, [rows, tab, q]);
+
+  const pg = usePagination(filtered, { perPage: 20, resetKey: `${tab}|${q}` });
 
   async function onDelete(id: string) {
     if (!window.confirm(t("delete_confirm"))) return;
@@ -186,7 +189,7 @@ export default function DiscountsPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((d) => (
+              {pg.items.map((d) => (
                 <tr
                   key={d.id}
                   className="cursor-pointer border-t border-line transition-colors hover:bg-surface-page"
@@ -259,6 +262,8 @@ export default function DiscountsPage() {
             </div>
           )}
         </div>
+
+        {!loading && <Pagination {...pg} />}
       </Card>
     </>
   );

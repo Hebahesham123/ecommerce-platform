@@ -1,6 +1,8 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import type { ComponentType, ReactNode, SVGProps } from "react";
+import { useI18n, num } from "@/lib/i18n";
 import { IcSearch, IcChevron, IcUp, IcDown } from "@/components/icons";
 
 // =============================================================================
@@ -341,6 +343,163 @@ export function Select({
         {children}
       </select>
       <IcChevron className="pointer-events-none absolute end-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 rotate-90 text-ink-soft" />
+    </div>
+  );
+}
+
+// ---- Pagination -------------------------------------------------------------
+// Every admin list renders one page at a time instead of the whole result set,
+// so a catalog of thousands stays as light to paint as a catalog of ten.
+
+export type PaginationState<T> = {
+  /** The rows to render for the current page. */
+  items: T[];
+  page: number;
+  pageCount: number;
+  total: number;
+  /** 1-based inclusive range of the current page, for "21–40 of 340". */
+  from: number;
+  to: number;
+  perPage: number;
+  /** Accepts a page number or an updater, so rapid Prev/Next clicks all land. */
+  setPage: (p: number | ((cur: number) => number)) => void;
+  setPerPage: (n: number) => void;
+};
+
+/**
+ * Slices an already-filtered/sorted array down to a single page.
+ *
+ * `resetKey` should carry the filter state (search text, tab, sort…): whenever
+ * it changes the view jumps back to page 1, so narrowing a filter never leaves
+ * you stranded on a page that no longer exists. Shrinking data is clamped too.
+ */
+export function usePagination<T>(
+  rows: T[],
+  opts?: { perPage?: number; resetKey?: string },
+): PaginationState<T> {
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(opts?.perPage ?? 20);
+  const resetKey = opts?.resetKey ?? "";
+
+  useEffect(() => {
+    setPage(1);
+  }, [resetKey, perPage]);
+
+  const total = rows.length;
+  const pageCount = Math.max(1, Math.ceil(total / perPage));
+  const safePage = Math.min(page, pageCount);
+  const start = (safePage - 1) * perPage;
+  const items = useMemo(
+    () => rows.slice(start, start + perPage),
+    [rows, start, perPage],
+  );
+
+  return {
+    items,
+    page: safePage,
+    pageCount,
+    total,
+    from: total === 0 ? 0 : start + 1,
+    to: Math.min(start + perPage, total),
+    perPage,
+    setPage: (p) =>
+      setPage((cur) => {
+        const target = typeof p === "function" ? p(Math.min(cur, pageCount)) : p;
+        return Math.min(Math.max(1, target), pageCount);
+      }),
+    setPerPage,
+  };
+}
+
+/** Page numbers around the current page, with gaps collapsed to an ellipsis. */
+function pageWindow(page: number, pageCount: number, max = 7): (number | "…")[] {
+  if (pageCount <= max) return Array.from({ length: pageCount }, (_, i) => i + 1);
+  const out: (number | "…")[] = [1];
+  const span = Math.floor((max - 3) / 2); // slots left for neighbours of `page`
+  let lo = Math.max(2, page - span);
+  let hi = Math.min(pageCount - 1, page + span);
+  if (page - span < 2) hi = Math.min(pageCount - 1, hi + (2 - (page - span)));
+  if (page + span > pageCount - 1) lo = Math.max(2, lo - (page + span - (pageCount - 1)));
+  if (lo > 2) out.push("…");
+  for (let p = lo; p <= hi; p += 1) out.push(p);
+  if (hi < pageCount - 1) out.push("…");
+  out.push(pageCount);
+  return out;
+}
+
+/**
+ * Footer bar for a paginated list: result range, rows-per-page, page numbers.
+ * Spread a `usePagination` result straight into it — `<Pagination {...pg} />`.
+ */
+export function Pagination({
+  page,
+  pageCount,
+  total,
+  from,
+  to,
+  perPage,
+  setPage,
+  setPerPage,
+  perPageOptions = [10, 20, 50, 100],
+}: Omit<PaginationState<unknown>, "items"> & { perPageOptions?: number[] }) {
+  const { t, lang } = useI18n();
+  if (total === 0) return null;
+
+  // Keep an unusual default (a grid's 24, say) selectable rather than dropping it.
+  const sizes = [...new Set([...perPageOptions, perPage])].sort((a, b) => a - b);
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-4 py-3 text-sm">
+      <div className="flex items-center gap-2">
+        <span className="text-ink-soft">
+          {num(from, lang)}–{num(to, lang)} {t("pag_of")} {num(total, lang)}
+        </span>
+        <Select value={String(perPage)} onChange={(v) => setPerPage(Number(v))}>
+          {sizes.map((n) => (
+            <option key={n} value={n}>
+              {num(n, lang)} / {t("pag_per_page")}
+            </option>
+          ))}
+        </Select>
+      </div>
+
+      {pageCount > 1 && (
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setPage((p) => p - 1)}
+            disabled={page <= 1}
+            className="btn-ghost h-8 px-2.5 text-xs disabled:opacity-40"
+          >
+            {t("pag_prev")}
+          </button>
+          {pageWindow(page, pageCount).map((p, i) =>
+            p === "…" ? (
+              <span key={`gap-${i}`} className="px-1 text-xs text-ink-soft">
+                …
+              </span>
+            ) : (
+              <button
+                key={p}
+                onClick={() => setPage(p)}
+                aria-current={p === page ? "page" : undefined}
+                aria-label={`${t("pag_page")} ${p}`}
+                className={`h-8 min-w-8 rounded-lg px-2 text-xs font-medium ${
+                  p === page ? "bg-brand text-white" : "text-ink-muted hover:bg-surface-hover"
+                }`}
+              >
+                {num(p, lang)}
+              </button>
+            ),
+          )}
+          <button
+            onClick={() => setPage((p) => p + 1)}
+            disabled={page >= pageCount}
+            className="btn-ghost h-8 px-2.5 text-xs disabled:opacity-40"
+          >
+            {t("pag_next")}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
