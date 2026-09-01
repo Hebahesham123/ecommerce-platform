@@ -5,7 +5,12 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useI18n, num } from "@/lib/i18n";
 import { PageHeader } from "@/components/page-header";
 import { Card, Badge } from "@/components/ui";
-import { KpiRow, StatTile } from "@/components/dashboard-ui";
+import {
+  KpiRow,
+  StatTile,
+  Pagination,
+  usePagination,
+} from "@/components/dashboard-ui";
 import { IcInbox, IcCustomers, IcSend, IcCopy, IcX, IcUp } from "@/components/icons";
 import {
   starterTemplates,
@@ -108,6 +113,8 @@ function TemplatesTab({ ar }: { ar: boolean }) {
   const router = useRouter();
   const [templates, setTemplates] = useTemplates();
   const [picking, setPicking] = useState(false);
+  // Each card mounts a rendering iframe, so keep the mounted count bounded.
+  const pg = usePagination(templates, { perPage: 12 });
 
   function createFrom(starterId: string) {
     const starter = starterTemplates().find((t) => t.id === starterId) ?? starterTemplates()[0];
@@ -156,7 +163,7 @@ function TemplatesTab({ ar }: { ar: boolean }) {
         <p className="py-10 text-center text-sm text-ink-soft">{ar ? "لا توجد قوالب بعد." : "No templates yet."}</p>
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {templates.map((t) => (
+          {pg.items.map((t) => (
             <div key={t.id} className="overflow-hidden rounded-xl border border-line">
               <button onClick={() => router.push(`/email/editor/${t.id}`)} className="block w-full bg-surface-page" aria-label="Edit">
                 <span className="block h-40 overflow-hidden">
@@ -181,6 +188,10 @@ function TemplatesTab({ ar }: { ar: boolean }) {
           ))}
         </div>
       )}
+
+      <div className="-mx-4 -mb-4 mt-4">
+        <Pagination {...pg} perPageOptions={[6, 12, 24, 48]} />
+      </div>
     </Card>
   );
 }
@@ -198,6 +209,8 @@ function AudiencesTab({ ar, audience, loaded }: { ar: boolean; audience: Audienc
     return active ? filterAudience(audience, active) : audience;
   }, [audience, active, activeId]);
   const emailable = matched.filter((c) => c.email).length;
+  // Paging replaces the old silent slice(0, 500): every match is now reachable.
+  const pg = usePagination(matched, { perPage: 20, resetKey: activeId });
 
   function saveSegment(seg: Segment) {
     setSegments((prev) => {
@@ -268,7 +281,7 @@ function AudiencesTab({ ar, audience, loaded }: { ar: boolean; audience: Audienc
                 </tr>
               </thead>
               <tbody>
-                {matched.slice(0, 500).map((c) => (
+                {pg.items.map((c) => (
                   <tr key={c.phone} className="border-b border-line last:border-0 hover:bg-surface-page">
                     <td className="px-4 py-2.5">
                       <div className="font-medium text-ink">{c.name}</div>
@@ -285,6 +298,8 @@ function AudiencesTab({ ar, audience, loaded }: { ar: boolean; audience: Audienc
             </table>
           )}
         </div>
+
+        {loaded && <Pagination {...pg} />}
       </Card>
     </div>
   );
@@ -407,6 +422,8 @@ function CampaignsTab({ ar, audience }: { ar: boolean; audience: AudienceCustome
   const recipients = segmentId === "__all" ? audience : seg ? filterAudience(audience, seg) : audience;
   const emailable = recipients.filter((c) => c.email).length;
 
+  const pg = usePagination(campaigns, { perPage: 20 });
+
   function resetForm() {
     setName(""); setSubject(""); setTemplateId(""); setSegmentId("__all");
   }
@@ -519,7 +536,7 @@ function CampaignsTab({ ar, audience }: { ar: boolean; audience: AudienceCustome
                 </tr>
               </thead>
               <tbody>
-                {campaigns.map((c) => (
+                {pg.items.map((c) => (
                   <tr key={c.id} className="border-b border-line last:border-0 hover:bg-surface-page">
                     <td className="px-4 py-3">
                       <div className="font-medium text-ink">{c.name}</div>
@@ -541,6 +558,8 @@ function CampaignsTab({ ar, audience }: { ar: boolean; audience: AudienceCustome
             </table>
           </div>
         )}
+
+        <Pagination {...pg} />
       </Card>
 
       {preview && (
