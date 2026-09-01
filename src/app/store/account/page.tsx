@@ -63,7 +63,7 @@ export default async function AccountPage() {
           <div className="rounded-2xl border border-line p-8 text-center">
             <p className="text-sm text-ink-muted">No orders yet.</p>
             <Link
-              href="/store"
+              href="/shop"
               className="mt-4 inline-flex rounded-lg bg-brand px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700"
             >
               Start shopping

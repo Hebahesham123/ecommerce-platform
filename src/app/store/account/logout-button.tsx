@@ -11,7 +11,9 @@ export default function LogoutButton() {
     <button
       onClick={async () => {
         await logout();
-        router.push("/store");
+        // Home for a shopper is the published theme at /shop — the same place
+        // the header logo and checkout go. /store is the bare internal list.
+        router.push("/shop");
         router.refresh();
       }}
       className="rounded-xl border border-line px-3.5 py-2 text-sm font-medium text-ink-muted transition hover:bg-surface-hover hover:text-ink"
