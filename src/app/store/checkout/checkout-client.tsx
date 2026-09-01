@@ -8,6 +8,7 @@ import {
   sendOtp, verifyOtp, placeOrder, getCustomer, type CustomerProfile,
 } from "../actions";
 import { computeDiscount, isBirthday } from "@/lib/offers";
+import { normalizePhone } from "@/lib/phone";
 
 /**
  * Where "home" is for a shopper in checkout: the published theme at /shop,
@@ -144,7 +145,16 @@ function Check({ checked, onChange, children }: { checked: boolean; onChange: (v
 
 /* ---------------------------------- page ---------------------------------- */
 
-export default function CheckoutClient({ initialItems }: { initialItems: CartItem[] }) {
+/** The signed-in shopper, resolved server-side from the session cookie. */
+export type CheckoutIdentity = { phone: string; profile: CustomerProfile | null };
+
+export default function CheckoutClient({
+  initialItems,
+  identity = null,
+}: {
+  initialItems: CartItem[];
+  identity?: CheckoutIdentity | null;
+}) {
   // Checkout always renders in English by default, regardless of the store's
   // Arabic-first language setting.
   const ar = false;
@@ -190,20 +200,27 @@ export default function CheckoutClient({ initialItems }: { initialItems: CartIte
     };
   }, []);
 
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [gov, setGov] = useState("");
-  const [city, setCity] = useState("");
-  const [address, setAddress] = useState("");
+  // A signed-in shopper's details are known before the first paint, so the form
+  // opens filled in rather than empty.
+  const known = identity?.profile ?? null;
+  const knownName = (known?.name ?? "").trim().split(/\s+/).filter(Boolean);
+
+  const [firstName, setFirstName] = useState(knownName[0] ?? "");
+  const [lastName, setLastName] = useState(knownName.slice(1).join(" "));
+  const [email, setEmail] = useState(known?.email ?? "");
+  const [phone, setPhone] = useState(identity?.phone ?? "");
+  const [gov, setGov] = useState(known?.governorate ?? "");
+  const [city, setCity] = useState(known?.city ?? "");
+  const [address, setAddress] = useState(known?.address ?? "");
   const [postal, setPostal] = useState("");
   const [saveInfo, setSaveInfo] = useState(true);
   const [emailOptIn, setEmailOptIn] = useState(false);
   const [smsOptIn, setSmsOptIn] = useState(false);
   const [billingSame, setBillingSame] = useState(true);
 
-  const [step, setStep] = useState<Step>("idle");
+  // Signed in IS verified — the session was only issued to a shopper we had
+  // already recognised, so asking for a code again would be asking twice.
+  const [step, setStep] = useState<Step>(identity ? "verified" : "idle");
   const [channel, setChannel] = useState<Channel>("whatsapp");
   const [code, setCode] = useState("");
   const [placing, setPlacing] = useState(false);
@@ -213,8 +230,8 @@ export default function CheckoutClient({ initialItems }: { initialItems: CartIte
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
   const [couponErr, setCouponErr] = useState<string | null>(null);
   const [discountOpen, setDiscountOpen] = useState(false);
-  const [welcomeName, setWelcomeName] = useState<string | null>(null);
-  const [profileBirthday, setProfileBirthday] = useState<string | null>(null);
+  const [welcomeName, setWelcomeName] = useState<string | null>(known?.name ?? null);
+  const [profileBirthday, setProfileBirthday] = useState<string | null>(known?.birthday ?? null);
 
   // The order summary is collapsed on mobile (Shopify's "Order summary ⌄" bar).
   const [summaryOpen, setSummaryOpen] = useState(false);
@@ -245,6 +262,10 @@ export default function CheckoutClient({ initialItems }: { initialItems: CartIte
     setWelcomeName(p.name);
     setProfileBirthday(p.birthday);
   }
+
+  /** True while the phone field still holds the number we're signed in as. */
+  const isSessionPhone = (v: string) =>
+    Boolean(identity) && normalizePhone(v) === normalizePhone(identity!.phone);
 
   async function recognizePhone() {
     if (!phoneOk || step !== "idle") return;
@@ -283,8 +304,12 @@ export default function CheckoutClient({ initialItems }: { initialItems: CartIte
     if (!phoneOk) { setErr(ar ? "أدخلي رقم هاتف صحيح" : "Enter a valid phone number"); return; }
     if (items.length === 0) { setErr(ar ? "السلة فارغة" : "Cart is empty"); return; }
 
-    // Verified (this session or ever on this device) → place, never ask again.
-    if (step === "verified" || isLocallyVerified(phone)) { await placeOrderNow(); return; }
+    // Signed in, verified in this session, or verified on this device before →
+    // place the order; never ask the same person to prove the same number twice.
+    if (step === "verified" || isSessionPhone(phone) || isLocallyVerified(phone)) {
+      await placeOrderNow();
+      return;
+    }
     const res = await getCustomer(phone);
     if (res.ok && res.data.verified) { setStep("verified"); rememberVerified(phone); await placeOrderNow(); return; }
     setCode("");
@@ -538,8 +563,22 @@ export default function CheckoutClient({ initialItems }: { initialItems: CartIte
             <section>
               <div className="mb-4 flex items-baseline justify-between gap-4">
                 <h2 className="text-[19px] font-semibold text-[#1a1a1a]">{ar ? "معلومات التواصل" : "Contact"}</h2>
-                <Link href="/store/login" className="co-link text-[15px]">{ar ? "تسجيل الدخول" : "Sign in"}</Link>
+                {identity ? (
+                  <Link href="/store/account" className="co-link text-[15px]">
+                    {ar ? "حسابي" : "My account"}
+                  </Link>
+                ) : (
+                  <Link href="/store/login" className="co-link text-[15px]">{ar ? "تسجيل الدخول" : "Sign in"}</Link>
+                )}
               </div>
+              {identity && (
+                <p className="mb-3 text-[14px] text-[#6b7177]">
+                  {ar ? "مسجّلة الدخول باسم" : "Signed in as"}{" "}
+                  <span className="font-medium text-[#1a1a1a]" dir="ltr">
+                    {known?.name ? `${known.name} · ${identity.phone}` : identity.phone}
+                  </span>
+                </p>
+              )}
               <Field label={ar ? "البريد الإلكتروني" : "Email"} value={email} onChange={setEmail} type="email" inputMode="email" dir="ltr" help />
               <div className="mt-4">
                 <Check checked={emailOptIn} onChange={setEmailOptIn}>
@@ -569,7 +608,13 @@ export default function CheckoutClient({ initialItems }: { initialItems: CartIte
                 <Field
                   label={ar ? "الهاتف" : "Phone"}
                   value={phone}
-                  onChange={(v) => { setPhone(v); if (step === "verified") { setStep("idle"); setWelcomeName(null); } }}
+                  onChange={(v) => {
+                    setPhone(v);
+                    // Typing a different number drops the verified state, but
+                    // coming back to the signed-in one restores it.
+                    if (isSessionPhone(v)) setStep("verified");
+                    else if (step === "verified") { setStep("idle"); setWelcomeName(null); }
+                  }}
                   onBlur={recognizePhone}
                   dir="ltr"
                   inputMode="tel"

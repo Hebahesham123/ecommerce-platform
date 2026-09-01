@@ -1,7 +1,7 @@
 "use server";
 
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
-import { normalizePhone } from "@/lib/phone";
+import { normalizePhone, phoneVariants } from "@/lib/phone";
 import { setSession, getSessionPhone, clearSession } from "@/lib/store-session";
 import { sendOtp, verifyOtp, type ActionResult } from "./actions";
 
@@ -44,6 +44,26 @@ async function isVerified(phone: string): Promise<boolean> {
 }
 
 /**
+ * Whether this number is a customer we already have, verified or not.
+ *
+ * `verified_phones` only holds numbers that went through the code flow on this
+ * app, so it misses everyone who ordered before it existed or whose row was
+ * written under the old unnormalized phone format. Those shoppers are in the
+ * database in every sense that matters — they have orders — and telling them
+ * to "create an account" is telling them they're a stranger.
+ */
+async function isKnownCustomer(phone: string): Promise<boolean> {
+  if (await isVerified(phone)) return true;
+  const supabase = getServerSupabase();
+  const variants = phoneVariants(phone);
+  const [{ data: order }, { data: profile }] = await Promise.all([
+    supabase.from("store_orders").select("phone").in("phone", variants).limit(1),
+    supabase.from("store_customers").select("phone").in("phone", variants).limit(1),
+  ]);
+  return Boolean(order?.length) || Boolean(profile?.length);
+}
+
+/**
  * Step 1 of sign up: ask n8n to send a code.
  *
  * Note `sendOtp` deliberately short-circuits for numbers already in
@@ -61,7 +81,7 @@ export async function startSignup(
   if (ph.replace(/\D/g, "").length < 12) return { ok: false, error: "invalid_phone" };
 
   try {
-    if (await isVerified(ph)) return { ok: false, error: "already_registered" };
+    if (await isKnownCustomer(ph)) return { ok: false, error: "already_registered" };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }
@@ -114,8 +134,9 @@ export async function completeSignup(
 /**
  * Log in with a phone number alone — no code, as specified.
  *
- * Only numbers that are already verified can sign in; anything else is reported
- * as unregistered so the caller can route into sign up.
+ * Any number we already have counts, not just ones carrying a verified_phones
+ * row: a customer with orders on file is not a new sign-up. Genuinely unknown
+ * numbers are still reported back so the caller can route into sign up.
  */
 export async function loginWithPhone(
   phone: string,
@@ -125,7 +146,7 @@ export async function loginWithPhone(
   if (ph.replace(/\D/g, "").length < 12) return { ok: false, error: "invalid_phone" };
 
   try {
-    if (!(await isVerified(ph))) return { ok: false, error: "not_registered" };
+    if (!(await isKnownCustomer(ph))) return { ok: false, error: "not_registered" };
     await setSession(ph);
     return { ok: true, data: { phone: ph } };
   } catch (e) {
@@ -162,19 +183,29 @@ export async function getAccount(): Promise<Account | null> {
         .maybeSingle(),
       supabase
         .from("store_orders")
-        .select("order_number,total,created_at,lifecycle,payment_status,fulfillment_status")
-        .eq("phone", phone)
+        .select(
+          "order_number,total,created_at,lifecycle,payment_status,fulfillment_status,customer_name,governorate,city,address",
+        )
+        // Orders written before phones were normalized are still this shopper's.
+        .in("phone", phoneVariants(phone))
         .order("created_at", { ascending: false })
         .limit(50),
     ]);
 
+    // Their latest order carries a name and address even when there is no
+    // profile row — better than showing a returning customer nothing but "—".
+    const last = orders?.[0];
     return {
       phone,
-      name: ((profile?.name as string) || (verified?.name as string)) ?? null,
+      name:
+        ((profile?.name as string) ||
+          (verified?.name as string) ||
+          (last?.customer_name as string)) ??
+        null,
       email: (profile?.email as string) ?? null,
-      governorate: (profile?.governorate as string) ?? null,
-      city: (profile?.city as string) ?? null,
-      address: (profile?.address as string) ?? null,
+      governorate: ((profile?.governorate as string) || (last?.governorate as string)) ?? null,
+      city: ((profile?.city as string) || (last?.city as string)) ?? null,
+      address: ((profile?.address as string) || (last?.address as string)) ?? null,
       orders: (orders ?? []).map((o) => ({
         orderNumber: String(o.order_number),
         total: Number(o.total),

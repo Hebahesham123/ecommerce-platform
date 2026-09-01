@@ -2,7 +2,8 @@
 
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
 import { computeDiscount, slotLabel, isBirthday } from "@/lib/offers";
-import { normalizePhone } from "@/lib/phone";
+import { normalizePhone, phoneVariants } from "@/lib/phone";
+import { getSessionPhone, setSession } from "@/lib/store-session";
 
 export type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -219,6 +220,10 @@ export async function verifyOtp(
       .from("verified_phones")
       .upsert({ phone: ph, name: name ?? null, verified_at: new Date().toISOString() }, { onConflict: "phone" });
     await supabase.from("otp_codes").delete().eq("phone", ph);
+    // Proving ownership of the number IS signing in here — the phone is the
+    // account. Without this, a shopper who verified at checkout comes back a
+    // stranger and gets asked to verify all over again.
+    await setSession(ph);
     return { ok: true, data: undefined };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
@@ -237,9 +242,54 @@ export type CustomerProfile = {
 };
 
 /**
+ * Everything we already know about a phone, gathered from wherever it lives:
+ * the profile table, the name captured at verification, and — for customers
+ * who ordered before profiles existed (or while `store_customers` was missing)
+ * — their most recent order. Callers must have established the number belongs
+ * to this shopper before handing the result back.
+ */
+async function readProfile(ph: string): Promise<CustomerProfile | null> {
+  const supabase = getServerSupabase();
+  // `store_customers` is optional: a store that hasn't run 0012_customers.sql
+  // yet still gets a profile from the columns its orders carry.
+  const [{ data: row }, { data: verified }, { data: orders }] = await Promise.all([
+    supabase
+      .from("store_customers")
+      .select("name,email,birthday,governorate,city,address,note")
+      .eq("phone", ph)
+      .maybeSingle(),
+    supabase.from("verified_phones").select("name").eq("phone", ph).maybeSingle(),
+    supabase
+      .from("store_orders")
+      .select("customer_name,governorate,city,address,created_at")
+      .in("phone", phoneVariants(ph))
+      .order("created_at", { ascending: false })
+      .limit(1),
+  ]);
+
+  const last = orders?.[0];
+  const pick = (a: unknown, b: unknown) => (a as string) || (b as string) || null;
+  const profile: CustomerProfile = {
+    name: pick(row?.name, verified?.name) || (last?.customer_name as string) || null,
+    email: (row?.email as string) ?? null,
+    birthday: row?.birthday ? String(row.birthday) : null,
+    governorate: pick(row?.governorate, last?.governorate),
+    city: pick(row?.city, last?.city),
+    address: pick(row?.address, last?.address),
+    note: (row?.note as string) ?? null,
+  };
+  // Nothing known at all is the same as no profile.
+  return Object.values(profile).some(Boolean) ? profile : null;
+}
+
+/**
  * Returns whether the phone is verified and, if so, its saved profile so the
  * checkout can autofill returning customers. A profile is ONLY revealed for
  * verified numbers — typing someone else's number leaks nothing.
+ *
+ * The signed-in number counts as verified even when `verified_phones` has no
+ * row: the session cookie is HMAC-signed by us and is only ever issued to a
+ * shopper we already recognised, so it is at least as strong a claim.
  */
 export async function getCustomer(
   phone: string,
@@ -248,32 +298,33 @@ export async function getCustomer(
   try {
     const supabase = getServerSupabase();
     const ph = normalizePhone(phone);
-    const { data: v } = await supabase
-      .from("verified_phones")
-      .select("phone")
-      .eq("phone", ph)
-      .maybeSingle();
-    if (!v) return { ok: true, data: { verified: false, profile: null } };
+    const [{ data: v }, sessionPhone] = await Promise.all([
+      supabase.from("verified_phones").select("phone").eq("phone", ph).maybeSingle(),
+      getSessionPhone(),
+    ]);
+    if (!v && sessionPhone !== ph) return { ok: true, data: { verified: false, profile: null } };
 
-    const { data } = await supabase
-      .from("store_customers")
-      .select("name,email,birthday,governorate,city,address,note")
-      .eq("phone", ph)
-      .maybeSingle();
-    const profile: CustomerProfile | null = data
-      ? {
-          name: (data.name as string) ?? null,
-          email: (data.email as string) ?? null,
-          birthday: data.birthday ? String(data.birthday) : null,
-          governorate: (data.governorate as string) ?? null,
-          city: (data.city as string) ?? null,
-          address: (data.address as string) ?? null,
-          note: (data.note as string) ?? null,
-        }
-      : null;
-    return { ok: true, data: { verified: true, profile } };
+    return { ok: true, data: { verified: true, profile: await readProfile(ph) } };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
+  }
+}
+
+/**
+ * The signed-in shopper as checkout needs them: who they are and the fact that
+ * they need no further proof. Null when signed out — checkout then behaves
+ * exactly as it did for guests.
+ */
+export async function getCheckoutIdentity(): Promise<
+  { phone: string; profile: CustomerProfile | null } | null
+> {
+  if (!isSupabaseConfigured()) return null;
+  const phone = await getSessionPhone();
+  if (!phone) return null;
+  try {
+    return { phone, profile: await readProfile(phone) };
+  } catch {
+    return { phone, profile: null };
   }
 }
 
@@ -436,13 +487,15 @@ export async function placeOrder(
     const supabase = getServerSupabase();
     const ph = normalizePhone(payload.phone);
 
-    // Enforce verification server-side.
-    const { data: verified } = await supabase
-      .from("verified_phones")
-      .select("phone")
-      .eq("phone", ph)
-      .maybeSingle();
-    if (!verified) return { ok: false, error: "not_verified" };
+    // Enforce verification server-side. Being signed in as this number counts:
+    // the session is HMAC-signed by us, so it is proof we already recognised
+    // this shopper — otherwise a logged-in customer would be sent back through
+    // verification on every single order.
+    const [{ data: verified }, sessionPhone] = await Promise.all([
+      supabase.from("verified_phones").select("phone").eq("phone", ph).maybeSingle(),
+      getSessionPhone(),
+    ]);
+    if (!verified && sessionPhone !== ph) return { ok: false, error: "not_verified" };
 
     const subtotal = payload.items.reduce((s, i) => s + i.price * i.quantity, 0);
     const shipping = 0; // free shipping for the test flow
