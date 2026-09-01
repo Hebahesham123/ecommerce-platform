@@ -130,12 +130,13 @@
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
   (function () {
-    // PUBLIC project URL + anon key — safe to expose. RLS protects your data.
-    var SUPABASE_URL = "https://vumykpkjirjhdtwlpzwe.supabase.co";
-    var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ1bXlrcGtqaXJqaGR0d2xwendlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyOTczMzQsImV4cCI6MjA5Nzg3MzMzNH0.sJLzH45T_Muox5Lc_zXU6nyw2r4Ea6IrT0zPZt70L8k";
+    // Reviews post to this store's own server, which writes them into this
+    // project's database for moderation on the dashboard. (They used to go
+    // straight into a separate Supabase project, so the dashboard never saw
+    // them.) Same-origin and key-free: the page carries no credentials.
+    var ENDPOINT = "/api/reviews";
 
     var EG_FIRST = ["Ahmed","Mohamed","Mahmoud","Mostafa","Omar","Youssef","Khaled","Hassan","Amr","Tarek","Karim","Sherif","Ali","Ibrahim","Hossam","Tamer","Ramy","Wael","Sameh","Adel","Ayman","Hany","Magdy","Mariam","Nour","Habiba","Salma","Farida","Malak","Hana","Layla","Yasmin","Nada","Aya","Esraa","Mai","Dina","Heba","Mona","Rana","Reem","Sara","Amira","Menna","Doaa","Shaimaa","Eman","Asmaa","Noha","Dalia","Hala","Nourhan","Aliaa"];
     var EG_LAST = ["Hassan","Mohamed","Ibrahim","Mahmoud","Abdelrahman","Farouk","Mansour","Saad","Adel","Gamal","Fathy","Zaki","Sabry","Shawky","Nabil","Fawzy","Lotfy","Helmy","Refaat","ElSayed","AbdelAziz","Kamel","Naguib","Hegazy","Sorour"];
@@ -143,7 +144,6 @@
     function randomEgyptianName() { return pick(EG_FIRST) + " " + pick(EG_LAST); }
 
     function init() {
-      var client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       var form = document.getElementById('rvw-form');
       if (!form) return;
       var formView = document.getElementById('rvw-form-view');
@@ -167,11 +167,23 @@
           review_comment: ((data.get('review_comment') || '').toString().trim()) || null
         };
 
-        var res = await client.from('reviews').insert(payload);
+        var ok = false, message = '';
+        try {
+          var res = await fetch(ENDPOINT, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          var out = await res.json().catch(function () { return {}; });
+          ok = res.ok && out.ok;
+          message = out.error || ('HTTP ' + res.status);
+        } catch (err) {
+          message = String(err);
+        }
         btn.disabled = false; btn.textContent = "Submit Review";
 
-        if (res.error) {
-          alert('There was a problem submitting your review: ' + res.error.message);
+        if (!ok) {
+          alert('There was a problem submitting your review: ' + message);
           return;
         }
 
@@ -192,13 +204,11 @@
       });
     }
 
-    // Wait for the Supabase CDN script to be ready.
-    if (window.supabase && window.supabase.createClient) {
-      init();
+    // No CDN to wait on any more — the form talks to our own endpoint.
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
     } else {
-      var check = setInterval(function () {
-        if (window.supabase && window.supabase.createClient) { clearInterval(check); init(); }
-      }, 50);
+      init();
     }
   })();
 </script>
