@@ -133,15 +133,28 @@ function originOf(req: Request): string {
   return `${proto}://${host}`;
 }
 
+/**
+ * Where a widget page's iframe actually points.
+ *
+ * Reviews is a static form under /public. Requests is not: returns and
+ * exchanges read the shopper's OWN orders through the session cookie, so it has
+ * to be a real page in this app. `home` tells it which themed URL to return to
+ * after a signed-out shopper goes off to sign in.
+ */
+function widgetSrc(origin: string, path: string, mount: string): string {
+  if (path === "/requests")
+    return `${origin}/store/requests?home=${encodeURIComponent(`${mount}/requests`)}`;
+  return `${origin}/widgets/${path.slice(1)}.html`;
+}
+
 /** Body HTML for a widget page: the widget in an isolated, auto-sized iframe.
  *  Dropped into the theme layout so the store header/footer wrap it. The iframe
  *  is same-origin, so a tiny script can size it to its content (no inner scroll). */
-function widgetPageBody(origin: string, slug: string, title: string): string {
-  const src = `${origin}/widgets/${slug}.html`;
+function widgetPageBody(src: string, title: string): string {
   return `<div style="max-width:960px;margin:0 auto;padding:28px 16px 64px">
-<iframe id="bb-widget-frame" src="${src}" title="${escHtml(title)}" loading="lazy" scrolling="no" style="width:100%;min-height:820px;border:0;border-radius:16px;background:#fff;box-shadow:0 6px 24px rgba(0,0,0,.06);display:block"></iframe>
+<iframe id="bb-widget-frame" src="${src}" title="${escHtml(title)}" loading="lazy" scrolling="no" style="width:100%;min-height:520px;border:0;border-radius:16px;background:#fff;box-shadow:0 6px 24px rgba(0,0,0,.06);display:block"></iframe>
 </div>
-<script>(function(){var f=document.getElementById('bb-widget-frame');if(!f)return;function fit(){try{var d=f.contentWindow.document;var h=Math.max(d.body.scrollHeight,d.documentElement.scrollHeight);if(h>0)f.style.height=(h+24)+'px';}catch(e){}}f.addEventListener('load',fit);setInterval(fit,700);})();</script>`;
+<script>(function(){var f=document.getElementById('bb-widget-frame');if(!f)return;function fit(){try{var d=f.contentWindow.document;var h=Math.max(d.body.scrollHeight,d.documentElement.scrollHeight);if(h>0){f.style.minHeight='0px';f.style.height=(h+24)+'px';}}catch(e){}}f.addEventListener('load',fit);setInterval(fit,700);})();</script>`;
 }
 
 /** Best-effort: add Reviews & Requests into the theme's menu by cloning an
@@ -753,7 +766,10 @@ async function storefrontGet(req: Request, config: MountConfig): Promise<Respons
   // theme (header/footer inherited from the store).
   const widgetTitle = WIDGET_PAGES[path];
   const customPage = widgetTitle
-    ? { title: widgetTitle, body: widgetPageBody(originOf(req), path.slice(1), widgetTitle) }
+    ? {
+        title: widgetTitle,
+        body: widgetPageBody(widgetSrc(originOf(req), path, mount), widgetTitle),
+      }
     : undefined;
 
   const res = await renderStorefront({

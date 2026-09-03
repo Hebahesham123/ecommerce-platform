@@ -19,6 +19,14 @@ function SignupForm() {
   // Arriving from login with an unrecognised number: carry it over so it isn't
   // typed twice.
   const [phone, setPhone] = useState(params.get("phone") ?? "");
+
+  // Handed over by the login page so a shopper who turned out to be new still
+  // lands on whatever they were trying to do. Same-origin paths only.
+  const rawNext = params.get("next") ?? "";
+  const next =
+    rawNext.startsWith("/") && !rawNext.startsWith("//") && !rawNext.includes("\\")
+      ? rawNext
+      : null;
   const [code, setCode] = useState("");
   const [step, setStep] = useState<Step>("details");
   const [channel, setChannel] = useState<Channel>("whatsapp");
@@ -76,7 +84,7 @@ function SignupForm() {
       );
       return;
     }
-    router.push("/store/account");
+    router.push(next ?? "/store/account");
     router.refresh();
   }
 

@@ -13,6 +13,20 @@ function LoginForm() {
   const params = useSearchParams();
 
   const [phone, setPhone] = useState(params.get("phone") ?? "");
+
+  /**
+   * Where to land after signing in. Shoppers reach this page from the Requests
+   * screen as often as from the header, and sending them to their account
+   * instead of back to the return they were starting loses the thread.
+   *
+   * Only a plain same-origin path is honoured — never a scheme or a
+   * protocol-relative "//evil.com" — so this can't become an open redirect.
+   */
+  const rawNext = params.get("next") ?? "";
+  const next =
+    rawNext.startsWith("/") && !rawNext.startsWith("//") && !rawNext.includes("\\")
+      ? rawNext
+      : null;
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -27,14 +41,17 @@ function LoginForm() {
     setBusy(false);
 
     if (res.ok) {
-      router.push("/store/account");
+      router.push(next ?? "/store/account");
       router.refresh();
       return;
     }
     // No account for this number (or it was never verified) → sign up, carrying
     // the number across so it isn't retyped.
     if (res.error === "not_registered") {
-      router.push(`/store/signup?phone=${encodeURIComponent(phone)}`);
+      router.push(
+        `/store/signup?phone=${encodeURIComponent(phone)}` +
+          (next ? `&next=${encodeURIComponent(next)}` : ""),
+      );
       return;
     }
     setErr(

@@ -34,7 +34,14 @@ export default function StoreLayout({ children }: { children: ReactNode }) {
   // storefront's `sf_locale`), so there is nothing to adopt here.
   // Checkout is a standalone funnel (like Shopify's): no shop nav, no footer,
   // no cart drawer — it brings its own header and order summary.
-  const bare = pathname?.startsWith("/store/checkout") ?? false;
+  //
+  // Requests renders bare for a different reason: it is embedded inside the
+  // theme's own header and footer, so a second set of chrome here would show
+  // the shopper two navigations stacked on top of each other.
+  const bare =
+    (pathname?.startsWith("/store/checkout") ||
+      pathname?.startsWith("/store/requests")) ??
+    false;
 
   // The storefront is always light (its surfaces aren't dark-themed), even when
   // the admin default is dark.

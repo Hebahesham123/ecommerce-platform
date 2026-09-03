@@ -27,7 +27,17 @@ import {
  * other concern — the 14-day clock, the order picker, the quantity rules — so
  * splitting them into two pages would mean maintaining the same screen twice.
  */
-export default function RequestForm({ kind }: { kind: RequestKind }) {
+export default function RequestForm({
+  kind,
+  onBack,
+  signInHref = "/store/login",
+}: {
+  kind: RequestKind;
+  /** Rendered as a "back" link when the form is opened from the chooser. */
+  onBack?: () => void;
+  /** Where a signed-out shopper is sent, so they return here afterwards. */
+  signInHref?: string;
+}) {
   const { lang } = useI18n();
   const ar = lang === "ar";
   const isExchange = kind === "exchange";
@@ -184,13 +194,23 @@ export default function RequestForm({ kind }: { kind: RequestKind }) {
   if (signedOut) {
     return (
       <div className="mx-auto max-w-lg py-16 text-center">
+        {onBack && (
+          <button
+            type="button"
+            onClick={onBack}
+            className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-ink-muted transition-colors hover:text-ink"
+          >
+            <span aria-hidden>{ar ? "\u2192" : "\u2190"}</span>
+            {ar ? "\u0631\u062c\u0648\u0639" : "Back"}
+          </button>
+        )}
         <h1 className="text-2xl font-bold tracking-tight text-ink">{title}</h1>
         <p className="mt-2 text-sm text-ink-muted">
           {ar
             ? "سجّلي الدخول برقم هاتفك لعرض طلباتك وبدء الاسترجاع أو الاستبدال."
             : "Sign in with your phone number to see your orders and start a request."}
         </p>
-        <Link href="/store/login" className="btn-primary mt-6 inline-flex px-6 py-3">
+        <Link href={signInHref} target="_top" className="btn-primary mt-6 inline-flex px-6 py-3">
           {ar ? "تسجيل الدخول" : "Sign in"}
         </Link>
       </div>
@@ -199,6 +219,16 @@ export default function RequestForm({ kind }: { kind: RequestKind }) {
 
   return (
     <div className="mx-auto max-w-3xl py-8">
+      {onBack && (
+        <button
+          type="button"
+          onClick={onBack}
+          className="mb-4 inline-flex items-center gap-1.5 text-sm font-medium text-ink-muted transition-colors hover:text-ink"
+        >
+          <span aria-hidden>{ar ? "\u2192" : "\u2190"}</span>
+          {ar ? "\u0631\u062c\u0648\u0639" : "Back"}
+        </button>
+      )}
       <h1 className="text-2xl font-bold tracking-tight text-ink">{title}</h1>
       <p className="mt-1.5 text-sm text-ink-muted">
         {ar
