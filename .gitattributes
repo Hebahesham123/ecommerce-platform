@@ -1,0 +1,5 @@
+# Git stores every text file with LF and converts on checkout, so editing on
+# Windows can no longer rewrite a whole file as a line-ending change and bury
+# the real diff. Without this, 82 files showed as fully modified while their
+# content was byte-identical apart from carriage returns.
+* text=auto
