@@ -137,6 +137,28 @@ export default function RequestForm({
   const anyPicked = Object.values(picked).some((q) => q > 0);
   const canSubmit = Boolean(order) && !expired && anyReturned && (!isExchange || anyPicked) && !busy;
 
+  /**
+   * Why the button is refusing. Everything on this form is optional except the
+   * quantities, so a shopper who has not touched a stepper sees a page that
+   * looks finished and a button that will not move — with nothing anywhere
+   * saying which of the two things is missing.
+   */
+  const blocker: string | null = !order
+    ? null
+    : expired
+      ? ar
+        ? `\u0627\u0646\u062a\u0647\u062a \u0645\u0647\u0644\u0629 \u0627\u0644\u0640 ${RETURN_WINDOW_DAYS} \u064a\u0648\u0645\u0627\u064b \u0644\u0647\u0630\u0627 \u0627\u0644\u0637\u0644\u0628`
+        : `The ${RETURN_WINDOW_DAYS}-day window for this order has closed`
+      : !anyReturned
+        ? ar
+          ? "\u0627\u062e\u062a\u0627\u0631\u064a \u0642\u0637\u0639\u0629 \u0648\u0627\u062d\u062f\u0629 \u0639\u0644\u0649 \u0627\u0644\u0623\u0642\u0644 \u0628\u0627\u0633\u062a\u062e\u062f\u0627\u0645 \u0632\u0631 +"
+          : "Choose at least one item to send back \u2014 use + to set how many"
+        : isExchange && !anyPicked
+          ? ar
+            ? "\u0627\u062e\u062a\u0627\u0631\u064a \u0627\u0644\u0642\u0637\u0639\u0629 \u0627\u0644\u0628\u062f\u064a\u0644\u0629"
+            : "Pick at least one replacement below"
+          : null;
+
   async function submit() {
     if (!order) return;
     setErr(null);
@@ -326,21 +348,21 @@ export default function RequestForm({
                             : `${ar ? "متاح للإرجاع" : "up to"} ${l.returnable}`}
                         </div>
                       </div>
-                      <div className="flex items-center rounded-lg border border-line">
+                      <div className="flex items-center overflow-hidden rounded-lg border border-line">
                         <button
                           type="button"
                           onClick={() => setQty((q) => ({ ...q, [l.orderItemId]: Math.max(0, chosen - 1) }))}
                           disabled={soldOut || chosen <= 0}
-                          className="px-2.5 py-1 text-ink-muted disabled:opacity-30"
+                          className="h-9 w-9 text-lg font-semibold leading-none text-ink transition-colors hover:bg-surface-hover disabled:text-ink-soft disabled:opacity-40 disabled:hover:bg-transparent"
                         >
                           −
                         </button>
-                        <span className="w-8 text-center text-sm font-medium">{chosen}</span>
+                        <span className="w-9 text-center text-sm font-semibold tabular-nums">{chosen}</span>
                         <button
                           type="button"
                           onClick={() => setQty((q) => ({ ...q, [l.orderItemId]: Math.min(l.returnable, chosen + 1) }))}
                           disabled={soldOut || chosen >= l.returnable}
-                          className="px-2.5 py-1 text-ink-muted disabled:opacity-30"
+                          className="h-9 w-9 text-lg font-semibold leading-none text-ink transition-colors hover:bg-surface-hover disabled:text-ink-soft disabled:opacity-40 disabled:hover:bg-transparent"
                         >
                           +
                         </button>
@@ -384,21 +406,21 @@ export default function RequestForm({
                             {egp(v.price, lang)} · {v.available} {ar ? "متاح" : "in stock"}
                           </div>
                         </div>
-                        <div className="flex items-center rounded-lg border border-line">
+                        <div className="flex items-center overflow-hidden rounded-lg border border-line">
                           <button
                             type="button"
                             onClick={() => setPicked((p) => ({ ...p, [v.id]: Math.max(0, chosen - 1) }))}
                             disabled={chosen <= 0}
-                            className="px-2.5 py-1 text-ink-muted disabled:opacity-30"
+                            className="h-9 w-9 text-lg font-semibold leading-none text-ink transition-colors hover:bg-surface-hover disabled:text-ink-soft disabled:opacity-40 disabled:hover:bg-transparent"
                           >
                             −
                           </button>
-                          <span className="w-8 text-center text-sm font-medium">{chosen}</span>
+                          <span className="w-9 text-center text-sm font-semibold tabular-nums">{chosen}</span>
                           <button
                             type="button"
                             onClick={() => setPicked((p) => ({ ...p, [v.id]: Math.min(v.available, chosen + 1) }))}
                             disabled={chosen >= v.available}
-                            className="px-2.5 py-1 text-ink-muted disabled:opacity-30"
+                            className="h-9 w-9 text-lg font-semibold leading-none text-ink transition-colors hover:bg-surface-hover disabled:text-ink-soft disabled:opacity-40 disabled:hover:bg-transparent"
                           >
                             +
                           </button>
@@ -487,6 +509,9 @@ export default function RequestForm({
                 ? ar ? "انتهت المهلة" : "Window closed"
                 : ar ? "إرسال الطلب" : "Submit request"}
           </button>
+          {blocker && !busy && (
+            <p className="mt-2 text-center text-sm text-ink-muted">{blocker}</p>
+          )}
         </>
       )}
 
