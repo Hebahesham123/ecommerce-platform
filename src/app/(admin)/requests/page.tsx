@@ -2,12 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useI18n, num } from "@/lib/i18n";
+import Link from "next/link";
 import {
   deleteRequest,
   listRequests,
+  returnsSummary,
   setRequestAdminNote,
   setRequestStatus,
   type RequestStatus,
+  type ReturnsSummary,
   type StoreRequest,
 } from "./actions";
 import { PageHeader } from "@/components/page-header";
@@ -34,6 +37,7 @@ import {
   IcMail,
   IcWhatsApp,
   IcOrders,
+  IcRefresh,
 } from "@/components/icons";
 
 /**
@@ -76,6 +80,7 @@ export default function RequestsPage() {
   const [open, setOpen] = useState<StoreRequest | null>(null);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+  const [returns, setReturns] = useState<ReturnsSummary | null>(null);
 
   async function load() {
     setLoading(true);
@@ -91,6 +96,9 @@ export default function RequestsPage() {
 
   useEffect(() => {
     load();
+    returnsSummary().then((r) => {
+      if (r.ok) setReturns(r.data);
+    });
   }, []);
 
   // Keep the open drawer pointing at the freshly loaded copy of its row.
@@ -186,6 +194,37 @@ export default function RequestsPage() {
           </button>
         }
       />
+
+      {returns && returns.total > 0 && (
+        <Link
+          href="/returns"
+          className="mb-4 flex items-center gap-3 rounded-2xl border border-line bg-surface p-4 transition-shadow hover:shadow-pop"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+            <IcRefresh className="h-5 w-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold text-ink">
+              {ar
+                ? "الاسترجاع والاستبدال في صفحة منفصلة"
+                : "Returns and exchanges are on their own page"}
+            </span>
+            <span className="mt-0.5 block text-xs text-ink-soft">
+              {ar
+                ? `${num(returns.total, lang)} طلب — ${num(returns.waiting, lang)} بانتظار المراجعة. هذه الصفحة للاستفسارات العامة فقط.`
+                : `${returns.total} request${returns.total === 1 ? "" : "s"}, ${returns.waiting} waiting on you. This page is for general enquiries only.`}
+            </span>
+          </span>
+          {returns.waiting > 0 && (
+            <span className="badge shrink-0 bg-amber-50 text-amber-700">
+              {num(returns.waiting, lang)}
+            </span>
+          )}
+          <span aria-hidden className="text-ink-soft">
+            {ar ? "\u2039" : "\u203a"}
+          </span>
+        </Link>
+      )}
 
       <KpiRow cols={4}>
         <StatTile

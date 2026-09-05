@@ -63,6 +63,32 @@ function mapError(message: string): string {
   return /store_requests/i.test(message) ? "migration_missing" : message;
 }
 
+/**
+ * Returns and exchanges live in their own table and on their own page, because
+ * they move stock and money. A shopper choosing "Return" on the storefront and
+ * a merchant looking for it under Requests is the obvious way to be confused,
+ * so this page points at the other one rather than leaving a dead end.
+ */
+export type ReturnsSummary = { waiting: number; total: number };
+
+export async function returnsSummary(): Promise<ActionResult<ReturnsSummary>> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  try {
+    const supabase = getServerSupabase();
+    const [all, open] = await Promise.all([
+      supabase.from("return_requests").select("id", { count: "exact", head: true }),
+      supabase
+        .from("return_requests")
+        .select("id", { count: "exact", head: true })
+        .in("status", ["pending", "approved"]),
+    ]);
+    if (all.error) return { ok: false, error: all.error.message };
+    return { ok: true, data: { waiting: open.count ?? 0, total: all.count ?? 0 } };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
 export async function listRequests(): Promise<ActionResult<StoreRequest[]>> {
   if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
   try {
