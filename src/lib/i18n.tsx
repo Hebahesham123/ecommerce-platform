@@ -334,6 +334,7 @@ const dict = {
   nav_app_returns: { ar: "مرتجعات التطبيق", en: "App returns" },
   nav_app_requests: { ar: "استفسارات التطبيق", en: "App requests" },
   nav_app_connect: { ar: "ربط التطبيق", en: "Connect" },
+  nav_app_preview: { ar: "معاينة التطبيق", en: "App preview" },
   nav_meta: { ar: "ميتا (فيسبوك)", en: "Meta (Facebook)" },
   meta_subtitle: { ar: "اربط البيكسل والكتالوج وأحداث الخادم مع ميتا", en: "Connect Pixel, Catalog & server events to Meta" },
   sec_connection: { ar: "الاتصال", en: "Connection" },

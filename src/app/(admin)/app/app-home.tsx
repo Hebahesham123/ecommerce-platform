@@ -403,6 +403,22 @@ export function AppHome() {
             </Card>
           </Link>
 
+          <Link href="/app-preview" target="_blank" className="block">
+            <Card className="flex items-center gap-3 p-4 transition-colors hover:bg-surface-hover">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+                <IcMobile className="h-5 w-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium text-ink">
+                  {ar ? "معاينة التطبيق" : "App preview"}
+                </div>
+                <div className="text-xs text-ink-soft">
+                  {ar ? "جرّبي الشراء من التطبيق الآن" : "Shop as an app, before there is one"}
+                </div>
+              </div>
+            </Card>
+          </Link>
+
           <Link href="/app/connect" className="block">
             <Card className="flex items-center gap-3 p-4 transition-colors hover:bg-surface-hover">
               <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-50 text-violet-600">

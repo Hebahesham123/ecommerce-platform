@@ -30,6 +30,7 @@ import {
   IcRefresh,
   IcMobile,
   IcCode,
+  IcEye,
 } from "./icons";
 import type { ComponentType, SVGProps } from "react";
 
@@ -105,6 +106,7 @@ const groups: Group[] = [
       { href: "/app/returns", key: "nav_app_returns", icon: IcRefresh },
       { href: "/app/requests", key: "nav_app_requests", icon: IcClipboard },
       { href: "/app/connect", key: "nav_app_connect", icon: IcCode },
+      { href: "/app-preview", key: "nav_app_preview", icon: IcEye },
     ],
   },
   {

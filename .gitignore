@@ -40,3 +40,6 @@ products_export.csv
 
 # Agent session state
 .claude/
+
+# Files Claude delivers into the chat
+Claude outputs/
