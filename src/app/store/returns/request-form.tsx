@@ -151,8 +151,8 @@ export default function RequestForm({
         : `The ${RETURN_WINDOW_DAYS}-day window for this order has closed`
       : !anyReturned
         ? ar
-          ? "\u0627\u062e\u062a\u0627\u0631\u064a \u0642\u0637\u0639\u0629 \u0648\u0627\u062d\u062f\u0629 \u0639\u0644\u0649 \u0627\u0644\u0623\u0642\u0644 \u0628\u0627\u0633\u062a\u062e\u062f\u0627\u0645 \u0632\u0631 +"
-          : "Choose at least one item to send back \u2014 use + to set how many"
+          ? "\u0627\u062e\u062a\u0627\u0631\u064a \u0642\u0637\u0639\u0629 \u0648\u0627\u062d\u062f\u0629 \u0639\u0644\u0649 \u0627\u0644\u0623\u0642\u0644"
+          : "Tick at least one item to send back"
         : isExchange && !anyPicked
           ? ar
             ? "\u0627\u062e\u062a\u0627\u0631\u064a \u0627\u0644\u0642\u0637\u0639\u0629 \u0627\u0644\u0628\u062f\u064a\u0644\u0629"
@@ -324,49 +324,53 @@ export default function RequestForm({
           {order && (
             <section className="mt-4 rounded-2xl border border-line p-4">
               <h2 className="text-sm font-semibold text-ink">
-                {ar ? "ما الذي تريدين إرجاعه؟" : "What are you sending back?"}
+                {ar ? "ما الذي تريدين إرجاعه؟" : "Tick what you're sending back"}
               </h2>
               <ul className="mt-3 divide-y divide-line">
                 {order.lines.map((l) => {
                   const chosen = qty[l.orderItemId] ?? 0;
                   const soldOut = l.returnable <= 0;
                   return (
-                    <li key={l.orderItemId} className={`flex items-center gap-3 py-3 ${soldOut ? "opacity-50" : ""}`}>
-                      <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-line bg-surface-page">
-                        {l.imageUrl && (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={l.imageUrl} alt="" className="h-full w-full object-cover" />
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-sm font-medium text-ink">{l.productName}</div>
-                        {l.variantTitle && <div className="text-xs text-ink-soft">{l.variantTitle}</div>}
-                        <div className="text-xs text-ink-soft">
-                          {egp(l.price, lang)} ·{" "}
-                          {soldOut
-                            ? ar ? "مطلوب استرجاعه بالفعل" : "already requested"
-                            : `${ar ? "متاح للإرجاع" : "up to"} ${l.returnable}`}
+                    <li key={l.orderItemId} className={soldOut ? "opacity-50" : ""}>
+                      {/* The whole row is the control: a shopper returning one
+                          pair of shoes should tick a box, not operate a
+                          spinner. Ticking sends the whole line back. */}
+                      <label
+                        className={`flex items-center gap-3 py-3 ${
+                          soldOut ? "cursor-not-allowed" : "cursor-pointer"
+                        }`}
+                      >
+                        <div className="h-14 w-14 shrink-0 overflow-hidden rounded-lg border border-line bg-surface-page">
+                          {l.imageUrl && (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={l.imageUrl} alt="" className="h-full w-full object-cover" />
+                          )}
                         </div>
-                      </div>
-                      <div className="flex items-center overflow-hidden rounded-lg border border-line">
-                        <button
-                          type="button"
-                          onClick={() => setQty((q) => ({ ...q, [l.orderItemId]: Math.max(0, chosen - 1) }))}
-                          disabled={soldOut || chosen <= 0}
-                          className="h-9 w-9 text-lg font-semibold leading-none text-ink transition-colors hover:bg-surface-hover disabled:text-ink-soft disabled:opacity-40 disabled:hover:bg-transparent"
-                        >
-                          −
-                        </button>
-                        <span className="w-9 text-center text-sm font-semibold tabular-nums">{chosen}</span>
-                        <button
-                          type="button"
-                          onClick={() => setQty((q) => ({ ...q, [l.orderItemId]: Math.min(l.returnable, chosen + 1) }))}
-                          disabled={soldOut || chosen >= l.returnable}
-                          className="h-9 w-9 text-lg font-semibold leading-none text-ink transition-colors hover:bg-surface-hover disabled:text-ink-soft disabled:opacity-40 disabled:hover:bg-transparent"
-                        >
-                          +
-                        </button>
-                      </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-medium text-ink">{l.productName}</div>
+                          {l.variantTitle && <div className="text-xs text-ink-soft">{l.variantTitle}</div>}
+                          <div className="text-xs text-ink-soft">
+                            {egp(l.price, lang)}
+                            {soldOut
+                              ? ` · ${ar ? "مطلوب استرجاعه بالفعل" : "already requested"}`
+                              : l.returnable > 1
+                                ? ` · ${l.returnable} ${ar ? "قطع سترجع كلها" : "pieces, all returned"}`
+                                : ""}
+                          </div>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={chosen > 0}
+                          disabled={soldOut}
+                          onChange={(e) =>
+                            setQty((q) => ({
+                              ...q,
+                              [l.orderItemId]: e.target.checked ? l.returnable : 0,
+                            }))
+                          }
+                          className="h-5 w-5 shrink-0 rounded accent-brand-600"
+                        />
+                      </label>
                     </li>
                   );
                 })}
@@ -393,38 +397,27 @@ export default function RequestForm({
                   {shown.map((v) => {
                     const chosen = picked[v.id] ?? 0;
                     return (
-                      <li key={v.id} className="flex items-center gap-3 py-2.5">
-                        <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-line bg-surface-page">
-                          {v.image && (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={v.image} alt="" className="h-full w-full object-cover" />
-                          )}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-sm font-medium text-ink">{v.label}</div>
-                          <div className="text-xs text-ink-soft">
-                            {egp(v.price, lang)} · {v.available} {ar ? "متاح" : "in stock"}
+                      <li key={v.id}>
+                        <label className="flex cursor-pointer items-center gap-3 py-2.5">
+                          <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-line bg-surface-page">
+                            {v.image && (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={v.image} alt="" className="h-full w-full object-cover" />
+                            )}
                           </div>
-                        </div>
-                        <div className="flex items-center overflow-hidden rounded-lg border border-line">
-                          <button
-                            type="button"
-                            onClick={() => setPicked((p) => ({ ...p, [v.id]: Math.max(0, chosen - 1) }))}
-                            disabled={chosen <= 0}
-                            className="h-9 w-9 text-lg font-semibold leading-none text-ink transition-colors hover:bg-surface-hover disabled:text-ink-soft disabled:opacity-40 disabled:hover:bg-transparent"
-                          >
-                            −
-                          </button>
-                          <span className="w-9 text-center text-sm font-semibold tabular-nums">{chosen}</span>
-                          <button
-                            type="button"
-                            onClick={() => setPicked((p) => ({ ...p, [v.id]: Math.min(v.available, chosen + 1) }))}
-                            disabled={chosen >= v.available}
-                            className="h-9 w-9 text-lg font-semibold leading-none text-ink transition-colors hover:bg-surface-hover disabled:text-ink-soft disabled:opacity-40 disabled:hover:bg-transparent"
-                          >
-                            +
-                          </button>
-                        </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-sm font-medium text-ink">{v.label}</div>
+                            <div className="text-xs text-ink-soft">{egp(v.price, lang)}</div>
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={chosen > 0}
+                            onChange={(e) =>
+                              setPicked((p) => ({ ...p, [v.id]: e.target.checked ? 1 : 0 }))
+                            }
+                            className="h-5 w-5 shrink-0 rounded accent-brand-600"
+                          />
+                        </label>
                       </li>
                     );
                   })}
