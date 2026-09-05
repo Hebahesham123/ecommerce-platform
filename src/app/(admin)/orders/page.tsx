@@ -28,6 +28,8 @@ import {
   type PillTone,
 } from "@/components/dashboard-ui";
 import { IcFile, IcX, IcChevron, IcCash, IcCourier } from "@/components/icons";
+import { ChannelBadge } from "@/components/channel-badge";
+import { CHANNELS, CHANNEL_LABELS, type Channel } from "@/lib/channel";
 
 type Tab = "all" | "unfulfilled" | "unpaid" | "open" | "attention";
 type SortKey = "newest" | "oldest" | "total_high" | "total_low";
@@ -54,7 +56,7 @@ const flagPill: Record<OrderFlag, PillTone> = {
 };
 
 // Table row = an order plus the extra columns the Shopify-style list shows.
-type Row = Order & { itemsCount: number; channel: "online" };
+type Row = Order & { itemsCount: number; channel: Channel };
 
 export default function OrdersPage() {
   const { t, lang } = useI18n();
@@ -63,6 +65,7 @@ export default function OrdersPage() {
   const [payment, setPayment] = useState<"all" | Payment>("all");
   const [fulfillment, setFulfillment] = useState<"all" | Fulfillment>("all");
   const [method, setMethod] = useState<"all" | PayMethod>("all");
+  const [channel, setChannel] = useState<"all" | Channel>("all");
   const [sort, setSort] = useState<SortKey>("newest");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [detail, setDetail] = useState<Order | null>(null);
@@ -85,7 +88,7 @@ export default function OrdersPage() {
             fulfillment: o.fulfillment,
             date: o.date,
             itemsCount: o.itemsCount,
-            channel: "online",
+            channel: o.channel,
           })),
         );
       }
@@ -94,7 +97,14 @@ export default function OrdersPage() {
 
   // Real placed orders first, then the demo orders (given a stable item count).
   const orders = useMemo<Row[]>(
-    () => [...placed, ...mockOrders.map((m) => ({ ...m, itemsCount: 1 + (Number(m.id) % 3), channel: "online" as const }))],
+    () => [
+      ...placed,
+      ...mockOrders.map((m) => ({
+        ...m,
+        itemsCount: 1 + (Number(m.id) % 3),
+        channel: "web" as Channel,
+      })),
+    ],
     [placed],
   );
 
@@ -154,6 +164,7 @@ export default function OrdersPage() {
       if (payment !== "all" && o.payment !== payment) return false;
       if (fulfillment !== "all" && o.fulfillment !== fulfillment) return false;
       if (method !== "all" && o.method !== method) return false;
+      if (channel !== "all" && o.channel !== channel) return false;
       if (needle) {
         const hay = `${o.id} ${o.customer} ${o.phone} ${o.governorate}`.toLowerCase();
         if (!hay.includes(needle)) return false;
@@ -174,14 +185,15 @@ export default function OrdersPage() {
       }
     });
     return sorted;
-  }, [orders, tab, q, payment, fulfillment, method, sort]);
+  }, [orders, tab, q, payment, fulfillment, method, channel, sort]);
 
   const pg = usePagination(filtered, {
     perPage: 20,
-    resetKey: `${tab}|${q}|${payment}|${fulfillment}|${method}|${sort}`,
+    resetKey: `${tab}|${q}|${payment}|${fulfillment}|${method}|${channel}|${sort}`,
   });
 
-  const filtersActive = q !== "" || payment !== "all" || fulfillment !== "all" || method !== "all";
+  const filtersActive =
+    q !== "" || payment !== "all" || fulfillment !== "all" || method !== "all" || channel !== "all";
   // Bulk selection acts on the visible page, the way every list app behaves.
   const allSelected = pg.items.length > 0 && pg.items.every((o) => selected.has(o.id));
   const someSelected = pg.items.some((o) => selected.has(o.id));
@@ -253,6 +265,12 @@ export default function OrdersPage() {
                 <option key={m} value={m}>{t(labels.methodKey[m])}</option>
               ))}
             </Select>
+            <Select value={channel} onChange={(v) => setChannel(v as "all" | Channel)}>
+              <option value="all">{t("col_channel")}</option>
+              {CHANNELS.map((ch) => (
+                <option key={ch} value={ch}>{CHANNEL_LABELS[ch][ar ? "ar" : "en"]}</option>
+              ))}
+            </Select>
             <Select value={sort} onChange={(v) => setSort(v as SortKey)}>
               <option value="newest">{t("sort_label")}: {ar ? "الأحدث" : "Newest"}</option>
               <option value="oldest">{ar ? "الأقدم" : "Oldest"}</option>
@@ -261,7 +279,13 @@ export default function OrdersPage() {
             </Select>
             {filtersActive && (
               <button
-                onClick={() => { setPayment("all"); setFulfillment("all"); setMethod("all"); setQ(""); }}
+                onClick={() => {
+                  setPayment("all");
+                  setFulfillment("all");
+                  setMethod("all");
+                  setChannel("all");
+                  setQ("");
+                }}
                 className="btn-ghost h-9 gap-1 px-2.5 text-xs text-ink-muted"
               >
                 <IcX className="h-3.5 w-3.5" /> {t("clear_filters")}
@@ -344,9 +368,7 @@ export default function OrdersPage() {
                       </div>
                     </td>
                     <td className="px-5 py-3.5">
-                      <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-ink-muted">
-                        <span className="h-2 w-2 rounded-full bg-emerald-500" />{t("nav_online_store")}
-                      </span>
+                      <ChannelBadge value={o.channel} />
                     </td>
                   </tr>
                 );

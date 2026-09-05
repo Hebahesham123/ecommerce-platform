@@ -2,6 +2,7 @@
 
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
 import type { ActionResult } from "../../store/actions";
+import { normalizeChannel, type Channel } from "@/lib/channel";
 
 /**
  * General customer requests — the "something else" branch of the storefront's
@@ -28,6 +29,8 @@ export type StoreRequest = {
   status: RequestStatus;
   adminNote: string | null;
   createdAt: string;
+  /** Which surface the enquiry came in from. */
+  channel: Channel;
 };
 
 type Row = Record<string, unknown>;
@@ -54,6 +57,7 @@ function mapRequest(r: Row): StoreRequest {
     status: (r.status as RequestStatus) ?? "new",
     adminNote: (r.admin_note as string) ?? null,
     createdAt: String(r.created_at ?? ""),
+    channel: normalizeChannel(r.channel),
   };
 }
 

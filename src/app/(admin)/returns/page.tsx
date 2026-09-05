@@ -28,6 +28,8 @@ import {
   type PillTone,
 } from "@/components/dashboard-ui";
 import { IcRefresh, IcCash, IcAlert, IcX, IcImage, IcInventory } from "@/components/icons";
+import { ChannelBadge } from "@/components/channel-badge";
+import { CHANNELS, CHANNEL_LABELS, type Channel } from "@/lib/channel";
 
 const statusTone: Record<RequestStatus, PillTone> = {
   pending: "warning",
@@ -48,6 +50,7 @@ export default function ReturnsPage() {
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<KindTab>("all");
   const [status, setStatus] = useState<"all" | RequestStatus>("all");
+  const [channel, setChannel] = useState<"all" | Channel>("all");
   const [q, setQ] = useState("");
   const [open, setOpen] = useState<ReturnRequest | null>(null);
 
@@ -77,15 +80,19 @@ export default function ReturnsPage() {
     return rows.filter((r) => {
       if (tab !== "all" && r.kind !== tab) return false;
       if (status !== "all" && r.status !== status) return false;
+      if (channel !== "all" && r.channel !== channel) return false;
       if (needle) {
         const hay = `${r.reference} ${r.orderNumber} ${r.customerName ?? ""} ${r.phone}`.toLowerCase();
         if (!hay.includes(needle)) return false;
       }
       return true;
     });
-  }, [rows, tab, status, q]);
+  }, [rows, tab, status, channel, q]);
 
-  const pg = usePagination(filtered, { perPage: 20, resetKey: `${tab}|${status}|${q}` });
+  const pg = usePagination(filtered, {
+    perPage: 20,
+    resetKey: `${tab}|${status}|${channel}|${q}`,
+  });
 
   const kpi = useMemo(() => {
     const pending = rows.filter((r) => r.status === "pending").length;
@@ -222,9 +229,15 @@ export default function ReturnsPage() {
               <option key={s} value={s}>{statusLabel[s][ar ? "ar" : "en"]}</option>
             ))}
           </Select>
-          {(q || status !== "all" || tab !== "all") && (
+          <Select value={channel} onChange={(v) => setChannel(v as "all" | Channel)}>
+            <option value="all">{t("col_channel")}: {t("filter_all")}</option>
+            {CHANNELS.map((ch) => (
+              <option key={ch} value={ch}>{CHANNEL_LABELS[ch][ar ? "ar" : "en"]}</option>
+            ))}
+          </Select>
+          {(q || status !== "all" || tab !== "all" || channel !== "all") && (
             <button
-              onClick={() => { setQ(""); setStatus("all"); setTab("all"); }}
+              onClick={() => { setQ(""); setStatus("all"); setTab("all"); setChannel("all"); }}
               className="btn-ghost h-9 gap-1 px-2.5 text-xs text-ink-muted"
             >
               <IcX className="h-3.5 w-3.5" /> {t("clear_filters")}
@@ -246,6 +259,7 @@ export default function ReturnsPage() {
                 <th className="px-3 py-3 text-start font-medium">{ar ? "المهلة" : "Window"}</th>
                 <th className="px-3 py-3 text-end font-medium">{ar ? "الفرق" : "Difference"}</th>
                 <th className="px-3 py-3 text-start font-medium">{t("col_status")}</th>
+                <th className="px-3 py-3 text-start font-medium">{t("col_channel")}</th>
                 <th className="px-5 py-3 text-end font-medium" />
               </tr>
             </thead>
@@ -293,6 +307,9 @@ export default function ReturnsPage() {
                         label={statusLabel[r.status][ar ? "ar" : "en"]}
                         tone={statusTone[r.status]}
                       />
+                    </td>
+                    <td className="px-3 py-3.5">
+                      <ChannelBadge value={r.channel} />
                     </td>
                     <td className="px-5 py-3.5 text-end" onClick={(e) => e.stopPropagation()}>
                       {nextStatuses(r.status).length > 0 ? (
@@ -433,8 +450,12 @@ function RequestDrawer({
                 tone={statusTone[request.status]}
               />
             </div>
-            <p className="mt-0.5 text-sm text-ink-muted">
-              {kindLabel[request.kind][ar ? "ar" : "en"]} · <span dir="ltr">#{request.orderNumber}</span>
+            <p className="mt-0.5 flex flex-wrap items-center gap-2 text-sm text-ink-muted">
+              <span>
+                {kindLabel[request.kind][ar ? "ar" : "en"]} ·{" "}
+                <span dir="ltr">#{request.orderNumber}</span>
+              </span>
+              <ChannelBadge value={request.channel} />
             </p>
           </div>
           <button onClick={onClose} className="btn-ghost h-8 w-8 p-0">

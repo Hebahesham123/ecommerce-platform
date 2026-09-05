@@ -2,6 +2,7 @@
 
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
 import type { ActionResult } from "../../store/actions";
+import { normalizeChannel, type Channel } from "@/lib/channel";
 
 export type ReviewStatus = "pending" | "published" | "hidden";
 
@@ -18,6 +19,8 @@ export type StoreReview = {
   phone: string | null;
   orderNumber: string | null;
   createdAt: string;
+  /** Which surface it was left from. */
+  channel: Channel;
 };
 
 type Row = Record<string, unknown>;
@@ -37,6 +40,7 @@ function mapReview(r: Row): StoreReview {
     phone: (r.phone as string) ?? null,
     orderNumber: (r.order_number as string) ?? null,
     createdAt: String(r.created_at),
+    channel: normalizeChannel(r.channel),
   };
 }
 

@@ -15,6 +15,8 @@ import {
 } from "./actions";
 import { PageHeader } from "@/components/page-header";
 import { Card, Avatar } from "@/components/ui";
+import { ChannelBadge } from "@/components/channel-badge";
+import { CHANNELS, CHANNEL_LABELS, type Channel } from "@/lib/channel";
 import {
   KpiRow,
   StatTile,
@@ -77,6 +79,7 @@ export default function RequestsPage() {
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("all");
   const [q, setQ] = useState("");
+  const [channel, setChannel] = useState<"all" | Channel>("all");
   const [open, setOpen] = useState<StoreRequest | null>(null);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
@@ -119,6 +122,7 @@ export default function RequestsPage() {
     const needle = q.trim().toLowerCase();
     return rows.filter((r) => {
       if (tab !== "all" && r.status !== tab) return false;
+      if (channel !== "all" && r.channel !== channel) return false;
       if (!needle) return true;
       return [r.reference, r.name, r.email, r.phone, r.orderNumber, r.subject, r.message]
         .filter(Boolean)
@@ -126,9 +130,9 @@ export default function RequestsPage() {
         .toLowerCase()
         .includes(needle);
     });
-  }, [rows, tab, q]);
+  }, [rows, tab, channel, q]);
 
-  const pg = usePagination(filtered, { perPage: 20, resetKey: `${tab}|${q}` });
+  const pg = usePagination(filtered, { perPage: 20, resetKey: `${tab}|${channel}|${q}` });
 
   async function changeStatus(r: StoreRequest, status: RequestStatus) {
     setBusy(true);
@@ -271,12 +275,29 @@ export default function RequestsPage() {
             active={tab}
             onChange={(k) => setTab(k as Tab)}
           />
-          <div className="ms-auto w-full max-w-xs">
-            <SearchInput
-              value={q}
-              onChange={setQ}
-              placeholder={ar ? "ابحثي بالاسم أو الرقم…" : "Search name, phone, order…"}
-            />
+          <div className="ms-auto flex items-center gap-2">
+            <div className="flex rounded-lg border border-line p-0.5">
+              {(["all", ...CHANNELS] as ("all" | Channel)[]).map((ch) => (
+                <button
+                  key={ch}
+                  onClick={() => setChannel(ch)}
+                  className={`rounded-md px-2.5 py-1 text-xs font-medium transition ${
+                    channel === ch ? "bg-surface-page text-ink" : "text-ink-soft hover:text-ink"
+                  }`}
+                >
+                  {ch === "all"
+                    ? ar ? "الكل" : "All"
+                    : CHANNEL_LABELS[ch][ar ? "ar" : "en"]}
+                </button>
+              ))}
+            </div>
+            <div className="w-full max-w-xs">
+              <SearchInput
+                value={q}
+                onChange={setQ}
+                placeholder={ar ? "ابحثي بالاسم أو الرقم…" : "Search name, phone, order…"}
+              />
+            </div>
           </div>
         </Toolbar>
       </div>
@@ -307,6 +328,7 @@ export default function RequestsPage() {
                       {r.reference}
                     </span>
                     <StatusPill label={statusText[r.status][lang]} tone={statusTone[r.status]} />
+                    <ChannelBadge value={r.channel} />
                   </div>
                   <p className="mt-1 line-clamp-2 text-sm text-ink-muted">{r.message}</p>
                   <div className="mt-1.5 flex flex-wrap items-center gap-3 text-xs text-ink-soft">

@@ -7,6 +7,8 @@
  * what stops the two sides from disagreeing about either.
  */
 
+import { normalizeChannel, type Channel } from "@/lib/channel";
+
 export type RequestKind = "return" | "exchange";
 
 export type RequestStatus =
@@ -55,6 +57,8 @@ export type ReturnRequest = {
   inventoryAppliedAt: string | null;
   completedAt: string | null;
   createdAt: string;
+  /** Which surface the shopper opened it from. */
+  channel: Channel;
   lines: RequestLine[];
 };
 
@@ -169,6 +173,7 @@ export function mapRequestRow(r: Row): ReturnRequest {
     inventoryAppliedAt: r.inventory_applied_at ? String(r.inventory_applied_at) : null,
     completedAt: r.completed_at ? String(r.completed_at) : null,
     createdAt: String(r.created_at),
+    channel: normalizeChannel(r.channel),
     lines: lines.map(
       (l): RequestLine => ({
         id: String(l.id),

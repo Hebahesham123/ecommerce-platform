@@ -25,6 +25,7 @@ import {
   type PillTone,
 } from "@/components/dashboard-ui";
 import { IcStar, IcAlert, IcEye, IcTrash, IcX, IcLink, IcRefresh } from "@/components/icons";
+import { ChannelBadge } from "@/components/channel-badge";
 
 const statusTone: Record<ReviewStatus, PillTone> = {
   pending: "warning",
@@ -307,11 +308,14 @@ export default function ReviewsPage() {
                       <Avatar name={r.reviewerName} />
                       <div className="min-w-0">
                         <div className="truncate font-medium text-ink">{r.reviewerName}</div>
-                        {(r.orderNumber || r.phone) && (
-                          <div className="truncate text-xs text-ink-soft" dir="ltr">
-                            {r.orderNumber ? `#${r.orderNumber}` : r.phone}
-                          </div>
-                        )}
+                        <div className="mt-0.5 flex items-center gap-1.5">
+                          {(r.orderNumber || r.phone) && (
+                            <span className="truncate text-xs text-ink-soft" dir="ltr">
+                              {r.orderNumber ? `#${r.orderNumber}` : r.phone}
+                            </span>
+                          )}
+                          <ChannelBadge value={r.channel} />
+                        </div>
                       </div>
                     </div>
                   </td>

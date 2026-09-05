@@ -4,6 +4,7 @@ import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
 import { validateDiscount, type DiscountLine } from "@/lib/discount-engine";
 import { normalizePhone, phoneVariants } from "@/lib/phone";
 import { getSessionPhone, setSession } from "@/lib/store-session";
+import { normalizeChannel, type Channel } from "@/lib/channel";
 import {
   isBirthdayFor,
   placeOrderCore,
@@ -464,6 +465,8 @@ export type PlacedOrder = {
   fulfillment: "unfulfilled" | "assigned" | "out" | "delivered" | "returned";
   date: string;
   itemsCount: number;
+  /** Which surface placed it. Every pre-channel order reads as the website. */
+  channel: Channel;
 };
 
 export async function listStoreOrders(): Promise<ActionResult<PlacedOrder[]>> {
@@ -487,6 +490,7 @@ export async function listStoreOrders(): Promise<ActionResult<PlacedOrder[]>> {
       fulfillment: (String(r.fulfillment_status ?? "unfulfilled") as PlacedOrder["fulfillment"]),
       date: String(r.created_at ?? "").slice(0, 10),
       itemsCount: Array.isArray(r.store_order_items) ? r.store_order_items.length : 0,
+      channel: normalizeChannel(r.channel),
     }));
     return { ok: true, data: rows };
   } catch (e) {
