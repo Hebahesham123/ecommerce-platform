@@ -1,4 +1,4 @@
-import { submitGeneralRequest } from "@/app/store/requests/actions";
+import { submitGeneralRequestFor } from "@/lib/requests-service";
 import { channelOf, fail, fromResult, viewerOf } from "@/lib/api/http";
 
 export const runtime = "nodejs";
@@ -23,9 +23,6 @@ export async function POST(request: Request) {
   }
 
   return fromResult(
-    await submitGeneralRequest(form, {
-      viewerPhone: viewerOf(request),
-      channel: channelOf(request),
-    }),
+    await submitGeneralRequestFor(viewerOf(request), form, channelOf(request)),
   );
 }

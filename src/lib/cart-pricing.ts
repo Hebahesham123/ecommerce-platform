@@ -94,3 +94,49 @@ export async function priceCart(requested: CartRequestLine[]): Promise<PricedCar
     removed,
   };
 }
+
+/**
+ * Replace whatever prices a caller sent with the ones in the database.
+ *
+ * The website's cart lives in localStorage, so its prices are as editable as
+ * any other value in a browser; an app's cart lives on a device we do not
+ * control. Either way, an order priced from numbers the client supplied is an
+ * order a client can discount to zero — so checkout re-reads every price here
+ * before anything is charged or reserved. Quantities are left alone: the stock
+ * function holds the lock and is the only thing that can honestly cap them.
+ */
+export async function repriceLines<T extends { itemId: string; quantity: number; price: number }>(
+  lines: T[],
+): Promise<{ ok: true; lines: T[] } | { ok: false; error: string }> {
+  if (!lines.length) return { ok: false, error: "empty_cart" };
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+
+  const { data, error } = await getServerSupabase()
+    .from("inventory_items")
+    .select("id,product_name,variant_title,sku,image_url,price,status")
+    .in(
+      "id",
+      lines.map((l) => l.itemId),
+    );
+  if (error) return { ok: false, error: error.message };
+
+  const byId = new Map((data ?? []).map((r: any) => [String(r.id), r]));
+  const priced: T[] = [];
+  for (const line of lines) {
+    const r: any = byId.get(line.itemId);
+    // Gone, unpublished or unpriced all mean the same thing at the till.
+    if (!r || String(r.status ?? "active") !== "active" || !(Number(r.price) > 0)) {
+      return { ok: false, error: "item_unavailable" };
+    }
+    priced.push({
+      ...line,
+      productName: String(r.product_name ?? ""),
+      variantTitle:
+        r.variant_title && r.variant_title !== "Default Title" ? String(r.variant_title) : null,
+      sku: r.sku ?? null,
+      imageUrl: r.image_url ? String(r.image_url) : null,
+      price: Number(r.price),
+    });
+  }
+  return { ok: true, lines: priced };
+}

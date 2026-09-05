@@ -11,6 +11,7 @@ import {
 import { recordNudgeConversion } from "@/lib/nudge-service";
 import { sendOrderPurchase } from "@/lib/meta-purchase";
 import type { Channel } from "@/lib/channel";
+import { repriceLines } from "@/lib/cart-pricing";
 
 /**
  * Placing an order — the one path, whichever surface asked.
@@ -66,26 +67,23 @@ const ORDER_RELAY_WEBHOOK_URL =
 /**
  * Is today verifiably this customer's birthday?
  *
- * Only asked when the BIRTHDAY code is in play. The date comes from what they
- * just typed or from their saved profile — never from a claim the caller makes.
+ * Only asked when the BIRTHDAY code is in play, and only ever answered from
+ * the date saved on their profile. A date typed at checkout is a claim, not a
+ * fact — honouring it would make the code "20% off, type any date", every day,
+ * for anyone.
  */
 export async function isBirthdayFor(
   supabase: ReturnType<typeof getServerSupabase>,
   phone: string,
   code: string | null | undefined,
-  typed: string | null | undefined,
 ): Promise<boolean> {
   if ((code || "").trim().toUpperCase() !== "BIRTHDAY") return false;
-  let bday = typed || null;
-  if (!bday) {
-    const { data } = await supabase
-      .from("store_customers")
-      .select("birthday")
-      .eq("phone", phone)
-      .maybeSingle();
-    bday = data?.birthday ? String(data.birthday) : null;
-  }
-  return isBirthday(bday, new Date());
+  const { data } = await supabase
+    .from("store_customers")
+    .select("birthday")
+    .eq("phone", phone)
+    .maybeSingle();
+  return isBirthday(data?.birthday ? String(data.birthday) : null, new Date());
 }
 
 /**
@@ -180,13 +178,20 @@ export async function placeOrderCore(
       .maybeSingle();
     if (!verified && opts.viewerPhone !== ph) return { ok: false, error: "not_verified" };
 
-    const subtotal = payload.items.reduce((s, i) => s + i.price * i.quantity, 0);
+    // Prices come from the database, never from the caller. The website's cart
+    // lives in localStorage and the app's lives on a phone; both are editable
+    // by whoever holds them, so neither gets to name a price.
+    const repriced = await repriceLines(payload.items);
+    if (!repriced.ok) return { ok: false, error: repriced.error };
+    const items = repriced.lines;
+
+    const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
     const shipping = 0;
 
     // Price any coupon server-side — never trust a client for pricing. Reads
     // the merchant's own discounts table first, then the legacy built-ins.
-    const isBday = await isBirthdayFor(supabase, ph, payload.couponCode, payload.birthday);
-    const lines: DiscountLine[] = payload.items.map((i) => ({
+    const isBday = await isBirthdayFor(supabase, ph, payload.couponCode);
+    const lines: DiscountLine[] = items.map((i) => ({
       itemId: i.itemId,
       productName: i.productName,
       price: i.price,
@@ -236,7 +241,7 @@ export async function placeOrderCore(
       p_subtotal: subtotal,
       p_shipping: shipping,
       p_total: total,
-      p_items: payload.items.map((i) => ({
+      p_items: items.map((i) => ({
         item_id: i.itemId,
         product_name: i.productName,
         variant_title: i.variantTitle,
@@ -260,7 +265,19 @@ export async function placeOrderCore(
       patch.discount_code = discountCode;
       patch.discount_amount = discount;
     }
-    await supabase.from("store_orders").update(patch).eq("order_number", orderNumber);
+    const { error: stampErr } = await supabase
+      .from("store_orders")
+      .update(patch)
+      .eq("order_number", orderNumber);
+    // The order is placed and the stock is reserved — this is only the label,
+    // so it must never fail the sale. But an app order silently filed as a web
+    // one is a lie the dashboard has no way to notice, so say so in the log.
+    if (stampErr) {
+      console.error(
+        `[orders] ${orderNumber}: could not stamp channel/discount — ${stampErr.message}. ` +
+          "Run supabase/migrations/0019 and 0022.",
+      );
+    }
     if (discountCode && discount > 0 && verdict.ok && verdict.source === "table") {
       await redeemDiscount(discountCode);
     }

@@ -265,7 +265,7 @@ export default function CheckoutClient({
     if (!appliedCoupon) return;
     let cancelled = false;
     (async () => {
-      const res = await previewCoupon(appliedCoupon, items, phone, profileBirthday);
+      const res = await previewCoupon(appliedCoupon, items, phone);
       if (cancelled) return;
       if (res.ok) {
         setCouponAmount(res.amount);
@@ -342,7 +342,7 @@ export default function CheckoutClient({
       return;
     }
     setCouponBusy(true);
-    const res = await previewCoupon(c, items, phone, profileBirthday);
+    const res = await previewCoupon(c, items, phone);
     setCouponBusy(false);
     if (!res.ok) {
       clearCoupon();

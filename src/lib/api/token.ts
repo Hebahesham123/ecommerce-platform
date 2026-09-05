@@ -10,12 +10,13 @@ import { createHmac, timingSafeEqual } from "node:crypto";
  * and so is the trust model: the value is only believed after the signature
  * verifies, so nobody can edit a token and become another customer.
  *
- * Unlike the cookie these carry an issue time and expire, because a token
- * lives on a device we do not control and cannot be cleared remotely.
+ * These carry an issue time and expire on the same 30-day clock as the web
+ * session cookie. A token is not a stronger credential than the cookie — it is
+ * the same claim in a different envelope — so it must not outlive one.
  */
 
 const VERSION = "v1";
-const MAX_AGE_MS = 180 * 24 * 60 * 60 * 1000; // 180 days
+const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days, same as the web session
 
 function secret(): string {
   const s = process.env.STORE_SESSION_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;

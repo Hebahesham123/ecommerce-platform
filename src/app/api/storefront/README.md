@@ -18,8 +18,11 @@ attribution all live in `src/lib` and are shared.
 - Responses are always `{ "ok": true, "data": ... }` or `{ "ok": false, "error": "..." }`.
 - Nothing is cached: every route returns a shopper's own data or live stock.
 - **Auth** is `Authorization: Bearer <token>`, issued by `/auth/verify` or
-  `/auth/login`. The token proves one thing — a verified phone number — which
-  is the same claim the website's session cookie carries.
+  `/auth/login`. The token carries exactly the same claim as the website's
+  session cookie — "this request belongs to this phone number" — and expires on
+  the same 30-day clock. Note that `/auth/login` inherits the website's
+  passwordless rule: a number the store already knows signs in without a code.
+  That is the store's chosen login model, not something the token strengthens.
 - **Channel** is the `x-store-channel: app | web` header, defaulting to `app`.
   It is attribution only: it decides the label on the row and which Meta
   dataset a purchase reports to. Nothing grants access based on it.
@@ -37,7 +40,7 @@ attribution all live in `src/lib` and are shared.
 | GET | `/collections` | Categories with product counts |
 | POST | `/cart/price` | Re-price a device-held cart against live stock |
 | POST | `/discount` | Preview a coupon |
-| POST | `/orders` | Place a COD order |
+| POST | `/orders` | Place a COD order (signed in; the order's phone must be the token's) |
 | GET | `/orders` | The shopper's own orders |
 | GET | `/orders/{number}` | One of the shopper's own orders, with lines |
 | GET | `/returns/eligible` | Orders still inside the return window |

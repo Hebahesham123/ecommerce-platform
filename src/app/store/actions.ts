@@ -121,8 +121,11 @@ export async function getStoreProduct(id: string): Promise<ActionResult<StorePro
       .from("inventory_items")
       .select("product_name")
       .eq("id", id)
-      .single();
+      .maybeSingle();
     if (e1) return { ok: false, error: e1.message };
+    // A product that isn't there is a 404, not a database error — .single()
+    // would have reported "no rows returned" and been read as a bad request.
+    if (!one) return { ok: false, error: "not_found" };
     const { data, error } = await supabase
       .from("inventory_items")
       .select("*, inventory_levels(on_hand,committed)")
@@ -406,7 +409,6 @@ export async function previewCoupon(
   code: string,
   items: CartLine[],
   phone?: string | null,
-  birthday?: string | null,
 ): Promise<CouponPreview> {
   const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
   const lines: DiscountLine[] = items.map((i) => ({
@@ -420,7 +422,7 @@ export async function previewCoupon(
   let bday = false;
   if (ph && isSupabaseConfigured()) {
     try {
-      bday = await isBirthdayFor(getServerSupabase(), ph, code, birthday ?? null);
+      bday = await isBirthdayFor(getServerSupabase(), ph, code);
     } catch {
       bday = false;
     }
@@ -506,8 +508,9 @@ export async function getOrderByNumber(orderNumber: string): Promise<ActionResul
       .from("store_orders")
       .select("*, store_order_items(*)")
       .eq("order_number", orderNumber)
-      .single();
+      .maybeSingle();
     if (error) return { ok: false, error: error.message };
+    if (!data) return { ok: false, error: "order_not_found" };
     return { ok: true, data };
   } catch (e) {
     return { ok: false, error: (e as Error).message };

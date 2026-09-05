@@ -1,4 +1,8 @@
-import { listMyRequests, submitReturnRequest, type SubmitPayload } from "@/app/store/returns/actions";
+import {
+  listMyRequestsFor,
+  submitReturnRequestFor,
+  type SubmitPayload,
+} from "@/lib/returns-service";
 import { bodyOf, channelOf, fail, fromResult, int, ok, str, viewerOf } from "@/lib/api/http";
 
 export const runtime = "nodejs";
@@ -9,7 +13,7 @@ export async function GET(request: Request) {
   const viewer = viewerOf(request);
   if (!viewer) return fail("not_signed_in", 401);
 
-  const res = await listMyRequests(viewer);
+  const res = await listMyRequestsFor(viewer);
   if (!res.ok) return fromResult(res);
   return ok({ requests: res.data });
 }
@@ -59,7 +63,5 @@ export async function POST(request: Request) {
     note: str(body.note, 2000),
   };
 
-  return fromResult(
-    await submitReturnRequest(payload, { viewerPhone: viewer, channel: channelOf(request) }),
-  );
+  return fromResult(await submitReturnRequestFor(viewer, payload, channelOf(request)));
 }

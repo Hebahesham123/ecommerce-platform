@@ -18,22 +18,42 @@ export function fail(error: string, status = 400): NextResponse {
   return NextResponse.json({ ok: false, error }, { status, headers: { "Cache-Control": "no-store" } });
 }
 
+/**
+ * How each refusal the shared functions can return maps onto HTTP.
+ *
+ * Worth being exact about: an app decides what to do next from the status
+ * alone. A 404 tells it the thing is gone, a 409 tells it to re-read and try
+ * again, a 401 tells it to sign in — and getting one of those wrong is how an
+ * app signs a customer out over a database blip, or hides a sold-out message
+ * behind "something went wrong".
+ */
+const STATUS: Record<string, number> = {
+  not_signed_in: 401,
+  not_verified: 401,
+  not_your_order: 403,
+  phone_not_yours: 403,
+  not_configured: 503,
+  account_unavailable: 503,
+  not_found: 404,
+  order_not_found: 404,
+  line_not_found: 404,
+  replacement_not_found: 404,
+  out_of_stock: 409,
+  item_unavailable: 409,
+  cart_changed: 409,
+  replacement_out_of_stock: 409,
+  already_requested: 409,
+  window_expired: 409,
+  nothing_returnable: 409,
+  migration_missing: 503,
+};
+
 /** Turn a shared ActionResult into a response, mapping the usual refusals. */
 export function fromResult<T>(
   res: { ok: true; data: T } | { ok: false; error: string },
 ): NextResponse {
   if (res.ok) return ok(res.data);
-  const status =
-    res.error === "not_signed_in" || res.error === "not_verified"
-      ? 401
-      : res.error === "not_your_order" || res.error === "not_configured"
-        ? 403
-        : res.error === "order_not_found" || res.error === "not_found"
-          ? 404
-          : res.error === "out_of_stock" || res.error === "window_expired"
-            ? 409
-            : 400;
-  return fail(res.error, status);
+  return fail(res.error, STATUS[res.error] ?? 400);
 }
 
 /**

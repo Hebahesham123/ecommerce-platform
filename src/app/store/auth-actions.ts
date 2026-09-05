@@ -4,6 +4,9 @@ import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
 import { normalizePhone, phoneVariants } from "@/lib/phone";
 import { setSession, getSessionPhone, clearSession } from "@/lib/store-session";
 import { sendOtp, verifyOtp, type ActionResult } from "./actions";
+import { accountFor, type Account } from "@/lib/account-service";
+
+export type { AccountOrder, Account } from "@/lib/account-service";
 
 /**
  * Phone-based customer accounts.
@@ -13,25 +16,6 @@ import { sendOtp, verifyOtp, type ActionResult } from "./actions";
  * counts as verified when it has a row in `verified_phones`, which is exactly
  * what checkout already relies on.
  */
-
-export type AccountOrder = {
-  orderNumber: string;
-  total: number;
-  createdAt: string;
-  lifecycle: string;
-  paymentStatus: string;
-  fulfillmentStatus: string;
-};
-
-export type Account = {
-  phone: string;
-  name: string | null;
-  email: string | null;
-  governorate: string | null;
-  city: string | null;
-  address: string | null;
-  orders: AccountOrder[];
-};
 
 async function isVerified(phone: string): Promise<boolean> {
   const supabase = getServerSupabase();
@@ -160,62 +144,6 @@ export async function logout(): Promise<ActionResult> {
 }
 
 /** The signed-in customer's profile and orders, or null when signed out. */
-export async function getAccount(viewerPhone?: string | null): Promise<Account | null> {
-  if (!isSupabaseConfigured()) return null;
-  const phone = viewerPhone ?? (await getSessionPhone());
-  if (!phone) return null;
-
-  try {
-    const supabase = getServerSupabase();
-    const [{ data: profile }, { data: verified }, { data: orders }] = await Promise.all([
-      supabase
-        .from("store_customers")
-        .select("name,email,governorate,city,address")
-        .eq("phone", phone)
-        .maybeSingle(),
-      // A phone verified at checkout has its name here and no profile row yet
-      // (profiles are only written when an order is placed), so this is the
-      // fallback for the name.
-      supabase
-        .from("verified_phones")
-        .select("name")
-        .eq("phone", phone)
-        .maybeSingle(),
-      supabase
-        .from("store_orders")
-        .select(
-          "order_number,total,created_at,lifecycle,payment_status,fulfillment_status,customer_name,governorate,city,address",
-        )
-        // Orders written before phones were normalized are still this shopper's.
-        .in("phone", phoneVariants(phone))
-        .order("created_at", { ascending: false })
-        .limit(50),
-    ]);
-
-    // Their latest order carries a name and address even when there is no
-    // profile row — better than showing a returning customer nothing but "—".
-    const last = orders?.[0];
-    return {
-      phone,
-      name:
-        ((profile?.name as string) ||
-          (verified?.name as string) ||
-          (last?.customer_name as string)) ??
-        null,
-      email: (profile?.email as string) ?? null,
-      governorate: ((profile?.governorate as string) || (last?.governorate as string)) ?? null,
-      city: ((profile?.city as string) || (last?.city as string)) ?? null,
-      address: ((profile?.address as string) || (last?.address as string)) ?? null,
-      orders: (orders ?? []).map((o) => ({
-        orderNumber: String(o.order_number),
-        total: Number(o.total),
-        createdAt: String(o.created_at),
-        lifecycle: String(o.lifecycle),
-        paymentStatus: String(o.payment_status),
-        fulfillmentStatus: String(o.fulfillment_status),
-      })),
-    };
-  } catch {
-    return null;
-  }
+export async function getAccount(): Promise<Account | null> {
+  return accountFor(await getSessionPhone());
 }

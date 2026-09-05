@@ -1,4 +1,4 @@
-import { listReturnableOrders } from "@/app/store/returns/actions";
+import { listReturnableOrdersFor } from "@/lib/returns-service";
 import { RETURN_WINDOW_DAYS } from "@/lib/returns";
 import { fail, fromResult, ok, viewerOf } from "@/lib/api/http";
 
@@ -17,7 +17,7 @@ export async function GET(request: Request) {
   const viewer = viewerOf(request);
   if (!viewer) return fail("not_signed_in", 401);
 
-  const res = await listReturnableOrders(viewer);
+  const res = await listReturnableOrdersFor(viewer);
   if (!res.ok) return fromResult(res);
   return ok({ orders: res.data, windowDays: RETURN_WINDOW_DAYS });
 }

@@ -1,7 +1,8 @@
-import { getAccount } from "@/app/store/auth-actions";
+import { accountFor } from "@/lib/account-service";
 import { placeOrderCore, type CartLine, type OrderPayload } from "@/lib/orders";
-import { priceCart, type CartRequestLine } from "@/lib/api/cart";
+import { priceCart, type CartRequestLine } from "@/lib/cart-pricing";
 import { bodyOf, channelOf, fail, fromResult, int, ok, str, viewerOf } from "@/lib/api/http";
+import { normalizePhone } from "@/lib/phone";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,8 +12,12 @@ export async function GET(request: Request) {
   const viewer = viewerOf(request);
   if (!viewer) return fail("not_signed_in", 401);
 
-  const account = await getAccount(viewer);
-  return ok({ orders: account?.orders ?? [] });
+  const account = await accountFor(viewer);
+  // A read that failed is not the same as a shopper with no orders, and an app
+  // that shows "no orders yet" during an outage teaches people their history
+  // is gone.
+  if (!account) return fail("account_unavailable", 503);
+  return ok({ orders: account.orders });
 }
 
 /**
@@ -29,6 +34,15 @@ export async function GET(request: Request) {
  * `placeOrderCore`, the same function the website's checkout calls.
  */
 export async function POST(request: Request) {
+  // Unlike the website, this route will not take the buyer's word for who they
+  // are. The website can fall back to "this number is in verified_phones",
+  // because a browser that got there went through the code screen in the same
+  // session. An HTTP client did not, so knowing a number that has ordered
+  // before would otherwise be enough to place an order in that person's name —
+  // and to overwrite their saved address with the sender's.
+  const viewer = viewerOf(request);
+  if (!viewer) return fail("not_signed_in", 401);
+
   const body = await bodyOf(request);
 
   const raw = Array.isArray(body.lines) ? body.lines : [];
@@ -75,10 +89,10 @@ export async function POST(request: Request) {
   };
 
   if (!payload.customerName) return fail("missing_name");
-  if (!payload.phone) return fail("missing_phone");
   if (!payload.address) return fail("missing_address");
+  if (normalizePhone(payload.phone) !== viewer) return fail("phone_not_yours", 403);
 
   return fromResult(
-    await placeOrderCore(payload, { channel: channelOf(request), viewerPhone: viewerOf(request) }),
+    await placeOrderCore(payload, { channel: channelOf(request), viewerPhone: viewer }),
   );
 }

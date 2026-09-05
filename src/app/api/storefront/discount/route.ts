@@ -1,5 +1,5 @@
 import { previewCoupon } from "@/app/store/actions";
-import { priceCart, type CartRequestLine } from "@/lib/api/cart";
+import { priceCart, type CartRequestLine } from "@/lib/cart-pricing";
 import { bodyOf, fail, int, ok, str, viewerOf } from "@/lib/api/http";
 
 export const runtime = "nodejs";
@@ -14,7 +14,8 @@ export const dynamic = "force-dynamic";
  * that lies to the shopper is worse than none.
  *
  * The phone comes from the bearer token, never the body: a birthday code must
- * not be claimable by typing someone else's number.
+ * not be claimable by typing someone else's number, and the date behind it is
+ * read from that customer's saved profile rather than sent with the request.
  */
 export async function POST(request: Request) {
   const body = await bodyOf(request);
@@ -44,7 +45,6 @@ export async function POST(request: Request) {
       quantity: l.quantity,
     })),
     viewerOf(request),
-    str(body.birthday, 10) || null,
   );
 
   return ok({ ...preview, subtotal: cart.subtotal });
