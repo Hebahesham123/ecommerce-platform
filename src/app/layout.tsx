@@ -3,6 +3,7 @@ import { Tajawal } from "next/font/google";
 import "./globals.css";
 import { cookies } from "next/headers";
 import { LangProvider, type Lang } from "@/lib/i18n";
+import { getPixelSnippet } from "@/lib/meta-pixel";
 
 // Self-hosted Tajawal (bundled with the app) so an ad/privacy blocker or a
 // flaky network can never stop the font from loading — which used to break the
@@ -20,9 +21,6 @@ export const metadata: Metadata = {
   description: "BeautyBar commerce admin dashboard",
 };
 
-// Meta Pixel ID — verifying the pixel fires. Move to env/DB once OAuth is wired.
-const META_PIXEL_ID = "1042036368209197";
-
 export default async function RootLayout({
   children,
 }: {
@@ -38,6 +36,10 @@ export default async function RootLayout({
   const lang: Lang = initialLang ?? "ar";
   const dir = lang === "ar" ? "rtl" : "ltr";
 
+  // Whichever pixel the merchant configured, or nothing at all. Hardcoding an
+  // id here meant a store that pasted its own still fired someone else's.
+  const pixel = await getPixelSnippet();
+
   return (
     <html lang={lang} dir={dir} className={tajawal.variable} suppressHydrationWarning>
       <head>
@@ -48,28 +50,13 @@ export default async function RootLayout({
             __html: `try{var s=location.pathname.indexOf('/store')===0;if(!s&&localStorage.getItem('theme')!=='light')document.documentElement.classList.add('dark')}catch(e){}`,
           }}
         />
-        {/* Meta Pixel */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `!function(f,b,e,v,n,t,s)
-{if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-n.queue=[];t=b.createElement(e);t.async=!0;
-t.src=v;s=b.getElementsByTagName(e)[0];
-s.parentNode.insertBefore(t,s)}(window, document,'script',
-'https://connect.facebook.net/en_US/fbevents.js');
-fbq('init', '${META_PIXEL_ID}');
-fbq('track', 'PageView');`,
-          }}
-        />
       </head>
       <body>
-        <noscript
-          dangerouslySetInnerHTML={{
-            __html: `<img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=${META_PIXEL_ID}&ev=PageView&noscript=1" alt="" />`,
-          }}
-        />
+        {/* Meta Pixel, as configured in Channels → Meta. It lives at the top of
+            the body rather than in <head> because the snippet carries a
+            <noscript> image alongside the script, and a <div> is not valid
+            inside <head>. */}
+        {pixel && <div dangerouslySetInnerHTML={{ __html: pixel }} />}
         <LangProvider initialLang={initialLang}>{children}</LangProvider>
       </body>
     </html>

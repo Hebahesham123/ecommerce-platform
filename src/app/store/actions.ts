@@ -10,6 +10,7 @@ import {
 import { normalizePhone, phoneVariants } from "@/lib/phone";
 import { getSessionPhone, setSession } from "@/lib/store-session";
 import { recordNudgeConversion } from "@/lib/nudge-service";
+import { sendOrderPurchase } from "@/lib/meta-purchase";
 import { cookies } from "next/headers";
 
 export type ActionResult<T = void> =
@@ -705,6 +706,22 @@ export async function placeOrder(
         .maybeSingle();
       relayEmail = (prof?.email as string) ?? null;
     }
+
+    // Tell Meta a sale happened. The browser pixel only fires Purchase on paths
+    // that look like Shopify's thank-you page, and this store's is
+    // /store/order/<number>, so without this nothing was ever reported. The
+    // order number doubles as the event id, which is what lets Meta discard a
+    // duplicate if a browser-side Purchase is ever added.
+    await sendOrderPurchase({
+      orderNumber,
+      total,
+      phone: ph,
+      email: relayEmail,
+      customerName: payload.customerName,
+      city: payload.city,
+      contentIds: [...new Set(payload.items.map((i) => i.sku || i.itemId))],
+      numItems: payload.items.reduce((n, i) => n + i.quantity, 0),
+    });
 
     // Relay to the supplier via n8n (draft order + checkout-link email). Awaited
     // so it runs before the serverless function returns, but never fails the order.

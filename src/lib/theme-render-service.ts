@@ -9,7 +9,10 @@ import {
   type ProductDrop,
 } from "@/lib/storefront-data";
 import { buildCart, type CartLine } from "@/lib/storefront-cart";
-import { pixelBaseCode } from "@/lib/meta";
+import { getPixelSnippet, invalidatePixelSnippet } from "@/lib/meta-pixel";
+
+// Re-exported so the admin actions keep one obvious place to call.
+export { invalidatePixelSnippet };
 import {
   buildThemeMap,
   EMPTY_CUSTOMIZATION,
@@ -39,12 +42,6 @@ let publishedThemeCache: { at: number; id: string | null } | null = null;
 /** Forget the published-theme id (call after publish/unpublish/delete). */
 export function invalidatePublishedTheme(): void {
   publishedThemeCache = null;
-}
-
-let pixelCache: { at: number; snippet: string } | null = null;
-/** Forget the cached Meta Pixel snippet (call after the pixel is changed). */
-export function invalidatePixelSnippet(): void {
-  pixelCache = null;
 }
 
 const customizationCache = new Map<string, { at: number; value: ThemeCustomization }>();
@@ -339,25 +336,6 @@ export async function getThemeMap(
   return {
     map: buildThemeMap(bundle.files, customization ?? (await loadCustomization(themeId))),
   };
-}
-
-// ---- Meta Pixel -------------------------------------------------------------
-async function getPixelSnippet(): Promise<string> {
-  if (pixelCache && Date.now() - pixelCache.at < LOOKUP_TTL_MS) return pixelCache.snippet;
-  let snippet = "";
-  try {
-    const supabase = getServerSupabase();
-    const { data } = await supabase
-      .from("meta_connection")
-      .select("pixel_id, pixel_enabled")
-      .eq("id", "default")
-      .single();
-    if (data?.pixel_enabled && data?.pixel_id) snippet = pixelBaseCode(data.pixel_id as string);
-  } catch {
-    /* no pixel configured */
-  }
-  pixelCache = { at: Date.now(), snippet };
-  return snippet;
 }
 
 function injectHead(html: string, snippet: string): string {

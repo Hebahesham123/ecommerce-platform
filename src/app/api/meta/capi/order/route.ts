@@ -74,11 +74,15 @@ export async function POST(req: Request) {
   const supabase = getServerSupabase();
   const { data: conn } = await supabase
     .from("meta_connection")
-    .select("access_token,pixel_id,capi_enabled,test_event_code")
+    .select("access_token,capi_token,pixel_id,capi_enabled,test_event_code")
     .eq("id", "default")
     .single();
 
-  const token = conn?.access_token as string | undefined;
+  // A pasted Conversions API token is the normal setup now; an OAuth token
+  // still works for stores that connected through Facebook Login.
+  const token = ((conn?.capi_token as string) || (conn?.access_token as string)) as
+    | string
+    | undefined;
   const pixelId = conn?.pixel_id as string | undefined;
   if (!token || !pixelId) {
     return NextResponse.json({ ok: false, error: "meta_not_connected" }, { status: 200 });

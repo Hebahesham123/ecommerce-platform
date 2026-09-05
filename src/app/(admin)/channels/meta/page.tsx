@@ -7,6 +7,7 @@ import { Card, Badge } from "@/components/ui";
 import { IcMeta, IcAlert, IcCopy, IcLink, IcUpload, IcSend } from "@/components/icons";
 import {
   getConnection,
+  saveDirectSetup,
   updateSelection,
   disconnect,
   syncCatalog,
@@ -40,8 +41,23 @@ function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: 
   );
 }
 
+function StatusRow({ on, label, hint }: { on: boolean; label: string; hint: string }) {
+  return (
+    <div className="flex items-start gap-2.5">
+      <span
+        className={`mt-1 h-2 w-2 shrink-0 rounded-full ${on ? "bg-emerald-500" : "bg-slate-300"}`}
+      />
+      <span className="min-w-0">
+        <span className="block text-sm font-medium text-ink">{label}</span>
+        <span className="block text-xs text-ink-soft">{hint}</span>
+      </span>
+    </div>
+  );
+}
+
 export default function MetaPage() {
   const { t, lang } = useI18n();
+  const ar = lang === "ar";
   const [conn, setConn] = useState<MetaConnectionView | null>(null);
   const [events, setEvents] = useState<MetaEventLog[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,12 +67,16 @@ export default function MetaPage() {
   const [copied, setCopied] = useState(false);
   const [eventType, setEventType] = useState("PageView");
   const [testCode, setTestCode] = useState("");
+  const [pixelId, setPixelId] = useState("");
+  const [capiToken, setCapiToken] = useState("");
+  const [savingSetup, setSavingSetup] = useState(false);
 
   async function reload() {
     const [c, e] = await Promise.all([getConnection(), listEvents()]);
     if (c.ok) {
       setConn(c.data);
       setTestCode(c.data.testEventCode ?? "");
+      setPixelId(c.data.pixelId ?? "");
     }
     if (e.ok) setEvents(e.data);
     setLoading(false);
@@ -76,6 +96,49 @@ export default function MetaPage() {
   async function save(patch: Parameters<typeof updateSelection>[0]) {
     const res = await updateSelection(patch);
     if (res.ok) reload();
+  }
+
+  /** Save both credentials at once — that pair is the whole integration. */
+  async function onSaveSetup(clearToken = false) {
+    setSavingSetup(true);
+    const res = await saveDirectSetup({
+      pixelId,
+      capiToken: clearToken ? null : capiToken,
+      testEventCode: testCode,
+    });
+    setSavingSetup(false);
+    if (!res.ok) {
+      setBanner({
+        kind: "err",
+        msg:
+          res.error === "invalid_pixel_id"
+            ? ar
+              ? "معرّف البيكسل أرقام فقط — انسخيه من Events Manager."
+              : "The Pixel ID should be digits only — copy it from Events Manager."
+            : res.error === "migration_missing"
+              ? ar
+                ? "شغّلي supabase/migrations/0021_meta_direct_setup.sql"
+                : "Run supabase/migrations/0021_meta_direct_setup.sql"
+              : res.error,
+      });
+      return;
+    }
+    setCapiToken("");
+    setBanner({
+      kind: "ok",
+      msg: res.data.capiOn
+        ? ar
+          ? "تم تفعيل البيكسل وواجهة التحويلات."
+          : "Pixel and Conversions API are both on."
+        : res.data.pixelOn
+          ? ar
+            ? "تم تفعيل البيكسل. أضيفي التوكن لتفعيل أحداث الخادم."
+            : "Pixel is on. Add a token to switch on server events."
+          : ar
+            ? "تم الحفظ."
+            : "Saved.",
+    });
+    reload();
   }
 
   async function onSync() {
@@ -148,84 +211,91 @@ fbq('track', 'PageView');
         </Card>
       )}
 
-      {!c.configured && (
-        <Card className="mb-4 flex items-center gap-3 bg-amber-50/60 p-3.5">
-          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-surface text-amber-600 shadow-card">
-            <IcAlert className="h-4 w-4" />
-          </span>
-          <span className="text-sm font-medium text-amber-800">{t("meta_app_missing")}</span>
-        </Card>
-      )}
-
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {/* Connection */}
-        <Section title={t("sec_connection")}>
-          {c.connected ? (
-            <>
-              <dl className="grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <dt className="text-ink-soft">{t("meta_account")}</dt>
-                  <dd className="font-medium text-ink">{c.userName ?? "—"}</dd>
-                </div>
-                <div>
-                  <dt className="text-ink-soft">{t("meta_business")}</dt>
-                  <dd className="font-medium text-ink">{c.businessName ?? "—"}</dd>
-                </div>
-                {c.tokenExpiresAt && (
-                  <div className="col-span-2">
-                    <dt className="text-ink-soft">{t("token_expires")}</dt>
-                    <dd className="font-medium text-ink" dir="ltr">
-                      {new Date(c.tokenExpiresAt).toLocaleDateString(lang === "ar" ? "ar-EG" : "en-US")}
-                    </dd>
-                  </div>
-                )}
-              </dl>
-              <div className="flex gap-2">
-                <a href="/api/meta/connect" className="btn-outline">{t("meta_reconnect")}</a>
-                <button
-                  className="btn-ghost text-rose-600 hover:bg-rose-50"
-                  onClick={async () => {
-                    await disconnect();
-                    reload();
-                  }}
-                >
-                  {t("meta_disconnect")}
-                </button>
-              </div>
-            </>
-          ) : (
-            <>
-              <p className="text-sm text-ink-muted">{t("meta_connect_hint")}</p>
-              <a
-                href={c.configured ? "/api/meta/connect" : undefined}
-                aria-disabled={!c.configured}
-                className={`btn-primary ${!c.configured ? "pointer-events-none opacity-50" : ""}`}
+        {/* Setup — two values, pasted */}
+        <Section title={ar ? "الإعداد" : "Setup"}>
+          <p className="text-sm text-ink-muted">
+            {ar
+              ? "انسخي القيمتين من Events Manager والصقيهما هنا. لا حاجة لتسجيل الدخول بفيسبوك."
+              : "Copy both values out of Events Manager and paste them here. No Facebook login needed."}
+          </p>
+
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-ink">{t("pixel_id_label")}</label>
+            <input
+              value={pixelId}
+              onChange={(e) => setPixelId(e.target.value.replace(/[^0-9]/g, ""))}
+              placeholder="1234567890123456"
+              className={inputCls}
+              dir="ltr"
+              inputMode="numeric"
+            />
+            <p className="mt-1 text-xs text-ink-soft">
+              {ar
+                ? "Events Manager ← مصادر البيانات ← البيكسل. أرقام فقط. هذا وحده يشغّل التتبّع في المتجر."
+                : "Events Manager → Data sources → your pixel. Digits only. This alone switches on storefront tracking."}
+            </p>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-ink">
+              {ar ? "توكن واجهة التحويلات" : "Conversions API token"}
+            </label>
+            <input
+              type="password"
+              value={capiToken}
+              onChange={(e) => setCapiToken(e.target.value)}
+              placeholder={
+                c.capiTokenSet
+                  ? ar
+                    ? "محفوظ — اتركيه فارغاً للإبقاء عليه"
+                    : "Saved — leave blank to keep it"
+                  : "EAAG…"
+              }
+              className={inputCls}
+              dir="ltr"
+              autoComplete="off"
+            />
+            <p className="mt-1 text-xs text-ink-soft">
+              {ar
+                ? "Events Manager ← الإعدادات ← إنشاء توكن وصول. يُحفظ على الخادم ولا يظهر مرة أخرى."
+                : "Events Manager → Settings → Generate access token. Stored server-side and never shown again."}
+            </p>
+            {c.capiTokenSet && (
+              <button
+                onClick={() => onSaveSetup(true)}
+                className="mt-1.5 text-xs font-medium text-rose-600 hover:underline"
               >
-                <IcMeta className="h-4 w-4" /> {t("meta_connect")}
-              </a>
-            </>
-          )}
+                {ar ? "حذف التوكن" : "Remove stored token"}
+              </button>
+            )}
+          </div>
+
+          <button
+            onClick={() => onSaveSetup(false)}
+            disabled={savingSetup}
+            className="btn-primary disabled:opacity-60"
+          >
+            <IcMeta className="h-4 w-4" />
+            {savingSetup ? t("loading") : ar ? "حفظ وتفعيل" : "Save & connect"}
+          </button>
+
+          <div className="space-y-2 border-t border-line pt-3">
+            <StatusRow
+              on={Boolean(c.pixelId) && c.pixelEnabled}
+              label={ar ? "بيكسل المتصفح" : "Browser pixel"}
+              hint={ar ? "يتتبّع التصفّح والسلة" : "Tracks browsing and add-to-cart"}
+            />
+            <StatusRow
+              on={c.capiEnabled}
+              label={ar ? "واجهة التحويلات (خادم)" : "Conversions API (server)"}
+              hint={ar ? "يرسل عمليات الشراء من الخادم" : "Sends purchases from the server"}
+            />
+          </div>
         </Section>
 
         {/* Pixel */}
         <Section title={t("sec_pixel")}>
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-ink">{t("pixel_select")}</label>
-            <select
-              value={c.pixelId ?? ""}
-              onChange={(e) => save({ pixelId: e.target.value })}
-              className={inputCls}
-              disabled={!c.connected}
-            >
-              <option value="">—</option>
-              {(c.available.pixels ?? []).map((p) => (
-                <option key={p.id} value={p.id}>{p.name} ({p.id})</option>
-              ))}
-              {c.pixelId && !(c.available.pixels ?? []).some((p) => p.id === c.pixelId) && (
-                <option value={c.pixelId}>{c.pixelName ?? c.pixelId}</option>
-              )}
-            </select>
-          </div>
           <Toggle checked={c.pixelEnabled} onChange={(v) => save({ pixelEnabled: v })} label={t("pixel_enable")} />
           <p className="text-xs text-ink-soft">{t("pixel_inject_hint")}</p>
           {pixelSnippet && (
@@ -243,6 +313,11 @@ fbq('track', 'PageView');
                   <IcCopy className="h-3.5 w-3.5" /> {copied ? t("copied") : t("copy_snippet")}
                 </button>
               </div>
+              <p className="mb-1.5 text-xs text-ink-soft">
+                {ar
+                  ? "للاطّلاع فقط — المتجر يحقنه تلقائياً."
+                  : "For reference only — your storefront injects this automatically."}
+              </p>
               <pre className="max-h-40 overflow-auto rounded-xl bg-ink p-3 text-[11px] leading-relaxed text-white/90" dir="ltr">
                 <code>{pixelSnippet}</code>
               </pre>
@@ -252,6 +327,22 @@ fbq('track', 'PageView');
 
         {/* Catalog */}
         <Section title={t("sec_catalog")}>
+          <p className="text-sm text-ink-muted">
+            {ar
+              ? "مزامنة الكتالوج وحدها تحتاج تسجيل دخول بفيسبوك — البيكسل وواجهة التحويلات لا تحتاجانه."
+              : "Catalog sync is the one piece that still needs a Facebook login — the pixel and Conversions API don't."}
+          </p>
+          {!c.configured && (
+            <div className="flex items-center gap-2 rounded-xl bg-amber-50 p-3 text-xs text-amber-800">
+              <IcAlert className="h-4 w-4 shrink-0" />
+              {t("meta_app_missing")}
+            </div>
+          )}
+          {c.configured && !c.connected && (
+            <a href="/api/meta/connect" className="btn-outline w-fit">
+              <IcMeta className="h-4 w-4" /> {t("meta_connect")}
+            </a>
+          )}
           <div>
             <label className="mb-1.5 block text-sm font-medium text-ink">{t("catalog_select")}</label>
             <select
