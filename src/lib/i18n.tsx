@@ -328,6 +328,12 @@ const dict = {
 
   // ---- Meta (Facebook) integration ----
   group_channels: { ar: "قنوات البيع", en: "Sales channels" },
+  group_app: { ar: "التطبيق", en: "App" },
+  nav_app_home: { ar: "نظرة عامة", en: "Overview" },
+  nav_app_orders: { ar: "طلبات التطبيق", en: "App orders" },
+  nav_app_returns: { ar: "مرتجعات التطبيق", en: "App returns" },
+  nav_app_requests: { ar: "استفسارات التطبيق", en: "App requests" },
+  nav_app_connect: { ar: "ربط التطبيق", en: "Connect" },
   nav_meta: { ar: "ميتا (فيسبوك)", en: "Meta (Facebook)" },
   meta_subtitle: { ar: "اربط البيكسل والكتالوج وأحداث الخادم مع ميتا", en: "Connect Pixel, Catalog & server events to Meta" },
   sec_connection: { ar: "الاتصال", en: "Connection" },

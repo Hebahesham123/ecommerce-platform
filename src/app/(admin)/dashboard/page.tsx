@@ -14,29 +14,8 @@ import { listInventory } from "../inventory/actions";
 import { listStoreOrders, type PlacedOrder } from "../../store/actions";
 import { PageHeader } from "@/components/page-header";
 import { IcImage } from "@/components/icons";
+import { CHART, useIsDark, type ChartColor } from "@/lib/chart-theme";
 
-// Validated categorical accents (data-viz palette), light/dark steps. Violet
-// leads to match the reference; magenta is skipped (reads pink).
-const CHART = {
-  violet: { light: "#7c3aed", dark: "#8b7cf6" },
-  blue: { light: "#2a78d6", dark: "#3987e5" },
-  green: { light: "#008300", dark: "#1baf7a" },
-  orange: { light: "#eb6834", dark: "#d95926" },
-} as const;
-type ColorKey = keyof typeof CHART;
-
-function useIsDark() {
-  const [dark, setDark] = useState(false);
-  useEffect(() => {
-    const el = document.documentElement;
-    const update = () => setDark(el.classList.contains("dark"));
-    update();
-    const obs = new MutationObserver(update);
-    obs.observe(el, { attributes: true, attributeFilter: ["class"] });
-    return () => obs.disconnect();
-  }, []);
-  return dark;
-}
 
 function Delta({ delta }: { delta: number }) {
   const up = delta >= 0;
@@ -110,7 +89,7 @@ export default function DashboardPage() {
   const { t, lang } = useI18n();
   const ar = lang === "ar";
   const dark = useIsDark();
-  const c = (k: ColorKey) => CHART[k][dark ? "dark" : "light"];
+  const c = (k: ChartColor) => CHART[k][dark ? "dark" : "light"];
 
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [placed, setPlaced] = useState<PlacedOrder[]>([]);

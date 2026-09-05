@@ -28,6 +28,8 @@ import {
   IcClipboard,
   IcMail,
   IcRefresh,
+  IcMobile,
+  IcCode,
 } from "./icons";
 import type { ComponentType, SVGProps } from "react";
 
@@ -89,6 +91,22 @@ const groups: Group[] = [
     label: "group_channels",
     items: [{ href: "/channels/meta", key: "nav_meta", icon: IcMeta }],
   },
+  // The app gets a section rather than a filter chip. It sells the same stock
+  // through the same till, but it is a business the merchant runs decisions
+  // about on its own — whether it is worth the ad spend, whether its returns
+  // are running hot — and those decisions are hard to make from a number that
+  // is averaged with the website's.
+  {
+    id: "app",
+    label: "group_app",
+    items: [
+      { href: "/app", key: "nav_app_home", icon: IcMobile },
+      { href: "/app/orders", key: "nav_app_orders", icon: IcOrders },
+      { href: "/app/returns", key: "nav_app_returns", icon: IcRefresh },
+      { href: "/app/requests", key: "nav_app_requests", icon: IcClipboard },
+      { href: "/app/connect", key: "nav_app_connect", icon: IcCode },
+    ],
+  },
   {
     id: "engage",
     label: "group_engage",
@@ -103,10 +121,27 @@ const groups: Group[] = [
   },
 ];
 
-function NavLink({ item }: { item: Item }) {
+/**
+ * Which link the current URL belongs to.
+ *
+ * The longest matching href wins, so /app/orders lights up "App orders" and
+ * not also "Overview" at /app. A plain prefix test lights up both, which reads
+ * as the sidebar not knowing where you are — and now that several sections
+ * nest (/app, /inventory, /channels), that is every visit rather than an edge
+ * case.
+ */
+const ALL_HREFS = groups.flatMap((g) => g.items.map((i) => i.href));
+
+function useIsActive(href: string): boolean {
   const pathname = usePathname();
+  const matches = (h: string) => pathname === h || pathname.startsWith(h + "/");
+  if (!matches(href)) return false;
+  return !ALL_HREFS.some((other) => other !== href && matches(other) && other.length > href.length);
+}
+
+function NavLink({ item }: { item: Item }) {
   const { t } = useI18n();
-  const active = pathname === item.href || pathname.startsWith(item.href + "/");
+  const active = useIsActive(item.href);
   const Icon = item.icon;
   return (
     <Link
