@@ -66,6 +66,7 @@ export async function POST(request: Request) {
       phone,
       order_number: text(body.order_number, 40),
       source: "storefront",
+      channel: request.headers.get("x-store-channel") === "app" ? "app" : "web",
     });
 
     if (error) {

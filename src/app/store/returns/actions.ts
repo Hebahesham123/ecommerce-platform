@@ -48,9 +48,17 @@ const n = (v: unknown) => (v == null ? 0 : Number(v));
  * Only their own orders are ever read: the phone comes from the signed session,
  * never from the page, so nobody can pull up someone else's order by number.
  */
-export async function listReturnableOrders(): Promise<ActionResult<ReturnableOrder[]>> {
+/**
+ * `viewerPhone` lets a caller that authenticated some other way — the mobile
+ * API, with a bearer token — say who is asking. The website passes nothing and
+ * keeps using its session cookie. Either way the phone is one this server
+ * verified; it is never read from a request body.
+ */
+export async function listReturnableOrders(
+  viewerPhone?: string | null,
+): Promise<ActionResult<ReturnableOrder[]>> {
   if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
-  const phone = await getSessionPhone();
+  const phone = viewerPhone ?? (await getSessionPhone());
   if (!phone) return { ok: false, error: "not_signed_in" };
 
   try {
@@ -150,9 +158,10 @@ export type SubmitPayload = {
  */
 export async function submitReturnRequest(
   payload: SubmitPayload,
+  opts?: { viewerPhone?: string | null; channel?: string },
 ): Promise<ActionResult<{ reference: string }>> {
   if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
-  const phone = await getSessionPhone();
+  const phone = opts?.viewerPhone ?? (await getSessionPhone());
   if (!phone) return { ok: false, error: "not_signed_in" };
 
   const kind: RequestKind = payload.kind === "exchange" ? "exchange" : "return";
@@ -178,7 +187,7 @@ export async function submitReturnRequest(
     if (!isWithinWindow(String(order.created_at))) return { ok: false, error: "window_expired" };
 
     // Re-derive what may be returned, so a tampered page can't over-return.
-    const available = await listReturnableOrders();
+    const available = await listReturnableOrders(phone);
     if (!available.ok) return { ok: false, error: available.error };
     const thisOrder = available.data.find((o) => o.orderId === payload.orderId);
     if (!thisOrder) return { ok: false, error: "nothing_returnable" };
@@ -265,6 +274,7 @@ export async function submitReturnRequest(
         extra_amount: money.extraAmount,
         order_created_at: String(order.created_at),
         window_expires_at: windowExpiryOf(String(order.created_at)).toISOString(),
+        channel: opts?.channel ?? "web",
       })
       .select("id")
       .single();
@@ -286,9 +296,11 @@ export async function submitReturnRequest(
 }
 
 /** The shopper's own requests, newest first, so they can follow the status. */
-export async function listMyRequests(): Promise<ActionResult<ReturnRequest[]>> {
+export async function listMyRequests(
+  viewerPhone?: string | null,
+): Promise<ActionResult<ReturnRequest[]>> {
   if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
-  const phone = await getSessionPhone();
+  const phone = viewerPhone ?? (await getSessionPhone());
   if (!phone) return { ok: false, error: "not_signed_in" };
   try {
     const supabase = getServerSupabase();

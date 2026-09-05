@@ -160,9 +160,9 @@ export async function logout(): Promise<ActionResult> {
 }
 
 /** The signed-in customer's profile and orders, or null when signed out. */
-export async function getAccount(): Promise<Account | null> {
+export async function getAccount(viewerPhone?: string | null): Promise<Account | null> {
   if (!isSupabaseConfigured()) return null;
-  const phone = await getSessionPhone();
+  const phone = viewerPhone ?? (await getSessionPhone());
   if (!phone) return null;
 
   try {

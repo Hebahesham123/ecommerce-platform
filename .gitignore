@@ -37,3 +37,6 @@ yarn-error.log*
 # product export contains private cost prices — never commit to a public repo
 products_export.csv
 *.csv
+
+# Agent session state
+.claude/

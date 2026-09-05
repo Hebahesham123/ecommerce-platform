@@ -42,6 +42,7 @@ const text = (v: FormDataEntryValue | null, max: number): string =>
 
 export async function submitGeneralRequest(
   form: FormData,
+  opts?: { viewerPhone?: string | null; channel?: string },
 ): Promise<ActionResult<{ reference: string }>> {
   if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
 
@@ -58,7 +59,7 @@ export async function submitGeneralRequest(
   try {
     const supabase = getServerSupabase();
     // A signed-in shopper is recorded from their session, never from the page.
-    const sessionPhone = await getSessionPhone();
+    const sessionPhone = opts?.viewerPhone ?? (await getSessionPhone());
 
     // ---- Attachments -------------------------------------------------------
     const attachments: RequestAttachment[] = [];
@@ -104,6 +105,7 @@ export async function submitGeneralRequest(
       order_number: orderNumber || null,
       attachments,
       source: "storefront",
+      channel: opts?.channel ?? "web",
     });
 
     if (error) {
