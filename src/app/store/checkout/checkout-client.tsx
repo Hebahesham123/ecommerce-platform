@@ -5,9 +5,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCart, type CartItem } from "../cart";
 import {
-  sendOtp, verifyOtp, placeOrder, getCustomer, type CustomerProfile,
+  sendOtp, verifyOtp, placeOrder, getCustomer, previewCoupon,
+  type CustomerProfile, type CouponPreview,
 } from "../actions";
-import { computeDiscount, isBirthday } from "@/lib/offers";
 import { normalizePhone } from "@/lib/phone";
 
 /**
@@ -229,6 +229,10 @@ export default function CheckoutClient({
   const [couponInput, setCouponInput] = useState("");
   const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
   const [couponErr, setCouponErr] = useState<string | null>(null);
+  // What the server said this code is worth. Pricing lives there because it
+  // reads the merchant's discounts table, so the amount is fetched, not derived.
+  const [couponAmount, setCouponAmount] = useState(0);
+  const [couponBusy, setCouponBusy] = useState(false);
   const [discountOpen, setDiscountOpen] = useState(false);
   const [welcomeName, setWelcomeName] = useState<string | null>(known?.name ?? null);
   const [profileBirthday, setProfileBirthday] = useState<string | null>(known?.birthday ?? null);
@@ -239,13 +243,7 @@ export default function CheckoutClient({
   const shipping = 0;
   const phoneOk = phone.replace(/[^\d]/g, "").length >= 10;
   const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
-  const bdayToday = useMemo(() => isBirthday(profileBirthday, new Date()), [profileBirthday]);
-
-  const discountResult = useMemo(
-    () => computeDiscount(appliedCoupon, subtotal, { birthday: bdayToday }),
-    [appliedCoupon, subtotal, bdayToday],
-  );
-  const discount = discountResult.ok ? discountResult.discount : 0;
+  const discount = appliedCoupon ? Math.min(couponAmount, subtotal) : 0;
   const total = Math.max(0, subtotal - discount + shipping);
   const itemCount = items.reduce((s, i) => s + i.quantity, 0);
 
@@ -263,6 +261,26 @@ export default function CheckoutClient({
     setProfileBirthday(p.birthday);
   }
 
+  useEffect(() => {
+    if (!appliedCoupon) return;
+    let cancelled = false;
+    (async () => {
+      const res = await previewCoupon(appliedCoupon, items, phone, profileBirthday);
+      if (cancelled) return;
+      if (res.ok) {
+        setCouponAmount(res.amount);
+        setCouponErr(null);
+      } else {
+        clearCoupon();
+        setCouponErr(couponMessage(res));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subtotal]);
+
   /** True while the phone field still holds the number we're signed in as. */
   const isSessionPhone = (v: string) =>
     Boolean(identity) && normalizePhone(v) === normalizePhone(identity!.phone);
@@ -279,20 +297,61 @@ export default function CheckoutClient({
     }
   }
 
-  function applyCoupon() {
+  function couponMessage(res: Extract<CouponPreview, { ok: false }>): string {
+    switch (res.reason) {
+      case "min_amount":
+        return res.requiredAmount != null
+          ? ar
+            ? `الحد الأدنى ${money(res.requiredAmount, ar)}`
+            : `Spend ${money(res.requiredAmount, ar)} to use this code`
+          : ar ? "لم يتحقق الحد الأدنى" : "Minimum not met";
+      case "min_quantity":
+        return ar
+          ? `أضيفي ${res.requiredQuantity ?? 2} قطع على الأقل`
+          : `Add at least ${res.requiredQuantity ?? 2} items to use this code`;
+      case "expired":
+        return ar ? "انتهت صلاحية هذا الكود" : "This code has expired";
+      case "not_started":
+        return ar ? "لم يبدأ هذا العرض بعد" : "This code isn't active yet";
+      case "usage_limit":
+        return ar ? "تم استخدام هذا الكود بالكامل" : "This code has been fully used";
+      case "already_used":
+        return ar ? "استخدمتِ هذا الكود من قبل" : "You've already used this code";
+      case "no_matching_items":
+        return ar
+          ? "لا ينطبق هذا الكود على منتجات سلتك"
+          : "This code doesn't apply to anything in your cart";
+      case "not_eligible":
+        return ar ? "هذا الكود غير متاح لهذا الطلب" : "This code isn't available on this order";
+      case "empty":
+        return ar ? "أدخلي كود الخصم" : "Enter a code";
+      default:
+        return ar ? "كود غير صالح" : "Enter a valid discount code or gift card";
+    }
+  }
+
+  function clearCoupon() {
+    setAppliedCoupon(null);
+    setCouponAmount(0);
+  }
+
+  async function applyCoupon() {
     const c = couponInput.trim();
-    const res = computeDiscount(c, subtotal, { birthday: bdayToday });
-    if (!res.ok) {
-      setAppliedCoupon(null);
-      setCouponErr(
-        res.reason === "unknown" ? (ar ? "كود غير صالح" : "Enter a valid discount code or gift card")
-          : res.reason === "min_not_met" ? (ar ? `الحد الأدنى ${money(res.offer!.minSubtotal, ar)}` : `Minimum ${money(res.offer!.minSubtotal, ar)}`)
-          : (ar ? "أدخلي كود الخصم" : "Enter a code"),
-      );
+    if (!c) {
+      setCouponErr(ar ? "أدخلي كود الخصم" : "Enter a code");
       return;
     }
-    setAppliedCoupon(res.offer!.code);
-    setCouponInput(res.offer!.code);
+    setCouponBusy(true);
+    const res = await previewCoupon(c, items, phone, profileBirthday);
+    setCouponBusy(false);
+    if (!res.ok) {
+      clearCoupon();
+      setCouponErr(couponMessage(res));
+      return;
+    }
+    setAppliedCoupon(res.code);
+    setCouponInput(res.code);
+    setCouponAmount(res.amount);
     setCouponErr(null);
   }
 
@@ -412,7 +471,7 @@ export default function CheckoutClient({
   const discountRow = (
     <div>
       <div className="flex gap-2">
-        {appliedCoupon && discountResult.ok ? (
+        {appliedCoupon ? (
           <div className="flex flex-1 items-center justify-between rounded-[8px] border border-[#d9d9d9] bg-white px-3 py-2.5">
             <span className="flex items-center gap-2 text-[14px] font-medium text-[#1a1a1a]">
               <IcTag className="h-4 w-4 text-[#6b7177]" />
@@ -420,7 +479,7 @@ export default function CheckoutClient({
             </span>
             <button
               type="button"
-              onClick={() => { setAppliedCoupon(null); setCouponInput(""); }}
+              onClick={() => { clearCoupon(); setCouponInput(""); }}
               className="co-link text-[13px]"
             >
               {ar ? "إزالة" : "Remove"}
@@ -441,10 +500,10 @@ export default function CheckoutClient({
             <button
               type="button"
               onClick={applyCoupon}
-              disabled={!couponInput.trim()}
+              disabled={!couponInput.trim() || couponBusy}
               className="h-[52px] shrink-0 rounded-[8px] border border-[#d9d9d9] bg-[#f0f0f0] px-6 text-[15px] font-medium text-[#6b7177] transition hover:bg-[#e8e8e8] disabled:opacity-60"
             >
-              {ar ? "تطبيق" : "Apply"}
+              {couponBusy ? (ar ? "…" : "…") : ar ? "تطبيق" : "Apply"}
             </button>
           </>
         )}

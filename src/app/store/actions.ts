@@ -1,7 +1,12 @@
 "use server";
 
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
-import { computeDiscount, slotLabel, isBirthday } from "@/lib/offers";
+import { slotLabel, isBirthday } from "@/lib/offers";
+import {
+  redeemDiscount,
+  validateDiscount,
+  type DiscountLine,
+} from "@/lib/discount-engine";
 import { normalizePhone, phoneVariants } from "@/lib/phone";
 import { getSessionPhone, setSession } from "@/lib/store-session";
 
@@ -388,6 +393,83 @@ export async function getStoreStats(): Promise<ActionResult<{ orders: number; cu
   }
 }
 
+// ---- Discounts --------------------------------------------------------------
+/**
+ * Is today verifiably this customer's birthday?
+ *
+ * Only asked when the BIRTHDAY code is in play. The date is taken from what
+ * they just typed or from their saved profile — never from a claim the page
+ * could make on its own.
+ */
+async function isBirthdayFor(
+  supabase: ReturnType<typeof getServerSupabase>,
+  phone: string,
+  code: string | null | undefined,
+  typed: string | null | undefined,
+): Promise<boolean> {
+  if ((code || "").trim().toUpperCase() !== "BIRTHDAY") return false;
+  let bday = typed || null;
+  if (!bday) {
+    const { data } = await supabase
+      .from("store_customers")
+      .select("birthday")
+      .eq("phone", phone)
+      .maybeSingle();
+    bday = data?.birthday ? String(data.birthday) : null;
+  }
+  return isBirthday(bday, new Date());
+}
+
+export type CouponPreview =
+  | { ok: true; code: string; label: string; amount: number }
+  | {
+      ok: false;
+      reason: string;
+      requiredAmount?: number;
+      requiredQuantity?: number;
+    };
+
+/**
+ * Price a code for the checkout summary.
+ *
+ * The same engine runs again inside placeOrder, so this is only ever a
+ * preview — a shopper who edits the response still gets charged correctly.
+ */
+export async function previewCoupon(
+  code: string,
+  items: CartLine[],
+  phone?: string | null,
+  birthday?: string | null,
+): Promise<CouponPreview> {
+  const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
+  const lines: DiscountLine[] = items.map((i) => ({
+    itemId: i.itemId,
+    productName: i.productName,
+    price: i.price,
+    quantity: i.quantity,
+  }));
+
+  const ph = phone && phone.trim() ? normalizePhone(phone) : null;
+  let bday = false;
+  if (ph && isSupabaseConfigured()) {
+    try {
+      bday = await isBirthdayFor(getServerSupabase(), ph, code, birthday ?? null);
+    } catch {
+      bday = false;
+    }
+  }
+
+  const v = await validateDiscount(code, { subtotal, items: lines, phone: ph, birthday: bday });
+  return v.ok
+    ? { ok: true, code: v.code, label: v.label, amount: v.amount }
+    : {
+        ok: false,
+        reason: v.reason,
+        requiredAmount: v.requiredAmount,
+        requiredQuantity: v.requiredQuantity,
+      };
+}
+
 // ---- Place a COD order ------------------------------------------------------
 export type CartLine = {
   itemId: string;
@@ -500,24 +582,23 @@ export async function placeOrder(
     const subtotal = payload.items.reduce((s, i) => s + i.price * i.quantity, 0);
     const shipping = 0; // free shipping for the test flow
 
-    // Validate any coupon server-side (never trust the client for pricing).
-    // The BIRTHDAY coupon is only honored on the customer's real birthday,
-    // checked against the birthday they entered now or saved on their profile.
-    let isBday = false;
-    if ((payload.couponCode || "").trim().toUpperCase() === "BIRTHDAY") {
-      let bday = payload.birthday || null;
-      if (!bday) {
-        const { data: c } = await supabase
-          .from("store_customers")
-          .select("birthday")
-          .eq("phone", ph)
-          .maybeSingle();
-        bday = c?.birthday ? String(c.birthday) : null;
-      }
-      isBday = isBirthday(bday, new Date());
-    }
-    const disc = computeDiscount(payload.couponCode, subtotal, { birthday: isBday });
-    const discount = disc.ok ? disc.discount : 0;
+    // Price any coupon server-side (never trust the client for pricing). This
+    // reads the merchant's own discounts table first and only then the legacy
+    // built-in offers, so a code created in the admin is finally honoured.
+    const isBday = await isBirthdayFor(supabase, ph, payload.couponCode, payload.birthday);
+    const verdict = await validateDiscount(payload.couponCode, {
+      subtotal,
+      items: payload.items.map((i) => ({
+        itemId: i.itemId,
+        productName: i.productName,
+        price: i.price,
+        quantity: i.quantity,
+      })),
+      phone: ph,
+      birthday: isBday,
+    });
+    const discount = verdict.ok ? verdict.amount : 0;
+    const discountCode = verdict.ok ? verdict.code : null;
     const total = Math.max(0, subtotal - discount + shipping);
     const orderNumber = "BB" + Date.now().toString().slice(-8);
 
@@ -534,7 +615,7 @@ export async function placeOrder(
     if (payload.giftWrap) {
       noteParts.push(`تغليف هدية${payload.giftMessage?.trim() ? `: "${payload.giftMessage.trim()}"` : ""}`);
     }
-    if (disc.ok && disc.offer) noteParts.push(`كوبون ${disc.offer.code} (−${discount})`);
+    if (discountCode && discount > 0) noteParts.push(`كوبون ${discountCode} (−${discount})`);
     const composedNote = noteParts.join(" | ") || null;
 
     // Place the order atomically: stock is reserved under row locks and the
@@ -565,6 +646,17 @@ export async function placeOrder(
         return { ok: false, error: "out_of_stock" };
       }
       return { ok: false, error: rpcErr.message };
+    }
+
+    // What the discount actually was, as numbers rather than Arabic prose in a
+    // note — this is what makes "did the discount pay for itself" answerable.
+    // Best-effort: the order is placed and must not fail over bookkeeping.
+    if (discountCode && discount > 0) {
+      await supabase
+        .from("store_orders")
+        .update({ discount_code: discountCode, discount_amount: discount })
+        .eq("order_number", orderNumber);
+      if (verdict.ok && verdict.source === "table") await redeemDiscount(discountCode);
     }
 
     // Upsert the passwordless customer profile (keyed by the verified phone) so
