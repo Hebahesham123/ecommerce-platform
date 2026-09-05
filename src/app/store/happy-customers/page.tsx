@@ -78,7 +78,11 @@ export default async function HappyCustomersPage() {
           <p className="text-sm text-ink-muted">
             No featured reviews yet — they appear here once we pick them.
           </p>
-          <Link href="/shop/reviews" className="btn-primary mt-5 inline-flex px-5 py-2.5">
+          <Link
+            href="/shop/reviews"
+            target="_top"
+            className="btn-primary mt-5 inline-flex px-5 py-2.5"
+          >
             Leave a review
           </Link>
         </div>
@@ -110,7 +114,11 @@ export default async function HappyCustomersPage() {
           </ul>
 
           <div className="mt-10 text-center">
-            <Link href="/shop/reviews" className="btn-outline inline-flex px-5 py-2.5">
+            <Link
+              href="/shop/reviews"
+              target="_top"
+              className="btn-outline inline-flex px-5 py-2.5"
+            >
               Share your experience
             </Link>
           </div>

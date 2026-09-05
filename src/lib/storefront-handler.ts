@@ -123,6 +123,7 @@ try{document.dispatchEvent(new CustomEvent('cart:refresh',{bubbles:true,detail:{
 const WIDGET_PAGES: Record<string, string> = {
   "/reviews": "Reviews",
   "/requests": "Requests",
+  "/happy-customers": "Happy customers",
 };
 
 /** Absolute origin of this request (correct behind Vercel's proxy and locally).
@@ -146,6 +147,13 @@ function originOf(req: Request): string {
 function widgetSrc(origin: string, path: string, mount: string): string {
   if (path === "/requests")
     return `${origin}/store/requests?home=${encodeURIComponent(`${mount}/requests`)}`;
+  // Happy customers reads featured reviews out of this database, so like
+  // Requests it is a real page here rather than a static widget. Serving it
+  // through the theme is also the only way a menu item can reach it: the
+  // renderer prefixes every relative link with the mount, so a merchant typing
+  // "/store/happy-customers" into Navigation would land on
+  // "/shop/store/happy-customers" and 404.
+  if (path === "/happy-customers") return `${origin}/store/happy-customers`;
   return `${origin}/widgets/${path.slice(1)}.html`;
 }
 

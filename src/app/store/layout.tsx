@@ -40,7 +40,8 @@ export default function StoreLayout({ children }: { children: ReactNode }) {
   // the shopper two navigations stacked on top of each other.
   const bare =
     (pathname?.startsWith("/store/checkout") ||
-      pathname?.startsWith("/store/requests")) ??
+      pathname?.startsWith("/store/requests") ||
+      pathname?.startsWith("/store/happy-customers")) ??
     false;
 
   // The storefront is always light (its surfaces aren't dark-themed), even when
