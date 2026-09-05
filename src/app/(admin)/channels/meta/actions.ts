@@ -7,11 +7,13 @@ import {
   catalogItemsBatch,
   sendConversionEvent,
   sha256,
+  type ConversionEvent,
   type CatalogItem,
   type Named,
 } from "@/lib/meta";
 import { invalidatePixelSnippet } from "@/lib/theme-render-service";
 import { products } from "@/lib/data";
+import type { Channel } from "@/lib/channel";
 
 export type MetaResult<T = void> =
   | { ok: true; data: T }
@@ -31,6 +33,14 @@ export type MetaConnectionView = {
   /** Whether a Conversions API token is stored. The token itself never leaves
    *  the server — the UI only needs to know it is there. */
   capiTokenSet: boolean;
+  /**
+   * The app's own dataset. Meta counts a website and an app as two different
+   * sources, so keeping them apart here is what lets the merchant run ads for
+   * one, the other, or both, and see honest numbers for each.
+   */
+  appDatasetId: string | null;
+  appCapiEnabled: boolean;
+  appCapiTokenSet: boolean;
   testEventCode: string | null;
   tokenExpiresAt: string | null;
   lastSyncAt: string | null;
@@ -62,6 +72,9 @@ export async function getConnection(): Promise<MetaResult<MetaConnectionView>> {
         pixelEnabled: r?.pixel_enabled !== false,
         capiEnabled: Boolean(r?.capi_enabled),
         capiTokenSet: Boolean(r?.capi_token || r?.access_token),
+        appDatasetId: (r?.app_dataset_id as string) ?? null,
+        appCapiEnabled: Boolean(r?.app_capi_enabled),
+        appCapiTokenSet: Boolean(r?.app_capi_token),
         testEventCode: (r?.test_event_code as string) ?? null,
         tokenExpiresAt: (r?.token_expires_at as string) ?? null,
         lastSyncAt: (r?.last_catalog_sync_at as string) ?? null,
@@ -75,17 +88,26 @@ export async function getConnection(): Promise<MetaResult<MetaConnectionView>> {
 }
 
 /**
- * Connect Meta by pasting what Events Manager already shows you.
+ * Connect one channel by pasting what Events Manager already shows you.
  *
- * The pixel needs an id and nothing else — it is a public identifier that ships
- * in the page source of every store that uses one. The Conversions API needs
- * that same id (it is the dataset id) plus an access token, which is secret and
- * therefore only ever travels inwards.
+ * A dataset needs an id and nothing else to receive browser events — it is a
+ * public identifier that ships in the page source of every store that uses
+ * one. The Conversions API needs that same id plus an access token, which is
+ * secret and therefore only ever travels inwards.
  *
- * Saving an id switches the pixel on; saving a token switches server events on.
- * There is no separate "connect" step because there is nothing else to do.
+ * The website and the app are saved separately because Meta treats them as
+ * separate sources: they get their own dataset, their own token and their own
+ * on/off state. That is what makes "website only", "app only" and "both" three
+ * real choices rather than one setting with a label on it — and it means
+ * connecting the app can never quietly change what the website reports.
+ *
+ * Saving an id switches that channel on; saving a token switches its server
+ * events on. There is no separate "connect" step because there is nothing else
+ * to do.
  */
 export async function saveDirectSetup(input: {
+  /** Which surface these credentials belong to. Defaults to the website. */
+  channel?: Channel;
   pixelId: string;
   /** Empty string leaves the stored token untouched; null clears it. */
   capiToken?: string | null;
@@ -93,6 +115,7 @@ export async function saveDirectSetup(input: {
 }): Promise<MetaResult<{ pixelOn: boolean; capiOn: boolean }>> {
   if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
 
+  const isApp = input.channel === "app";
   const pixelId = input.pixelId.trim();
   // Meta pixel / dataset ids are numeric. Catching a pasted URL or a stray
   // space here is far kinder than a silent no-op on the storefront.
@@ -102,26 +125,37 @@ export async function saveDirectSetup(input: {
     const supabase = getServerSupabase();
     const current = await loadRow();
 
-    const update: Record<string, unknown> = {
-      pixel_id: pixelId || null,
-      pixel_name: pixelId ? (current?.pixel_name as string) ?? "Pixel" : null,
-      pixel_enabled: Boolean(pixelId),
-      connected: Boolean(pixelId),
-    };
-    if (input.testEventCode !== undefined)
-      update.test_event_code = input.testEventCode.trim() || null;
-
     // A blank token means "leave what is stored"; explicit null means remove.
-    let token = (current?.capi_token as string) || null;
+    const stored = (isApp ? current?.app_capi_token : current?.capi_token) as string | undefined;
+    let token = stored || null;
     if (input.capiToken === null) token = null;
     else if (input.capiToken && input.capiToken.trim()) token = input.capiToken.trim();
 
-    if (input.capiToken !== undefined) update.capi_token = token;
-    update.capi_enabled = Boolean(pixelId && token);
+    const update: Record<string, unknown> = isApp
+      ? {
+          app_dataset_id: pixelId || null,
+          app_capi_enabled: Boolean(pixelId && token),
+        }
+      : {
+          pixel_id: pixelId || null,
+          pixel_name: pixelId ? (current?.pixel_name as string) ?? "Pixel" : null,
+          pixel_enabled: Boolean(pixelId),
+          capi_enabled: Boolean(pixelId && token),
+        };
+    if (input.capiToken !== undefined) update[isApp ? "app_capi_token" : "capi_token"] = token;
+
+    // "Connected" means at least one channel is reporting, so switching the
+    // website off does not blank a working app connection.
+    const otherId = isApp ? current?.pixel_id : current?.app_dataset_id;
+    update.connected = Boolean(pixelId || otherId);
+
+    // The test code is shared: it belongs to the tester, not to a channel.
+    if (input.testEventCode !== undefined)
+      update.test_event_code = input.testEventCode.trim() || null;
 
     const { error } = await supabase.from("meta_connection").update(update).eq("id", "default");
     if (error) {
-      const missing = /capi_token/i.test(error.message);
+      const missing = /capi_token|app_dataset_id|app_capi/i.test(error.message);
       return { ok: false, error: missing ? "migration_missing" : error.message };
     }
 
@@ -174,19 +208,42 @@ export async function updateSelection(patch: {
   }
 }
 
-export async function disconnect(): Promise<MetaResult> {
+/**
+ * Forget one channel's credentials, or all of them.
+ *
+ * Disconnecting the app must not take the website's ads down with it, so the
+ * default is the channel you are looking at. Only clearing the last one tears
+ * down the shared Facebook login as well.
+ */
+export async function disconnect(channel?: Channel | "all"): Promise<MetaResult> {
   if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
   try {
     const supabase = getServerSupabase();
-    const { error } = await supabase
-      .from("meta_connection")
-      .update({
-        connected: false,
-        capi_token: null,
-        capi_enabled: false,
-        pixel_id: null,
-        pixel_name: null,
-        pixel_enabled: false,
+    const current = await loadRow();
+    const scope = channel ?? "all";
+
+    const update: Record<string, unknown> = {};
+    if (scope === "app" || scope === "all") {
+      update.app_dataset_id = null;
+      update.app_capi_token = null;
+      update.app_capi_enabled = false;
+    }
+    if (scope === "web" || scope === "all") {
+      update.pixel_id = null;
+      update.pixel_name = null;
+      update.pixel_enabled = false;
+      update.capi_token = null;
+      update.capi_enabled = false;
+    }
+
+    const keptWeb = scope === "app" ? Boolean(current?.pixel_id) : false;
+    const keptApp = scope === "web" ? Boolean(current?.app_dataset_id) : false;
+    update.connected = keptWeb || keptApp;
+
+    // The OAuth login is shared by both channels (catalog sync uses it), so it
+    // only goes when nothing is left connected.
+    if (!update.connected) {
+      Object.assign(update, {
         access_token: null,
         token_expires_at: null,
         fb_user_id: null,
@@ -194,8 +251,10 @@ export async function disconnect(): Promise<MetaResult> {
         business_id: null,
         business_name: null,
         available: {},
-      })
-      .eq("id", "default");
+      });
+    }
+
+    const { error } = await supabase.from("meta_connection").update(update).eq("id", "default");
     if (error) return { ok: false, error: error.message };
     invalidatePixelSnippet();
     revalidatePath("/channels/meta");
@@ -245,25 +304,42 @@ export async function syncCatalog(): Promise<MetaResult<{ count: number }>> {
   }
 }
 
+/**
+ * Prove one channel's connection works, end to end.
+ *
+ * Sent against whichever channel is being tested, with that channel's own
+ * dataset, token and action_source — otherwise a passing test on the website
+ * would say nothing at all about whether the app is wired up.
+ */
 export async function sendTestEvent(
   eventName: string,
+  channel: Channel = "web",
 ): Promise<MetaResult<{ eventsReceived: number; traceId: string }>> {
   if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
   try {
     const supabase = getServerSupabase();
     const r = await loadRow();
+    const isApp = channel === "app";
     // A dedicated Conversions API token wins; an OAuth token still works.
-    const token = ((r?.capi_token as string) || (r?.access_token as string)) as string | undefined;
-    const pixelId = r?.pixel_id as string | undefined;
+    const token = (
+      isApp
+        ? (r?.app_capi_token as string)
+        : (r?.capi_token as string) || (r?.access_token as string)
+    ) as string | undefined;
+    const pixelId = (isApp ? r?.app_dataset_id : r?.pixel_id) as string | undefined;
     const testCode = (r?.test_event_code as string) || undefined;
     if (!pixelId) return { ok: false, error: "no_pixel" };
     if (!token) return { ok: false, error: "no_capi_token" };
 
     const eventId = crypto.randomUUID();
-    const event = {
+    const event: ConversionEvent = {
       event_name: eventName,
       event_id: eventId,
-      event_source_url: SITE_URL,
+      action_source: isApp ? "app" : "website",
+      // Meta rejects a website event with no source URL, and rejects an app
+      // event that carries one. Sending the wrong shape fails silently in the
+      // worst way: accepted, then dropped from attribution.
+      ...(isApp ? {} : { event_source_url: SITE_URL }),
       user_data: { em: [sha256("test@your-store.example.com")], client_user_agent: "cowork-admin-tester" },
       custom_data:
         eventName === "Purchase"
@@ -282,7 +358,7 @@ export async function sendTestEvent(
     await supabase.from("meta_events").insert({
       event_name: eventName,
       event_id: eventId,
-      source: "test",
+      source: `test:${channel}`,
       status,
       payload: event,
       response,

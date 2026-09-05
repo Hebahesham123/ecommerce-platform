@@ -16,12 +16,19 @@ import {
   type MetaConnectionView,
   type MetaEventLog,
 } from "./actions";
+import { type Channel } from "@/lib/channel";
 
 /**
  * Connecting Meta is two values pasted from Events Manager. The page is shaped
  * to say exactly that: one card you fill in, one that tells you it worked, and
  * everything else — the pause switch, catalog sync, disconnecting — folded away
  * behind Advanced, because none of it is part of getting set up.
+ *
+ * There are now two of those cards, one per channel, behind a switch. Meta
+ * treats a website and an app as separate data sources with separate ids, so
+ * pretending they share one setting would only produce numbers that are true
+ * of neither. The switch is also the answer to "website only, app only, or
+ * both": fill in one side, or fill in both.
  */
 
 const inputCls =
@@ -63,6 +70,7 @@ export default function MetaPage() {
   const [loading, setLoading] = useState(true);
   const [banner, setBanner] = useState<{ kind: "ok" | "err"; msg: string } | null>(null);
 
+  const [tab, setTab] = useState<Channel>("web");
   const [pixelId, setPixelId] = useState("");
   const [capiToken, setCapiToken] = useState("");
   const [testCode, setTestCode] = useState("");
@@ -71,15 +79,26 @@ export default function MetaPage() {
   const [syncing, setSyncing] = useState(false);
   const [eventType, setEventType] = useState("PageView");
 
-  async function reload() {
+  async function reload(forChannel?: Channel) {
+    const which = forChannel ?? tab;
     const [c, e] = await Promise.all([getConnection(), listEvents()]);
     if (c.ok) {
       setConn(c.data);
-      setPixelId(c.data.pixelId ?? "");
+      setPixelId((which === "app" ? c.data.appDatasetId : c.data.pixelId) ?? "");
       setTestCode(c.data.testEventCode ?? "");
     }
     if (e.ok) setEvents(e.data);
     setLoading(false);
+  }
+
+  /** Switching channels swaps the whole form — including clearing the token
+   *  box, so a token typed for one dataset can never be saved against another. */
+  function switchTo(next: Channel) {
+    if (next === tab) return;
+    setTab(next);
+    setCapiToken("");
+    setBanner(null);
+    setPixelId((next === "app" ? conn?.appDatasetId : conn?.pixelId) ?? "");
   }
 
   useEffect(() => {
@@ -95,6 +114,7 @@ export default function MetaPage() {
   async function onSave(clearToken = false) {
     setSaving(true);
     const res = await saveDirectSetup({
+      channel: tab,
       pixelId,
       capiToken: clearToken ? null : capiToken,
       testEventCode: testCode,
@@ -110,8 +130,8 @@ export default function MetaPage() {
               : "The Pixel ID should be digits only — copy it from Events Manager."
             : res.error === "migration_missing"
               ? ar
-                ? "شغّلي supabase/migrations/0021_meta_direct_setup.sql"
-                : "Run supabase/migrations/0021_meta_direct_setup.sql"
+                ? "شغّلي supabase/migrations/0021 و 0022"
+                : "Run supabase/migrations/0021 and 0022"
               : res.error,
       });
       return;
@@ -130,7 +150,7 @@ export default function MetaPage() {
 
   async function onSend() {
     setSending(true);
-    const res = await sendTestEvent(eventType);
+    const res = await sendTestEvent(eventType, tab);
     setSending(false);
     setBanner(
       res.ok
@@ -170,7 +190,24 @@ export default function MetaPage() {
   }
 
   const c = conn!;
-  const live = Boolean(c.pixelId) && c.pixelEnabled;
+  const app = tab === "app";
+  const webLive = Boolean(c.pixelId) && c.pixelEnabled;
+  const appLive = c.appCapiEnabled;
+  const live = app ? appLive : webLive;
+  // What this tab currently has stored, so the form never shows the other
+  // channel's state next to this channel's inputs.
+  const savedId = app ? c.appDatasetId : c.pixelId;
+  const tokenSet = app ? c.appCapiTokenSet : c.capiTokenSet;
+  const salesOn = app ? c.appCapiEnabled : c.capiEnabled;
+
+  const connectedLabel =
+    webLive && appLive
+      ? ar ? "الموقع والتطبيق" : "Website + app"
+      : webLive
+        ? ar ? "الموقع" : "Website"
+        : appLive
+          ? ar ? "التطبيق" : "App"
+          : t("meta_not_connected");
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -178,9 +215,13 @@ export default function MetaPage() {
         title={t("nav_meta")}
         subtitle={ar ? "تتبّع الزيارات والمبيعات في إعلاناتك" : "Track visits and sales in your ads"}
         actions={
-          <Badge className={live ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-ink-muted"}>
+          <Badge
+            className={
+              webLive || appLive ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-ink-muted"
+            }
+          >
             <IcMeta className="h-3.5 w-3.5" />
-            {live ? t("meta_connected") : t("meta_not_connected")}
+            {connectedLabel}
           </Badge>
         }
       />
@@ -197,18 +238,45 @@ export default function MetaPage() {
         </Card>
       )}
 
-      {/* ---- The whole setup ---- */}
+      {/* ---- Which surface am I setting up? ---- */}
+      <div className="mb-4 flex rounded-xl border border-line bg-surface-page p-1">
+        {(["web", "app"] as Channel[]).map((ch) => {
+          const on = ch === "web" ? webLive : appLive;
+          return (
+            <button
+              key={ch}
+              onClick={() => switchTo(ch)}
+              className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                tab === ch ? "bg-surface text-ink shadow-sm" : "text-ink-soft hover:text-ink"
+              }`}
+            >
+              {ch === "web"
+                ? ar ? "الموقع" : "Website"
+                : ar ? "التطبيق" : "App"}
+              <span className={`h-1.5 w-1.5 rounded-full ${on ? "bg-emerald-500" : "bg-slate-300"}`} />
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ---- The whole setup, for the channel you picked ---- */}
       <Card className="p-6">
-        <h2 className="text-base font-semibold text-ink">{ar ? "الربط" : "Connect"}</h2>
+        <h2 className="text-base font-semibold text-ink">
+          {app ? (ar ? "ربط التطبيق" : "Connect the app") : ar ? "ربط الموقع" : "Connect the website"}
+        </h2>
         <p className="mt-1 text-sm text-ink-muted">
-          {ar
-            ? "انسخي القيمتين من Events Manager والصقيهما هنا."
-            : "Copy these two values out of Events Manager and paste them here."}
+          {app
+            ? ar
+              ? "التطبيق يحتاج مجموعة بيانات خاصة به — فيسبوك يحسبه مصدراً مختلفاً عن الموقع."
+              : "The app needs a dataset of its own — Facebook counts it as a different source from your website."
+            : ar
+              ? "انسخي القيمتين من Events Manager والصقيهما هنا."
+              : "Copy these two values out of Events Manager and paste them here."}
         </p>
 
         <div className="mt-5 space-y-5">
           <Field
-            label={ar ? "معرّف البيكسل" : "Pixel ID"}
+            label={app ? (ar ? "معرّف مجموعة البيانات" : "Dataset ID") : ar ? "معرّف البيكسل" : "Pixel ID"}
             hint={
               ar
                 ? "Events Manager ← مصادر البيانات. أرقام فقط."
@@ -228,9 +296,13 @@ export default function MetaPage() {
           <Field
             label={ar ? "توكن واجهة التحويلات" : "Conversions API token"}
             hint={
-              ar
-                ? "Events Manager ← الإعدادات ← إنشاء توكن. اختياري، لكنه يتيح تتبّع المبيعات."
-                : "Events Manager → Settings → Generate access token. Optional, but it's what tracks sales."
+              app
+                ? ar
+                  ? "مطلوب — التطبيق ليس متصفّحاً، فكل أحداثه تُرسل من الخادم عبر هذا التوكن."
+                  : "Required here. An app has no browser, so every one of its events is sent from the server with this token."
+                : ar
+                  ? "Events Manager ← الإعدادات ← إنشاء توكن. اختياري، لكنه يتيح تتبّع المبيعات."
+                  : "Events Manager → Settings → Generate access token. Optional, but it's what tracks sales."
             }
           >
             <input
@@ -238,7 +310,7 @@ export default function MetaPage() {
               value={capiToken}
               onChange={(e) => setCapiToken(e.target.value)}
               placeholder={
-                c.capiTokenSet
+                tokenSet
                   ? ar ? "محفوظ — اتركيه فارغاً" : "Saved — leave blank to keep it"
                   : "EAAG…"
               }
@@ -257,21 +329,28 @@ export default function MetaPage() {
           </button>
 
           <div className="space-y-2 border-t border-line pt-4">
-            <Status on={live} label={ar ? "تتبّع الزيارات" : "Visits are tracked"} />
-            <Status on={c.capiEnabled} label={ar ? "تتبّع المبيعات" : "Sales are tracked"} />
+            {!app && <Status on={webLive} label={ar ? "تتبّع الزيارات" : "Visits are tracked"} />}
+            <Status
+              on={salesOn}
+              label={
+                app
+                  ? ar ? "مبيعات التطبيق تُرسل" : "App sales are reported"
+                  : ar ? "تتبّع المبيعات" : "Sales are tracked"
+              }
+            />
           </div>
         </div>
       </Card>
 
-      {/* ---- Proof it works ---- */}
-      {c.pixelId && (
+      {/* ---- Proof it works, for this channel ---- */}
+      {savedId && (
         <Card className="mt-4 p-6">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-base font-semibold text-ink">
               {ar ? "تجربة" : "Send a test"}
             </h2>
             <a
-              href={`https://business.facebook.com/events_manager2/list/dataset/${c.pixelId}`}
+              href={`https://business.facebook.com/events_manager2/list/dataset/${savedId}`}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-600 hover:underline"
@@ -334,24 +413,28 @@ export default function MetaPage() {
         </summary>
 
         <div className="space-y-6 border-t border-line p-5">
-          <div>
-            <label className="flex cursor-pointer items-center gap-2.5">
-              <input
-                type="checkbox"
-                checked={c.pixelEnabled}
-                onChange={(e) => updateSelection({ pixelEnabled: e.target.checked }).then(reload)}
-                className="h-4 w-4 rounded accent-brand-600"
-              />
-              <span className="text-sm text-ink">
-                {ar ? "تتبّع الزيارات مُفعّل" : "Track visits on the storefront"}
-              </span>
-            </label>
-            <p className="mt-1.5 ps-7 text-xs text-ink-soft">
-              {ar
-                ? "أوقفيه مؤقتاً دون حذف المعرّف."
-                : "Pause tracking without deleting your Pixel ID."}
-            </p>
-          </div>
+          {!app && (
+            <div>
+              <label className="flex cursor-pointer items-center gap-2.5">
+                <input
+                  type="checkbox"
+                  checked={c.pixelEnabled}
+                  onChange={(e) =>
+                    updateSelection({ pixelEnabled: e.target.checked }).then(() => reload())
+                  }
+                  className="h-4 w-4 rounded accent-brand-600"
+                />
+                <span className="text-sm text-ink">
+                  {ar ? "تتبّع الزيارات مُفعّل" : "Track visits on the storefront"}
+                </span>
+              </label>
+              <p className="mt-1.5 ps-7 text-xs text-ink-soft">
+                {ar
+                  ? "أوقفيه مؤقتاً دون حذف المعرّف."
+                  : "Pause tracking without deleting your Pixel ID."}
+              </p>
+            </div>
+          )}
 
           <div>
             <label className="text-sm font-medium text-ink">{t("test_event_code")}</label>
@@ -390,7 +473,9 @@ export default function MetaPage() {
               <div className="mt-2.5 flex flex-wrap items-center gap-2">
                 <select
                   value={c.catalogId ?? ""}
-                  onChange={(e) => updateSelection({ catalogId: e.target.value }).then(reload)}
+                  onChange={(e) =>
+                    updateSelection({ catalogId: e.target.value }).then(() => reload())
+                  }
                   className={`${inputCls} w-auto min-w-[180px] flex-1`}
                 >
                   <option value="">—</option>
@@ -414,8 +499,9 @@ export default function MetaPage() {
           <div className="border-t border-line pt-4">
             <button
               onClick={async () => {
-                await disconnect();
+                await disconnect(tab);
                 setCapiToken("");
+                setPixelId("");
                 setBanner({
                   kind: "ok",
                   msg: ar ? "تم إلغاء الربط." : "Disconnected.",
@@ -424,8 +510,15 @@ export default function MetaPage() {
               }}
               className="text-sm font-medium text-rose-600 hover:underline"
             >
-              {ar ? "إلغاء الربط وحذف البيانات" : "Disconnect and remove stored values"}
+              {app
+                ? ar ? "إلغاء ربط التطبيق وحذف بياناته" : "Disconnect the app and remove its values"
+                : ar ? "إلغاء ربط الموقع وحذف بياناته" : "Disconnect the website and remove its values"}
             </button>
+            <p className="mt-1.5 text-xs text-ink-soft">
+              {ar
+                ? "القناة الأخرى تظل تعمل كما هي."
+                : "The other channel keeps working exactly as it is."}
+            </p>
           </div>
         </div>
       </details>
