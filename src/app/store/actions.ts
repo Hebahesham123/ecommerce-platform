@@ -1,21 +1,21 @@
 "use server";
 
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
-import { slotLabel, isBirthday } from "@/lib/offers";
-import {
-  redeemDiscount,
-  validateDiscount,
-  type DiscountLine,
-} from "@/lib/discount-engine";
+import { validateDiscount, type DiscountLine } from "@/lib/discount-engine";
 import { normalizePhone, phoneVariants } from "@/lib/phone";
 import { getSessionPhone, setSession } from "@/lib/store-session";
-import { recordNudgeConversion } from "@/lib/nudge-service";
-import { sendOrderPurchase } from "@/lib/meta-purchase";
-import { cookies } from "next/headers";
+import {
+  isBirthdayFor,
+  placeOrderCore,
+  type ActionResult,
+  type CartLine,
+  type OrderPayload,
+} from "@/lib/orders";
 
-export type ActionResult<T = void> =
-  | { ok: true; data: T }
-  | { ok: false; error: string };
+// Checkout itself lives in lib/orders.ts so the storefront and the mobile API
+// share one path. These are re-exported because half the app imports them from
+// here, and moving the file should not move every import with it.
+export type { ActionResult, CartLine, OrderPayload };
 
 export type StoreVariant = {
   id: string;
@@ -153,17 +153,6 @@ export async function isPhoneVerified(phone: string): Promise<boolean> {
 
 const OTP_WEBHOOK_URL =
   process.env.OTP_WEBHOOK_URL || "https://n8n.srv1155688.hstgr.cloud/webhook/send-otp";
-
-/**
- * n8n "order relay" flow: on every placed order we POST the order + customer +
- * per-item supplier mapping here. n8n then creates a draft order on the supplier
- * Shopify store and emails the customer a checkout link. See
- * docs/n8n-order-relay.md. Fire-and-forget: a webhook failure never blocks the
- * order from being placed on our own store.
- */
-const ORDER_RELAY_WEBHOOK_URL =
-  process.env.ORDER_RELAY_WEBHOOK_URL ||
-  "https://n8n.srv1155688.hstgr.cloud/webhook/order-relay";
 
 /**
  * Generate a code, store it, and deliver it via the n8n OTP webhook.
@@ -397,32 +386,6 @@ export async function getStoreStats(): Promise<ActionResult<{ orders: number; cu
 }
 
 // ---- Discounts --------------------------------------------------------------
-/**
- * Is today verifiably this customer's birthday?
- *
- * Only asked when the BIRTHDAY code is in play. The date is taken from what
- * they just typed or from their saved profile — never from a claim the page
- * could make on its own.
- */
-async function isBirthdayFor(
-  supabase: ReturnType<typeof getServerSupabase>,
-  phone: string,
-  code: string | null | undefined,
-  typed: string | null | undefined,
-): Promise<boolean> {
-  if ((code || "").trim().toUpperCase() !== "BIRTHDAY") return false;
-  let bday = typed || null;
-  if (!bday) {
-    const { data } = await supabase
-      .from("store_customers")
-      .select("birthday")
-      .eq("phone", phone)
-      .maybeSingle();
-    bday = data?.birthday ? String(data.birthday) : null;
-  }
-  return isBirthday(bday, new Date());
-}
-
 export type CouponPreview =
   | { ok: true; code: string; label: string; amount: number }
   | {
@@ -474,266 +437,21 @@ export async function previewCoupon(
 }
 
 // ---- Place a COD order ------------------------------------------------------
-export type CartLine = {
-  itemId: string;
-  productName: string;
-  variantTitle: string | null;
-  sku: string | null;
-  imageUrl: string | null;
-  price: number;
-  quantity: number;
-};
-export type OrderPayload = {
-  customerName: string;
-  phone: string;
-  email?: string | null; // needed so the supplier can email the checkout link
-  governorate: string;
-  city: string;
-  address: string;
-  note?: string;
-  couponCode?: string | null;
-  birthday?: string | null; // yyyy-mm-dd, saved to the customer profile
-  deliverySpeed?: "standard" | "scheduled";
-  deliveryDate?: string | null; // yyyy-mm-dd
-  deliverySlot?: string | null; // slot id from DELIVERY_SLOTS
-  giftWrap?: boolean;
-  giftMessage?: string | null;
-  items: CartLine[];
-};
-
 /**
- * Build the relay payload (order + customer + per-item supplier mapping) and POST
- * it to the n8n order-relay webhook. Enriches each cart line with the supplier
- * mapping columns (supplier_variant_id / supplier_url / supplier_title) and the
- * vendor, so n8n can either use an exact supplier variant or search the supplier
- * store by the brand-stripped title. Never throws — relay problems must not fail
- * an order that already succeeded on our store.
+ * The storefront's checkout. All it decides is who is asking and from where —
+ * the pricing, the stock reservation, the discount redemption and the ad
+ * attribution are in lib/orders.ts, shared with the mobile API so the two
+ * surfaces can never drift apart on any of it.
  */
-async function fireOrderRelay(
-  supabase: ReturnType<typeof getServerSupabase>,
-  orderNumber: string,
-  payload: OrderPayload,
-  phone: string,
-  email: string | null,
-  total: number,
-): Promise<void> {
-  try {
-    const ids = [...new Set(payload.items.map((i) => i.itemId))];
-    const { data: mapRows } = await supabase
-      .from("inventory_items")
-      .select("id, vendor, supplier_variant_id, supplier_url, supplier_title")
-      .in("id", ids);
-    const byId = new Map((mapRows ?? []).map((r: Row) => [String(r.id), r]));
-
-    const items = payload.items.map((i) => {
-      const m = byId.get(i.itemId) ?? {};
-      return {
-        title: i.productName,
-        variantTitle: i.variantTitle,
-        sku: i.sku,
-        quantity: i.quantity,
-        price: i.price,
-        vendor: (m.vendor as string) ?? null,
-        supplierVariantId: (m.supplier_variant_id as string) ?? null,
-        supplierUrl: (m.supplier_url as string) ?? null,
-        supplierTitle: (m.supplier_title as string) ?? null,
-      };
-    });
-
-    await fetch(ORDER_RELAY_WEBHOOK_URL, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        orderNumber,
-        total,
-        customer: {
-          name: payload.customerName.trim(),
-          phone,
-          email,
-          governorate: payload.governorate.trim() || null,
-          city: payload.city.trim() || null,
-          address: payload.address.trim() || null,
-          note: payload.note?.trim() || null,
-        },
-        items,
-      }),
-    });
-  } catch {
-    // swallow — the order is already placed; relay is best-effort.
-  }
-}
-
 export async function placeOrder(
   payload: OrderPayload,
 ): Promise<ActionResult<{ orderNumber: string }>> {
-  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
-  if (!payload.items.length) return { ok: false, error: "empty_cart" };
-  try {
-    const supabase = getServerSupabase();
-    const ph = normalizePhone(payload.phone);
-
-    // Enforce verification server-side. Being signed in as this number counts:
-    // the session is HMAC-signed by us, so it is proof we already recognised
-    // this shopper — otherwise a logged-in customer would be sent back through
-    // verification on every single order.
-    const [{ data: verified }, sessionPhone] = await Promise.all([
-      supabase.from("verified_phones").select("phone").eq("phone", ph).maybeSingle(),
-      getSessionPhone(),
-    ]);
-    if (!verified && sessionPhone !== ph) return { ok: false, error: "not_verified" };
-
-    const subtotal = payload.items.reduce((s, i) => s + i.price * i.quantity, 0);
-    const shipping = 0; // free shipping for the test flow
-
-    // Price any coupon server-side (never trust the client for pricing). This
-    // reads the merchant's own discounts table first and only then the legacy
-    // built-in offers, so a code created in the admin is finally honoured.
-    const isBday = await isBirthdayFor(supabase, ph, payload.couponCode, payload.birthday);
-    const verdict = await validateDiscount(payload.couponCode, {
-      subtotal,
-      items: payload.items.map((i) => ({
-        itemId: i.itemId,
-        productName: i.productName,
-        price: i.price,
-        quantity: i.quantity,
-      })),
-      phone: ph,
-      birthday: isBday,
-    });
-    const discount = verdict.ok ? verdict.amount : 0;
-    const discountCode = verdict.ok ? verdict.code : null;
-    const total = Math.max(0, subtotal - discount + shipping);
-    const orderNumber = "BB" + Date.now().toString().slice(-8);
-
-    // Fold delivery schedule, gift options and coupon into the merchant note
-    // (no schema change needed — it's all captured in store_orders.note).
-    const noteParts: string[] = [];
-    if (payload.note?.trim()) noteParts.push(payload.note.trim());
-    if (payload.deliverySpeed === "scheduled" && payload.deliveryDate) {
-      const slot = slotLabel(payload.deliverySlot, "ar");
-      noteParts.push(`التوصيل: ${payload.deliveryDate}${slot ? ` (${slot})` : ""}`);
-    } else {
-      noteParts.push("التوصيل: قياسي (٢–٤ أيام)");
-    }
-    if (payload.giftWrap) {
-      noteParts.push(`تغليف هدية${payload.giftMessage?.trim() ? `: "${payload.giftMessage.trim()}"` : ""}`);
-    }
-    if (discountCode && discount > 0) noteParts.push(`كوبون ${discountCode} (−${discount})`);
-    const composedNote = noteParts.join(" | ") || null;
-
-    // Place the order atomically: stock is reserved under row locks and the
-    // whole transaction rolls back if any line is short (prevents overselling).
-    const { error: rpcErr } = await supabase.rpc("place_store_order", {
-      p_order_number: orderNumber,
-      p_customer_name: payload.customerName.trim(),
-      p_phone: ph,
-      p_governorate: payload.governorate.trim() || null,
-      p_city: payload.city.trim() || null,
-      p_address: payload.address.trim() || null,
-      p_note: composedNote,
-      p_subtotal: subtotal,
-      p_shipping: shipping,
-      p_total: total,
-      p_items: payload.items.map((i) => ({
-        item_id: i.itemId,
-        product_name: i.productName,
-        variant_title: i.variantTitle,
-        sku: i.sku,
-        image_url: i.imageUrl,
-        price: i.price,
-        quantity: i.quantity,
-      })),
-    });
-    if (rpcErr) {
-      if ((rpcErr.message || "").includes("insufficient_stock")) {
-        return { ok: false, error: "out_of_stock" };
-      }
-      return { ok: false, error: rpcErr.message };
-    }
-
-    // What the discount actually was, as numbers rather than Arabic prose in a
-    // note — this is what makes "did the discount pay for itself" answerable.
-    // Best-effort: the order is placed and must not fail over bookkeeping.
-    if (discountCode && discount > 0) {
-      await supabase
-        .from("store_orders")
-        .update({ discount_code: discountCode, discount_amount: discount })
-        .eq("order_number", orderNumber);
-      if (verdict.ok && verdict.source === "table") await redeemDiscount(discountCode);
-    }
-
-    // Close the loop on the hesitation popup. Without this the results page can
-    // only ever say how many people were shown an offer, never whether the
-    // discount it gave away bought anything back.
-    try {
-      const visitorId = (await cookies()).get("bb_vid")?.value ?? null;
-      await recordNudgeConversion({
-        visitorId,
-        code: discountCode,
-        orderNumber,
-        orderTotal: total,
-      });
-    } catch {
-      /* attribution is never worth failing an order over */
-    }
-
-    // Upsert the passwordless customer profile (keyed by the verified phone) so
-    // returning customers get autofilled next time. Birthday only overwrites
-    // when provided, so we never wipe a saved one.
-    const emailIn = payload.email?.trim() || null;
-    await supabase.from("store_customers").upsert(
-      {
-        phone: ph,
-        name: payload.customerName.trim() || null,
-        ...(emailIn ? { email: emailIn } : {}),
-        governorate: payload.governorate.trim() || null,
-        city: payload.city.trim() || null,
-        address: payload.address.trim() || null,
-        ...(payload.birthday ? { birthday: payload.birthday } : {}),
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "phone" },
-    );
-
-    // Fall back to the saved profile email if none was entered this time, so the
-    // supplier can still email the checkout link.
-    let relayEmail = emailIn;
-    if (!relayEmail) {
-      const { data: prof } = await supabase
-        .from("store_customers")
-        .select("email")
-        .eq("phone", ph)
-        .maybeSingle();
-      relayEmail = (prof?.email as string) ?? null;
-    }
-
-    // Tell Meta a sale happened. The browser pixel only fires Purchase on paths
-    // that look like Shopify's thank-you page, and this store's is
-    // /store/order/<number>, so without this nothing was ever reported. The
-    // order number doubles as the event id, which is what lets Meta discard a
-    // duplicate if a browser-side Purchase is ever added.
-    await sendOrderPurchase({
-      orderNumber,
-      total,
-      phone: ph,
-      email: relayEmail,
-      customerName: payload.customerName,
-      city: payload.city,
-      contentIds: [...new Set(payload.items.map((i) => i.sku || i.itemId))],
-      numItems: payload.items.reduce((n, i) => n + i.quantity, 0),
-    });
-
-    // Relay to the supplier via n8n (draft order + checkout-link email). Awaited
-    // so it runs before the serverless function returns, but never fails the order.
-    await fireOrderRelay(supabase, orderNumber, payload, ph, relayEmail, total);
-
-    return { ok: true, data: { orderNumber } };
-  } catch (e) {
-    return { ok: false, error: (e as Error).message };
-  }
+  return placeOrderCore(payload, {
+    channel: "web",
+    viewerPhone: await getSessionPhone(),
+  });
 }
 
-// Admin-facing list of real placed orders, mapped to the admin Order shape.
 export type PlacedOrder = {
   id: string;
   customer: string;
