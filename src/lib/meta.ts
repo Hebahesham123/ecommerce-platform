@@ -166,6 +166,9 @@ export async function catalogItemsBatch(
 export type ConversionEvent = {
   event_name: string;
   event_id: string;
+  /** "website" or "app". Meta reads these as different data sources, and an
+   *  app purchase filed as web traffic corrupts the attribution. */
+  action_source?: "website" | "app";
   event_source_url?: string;
   user_data?: Record<string, string[] | string>;
   custom_data?: Record<string, unknown>;
@@ -182,7 +185,7 @@ export async function sendConversionEvent(
       event_name: event.event_name,
       event_time: Math.floor(Date.now() / 1000),
       event_id: event.event_id,
-      action_source: "website",
+      action_source: event.action_source ?? "website",
       event_source_url: event.event_source_url,
       user_data: event.user_data ?? {},
       custom_data: event.custom_data ?? {},

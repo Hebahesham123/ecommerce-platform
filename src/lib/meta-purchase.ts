@@ -2,6 +2,7 @@ import "server-only";
 import { cookies, headers } from "next/headers";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
 import { sendConversionEvent, sha256 } from "@/lib/meta";
+import type { Channel } from "@/lib/channel";
 
 /**
  * Report a placed order to Meta's Conversions API.
@@ -27,6 +28,8 @@ type PurchaseInput = {
   city?: string | null;
   contentIds?: string[];
   numItems?: number;
+  /** Which surface sold it. Decides both the dataset and the action_source. */
+  channel: Channel;
 };
 
 /** Meta matches on normalised, SHA-256 hashed values — never raw. */
@@ -78,17 +81,30 @@ export async function sendOrderPurchase(order: PurchaseInput): Promise<void> {
     const supabase = getServerSupabase();
     const { data } = await supabase
       .from("meta_connection")
-      .select("pixel_id, capi_token, access_token, capi_enabled")
+      .select("pixel_id,capi_token,access_token,capi_enabled,app_dataset_id,app_capi_token,app_capi_enabled")
       .eq("id", "default")
       .maybeSingle();
+    if (!data) return;
 
-    if (!data?.capi_enabled) return;
-    const pixelId = data.pixel_id as string | undefined;
-    // A dedicated CAPI token is preferred; an OAuth token still works.
-    const token = ((data.capi_token as string) || (data.access_token as string)) ?? "";
+    // A website pixel and an app dataset are different data sources in Meta,
+    // each with its own token. Sending an app sale on the web pixel would file
+    // it as web traffic, which is worse than not sending it at all.
+    const isApp = order.channel === "app";
+    const enabled = isApp ? data.app_capi_enabled : data.capi_enabled;
+    if (!enabled) return;
+
+    const pixelId = (isApp ? data.app_dataset_id : data.pixel_id) as string | undefined;
+    // A dedicated CAPI token is preferred; an OAuth token still works for web.
+    const token = (isApp
+      ? (data.app_capi_token as string)
+      : (data.capi_token as string) || (data.access_token as string)) ?? "";
     if (!pixelId || !token) return;
 
-    const signals = await browserSignals(order.orderNumber);
+    // Browser identifiers only exist for the website. An app has no _fbp
+    // cookie and no page URL; sending empty ones would only muddy the payload.
+    const signals = isApp
+      ? { ip: null, ua: null, fbp: null, fbc: null, sourceUrl: undefined }
+      : await browserSignals(order.orderNumber);
 
     const name = String(order.customerName ?? "").trim();
     const [first, ...rest] = name ? name.split(/\s+/) : [];
@@ -127,6 +143,7 @@ export async function sendOrderPurchase(order: PurchaseInput): Promise<void> {
       response = await sendConversionEvent(pixelId, token, {
         event_name: "Purchase",
         event_id: order.orderNumber,
+        action_source: isApp ? "app" : "website",
         event_source_url: signals.sourceUrl,
         user_data,
         custom_data,
@@ -148,6 +165,7 @@ export async function sendOrderPurchase(order: PurchaseInput): Promise<void> {
       status,
       payload: {
         order_id: order.orderNumber,
+        channel: order.channel,
         value: custom_data.value,
         // Which identifiers were available, so a poor match quality score in
         // Events Manager can be explained without guessing.
