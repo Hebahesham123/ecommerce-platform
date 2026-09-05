@@ -1,18 +1,21 @@
 import "server-only";
+import { cookies, headers } from "next/headers";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
 import { sendConversionEvent, sha256 } from "@/lib/meta";
 
 /**
  * Report a placed order to Meta's Conversions API.
  *
- * Without this the Conversions API is connected to nothing: the browser pixel
- * only fires Purchase on paths that look like Shopify's thank-you page, and
- * this store's is /store/order/<number>, so no purchase was ever reported from
- * either side. A server-side event is also the more reliable half — it survives
- * ad blockers, and it carries the real order total instead of a guess.
+ * Authenticating takes only the dataset id and a token. Being *useful* takes
+ * more: Meta scores every event on how confidently it can tie it to a real
+ * person, and an event carrying nothing but a hashed phone number matches
+ * poorly, which quietly wastes the ad spend it was meant to optimise.
  *
- * `event_id` is the order number, which is what lets Meta discard a duplicate
- * if a browser-side Purchase is ever added for the same order.
+ * So alongside the hashed customer details this sends the four signals that do
+ * most of the matching work — the browser's _fbp cookie, the _fbc click id, the
+ * shopper's IP and their user agent. Those four are sent RAW, not hashed; Meta
+ * treats them as identifiers rather than personal data, and hashing them makes
+ * them useless.
  */
 
 type PurchaseInput = {
@@ -40,13 +43,42 @@ function phoneDigits(p: string | null | undefined): string | null {
   return d;
 }
 
+/**
+ * What the browser knows that the database doesn't.
+ *
+ * `_fbp` is written by the pixel on this same origin and `_fbc` by a click from
+ * an ad, so both are readable here — which is the whole reason the pixel and
+ * the Conversions API are worth having together rather than either alone.
+ */
+async function browserSignals(orderNumber: string) {
+  try {
+    const [h, c] = await Promise.all([headers(), cookies()]);
+    const forwarded = h.get("x-forwarded-for") ?? "";
+    const host = h.get("x-forwarded-host") || h.get("host") || "";
+    const proto = h.get("x-forwarded-proto") || "https";
+    return {
+      ip: forwarded.split(",")[0].trim() || h.get("x-real-ip") || null,
+      ua: h.get("user-agent") || null,
+      fbp: c.get("_fbp")?.value ?? null,
+      fbc: c.get("_fbc")?.value ?? null,
+      // Required whenever action_source is "website", which it is.
+      sourceUrl: host
+        ? `${proto}://${host}/store/order/${orderNumber}`
+        : process.env.NEXT_PUBLIC_SITE_URL || undefined,
+    };
+  } catch {
+    // Called outside a request (a job, a webhook) — send what we have.
+    return { ip: null, ua: null, fbp: null, fbc: null, sourceUrl: undefined };
+  }
+}
+
 export async function sendOrderPurchase(order: PurchaseInput): Promise<void> {
   if (!isSupabaseConfigured()) return;
   try {
     const supabase = getServerSupabase();
     const { data } = await supabase
       .from("meta_connection")
-      .select("pixel_id, capi_token, access_token, capi_enabled, test_event_code")
+      .select("pixel_id, capi_token, access_token, capi_enabled")
       .eq("id", "default")
       .maybeSingle();
 
@@ -56,9 +88,12 @@ export async function sendOrderPurchase(order: PurchaseInput): Promise<void> {
     const token = ((data.capi_token as string) || (data.access_token as string)) ?? "";
     if (!pixelId || !token) return;
 
+    const signals = await browserSignals(order.orderNumber);
+
     const name = String(order.customerName ?? "").trim();
     const [first, ...rest] = name ? name.split(/\s+/) : [];
     const user_data: Record<string, string[] | string> = {};
+
     const ph = phoneDigits(order.phone);
     if (ph) user_data.ph = [sha256(ph)];
     const em = hashed(order.email);
@@ -70,6 +105,12 @@ export async function sendOrderPurchase(order: PurchaseInput): Promise<void> {
     const ct = hashed(order.city);
     if (ct) user_data.ct = ct;
     user_data.country = [sha256("eg")];
+
+    // Raw on purpose — hashing any of these four breaks the match.
+    if (signals.fbp) user_data.fbp = signals.fbp;
+    if (signals.fbc) user_data.fbc = signals.fbc;
+    if (signals.ip) user_data.client_ip_address = signals.ip;
+    if (signals.ua) user_data.client_user_agent = signals.ua;
 
     const custom_data: Record<string, unknown> = {
       currency: "EGP",
@@ -83,17 +124,18 @@ export async function sendOrderPurchase(order: PurchaseInput): Promise<void> {
     let status = "sent";
     let response: unknown;
     try {
-      response = await sendConversionEvent(
-        pixelId,
-        token,
-        {
-          event_name: "Purchase",
-          event_id: order.orderNumber,
-          user_data,
-          custom_data,
-        },
-        (data.test_event_code as string) || undefined,
-      );
+      response = await sendConversionEvent(pixelId, token, {
+        event_name: "Purchase",
+        event_id: order.orderNumber,
+        event_source_url: signals.sourceUrl,
+        user_data,
+        custom_data,
+      });
+      // Deliberately no test_event_code. It belongs to the "send a test
+      // button, and passing it here would route every real sale into the Test
+      // Events tab — where it is visible but does not count as a conversion.
+      // A merchant who set a code once to check the wiring would have silently
+      // stopped reporting sales.
     } catch (e) {
       status = "error";
       response = { error: (e as Error).message };
@@ -107,6 +149,8 @@ export async function sendOrderPurchase(order: PurchaseInput): Promise<void> {
       payload: {
         order_id: order.orderNumber,
         value: custom_data.value,
+        // Which identifiers were available, so a poor match quality score in
+        // Events Manager can be explained without guessing.
         matched_on: Object.keys(user_data),
       },
       response,

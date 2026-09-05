@@ -363,7 +363,11 @@ export default function MetaPage() {
               className={`mt-2 ${inputCls}`}
               dir="ltr"
             />
-            <p className="mt-1.5 text-xs text-ink-soft">{t("test_event_code_hint")}</p>
+            <p className="mt-1.5 text-xs text-ink-soft">
+              {ar
+                ? "يُستخدم فقط مع زر التجربة أعلاه — المبيعات الحقيقية لا تُرسل به أبداً."
+                : "Used only by the test button above. Real sales are never sent with it, so leaving a code here can't hide your conversions."}
+            </p>
           </div>
 
           <div>
