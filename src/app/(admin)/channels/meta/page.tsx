@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useI18n } from "@/lib/i18n";
 import { PageHeader } from "@/components/page-header";
 import { Card, Badge } from "@/components/ui";
-import { IcMeta, IcAlert, IcCopy, IcLink, IcUpload, IcSend } from "@/components/icons";
+import { IcMeta, IcAlert, IcSend, IcLink, IcUpload } from "@/components/icons";
 import {
   getConnection,
   saveDirectSetup,
@@ -17,40 +17,39 @@ import {
   type MetaEventLog,
 } from "./actions";
 
+/**
+ * Connecting Meta is two values pasted from Events Manager. The page is shaped
+ * to say exactly that: one card you fill in, one that tells you it worked, and
+ * everything else — the pause switch, catalog sync, disconnecting — folded away
+ * behind Advanced, because none of it is part of getting set up.
+ */
+
 const inputCls =
-  "h-10 w-full rounded-xl border border-line bg-surface-page px-3 text-sm outline-none transition focus:border-brand-600 focus:bg-surface focus:ring-2 focus:ring-brand-100";
+  "h-11 w-full rounded-xl border border-line bg-surface-page px-3.5 text-sm text-ink outline-none transition focus:border-brand-600 focus:bg-surface";
 
-function Section({ title, children, action }: { title: string; children: React.ReactNode; action?: React.ReactNode }) {
+function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint: string;
+  children: React.ReactNode;
+}) {
   return (
-    <Card className="p-5">
-      <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-ink">{title}</h3>
-        {action}
-      </div>
-      <div className="space-y-4">{children}</div>
-    </Card>
-  );
-}
-
-function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
-  return (
-    <label className="flex cursor-pointer items-center gap-2.5">
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="h-4 w-4 rounded accent-brand-600" />
-      <span className="text-sm text-ink">{label}</span>
+    <label className="block">
+      <span className="text-sm font-medium text-ink">{label}</span>
+      <span className="mt-2 block">{children}</span>
+      <span className="mt-1.5 block text-xs leading-relaxed text-ink-soft">{hint}</span>
     </label>
   );
 }
 
-function StatusRow({ on, label, hint }: { on: boolean; label: string; hint: string }) {
+function Status({ on, label }: { on: boolean; label: string }) {
   return (
-    <div className="flex items-start gap-2.5">
-      <span
-        className={`mt-1 h-2 w-2 shrink-0 rounded-full ${on ? "bg-emerald-500" : "bg-slate-300"}`}
-      />
-      <span className="min-w-0">
-        <span className="block text-sm font-medium text-ink">{label}</span>
-        <span className="block text-xs text-ink-soft">{hint}</span>
-      </span>
+    <div className="flex items-center gap-2.5 text-sm">
+      <span className={`h-2 w-2 rounded-full ${on ? "bg-emerald-500" : "bg-slate-300"}`} />
+      <span className={on ? "font-medium text-ink" : "text-ink-soft"}>{label}</span>
     </div>
   );
 }
@@ -58,32 +57,32 @@ function StatusRow({ on, label, hint }: { on: boolean; label: string; hint: stri
 export default function MetaPage() {
   const { t, lang } = useI18n();
   const ar = lang === "ar";
+
   const [conn, setConn] = useState<MetaConnectionView | null>(null);
   const [events, setEvents] = useState<MetaEventLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [banner, setBanner] = useState<{ kind: "ok" | "err"; msg: string } | null>(null);
-  const [syncing, setSyncing] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [eventType, setEventType] = useState("PageView");
-  const [testCode, setTestCode] = useState("");
+
   const [pixelId, setPixelId] = useState("");
   const [capiToken, setCapiToken] = useState("");
-  const [savingSetup, setSavingSetup] = useState(false);
+  const [testCode, setTestCode] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [eventType, setEventType] = useState("PageView");
 
   async function reload() {
     const [c, e] = await Promise.all([getConnection(), listEvents()]);
     if (c.ok) {
       setConn(c.data);
-      setTestCode(c.data.testEventCode ?? "");
       setPixelId(c.data.pixelId ?? "");
+      setTestCode(c.data.testEventCode ?? "");
     }
     if (e.ok) setEvents(e.data);
     setLoading(false);
   }
 
   useEffect(() => {
-    // Read OAuth callback result from the URL, then clean it.
     const q = new URLSearchParams(window.location.search);
     if (q.get("connected") === "1") setBanner({ kind: "ok", msg: t("meta_connected") });
     const err = q.get("error");
@@ -93,20 +92,14 @@ export default function MetaPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function save(patch: Parameters<typeof updateSelection>[0]) {
-    const res = await updateSelection(patch);
-    if (res.ok) reload();
-  }
-
-  /** Save both credentials at once — that pair is the whole integration. */
-  async function onSaveSetup(clearToken = false) {
-    setSavingSetup(true);
+  async function onSave(clearToken = false) {
+    setSaving(true);
     const res = await saveDirectSetup({
       pixelId,
       capiToken: clearToken ? null : capiToken,
       testEventCode: testCode,
     });
-    setSavingSetup(false);
+    setSaving(false);
     if (!res.ok) {
       setBanner({
         kind: "err",
@@ -127,17 +120,31 @@ export default function MetaPage() {
     setBanner({
       kind: "ok",
       msg: res.data.capiOn
-        ? ar
-          ? "تم تفعيل البيكسل وواجهة التحويلات."
-          : "Pixel and Conversions API are both on."
+        ? ar ? "تم التفعيل بالكامل." : "Both are on."
         : res.data.pixelOn
-          ? ar
-            ? "تم تفعيل البيكسل. أضيفي التوكن لتفعيل أحداث الخادم."
-            : "Pixel is on. Add a token to switch on server events."
-          : ar
-            ? "تم الحفظ."
-            : "Saved.",
+          ? ar ? "البيكسل يعمل. أضيفي التوكن لتتبّع المبيعات." : "Pixel is on. Add a token to track sales."
+          : ar ? "تم الحفظ." : "Saved.",
     });
+    reload();
+  }
+
+  async function onSend() {
+    setSending(true);
+    const res = await sendTestEvent(eventType);
+    setSending(false);
+    setBanner(
+      res.ok
+        ? { kind: "ok", msg: `${res.data.eventsReceived} ${t("events_received")}` }
+        : {
+            kind: "err",
+            msg:
+              res.error === "no_capi_token"
+                ? ar ? "أضيفي توكن واجهة التحويلات أولاً." : "Add a Conversions API token first."
+                : res.error === "no_pixel"
+                  ? ar ? "أضيفي معرّف البيكسل أولاً." : "Add a Pixel ID first."
+                  : res.error,
+          },
+    );
     reload();
   }
 
@@ -145,39 +152,13 @@ export default function MetaPage() {
     setSyncing(true);
     const res = await syncCatalog();
     setSyncing(false);
-    if (res.ok) {
-      setBanner({ kind: "ok", msg: `${res.data.count} ${t("products_synced")}` });
-      reload();
-    } else {
-      setBanner({ kind: "err", msg: res.error });
-    }
+    setBanner(
+      res.ok
+        ? { kind: "ok", msg: `${res.data.count} ${t("products_synced")}` }
+        : { kind: "err", msg: res.error },
+    );
+    reload();
   }
-
-  async function onSend() {
-    setSending(true);
-    const res = await sendTestEvent(eventType);
-    setSending(false);
-    if (res.ok) {
-      setBanner({ kind: "ok", msg: `${res.data.eventsReceived} ${t("events_received")} · ${res.data.traceId}` });
-      reload();
-    } else {
-      setBanner({ kind: "err", msg: res.error });
-    }
-  }
-
-  const pixelSnippet = conn?.pixelId
-    ? `<!-- Meta Pixel Code -->
-<script>
-!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
-n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
-t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,
-document,'script','https://connect.facebook.net/en_US/fbevents.js');
-fbq('init', '${conn.pixelId}');
-fbq('track', 'PageView');
-</script>
-<!-- End Meta Pixel Code -->`
-    : "";
 
   if (loading) {
     return (
@@ -189,39 +170,51 @@ fbq('track', 'PageView');
   }
 
   const c = conn!;
-  const eventsManagerUrl = c.pixelId
-    ? `https://business.facebook.com/events_manager2/list/dataset/${c.pixelId}`
-    : "https://business.facebook.com/events_manager2/";
+  const live = Boolean(c.pixelId) && c.pixelEnabled;
 
   return (
-    <>
+    <div className="mx-auto max-w-2xl">
       <PageHeader
         title={t("nav_meta")}
-        subtitle={t("meta_subtitle")}
+        subtitle={ar ? "تتبّع الزيارات والمبيعات في إعلاناتك" : "Track visits and sales in your ads"}
         actions={
-          <Badge className={c.connected ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-ink-muted"}>
-            <IcMeta className="h-3.5 w-3.5" /> {c.connected ? t("meta_connected") : t("meta_not_connected")}
+          <Badge className={live ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-ink-muted"}>
+            <IcMeta className="h-3.5 w-3.5" />
+            {live ? t("meta_connected") : t("meta_not_connected")}
           </Badge>
         }
       />
 
       {banner && (
-        <Card className={`mb-4 p-3 text-sm ${banner.kind === "ok" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-rose-200 bg-rose-50 text-rose-700"}`}>
+        <Card
+          className={`mb-4 p-3.5 text-sm ${
+            banner.kind === "ok"
+              ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+              : "border-rose-200 bg-rose-50 text-rose-700"
+          }`}
+        >
           {banner.msg}
         </Card>
       )}
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {/* Setup — two values, pasted */}
-        <Section title={ar ? "الإعداد" : "Setup"}>
-          <p className="text-sm text-ink-muted">
-            {ar
-              ? "انسخي القيمتين من Events Manager والصقيهما هنا. لا حاجة لتسجيل الدخول بفيسبوك."
-              : "Copy both values out of Events Manager and paste them here. No Facebook login needed."}
-          </p>
+      {/* ---- The whole setup ---- */}
+      <Card className="p-6">
+        <h2 className="text-base font-semibold text-ink">{ar ? "الربط" : "Connect"}</h2>
+        <p className="mt-1 text-sm text-ink-muted">
+          {ar
+            ? "انسخي القيمتين من Events Manager والصقيهما هنا."
+            : "Copy these two values out of Events Manager and paste them here."}
+        </p>
 
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-ink">{t("pixel_id_label")}</label>
+        <div className="mt-5 space-y-5">
+          <Field
+            label={ar ? "معرّف البيكسل" : "Pixel ID"}
+            hint={
+              ar
+                ? "Events Manager ← مصادر البيانات. أرقام فقط."
+                : "Events Manager → Data sources. Digits only."
+            }
+          >
             <input
               value={pixelId}
               onChange={(e) => setPixelId(e.target.value.replace(/[^0-9]/g, ""))}
@@ -230,213 +223,208 @@ fbq('track', 'PageView');
               dir="ltr"
               inputMode="numeric"
             />
-            <p className="mt-1 text-xs text-ink-soft">
-              {ar
-                ? "Events Manager ← مصادر البيانات ← البيكسل. أرقام فقط. هذا وحده يشغّل التتبّع في المتجر."
-                : "Events Manager → Data sources → your pixel. Digits only. This alone switches on storefront tracking."}
-            </p>
-          </div>
+          </Field>
 
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-ink">
-              {ar ? "توكن واجهة التحويلات" : "Conversions API token"}
-            </label>
+          <Field
+            label={ar ? "توكن واجهة التحويلات" : "Conversions API token"}
+            hint={
+              ar
+                ? "Events Manager ← الإعدادات ← إنشاء توكن. اختياري، لكنه يتيح تتبّع المبيعات."
+                : "Events Manager → Settings → Generate access token. Optional, but it's what tracks sales."
+            }
+          >
             <input
               type="password"
               value={capiToken}
               onChange={(e) => setCapiToken(e.target.value)}
               placeholder={
                 c.capiTokenSet
-                  ? ar
-                    ? "محفوظ — اتركيه فارغاً للإبقاء عليه"
-                    : "Saved — leave blank to keep it"
+                  ? ar ? "محفوظ — اتركيه فارغاً" : "Saved — leave blank to keep it"
                   : "EAAG…"
               }
               className={inputCls}
               dir="ltr"
               autoComplete="off"
             />
-            <p className="mt-1 text-xs text-ink-soft">
-              {ar
-                ? "Events Manager ← الإعدادات ← إنشاء توكن وصول. يُحفظ على الخادم ولا يظهر مرة أخرى."
-                : "Events Manager → Settings → Generate access token. Stored server-side and never shown again."}
-            </p>
-            {c.capiTokenSet && (
-              <button
-                onClick={() => onSaveSetup(true)}
-                className="mt-1.5 text-xs font-medium text-rose-600 hover:underline"
-              >
-                {ar ? "حذف التوكن" : "Remove stored token"}
-              </button>
-            )}
-          </div>
+          </Field>
 
           <button
-            onClick={() => onSaveSetup(false)}
-            disabled={savingSetup}
-            className="btn-primary disabled:opacity-60"
+            onClick={() => onSave(false)}
+            disabled={saving}
+            className="btn-primary h-11 w-full justify-center text-sm disabled:opacity-60"
           >
-            <IcMeta className="h-4 w-4" />
-            {savingSetup ? t("loading") : ar ? "حفظ وتفعيل" : "Save & connect"}
+            {saving ? t("loading") : ar ? "حفظ" : "Save"}
           </button>
 
-          <div className="space-y-2 border-t border-line pt-3">
-            <StatusRow
-              on={Boolean(c.pixelId) && c.pixelEnabled}
-              label={ar ? "بيكسل المتصفح" : "Browser pixel"}
-              hint={ar ? "يتتبّع التصفّح والسلة" : "Tracks browsing and add-to-cart"}
-            />
-            <StatusRow
-              on={c.capiEnabled}
-              label={ar ? "واجهة التحويلات (خادم)" : "Conversions API (server)"}
-              hint={ar ? "يرسل عمليات الشراء من الخادم" : "Sends purchases from the server"}
-            />
+          <div className="space-y-2 border-t border-line pt-4">
+            <Status on={live} label={ar ? "تتبّع الزيارات" : "Visits are tracked"} />
+            <Status on={c.capiEnabled} label={ar ? "تتبّع المبيعات" : "Sales are tracked"} />
           </div>
-        </Section>
+        </div>
+      </Card>
 
-        {/* Pixel */}
-        <Section title={t("sec_pixel")}>
-          <Toggle checked={c.pixelEnabled} onChange={(v) => save({ pixelEnabled: v })} label={t("pixel_enable")} />
-          <p className="text-xs text-ink-soft">{t("pixel_inject_hint")}</p>
-          {pixelSnippet && (
-            <div>
-              <div className="mb-1.5 flex items-center justify-between">
-                <label className="text-sm font-medium text-ink">{t("pixel_snippet")}</label>
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(pixelSnippet);
-                    setCopied(true);
-                    setTimeout(() => setCopied(false), 1500);
-                  }}
-                  className="btn-outline h-7 gap-1.5 px-2 text-xs"
-                >
-                  <IcCopy className="h-3.5 w-3.5" /> {copied ? t("copied") : t("copy_snippet")}
-                </button>
-              </div>
-              <p className="mb-1.5 text-xs text-ink-soft">
-                {ar
-                  ? "للاطّلاع فقط — المتجر يحقنه تلقائياً."
-                  : "For reference only — your storefront injects this automatically."}
-              </p>
-              <pre className="max-h-40 overflow-auto rounded-xl bg-ink p-3 text-[11px] leading-relaxed text-white/90" dir="ltr">
-                <code>{pixelSnippet}</code>
-              </pre>
-            </div>
-          )}
-        </Section>
-
-        {/* Catalog */}
-        <Section title={t("sec_catalog")}>
-          <p className="text-sm text-ink-muted">
-            {ar
-              ? "مزامنة الكتالوج وحدها تحتاج تسجيل دخول بفيسبوك — البيكسل وواجهة التحويلات لا تحتاجانه."
-              : "Catalog sync is the one piece that still needs a Facebook login — the pixel and Conversions API don't."}
-          </p>
-          {!c.configured && (
-            <div className="flex items-center gap-2 rounded-xl bg-amber-50 p-3 text-xs text-amber-800">
-              <IcAlert className="h-4 w-4 shrink-0" />
-              {t("meta_app_missing")}
-            </div>
-          )}
-          {c.configured && !c.connected && (
-            <a href="/api/meta/connect" className="btn-outline w-fit">
-              <IcMeta className="h-4 w-4" /> {t("meta_connect")}
-            </a>
-          )}
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-ink">{t("catalog_select")}</label>
-            <select
-              value={c.catalogId ?? ""}
-              onChange={(e) => save({ catalogId: e.target.value })}
-              className={inputCls}
-              disabled={!c.connected}
+      {/* ---- Proof it works ---- */}
+      {c.pixelId && (
+        <Card className="mt-4 p-6">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-base font-semibold text-ink">
+              {ar ? "تجربة" : "Send a test"}
+            </h2>
+            <a
+              href={`https://business.facebook.com/events_manager2/list/dataset/${c.pixelId}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-600 hover:underline"
             >
-              <option value="">—</option>
-              {(c.available.catalogs ?? []).map((cat) => (
-                <option key={cat.id} value={cat.id}>{cat.name} ({cat.id})</option>
-              ))}
-              {c.catalogId && !(c.available.catalogs ?? []).some((cat) => cat.id === c.catalogId) && (
-                <option value={c.catalogId}>{c.catalogName ?? c.catalogId}</option>
-              )}
-            </select>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={onSync}
-              disabled={!c.connected || !c.catalogId || syncing}
-              className="btn-primary disabled:opacity-60"
-            >
-              <IcUpload className="h-4 w-4" /> {syncing ? t("syncing") : t("sync_catalog")}
-            </button>
-            {c.lastSyncAt && (
-              <span className="text-xs text-ink-soft">
-                {t("last_sync")}: {new Date(c.lastSyncAt).toLocaleString(lang === "ar" ? "ar-EG" : "en-US")} ·{" "}
-                {c.lastSyncCount} {t("products_synced")}
-              </span>
-            )}
-          </div>
-        </Section>
-
-        {/* Events */}
-        <Section
-          title={t("sec_events")}
-          action={
-            <a href={eventsManagerUrl} target="_blank" rel="noreferrer" className="btn-outline h-7 gap-1.5 px-2 text-xs">
               <IcLink className="h-3.5 w-3.5" /> {t("open_events_manager")}
             </a>
-          }
-        >
-          <div>
-            <label className="mb-1.5 block text-sm font-medium text-ink">{t("test_event_code")}</label>
-            <input
-              value={testCode}
-              onChange={(e) => setTestCode(e.target.value)}
-              onBlur={() => save({ testEventCode: testCode })}
-              placeholder="TEST12345"
-              className={inputCls}
-              dir="ltr"
-            />
-            <p className="mt-1 text-xs text-ink-soft">{t("test_event_code_hint")}</p>
           </div>
-          <div className="flex items-end gap-2">
-            <div className="flex-1">
-              <label className="mb-1.5 block text-sm font-medium text-ink">{t("event_type")}</label>
-              <select value={eventType} onChange={(e) => setEventType(e.target.value)} className={inputCls}>
-                <option value="PageView">{t("ev_pageview")}</option>
-                <option value="ViewContent">{t("ev_viewcontent")}</option>
-                <option value="AddToCart">{t("ev_addtocart")}</option>
-                <option value="Purchase">{t("ev_purchase")}</option>
-              </select>
-            </div>
-            <button onClick={onSend} disabled={!c.connected || !c.pixelId || sending} className="btn-primary disabled:opacity-60">
+
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <select
+              value={eventType}
+              onChange={(e) => setEventType(e.target.value)}
+              className={`${inputCls} w-auto min-w-[150px] flex-1`}
+            >
+              <option value="PageView">{t("ev_pageview")}</option>
+              <option value="ViewContent">{t("ev_viewcontent")}</option>
+              <option value="AddToCart">{t("ev_addtocart")}</option>
+              <option value="Purchase">{t("ev_purchase")}</option>
+            </select>
+            <button
+              onClick={onSend}
+              disabled={sending}
+              className="btn-primary h-11 shrink-0 px-4 text-sm disabled:opacity-60"
+            >
               <IcSend className="h-4 w-4" /> {sending ? t("loading") : t("send_test_event")}
             </button>
           </div>
 
-          <div>
-            <div className="mb-2 text-sm font-medium text-ink">{t("recent_events")}</div>
-            {events.length === 0 ? (
-              <p className="text-sm text-ink-soft">{t("no_events_yet")}</p>
-            ) : (
-              <ul className="divide-y divide-line">
-                {events.map((ev) => (
-                  <li key={ev.id} className="flex items-center justify-between py-2 text-sm">
-                    <span className="font-medium text-ink">{ev.eventName}</span>
-                    <span className="flex items-center gap-2">
-                      <Badge className={ev.status === "sent" ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}>
-                        {ev.status === "sent" ? t("status_sent") : t("status_error")}
-                      </Badge>
-                      <span className="text-[11px] text-ink-soft" dir="ltr">
-                        {new Date(ev.createdAt).toLocaleTimeString(lang === "ar" ? "ar-EG" : "en-US")}
-                      </span>
+          {events.length > 0 && (
+            <ul className="mt-4 divide-y divide-line border-t border-line">
+              {events.slice(0, 5).map((ev) => (
+                <li key={ev.id} className="flex items-center justify-between py-2.5 text-sm">
+                  <span className="text-ink">{ev.eventName}</span>
+                  <span className="flex items-center gap-2.5">
+                    <span
+                      className={`text-xs font-medium ${
+                        ev.status === "sent" ? "text-emerald-600" : "text-rose-600"
+                      }`}
+                    >
+                      {ev.status === "sent" ? t("status_sent") : t("status_error")}
                     </span>
-                  </li>
-                ))}
-              </ul>
+                    <span className="text-xs text-ink-soft" dir="ltr">
+                      {new Date(ev.createdAt).toLocaleTimeString(ar ? "ar-EG" : "en-US", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      )}
+
+      {/* ---- Everything that isn't setup ---- */}
+      <details className="mt-4 rounded-2xl border border-line bg-surface">
+        <summary className="cursor-pointer list-none p-4 text-sm font-medium text-ink-muted transition-colors hover:text-ink">
+          {ar ? "إعدادات متقدمة" : "Advanced"}
+        </summary>
+
+        <div className="space-y-6 border-t border-line p-5">
+          <div>
+            <label className="flex cursor-pointer items-center gap-2.5">
+              <input
+                type="checkbox"
+                checked={c.pixelEnabled}
+                onChange={(e) => updateSelection({ pixelEnabled: e.target.checked }).then(reload)}
+                className="h-4 w-4 rounded accent-brand-600"
+              />
+              <span className="text-sm text-ink">
+                {ar ? "تتبّع الزيارات مُفعّل" : "Track visits on the storefront"}
+              </span>
+            </label>
+            <p className="mt-1.5 ps-7 text-xs text-ink-soft">
+              {ar
+                ? "أوقفيه مؤقتاً دون حذف المعرّف."
+                : "Pause tracking without deleting your Pixel ID."}
+            </p>
+          </div>
+
+          <div>
+            <label className="text-sm font-medium text-ink">{t("test_event_code")}</label>
+            <input
+              value={testCode}
+              onChange={(e) => setTestCode(e.target.value)}
+              onBlur={() => onSave(false)}
+              placeholder="TEST12345"
+              className={`mt-2 ${inputCls}`}
+              dir="ltr"
+            />
+            <p className="mt-1.5 text-xs text-ink-soft">{t("test_event_code_hint")}</p>
+          </div>
+
+          <div>
+            <div className="text-sm font-medium text-ink">{t("sec_catalog")}</div>
+            <p className="mt-1 text-xs leading-relaxed text-ink-soft">
+              {ar
+                ? "مزامنة الكتالوج وحدها تحتاج تسجيل دخول بفيسبوك."
+                : "Catalog sync is the one piece that still needs a Facebook login."}
+            </p>
+            {!c.configured ? (
+              <div className="mt-2.5 flex items-start gap-2 rounded-xl bg-amber-50 p-3 text-xs text-amber-800">
+                <IcAlert className="mt-0.5 h-4 w-4 shrink-0" />
+                {t("meta_app_missing")}
+              </div>
+            ) : !c.connected ? (
+              <a href="/api/meta/connect" className="btn-outline mt-2.5 h-9 w-fit px-3 text-sm">
+                <IcMeta className="h-4 w-4" /> {t("meta_connect")}
+              </a>
+            ) : (
+              <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                <select
+                  value={c.catalogId ?? ""}
+                  onChange={(e) => updateSelection({ catalogId: e.target.value }).then(reload)}
+                  className={`${inputCls} w-auto min-w-[180px] flex-1`}
+                >
+                  <option value="">—</option>
+                  {(c.available.catalogs ?? []).map((cat) => (
+                    <option key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={onSync}
+                  disabled={!c.catalogId || syncing}
+                  className="btn-outline h-11 shrink-0 px-3 text-sm disabled:opacity-60"
+                >
+                  <IcUpload className="h-4 w-4" /> {syncing ? t("syncing") : t("sync_catalog")}
+                </button>
+              </div>
             )}
           </div>
-        </Section>
-      </div>
-    </>
+
+          <div className="border-t border-line pt-4">
+            <button
+              onClick={async () => {
+                await disconnect();
+                setCapiToken("");
+                setBanner({
+                  kind: "ok",
+                  msg: ar ? "تم إلغاء الربط." : "Disconnected.",
+                });
+                reload();
+              }}
+              className="text-sm font-medium text-rose-600 hover:underline"
+            >
+              {ar ? "إلغاء الربط وحذف البيانات" : "Disconnect and remove stored values"}
+            </button>
+          </div>
+        </div>
+      </details>
+    </div>
   );
 }
