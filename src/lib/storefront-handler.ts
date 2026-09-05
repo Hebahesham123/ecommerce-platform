@@ -21,6 +21,8 @@ import {
 } from "@/lib/storefront-cart";
 import { searchProducts, type ProductDrop } from "@/lib/storefront-data";
 import { getServerSupabase } from "@/lib/supabase/server";
+import { getActiveNudge, recordNudgeEvent } from "@/lib/nudge-service";
+import { nudgeScript } from "@/lib/nudge-script";
 
 const escHtml = (s: string) =>
   s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] as string);
@@ -790,9 +792,16 @@ async function storefrontGet(req: Request, config: MountConfig): Promise<Respons
   // the cart badge from /cart.js so a returning shopper still sees their real
   // item count. Only on the public storefront (the admin preview isn't cached).
   const cartSync = config.edgeCache ? cartCountSyncScript(mount) : "";
+  // The hesitation nudge. The campaign is merchant configuration — identical
+  // for every visitor — so baking it in keeps the page shareable at the edge;
+  // everything shopper-specific (dwell, what they've already seen, their cart)
+  // is decided in the browser.
+  const campaign = await getActiveNudge();
+  const nudge = campaign ? nudgeScript(mount, campaign) : "";
+
   // The account icon is identical for every shopper, so it stays cache-safe.
   // navLinksScript adds Reviews & Requests into the store menu (both cache-safe).
-  const inject = `${stockGuard}${localizationScript(mount)}${cartSync}${accountLinkScript(mount)}${navLinksScript(mount)}`;
+  const inject = `${stockGuard}${localizationScript(mount)}${cartSync}${accountLinkScript(mount)}${navLinksScript(mount)}${nudge}`;
   const withLoc = res.html.includes("</body>")
     ? res.html.replace(/<\/body>/i, `${inject}</body>`)
     : res.html + inject;
@@ -849,6 +858,34 @@ async function storefrontPost(req: Request, config: MountConfig): Promise<Respon
     const q = Array.isArray(payload.q) ? payload.q.filter((s): s is string => typeof s === "string").slice(0, 60) : [];
     return json({ t: await translateBatch(q, "ar") });
   }
+  // Where the hesitation tracker reports. Fire-and-forget: it is analytics
+  // riding on a shopper's page and must never delay or interrupt them.
+  if (path === "/nudge/event") {
+    let body: Record<string, unknown> = {};
+    try {
+      body = (await req.json()) as Record<string, unknown>;
+    } catch {
+      /* a malformed beacon is not worth an error */
+    }
+    const ALLOWED = ["hesitation", "shown", "dismissed", "claimed", "converted"] as const;
+    const type = String(body.type ?? "");
+    const visitorId = String(body.vid ?? "");
+    if (visitorId && (ALLOWED as readonly string[]).includes(type)) {
+      await recordNudgeEvent({
+        campaignId: body.cid ? String(body.cid) : null,
+        visitorId,
+        sessionId: body.sid ? String(body.sid) : null,
+        type: type as (typeof ALLOWED)[number],
+        trigger: body.trigger ? String(body.trigger) : null,
+        path: body.path ? String(body.path) : null,
+        dwellMs: body.dwellMs == null ? null : Number(body.dwellMs),
+        code: body.code ? String(body.code) : null,
+        contact: body.contact ? String(body.contact) : null,
+      });
+    }
+    return json({ ok: true });
+  }
+
   // Theme's native language switcher (Shopify posts here) — set the locale cookie.
   if (path === "/localization") {
     const fd = await req.formData().catch(() => null);

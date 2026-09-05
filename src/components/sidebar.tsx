@@ -12,6 +12,7 @@ import {
   IcCourier,
   IcInbox,
   IcMarketing,
+  IcBell,
   IcSettings,
   IcDiscount,
   IcFile,
@@ -94,6 +95,7 @@ const groups: Group[] = [
     items: [
       { href: "/inbox", key: "nav_inbox", icon: IcInbox },
       { href: "/marketing", key: "nav_marketing", icon: IcMarketing },
+      { href: "/nudges", key: "nav_nudges", icon: IcBell },
       { href: "/email", key: "nav_email", icon: IcMail },
       { href: "/reviews", key: "nav_reviews", icon: IcStar },
       { href: "/requests", key: "nav_requests", icon: IcClipboard },

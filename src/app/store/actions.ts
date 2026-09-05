@@ -9,6 +9,8 @@ import {
 } from "@/lib/discount-engine";
 import { normalizePhone, phoneVariants } from "@/lib/phone";
 import { getSessionPhone, setSession } from "@/lib/store-session";
+import { recordNudgeConversion } from "@/lib/nudge-service";
+import { cookies } from "next/headers";
 
 export type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -657,6 +659,21 @@ export async function placeOrder(
         .update({ discount_code: discountCode, discount_amount: discount })
         .eq("order_number", orderNumber);
       if (verdict.ok && verdict.source === "table") await redeemDiscount(discountCode);
+    }
+
+    // Close the loop on the hesitation popup. Without this the results page can
+    // only ever say how many people were shown an offer, never whether the
+    // discount it gave away bought anything back.
+    try {
+      const visitorId = (await cookies()).get("bb_vid")?.value ?? null;
+      await recordNudgeConversion({
+        visitorId,
+        code: discountCode,
+        orderNumber,
+        orderTotal: total,
+      });
+    } catch {
+      /* attribution is never worth failing an order over */
     }
 
     // Upsert the passwordless customer profile (keyed by the verified phone) so
