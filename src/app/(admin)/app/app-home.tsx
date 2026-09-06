@@ -343,7 +343,7 @@ export function AppHome() {
 
         {/* ---- What needs a person ---- */}
         <div className="space-y-3">
-          <Link href="/app/returns" className="block">
+          <Link href="/app/requests" className="block">
             <Card className="flex items-center gap-3 p-4 transition-colors hover:bg-surface-hover">
               <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
                 <IcRefresh className="h-5 w-5" />
@@ -360,7 +360,7 @@ export function AppHome() {
             </Card>
           </Link>
 
-          <Link href="/app/requests" className="block">
+          <Link href="/app/requests?tab=enquiries" className="block">
             <Card className="flex items-center gap-3 p-4 transition-colors hover:bg-surface-hover">
               <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-50 text-sky-600">
                 <IcClipboard className="h-5 w-5" />
