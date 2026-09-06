@@ -1,35 +1,28 @@
-import { listStoreProducts } from "@/app/store/actions";
-import { fromResult, ok } from "@/lib/api/http";
+import { appCatalog, SYNTHETIC, toCollection } from "@/lib/api/catalog";
+import { fail, ok } from "@/lib/api/http";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * The categories that actually have something to sell.
+ * The merchant's own collections, in the order they arranged them.
  *
- * Derived from the catalogue rather than kept in a table of its own, so a
- * category cannot survive in the app's navigation after its last product is
- * gone — which is the usual way a store ends up with a tab that opens onto
- * nothing.
+ * This used to synthesise categories out of each product's `category` string,
+ * which meant the app showed "Apparel & Accessories > Handbags, Wallets &
+ * Cases > Handbags" where the website showed the collection the merchant had
+ * actually built and named. Same shop, two different shops to a shopper.
+ *
+ * Now it reads the same resolver the storefront renders from, so publishing,
+ * reordering or renaming a collection reaches both surfaces at once.
  */
 export async function GET() {
-  const res = await listStoreProducts();
-  if (!res.ok) return fromResult(res);
-
-  const counts = new Map<string, { name: string; count: number; image: string | null }>();
-  for (const p of res.data) {
-    const name = (p.category ?? "").trim();
-    if (!name) continue;
-    const key = name.toLowerCase();
-    const entry = counts.get(key) ?? { name, count: 0, image: null };
-    entry.count += 1;
-    entry.image = entry.image ?? p.image;
-    counts.set(key, entry);
+  try {
+    const catalog = await appCatalog();
+    const collections = catalog.collections
+      .filter((c) => c.handle !== SYNTHETIC)
+      .map(toCollection);
+    return ok({ collections });
+  } catch (e) {
+    return fail((e as Error).message, 503);
   }
-
-  const collections = [...counts.entries()]
-    .map(([handle, v]) => ({ handle, ...v }))
-    .sort((a, b) => b.count - a.count);
-
-  return ok({ collections });
 }

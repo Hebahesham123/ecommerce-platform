@@ -161,21 +161,67 @@ export type Variant = {
   variantTitle: string | null;
   sku: string | null;
   price: number | null;
+  compareAt: number | null;
   available: number;
 };
 export type Product = {
   id: string;
+  handle: string;
   name: string;
   description: string | null;
   image: string | null;
   images: string[];
   category: string | null;
+  vendor: string | null;
+  tags: string[];
   priceMin: number | null;
   priceMax: number | null;
+  compareAt: number | null;
   available: number;
   variants: Variant[];
 };
-export type Collection = { handle: string; name: string; count: number; image: string | null };
+/** What a grid tile gets. The full product is one tap away at /products/{id}. */
+export type ProductCard = {
+  id: string;
+  handle: string;
+  name: string;
+  image: string | null;
+  priceMin: number | null;
+  priceMax: number | null;
+  compareAt: number | null;
+  available: number;
+};
+
+export type Collection = {
+  handle: string;
+  title: string;
+  description: string | null;
+  image: string | null;
+  productCount: number;
+};
+
+/** A menu item points at a screen, not a URL. */
+export type LinkTarget =
+  | { type: "home" }
+  | { type: "collection"; handle: string }
+  | { type: "product"; handle: string }
+  | { type: "search" }
+  | { type: "cart" }
+  | { type: "page"; handle: string }
+  | { type: "url"; url: string };
+
+export type MenuItem = { title: string; target: LinkTarget; children: MenuItem[] };
+export type Menu = { handle: string; title: string; items: MenuItem[] };
+
+/** Everything the front page needs, in one request. */
+export type Home = {
+  shop: { name: string; currency: string };
+  menus: Menu[];
+  collections: Collection[];
+  rows: (Collection & { products: ProductCard[] })[];
+  newArrivals: ProductCard[];
+  productCount: number;
+};
 export type PricedLine = {
   itemId: string;
   productName: string;

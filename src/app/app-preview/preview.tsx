@@ -10,12 +10,11 @@ import {
   setToken,
   useApiLog,
   type Account,
-  type Collection,
   type PricedCart,
-  type Product,
 } from "./api";
 import { Btn, Empty, Field, money, Note, Sheet, Spinner } from "./ui";
 import { Enquiry, Orders, Returns, SignIn } from "./screens";
+import { Shop } from "./shop";
 
 /**
  * A stand-in app, so the store can be shopped from an app before an app
@@ -259,143 +258,6 @@ export function Preview() {
         </div>
       </div>
     </div>
-  );
-}
-
-// ------------------------------------------------------------------- shop --
-function Shop({ ar, onAdd }: { ar: boolean; onAdd: (itemId: string) => void }) {
-  const [products, setProducts] = useState<Product[] | null>(null);
-  const [collections, setCollections] = useState<Collection[]>([]);
-  const [q, setQ] = useState("");
-  const [category, setCategory] = useState("");
-  const [open, setOpen] = useState<Product | null>(null);
-
-  useEffect(() => {
-    api.get<{ collections: Collection[] }>("/collections").then((r) => {
-      if (r.ok) setCollections(r.data.collections.slice(0, 12));
-    });
-  }, []);
-
-  useEffect(() => {
-    setProducts(null);
-    const params = new URLSearchParams();
-    if (q.trim()) params.set("q", q.trim());
-    if (category) params.set("category", category);
-    // toString() rather than params.size — Safari only grew `size` in 17, and
-    // this is meant to be opened on a phone.
-    const query = params.toString();
-    const t = setTimeout(() => {
-      api
-        .get<{ products: Product[] }>(`/products${query ? `?${query}` : ""}`)
-        .then((r) => setProducts(r.ok ? r.data.products.slice(0, 40) : []));
-    }, 300);
-    return () => clearTimeout(t);
-  }, [q, category]);
-
-  return (
-    <div className="p-4">
-      <input
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        placeholder={ar ? "ابحثي…" : "Search…"}
-        className="h-10 w-full rounded-full border border-slate-300 bg-white px-4 text-sm outline-none focus:border-violet-500"
-      />
-
-      {collections.length > 0 && (
-        <div className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1">
-          <Chip on={!category} onClick={() => setCategory("")} label={ar ? "الكل" : "All"} />
-          {collections.map((c) => (
-            <Chip
-              key={c.handle}
-              on={category === c.handle}
-              onClick={() => setCategory(category === c.handle ? "" : c.handle)}
-              label={c.name.split(">").pop()!.trim()}
-            />
-          ))}
-        </div>
-      )}
-
-      {!products ? (
-        <Spinner />
-      ) : products.length === 0 ? (
-        <Empty>{ar ? "لا توجد نتائج" : "Nothing found"}</Empty>
-      ) : (
-        <div className="mt-3 grid grid-cols-2 gap-3">
-          {products.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => setOpen(p)}
-              className="overflow-hidden rounded-2xl border border-slate-200 bg-white text-start transition hover:border-violet-300"
-            >
-              <div className="aspect-square bg-slate-100">
-                {p.image && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={p.image} alt="" className="h-full w-full object-cover" />
-                )}
-              </div>
-              <div className="p-2">
-                <div className="line-clamp-2 text-xs leading-snug text-slate-800">{p.name}</div>
-                <div className="mt-1 text-sm font-bold text-slate-900">
-                  {p.priceMin != null ? money(p.priceMin, ar) : "—"}
-                </div>
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
-
-      <Sheet open={Boolean(open)} onClose={() => setOpen(null)} title={open?.name ?? ""}>
-        <div className="space-y-3">
-          {open?.image && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={open.image} alt="" className="h-44 w-full rounded-2xl object-cover" />
-          )}
-          <ul className="space-y-2">
-            {(open?.variants ?? []).map((v) => (
-              <li
-                key={v.id}
-                className="flex items-center gap-3 rounded-xl border border-slate-200 p-2.5"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm text-slate-900">
-                    {v.variantTitle ?? (ar ? "الأساسي" : "Default")}
-                  </div>
-                  <div className="font-mono text-[10px] text-slate-400" dir="ltr">
-                    {v.id}
-                  </div>
-                  <div className="text-xs text-slate-500">
-                    {v.price != null ? money(v.price, ar) : "—"} · {ar ? "متاح" : "in stock"}{" "}
-                    {v.available}
-                  </div>
-                </div>
-                <Btn
-                  onClick={() => {
-                    onAdd(v.id);
-                    setOpen(null);
-                  }}
-                  disabled={v.available <= 0 || v.price == null}
-                >
-                  {ar ? "أضيفي" : "Add"}
-                </Btn>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </Sheet>
-    </div>
-  );
-}
-
-function Chip({ on, onClick, label }: { on: boolean; onClick: () => void; label: string }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition ${
-        on ? "bg-violet-600 text-white" : "border border-slate-300 bg-white text-slate-600"
-      }`}
-    >
-      {label}
-    </button>
   );
 }
 

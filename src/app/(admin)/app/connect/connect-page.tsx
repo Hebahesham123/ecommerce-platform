@@ -22,9 +22,13 @@ const ROUTES: { method: string; path: string; ar: string; en: string; auth: bool
   { method: "POST", path: "/auth/verify", ar: "التحقق من الكود وإصدار توكن", en: "Check the code, return a token", auth: false },
   { method: "POST", path: "/auth/login", ar: "دخول رقم معروف وإصدار توكن", en: "Sign in a known number, return a token", auth: false },
   { method: "GET", path: "/me", ar: "بيانات العميل وطلباته", en: "Profile and order history", auth: true },
-  { method: "GET", path: "/products", ar: "المنتجات — يقبل q و category", en: "Catalogue — takes q and category", auth: false },
-  { method: "GET", path: "/products/{id}", ar: "منتج واحد بكل مقاساته", en: "One product with its variants", auth: false },
-  { method: "GET", path: "/collections", ar: "الأقسام وعدد منتجاتها", en: "Categories with product counts", auth: false },
+  { method: "GET", path: "/home", ar: "الصفحة الرئيسية كاملة في نداء واحد", en: "The whole front page in one request", auth: false },
+  { method: "GET", path: "/products", ar: "المنتجات — q و collection و category", en: "Catalogue cards — q, collection, category", auth: false },
+  { method: "GET", path: "/products/{id}", ar: "منتج كامل — بالمعرّف أو بالـ handle", en: "One full product, by variant id or handle", auth: false },
+  { method: "GET", path: "/collections", ar: "أقسامك كما رتّبتِها", en: "Your collections, in your order", auth: false },
+  { method: "GET", path: "/collections/{handle}", ar: "منتجات قسم — sort و limit", en: "A collection's products — sort, limit", auth: false },
+  { method: "GET", path: "/menus", ar: "قوائم التنقّل", en: "Navigation menus", auth: false },
+  { method: "GET", path: "/menus/{handle}", ar: "قائمة واحدة", en: "One menu by handle", auth: false },
   { method: "POST", path: "/cart/price", ar: "تسعير السلة من المخزون الحالي", en: "Re-price a cart against live stock", auth: false },
   { method: "POST", path: "/discount", ar: "معاينة كوبون", en: "Preview a coupon", auth: true },
   { method: "POST", path: "/orders", ar: "إنشاء طلب دفع عند الاستلام", en: "Place a COD order", auth: true },
@@ -212,6 +216,14 @@ export function ConnectPage() {
             {ar
               ? "‏cart_changed أو out_of_stock — المخزون تغيّر بين العرض والدفع."
               : "cart_changed or out_of_stock — stock moved between showing the cart and taking the money. Re-price and show the customer what changed."}
+          </li>
+          <li>
+            <span className="font-medium text-ink">
+              {ar ? "الأقسام والقوائم من لوحة التحكم." : "Collections and menus come from the dashboard."}
+            </span>{" "}
+            {ar
+              ? "التطبيق يقرأ نفس الأقسام والقوائم التي يعرضها الموقع — لا يوجد مكان ثانٍ لتحديثها."
+              : "The app reads the same collections and navigation the website renders, so there is no second place to keep up to date. Menu items arrive as targets ({type:\"collection\", handle}) rather than URLs."}
           </li>
           <li>
             <span className="font-medium text-ink">

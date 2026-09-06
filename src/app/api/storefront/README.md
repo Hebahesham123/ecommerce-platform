@@ -29,15 +29,33 @@ attribution all live in `src/lib` and are shared.
 
 ## Routes
 
+### Merchandising
+
+These read the same catalogue resolver the website renders from, so the app
+sees the merchant's real collections and menus — their handles, images, order
+and publish state — rather than a guess assembled from product fields.
+
+Two shapes of product. A **card** (id, handle, name, image, price, stock) is
+what listings return; the **full product**, with every variant and image, is at
+`/products/{id}`. A forty-product grid does not need four hundred variants, and
+on mobile data the difference is most of the payload.
+
+Prices are whole pounds everywhere. The catalogue speaks minor units internally
+because Liquid needs them; the conversion happens once, in `lib/api/catalog.ts`.
+
 | Method | Path | Purpose |
 | --- | --- | --- |
 | POST | `/auth/request-code` | Send a WhatsApp/SMS code |
 | POST | `/auth/verify` | Check the code, return a token |
 | POST | `/auth/login` | Sign in a number we already know, return a token |
 | GET | `/me` | Profile and order history |
-| GET | `/products` | Catalogue, with `?q=` and `?category=` |
-| GET | `/products/{id}` | One product with its variants |
-| GET | `/collections` | Categories with product counts |
+| GET | `/home` | The front page in one request: menus, collections, rows, new arrivals |
+| GET | `/products` | Catalogue cards — `?q=`, `?collection=`, `?category=`, `?inStock=1`, `?limit=`, `?offset=` |
+| GET | `/products/{id}` | One full product, by variant id **or** website handle |
+| GET | `/collections` | The merchant's published collections, in their order |
+| GET | `/collections/{handle}` | One collection's products — `?sort=`, `?limit=`, `?offset=`; `all` means the whole shop |
+| GET | `/menus` | Every navigation menu, items carrying a typed target |
+| GET | `/menus/{handle}` | One menu — usually `main-menu` or `footer` |
 | POST | `/cart/price` | Re-price a device-held cart against live stock |
 | POST | `/discount` | Preview a coupon |
 | POST | `/orders` | Place a COD order (signed in; the order's phone must be the token's) |
