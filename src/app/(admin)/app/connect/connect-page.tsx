@@ -18,7 +18,7 @@ import { IcCopy, IcAlert } from "@/components/icons";
  */
 
 const ROUTES: { method: string; path: string; ar: string; en: string; auth: boolean }[] = [
-  { method: "POST", path: "/auth/request-code", ar: "إرسال كود التحقق", en: "Send a verification code", auth: false },
+  { method: "POST", path: "/auth/request-code", ar: "فحص الرقم، ثم إرسال الكود بالقناة المختارة", en: "Check the number, then send a code on the chosen channel", auth: false },
   { method: "POST", path: "/auth/verify", ar: "التحقق من الكود وإصدار توكن", en: "Check the code, return a token", auth: false },
   { method: "POST", path: "/auth/login", ar: "دخول رقم معروف وإصدار توكن", en: "Sign in a known number, return a token", auth: false },
   { method: "GET", path: "/me", ar: "بيانات العميل وطلباته", en: "Profile and order history", auth: true },
@@ -119,17 +119,24 @@ export function ConnectPage() {
           {ar ? "كيف يسجّل العميل دخوله" : "How a shopper signs in"}
         </h2>
         <ol className="mt-4 space-y-4">
-          <Step n={1} title={ar ? "اطلبي الكود" : "Ask for a code"}>
+          <Step n={1} title={ar ? "افحصي الرقم" : "Check the number"}>
             <code className="font-mono text-xs" dir="ltr">POST /auth/request-code</code>{" "}
-            {ar ? "بالرقم. يصل الكود على واتساب أو رسالة نصية." : "with the phone. The code arrives on WhatsApp or SMS."}
+            {ar
+              ? "بالرقم وحده — لا يُرسل شيء. الرد إمّا already_verified (سجّلي الدخول مباشرة بلا كود) أو needs_code."
+              : "with the phone alone — nothing is sent. The reply is already_verified (sign straight in, no code) or needs_code."}
           </Step>
-          <Step n={2} title={ar ? "تحقّقي واحصلي على التوكن" : "Verify, and get a token"}>
+          <Step n={2} title={ar ? "اسألي عن القناة، ثم أرسلي" : "Ask how, then send"}>
+            {ar
+              ? "نفس المسار مع channel: whatsapp أو sms. الرد sent أو not_delivered — لا تعرضي شاشة الكود إن لم يُرسل."
+              : "The same route with channel: whatsapp or sms. The reply is sent or not_delivered — don't show a code screen for a code that never went."}
+          </Step>
+          <Step n={3} title={ar ? "تحقّقي واحصلي على التوكن" : "Verify, and get a token"}>
             <code className="font-mono text-xs" dir="ltr">POST /auth/verify</code>{" "}
             {ar
               ? "بالرقم والكود. الرد يحتوي على توكن صالح ٣٠ يوماً."
               : "with the phone and the code. The reply carries a token good for 30 days."}
           </Step>
-          <Step n={3} title={ar ? "أرسليه مع كل طلب" : "Send it with every request"}>
+          <Step n={4} title={ar ? "أرسليه مع كل طلب" : "Send it with every request"}>
             <code className="font-mono text-xs" dir="ltr">Authorization: Bearer &lt;token&gt;</code>.{" "}
             {ar
               ? "التوكن يثبت رقماً واحداً — وهو نفس ما تثبته جلسة الموقع."

@@ -45,7 +45,7 @@ because Liquid needs them; the conversion happens once, in `lib/api/catalog.ts`.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| POST | `/auth/request-code` | Send a WhatsApp/SMS code |
+| POST | `/auth/request-code` | Without `channel`: check the number (`already_verified` \| `needs_code`), nothing sent. With `channel` (`whatsapp` \| `sms`): send it (`sent` \| `not_delivered`) |
 | POST | `/auth/verify` | Check the code, return a token |
 | POST | `/auth/login` | Sign in a number we already know, return a token |
 | GET | `/me` | Profile and order history |

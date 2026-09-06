@@ -18,19 +18,76 @@ import { Btn, Empty, Field, money, Note, Sheet, Spinner } from "./ui";
  */
 
 // ---------------------------------------------------------------- sign in --
+/**
+ * Signing in, in as few steps as the number allows.
+ *
+ * A number the store has already verified never sees a code screen at all —
+ * it is told it is verified and signed straight in. Anything else is asked how
+ * it wants the code before one is sent, because offering WhatsApp or SMS after
+ * the message has already gone is not offering a choice.
+ */
 export function SignIn({ ar, onDone }: { ar: boolean; onDone: (phone: string) => void }) {
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
-  const [stage, setStage] = useState<"phone" | "code">("phone");
+  const [stage, setStage] = useState<"phone" | "channel" | "code">("phone");
+  const [sentVia, setSentVia] = useState<"whatsapp" | "sms" | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
 
-  async function sendCode() {
+  /**
+   * Sign in a number the store already knows — no code involved.
+   *
+   * It says so before it does it: signing someone in silently, while they
+   * stand there expecting a code, looks identical to nothing happening.
+   */
+  async function login(p: string) {
+    const res = await api.post<{ token: string; phone: string }>("/auth/login", { phone: p });
+    if (!res.ok) return setErr(res.error);
+    setToken(res.data.token, res.data.phone);
+    // Long enough to read, short enough not to feel like a wait.
+    setTimeout(() => onDone(res.data.phone), 1000);
+  }
+
+  /** Step one: is this number one we know? Nothing is sent here. */
+  async function check() {
     setBusy(true);
     setErr(null);
-    const res = await api.post<{ sent: boolean }>("/auth/request-code", { phone });
+    setNote(null);
+    const res = await api.post<{ status: string; phone: string }>("/auth/request-code", { phone });
     setBusy(false);
     if (!res.ok) return setErr(res.error);
+
+    if (res.data.status === "already_verified") {
+      setNote(
+        ar
+          ? "هذا الرقم موثَّق بالفعل — لا حاجة لكود. جارٍ تسجيل دخولك…"
+          : "This number is already verified — no code needed. Signing you in…",
+      );
+      return login(res.data.phone);
+    }
+    setStage("channel");
+  }
+
+  /** Step two: they picked how to receive it, so now send it. */
+  async function send(channel: "whatsapp" | "sms") {
+    setBusy(true);
+    setErr(null);
+    setNote(null);
+    const res = await api.post<{ status: string; phone: string }>("/auth/request-code", {
+      phone,
+      channel,
+    });
+    setBusy(false);
+    if (!res.ok) return setErr(res.error);
+    if (res.data.status === "not_delivered") return setErr("not_delivered");
+
+    setSentVia(channel);
+    setNote(
+      channel === "sms"
+        ? ar ? "أُرسل الكود برسالة نصية." : "Code sent by SMS."
+        : ar ? "أُرسل الكود على واتساب." : "Code sent on WhatsApp.",
+    );
     setStage("code");
   }
 
@@ -44,16 +101,32 @@ export function SignIn({ ar, onDone }: { ar: boolean; onDone: (phone: string) =>
     onDone(res.data.phone);
   }
 
-  /** The store's own passwordless rule: a number it already knows needs no code. */
-  async function quickLogin() {
-    setBusy(true);
+  function restart() {
+    setStage("phone");
+    setCode("");
+    setSentVia(null);
     setErr(null);
-    const res = await api.post<{ token: string; phone: string }>("/auth/login", { phone });
-    setBusy(false);
-    if (!res.ok) return setErr(res.error);
-    setToken(res.data.token, res.data.phone);
-    onDone(res.data.phone);
+    setNote(null);
   }
+
+  const message = (e: string) => {
+    if (e === "not_registered")
+      return ar
+        ? "هذا الرقم غير معروف للمتجر."
+        : "The store doesn't know this number.";
+    if (e === "not_delivered")
+      return ar
+        ? "تعذّر إرسال الكود. جرّبي الطريقة الأخرى، أو تحقّقي من خدمة الإرسال."
+        : "The code couldn't be sent — the delivery webhook refused it. Try the other channel, or check the OTP service.";
+    if (e === "invalid_phone") return ar ? "الرقم غير مكتمل." : "That number isn't complete.";
+    if (e === "no_code")
+      return ar
+        ? "لا يوجد كود لهذا الرقم — اطلبي كوداً جديداً."
+        : "There's no code waiting for this number. Ask for a new one.";
+    if (e === "wrong_code") return ar ? "الكود غير صحيح." : "That code isn't right.";
+    if (e === "expired") return ar ? "انتهت صلاحية الكود." : "That code has expired.";
+    return null;
+  };
 
   return (
     <div className="space-y-4">
@@ -61,8 +134,9 @@ export function SignIn({ ar, onDone }: { ar: boolean; onDone: (phone: string) =>
         label={ar ? "رقم الموبايل" : "Phone number"}
         value={phone}
         onChange={setPhone}
-        placeholder="+201000000000"
-        hint={ar ? "بصيغة دولية" : "In international format"}
+        placeholder="01012345678"
+        disabled={stage !== "phone"}
+        hint={ar ? "‏01… أو ‎+20…‎ — كلاهما يعمل" : "01… or +20… — either works"}
       />
 
       {stage === "code" && (
@@ -71,35 +145,54 @@ export function SignIn({ ar, onDone }: { ar: boolean; onDone: (phone: string) =>
           value={code}
           onChange={setCode}
           placeholder="123456"
-          hint={ar ? "وصلك على واتساب أو رسالة" : "Sent to you on WhatsApp or SMS"}
+          hint={
+            sentVia === "sms"
+              ? ar ? "وصلك برسالة نصية" : "Sent to you by SMS"
+              : ar ? "وصلك على واتساب" : "Sent to you on WhatsApp"
+          }
         />
       )}
 
+      {note && <Note tone="good">{note}</Note>}
       {err && (
         <Note tone="bad">
-          <code className="font-mono">{err}</code>
-          {err === "not_registered" &&
-            (ar
-              ? " — هذا الرقم غير معروف للمتجر. جرّبي رقماً سبق أن طلب منه."
-              : " — the store doesn't know this number. Try one that has ordered before.")}
+          <code className="font-mono text-[11px]">{err}</code>
+          {message(err) && <div className="mt-1">{message(err)}</div>}
         </Note>
       )}
 
-      {stage === "phone" ? (
+      {stage === "phone" && (
+        <Btn full onClick={check} disabled={busy || phone.replace(/\D/g, "").length < 10}>
+          {busy ? "…" : ar ? "متابعة" : "Continue"}
+        </Btn>
+      )}
+
+      {stage === "channel" && (
         <div className="space-y-2">
-          <Btn full onClick={sendCode} disabled={busy || phone.length < 8}>
-            {busy ? "…" : ar ? "أرسلي الكود" : "Send me a code"}
+          <p className="text-sm text-slate-600">
+            {ar ? "كيف تحبّين استلام الكود؟" : "How would you like the code?"}
+          </p>
+          <Btn full onClick={() => send("whatsapp")} disabled={busy}>
+            {ar ? "واتساب" : "WhatsApp"}
           </Btn>
-          <Btn full variant="outline" onClick={quickLogin} disabled={busy || phone.length < 8}>
-            {ar ? "دخول بدون كود (رقم معروف)" : "Sign in without a code (known number)"}
+          <Btn full variant="outline" onClick={() => send("sms")} disabled={busy}>
+            {ar ? "رسالة نصية" : "SMS"}
+          </Btn>
+          <Btn full variant="ghost" onClick={restart}>
+            {ar ? "تغيير الرقم" : "Change the number"}
           </Btn>
         </div>
-      ) : (
+      )}
+
+      {stage === "code" && (
         <div className="space-y-2">
           <Btn full onClick={verify} disabled={busy || code.length < 4}>
             {busy ? "…" : ar ? "تأكيد" : "Verify"}
           </Btn>
-          <Btn full variant="ghost" onClick={() => setStage("phone")}>
+          <Btn full variant="outline" onClick={() => setStage("channel")} disabled={busy}>
+            {ar ? "إرسال الكود مرة أخرى" : "Send the code again"}
+          </Btn>
+          <Btn full variant="ghost" onClick={restart}>
             {ar ? "تغيير الرقم" : "Change the number"}
           </Btn>
         </div>
