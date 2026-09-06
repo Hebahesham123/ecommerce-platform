@@ -403,7 +403,7 @@ export function AppHome() {
             </Card>
           </Link>
 
-          <Link href="/app-preview" target="_blank" className="block">
+          <Link href="/app-preview" className="block">
             <Card className="flex items-center gap-3 p-4 transition-colors hover:bg-surface-hover">
               <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
                 <IcMobile className="h-5 w-5" />
