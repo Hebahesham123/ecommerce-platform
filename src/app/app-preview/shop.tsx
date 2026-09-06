@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   api,
   type Collection,
@@ -11,7 +11,7 @@ import {
   type Product,
   type ProductCard,
 } from "./api";
-import { Btn, Empty, money, Sheet, Spinner } from "./ui";
+import { Btn, Empty, money, Note, Sheet, Spinner } from "./ui";
 
 /**
  * The shopping half of the preview.
@@ -37,6 +37,7 @@ const SORTS = [
 
 export function Shop({ ar, onAdd }: { ar: boolean; onAdd: (itemId: string) => void }) {
   const [home, setHome] = useState<Home | null>(null);
+  const [homeErr, setHomeErr] = useState<string | null>(null);
   const [view, setView] = useState<View>({ kind: "home" });
   const [q, setQ] = useState("");
   // Listings hand back cards, so opening one fetches the product it stands
@@ -45,11 +46,14 @@ export function Shop({ ar, onAdd }: { ar: boolean; onAdd: (itemId: string) => vo
   const [open, setOpen] = useState<string | null>(null);
   const [menu, setMenu] = useState<Menu | null>(null);
 
-  useEffect(() => {
+  const loadHome = useCallback(() => {
+    setHomeErr(null);
     api.get<Home>("/home").then((r) => {
       if (r.ok) setHome(r.data);
+      else setHomeErr(r.error);
     });
   }, []);
+  useEffect(loadHome, [loadHome]);
 
   // Searching is a view of its own, debounced so a five-letter word is one
   // request rather than five.
@@ -98,7 +102,9 @@ export function Shop({ ar, onAdd }: { ar: boolean; onAdd: (itemId: string) => vo
         />
       </div>
 
-      {!home ? (
+      {homeErr ? (
+        <Failed ar={ar} error={homeErr} onRetry={loadHome} />
+      ) : !home ? (
         <Spinner />
       ) : view.kind === "home" ? (
         <HomeView ar={ar} home={home} onOpenCollection={(c) => go({ type: "collection", handle: c.handle })} onOpen={(p) => setOpen(p.id)} />
@@ -239,23 +245,29 @@ function ListView({
   onOpen: (p: ProductCard) => void;
 }) {
   const [products, setProducts] = useState<ProductCard[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
   const [sort, setSort] = useState("manual");
 
   const key = view.kind === "collection" ? view.handle : view.q;
-  useEffect(() => {
+  const load = useCallback(() => {
     setProducts(null);
+    setError(null);
     const path =
       view.kind === "collection"
         ? `/collections/${encodeURIComponent(view.handle)}?limit=40&sort=${sort}`
         : `/products?limit=40&q=${encodeURIComponent(view.q)}`;
     api.get<{ products: ProductCard[]; total?: number; count?: number }>(path).then((r) => {
-      if (!r.ok) return setProducts([]);
+      // A call that failed is not a collection with nothing in it. Showing
+      // "Nothing found" for a network error tells the merchant their shop is
+      // empty when what actually happened is that nobody answered.
+      if (!r.ok) return setError(r.error);
       setProducts(r.data.products);
       setTotal(r.data.total ?? r.data.count ?? r.data.products.length);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, sort, view.kind]);
+  useEffect(load, [load]);
 
   return (
     <div className="mt-3">
@@ -287,7 +299,9 @@ function ListView({
         </div>
       )}
 
-      {!products ? (
+      {error ? (
+        <Failed ar={ar} error={error} onRetry={load} />
+      ) : !products ? (
         <Spinner />
       ) : products.length === 0 ? (
         <Empty>{ar ? "لا توجد نتائج" : "Nothing found"}</Empty>
@@ -362,18 +376,24 @@ function ProductSheet({
   onAdd: (itemId: string) => void;
 }) {
   const [product, setProduct] = useState<Product | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = useCallback(() => {
     setProduct(null);
+    setError(null);
     if (!productId) return;
     api.get<Product>(`/products/${encodeURIComponent(productId)}`).then((r) => {
       if (r.ok) setProduct(r.data);
+      else setError(r.error);
     });
   }, [productId]);
+  useEffect(load, [load]);
 
   return (
     <Sheet open={Boolean(productId)} onClose={onClose} title={product?.name ?? "…"}>
-      {!product ? (
+      {error ? (
+        <Failed ar={ar} error={error} onRetry={load} />
+      ) : !product ? (
         <Spinner />
       ) : (
       <div className="space-y-3">
@@ -417,6 +437,47 @@ function ProductSheet({
 }
 
 // ---------------------------------------------------------------- pieces ---
+
+/**
+ * What went wrong, in the words the API used, with a way to try again.
+ *
+ * The error code is shown rather than hidden behind "something went wrong":
+ * this screen exists to test an API, and the person reading it is the person
+ * who can act on `not_found` or `Failed to fetch`.
+ */
+function Failed({
+  ar,
+  error,
+  onRetry,
+}: {
+  ar: boolean;
+  error: string;
+  onRetry: () => void;
+}) {
+  const offline = /failed to fetch|networkerror|load failed/i.test(error);
+  return (
+    <div className="mt-4 space-y-3">
+      <Note tone="bad">
+        <div className="font-semibold">
+          {ar ? "لم نستطع تحميل هذه الشاشة" : "Couldn't load this screen"}
+        </div>
+        <code className="mt-1 block font-mono text-[11px]" dir="ltr">
+          {error}
+        </code>
+        {offline && (
+          <p className="mt-1.5">
+            {ar
+              ? "الخادم لم يردّ. لو كنتِ تشغّلين الموقع محلياً، أعيدي تشغيل npm run dev — المسارات الجديدة لا تُسجَّل أحياناً دون ذلك."
+              : "The server didn't answer at all. If you're running locally, restart npm run dev — Next doesn't always pick up a newly added route folder."}
+          </p>
+        )}
+      </Note>
+      <Btn variant="outline" full onClick={onRetry}>
+        {ar ? "إعادة المحاولة" : "Try again"}
+      </Btn>
+    </div>
+  );
+}
 function Thumb({ src, className = "" }: { src: string | null; className?: string }) {
   return (
     <div className={`overflow-hidden rounded-xl bg-slate-100 ${className}`}>
