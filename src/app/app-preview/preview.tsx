@@ -110,7 +110,13 @@ export function Preview() {
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto">
-            {tab === "shop" && <Shop ar={ar} onAdd={add} />}
+            {tab === "shop" && (
+              <Shop
+                ar={ar}
+                onAdd={add}
+                onLeave={(what) => (what === "cart" ? setTab("cart") : setSheet("enquiry"))}
+              />
+            )}
             {tab === "cart" && (
               <Cart
                 ar={ar}

@@ -56,6 +56,8 @@ because Liquid needs them; the conversion happens once, in `lib/api/catalog.ts`.
 | GET | `/collections/{handle}` | One collection's products — `?sort=`, `?limit=`, `?offset=`; `all` means the whole shop |
 | GET | `/menus` | Every navigation menu, items carrying a typed target |
 | GET | `/menus/{handle}` | One menu — usually `main-menu` or `footer` |
+| GET | `/reviews` | Published reviews; `?featured=1` is the Happy Customers set |
+| POST | `/reviews` | Leave a review — lands pending, like every other |
 | POST | `/cart/price` | Re-price a device-held cart against live stock |
 | POST | `/discount` | Preview a coupon |
 | POST | `/orders` | Place a COD order (signed in; the order's phone must be the token's) |

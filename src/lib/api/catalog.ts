@@ -189,7 +189,8 @@ export type AppMenu = { handle: string; title: string; items: AppMenuItem[] };
 export function parseTarget(raw: string): LinkTarget {
   const url = String(raw ?? "").trim();
   if (!url || url === "/") return { type: "home" };
-  if (/^https?:\/\//i.test(url)) return { type: "url", url };
+  // Only something with its own origin is genuinely somewhere else.
+  if (/^[a-z][a-z0-9+.-]*:/i.test(url) || url.startsWith("//")) return { type: "url", url };
 
   const path = url.split("?")[0].replace(/\/+$/, "") || "/";
   const collection = /^\/collections\/([^/]+)$/.exec(path);
@@ -201,6 +202,15 @@ export function parseTarget(raw: string): LinkTarget {
   if (path === "/collections") return { type: "collection", handle: SYNTHETIC };
   if (path === "/search") return { type: "search" };
   if (path === "/cart") return { type: "cart" };
+
+  // A bare path like /reviews or /happy-customers is a page of this shop —
+  // that is how the storefront's own widget pages are addressed. Calling those
+  // "external" and refusing to open them, which is what fell out of treating
+  // anything unrecognised as a link away from the store, left three items in
+  // the merchant's menu that did nothing at all.
+  const bare = /^\/([^/]+)$/.exec(path);
+  if (bare) return { type: "page", handle: decodeURIComponent(bare[1]) };
+
   return { type: "url", url };
 }
 

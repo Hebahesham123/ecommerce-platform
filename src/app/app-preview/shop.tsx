@@ -12,6 +12,7 @@ import {
   type ProductCard,
 } from "./api";
 import { Btn, Empty, money, Note, Sheet, Spinner } from "./ui";
+import { Reviews } from "./reviews";
 
 /**
  * The shopping half of the preview.
@@ -35,7 +36,16 @@ const SORTS = [
   { key: "price-descending", ar: "الأعلى سعراً", en: "Price ↓" },
 ];
 
-export function Shop({ ar, onAdd }: { ar: boolean; onAdd: (itemId: string) => void }) {
+export function Shop({
+  ar,
+  onAdd,
+  onLeave,
+}: {
+  ar: boolean;
+  onAdd: (itemId: string) => void;
+  /** Targets that belong to another tab or another sheet the shell owns. */
+  onLeave: (what: "cart" | "requests") => void;
+}) {
   const [home, setHome] = useState<Home | null>(null);
   const [homeErr, setHomeErr] = useState<string | null>(null);
   const [view, setView] = useState<View>({ kind: "home" });
@@ -45,6 +55,8 @@ export function Shop({ ar, onAdd }: { ar: boolean; onAdd: (itemId: string) => vo
   // their size, and exactly when it is worth the round trip.
   const [open, setOpen] = useState<string | null>(null);
   const [menu, setMenu] = useState<Menu | null>(null);
+  const [page, setPage] = useState<"reviews" | "happy-customers" | null>(null);
+  const [unsupported, setUnsupported] = useState<string | null>(null);
 
   const loadHome = useCallback(() => {
     setHomeErr(null);
@@ -65,19 +77,53 @@ export function Shop({ ar, onAdd }: { ar: boolean; onAdd: (itemId: string) => vo
     return () => clearTimeout(t);
   }, [q]);
 
+  /**
+   * Every menu item goes somewhere.
+   *
+   * The first version quietly ignored the targets it had no screen for, so
+   * three items in the merchant's own menu — Reviews, Requests, Happy
+   * Customers — did nothing when tapped and said "external" while doing it.
+   * A link that does nothing is worse than one that admits it cannot help,
+   * so the fallback below now says so out loud.
+   */
   function go(target: LinkTarget) {
     setMenu(null);
-    if (target.type === "collection") {
-      const found = home?.collections.find((c) => c.handle === target.handle);
-      setView({ kind: "collection", handle: target.handle, title: found?.title ?? target.handle });
-    } else if (target.type === "home") {
-      setQ("");
-      setView({ kind: "home" });
-    } else if (target.type === "search") {
-      setView({ kind: "home" });
+    switch (target.type) {
+      case "collection": {
+        const found = home?.collections.find((c) => c.handle === target.handle);
+        setView({
+          kind: "collection",
+          handle: target.handle,
+          title: found?.title ?? target.handle,
+        });
+        return;
+      }
+      case "home":
+        setQ("");
+        setView({ kind: "home" });
+        return;
+      case "search":
+        setQ("");
+        setView({ kind: "home" });
+        return;
+      case "cart":
+        onLeave("cart");
+        return;
+      case "product":
+        // /products/{id} takes a handle as happily as a variant id.
+        setOpen(target.handle);
+        return;
+      case "page":
+        if (target.handle === "requests") return onLeave("requests");
+        if (target.handle === "reviews" || target.handle === "happy-customers") {
+          return setPage(target.handle);
+        }
+        setUnsupported(target.handle);
+        return;
+      case "url":
+        window.open(target.url, "_blank", "noopener");
+        return;
     }
-    // product / page / url targets would open their own screen in a real app;
-    // there is nothing honest to show for them here.
   }
 
   const mainMenu = home?.menus.find((m) => m.handle === "main-menu") ?? home?.menus[0] ?? null;
@@ -122,6 +168,30 @@ export function Shop({ ar, onAdd }: { ar: boolean; onAdd: (itemId: string) => vo
 
       <Sheet open={Boolean(menu)} onClose={() => setMenu(null)} title={menu?.title ?? ""}>
         <MenuTree items={menu?.items ?? []} onPick={go} ar={ar} />
+      </Sheet>
+
+      <Sheet
+        open={Boolean(page)}
+        onClose={() => setPage(null)}
+        title={
+          page === "happy-customers"
+            ? ar ? "عملاء سعداء" : "Happy customers"
+            : ar ? "التقييمات" : "Reviews"
+        }
+      >
+        <Reviews ar={ar} featuredOnly={page === "happy-customers"} />
+      </Sheet>
+
+      <Sheet
+        open={Boolean(unsupported)}
+        onClose={() => setUnsupported(null)}
+        title={unsupported ?? ""}
+      >
+        <Note tone="warn">
+          {ar
+            ? "هذه صفحة على الموقع لا يوجد لها شاشة في التطبيق بعد."
+            : "This is a page on the website that the app has no screen for yet. It is in your menu, so either the app needs one or the item belongs only on the website."}
+        </Note>
       </Sheet>
 
       <ProductSheet ar={ar} productId={open} onClose={() => setOpen(null)} onAdd={onAdd} />
@@ -350,7 +420,7 @@ function MenuTree({
             <span className="min-w-0 truncate">{item.title}</span>
             {item.target.type === "url" && (
               <span className="shrink-0 text-[10px] font-medium text-slate-400">
-                {ar ? "خارجي" : "external"}
+                {ar ? "رابط خارجي" : "external link"}
               </span>
             )}
           </button>

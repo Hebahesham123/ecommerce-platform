@@ -29,6 +29,8 @@ const ROUTES: { method: string; path: string; ar: string; en: string; auth: bool
   { method: "GET", path: "/collections/{handle}", ar: "منتجات قسم — sort و limit", en: "A collection's products — sort, limit", auth: false },
   { method: "GET", path: "/menus", ar: "قوائم التنقّل", en: "Navigation menus", auth: false },
   { method: "GET", path: "/menus/{handle}", ar: "قائمة واحدة", en: "One menu by handle", auth: false },
+  { method: "GET", path: "/reviews", ar: "التقييمات المنشورة — featured=1 للمختارة", en: "Published reviews — featured=1 for Happy Customers", auth: false },
+  { method: "POST", path: "/reviews", ar: "كتابة تقييم (ينتظر المراجعة)", en: "Leave a review (lands pending)", auth: false },
   { method: "POST", path: "/cart/price", ar: "تسعير السلة من المخزون الحالي", en: "Re-price a cart against live stock", auth: false },
   { method: "POST", path: "/discount", ar: "معاينة كوبون", en: "Preview a coupon", auth: true },
   { method: "POST", path: "/orders", ar: "إنشاء طلب دفع عند الاستلام", en: "Place a COD order", auth: true },
