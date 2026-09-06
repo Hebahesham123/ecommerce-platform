@@ -29,6 +29,22 @@ attribution all live in `src/lib` and are shared.
 
 ## Routes
 
+### The app's theme
+
+The website's look is an uploaded Liquid theme — files, sections, CSS — which
+an app cannot use: it draws its own screens and needs telling what to draw. So
+the app has a theme of its own, edited in the dashboard under **App → App
+theme**, and it is data rather than markup: a brand (name, logo, accent
+colour, announcement bar) and an ordered list of typed home-screen blocks.
+
+`/home` fetches exactly what those blocks need and nothing else, so a store
+whose home is one banner and one collection does not pay for six rows of
+products it never shows. Products come back keyed by collection handle, so two
+blocks pointing at the same collection cost one copy.
+
+Every block type has to exist as a screen in the app. A theme that can express
+more than the app can draw is a promise the app will break.
+
 ### Merchandising
 
 These read the same catalogue resolver the website renders from, so the app
@@ -49,7 +65,8 @@ because Liquid needs them; the conversion happens once, in `lib/api/catalog.ts`.
 | POST | `/auth/verify` | Check the code, return a token |
 | POST | `/auth/login` | Sign in a number we already know, return a token |
 | GET | `/me` | Profile and order history |
-| GET | `/home` | The front page in one request: menus, collections, rows, new arrivals |
+| GET | `/home` | The front page in one request: the theme, its blocks' data, menus, collections |
+| GET | `/theme` | How the app should look and what its home screen is made of |
 | GET | `/products` | Catalogue cards — `?q=`, `?collection=`, `?category=`, `?inStock=1`, `?limit=`, `?offset=` |
 | GET | `/products/{id}` | One full product, by variant id **or** website handle |
 | GET | `/collections` | The merchant's published collections, in their order |

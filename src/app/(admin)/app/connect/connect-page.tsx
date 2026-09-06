@@ -23,6 +23,7 @@ const ROUTES: { method: string; path: string; ar: string; en: string; auth: bool
   { method: "POST", path: "/auth/login", ar: "دخول رقم معروف وإصدار توكن", en: "Sign in a known number, return a token", auth: false },
   { method: "GET", path: "/me", ar: "بيانات العميل وطلباته", en: "Profile and order history", auth: true },
   { method: "GET", path: "/home", ar: "الصفحة الرئيسية كاملة في نداء واحد", en: "The whole front page in one request", auth: false },
+  { method: "GET", path: "/theme", ar: "مظهر التطبيق وأقسام صفحته الرئيسية", en: "The app's brand and its home-screen blocks", auth: false },
   { method: "GET", path: "/products", ar: "المنتجات — q و collection و category", en: "Catalogue cards — q, collection, category", auth: false },
   { method: "GET", path: "/products/{id}", ar: "منتج كامل — بالمعرّف أو بالـ handle", en: "One full product, by variant id or handle", auth: false },
   { method: "GET", path: "/collections", ar: "أقسامك كما رتّبتِها", en: "Your collections, in your order", auth: false },

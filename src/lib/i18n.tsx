@@ -330,6 +330,7 @@ const dict = {
   group_channels: { ar: "قنوات البيع", en: "Sales channels" },
   group_app: { ar: "التطبيق", en: "App" },
   nav_app_home: { ar: "نظرة عامة", en: "Overview" },
+  nav_app_theme: { ar: "مظهر التطبيق", en: "App theme" },
   nav_app_orders: { ar: "طلبات التطبيق", en: "App orders" },
   nav_app_requests: { ar: "طلبات التطبيق", en: "App requests" },
   nav_app_connect: { ar: "ربط التطبيق", en: "Connect" },

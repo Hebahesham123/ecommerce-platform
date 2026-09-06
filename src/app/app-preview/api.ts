@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import type { AppTheme } from "@/lib/app-theme";
 
 /**
  * The preview app's only way of talking to the store.
@@ -213,13 +214,23 @@ export type LinkTarget =
 export type MenuItem = { title: string; target: LinkTarget; children: MenuItem[] };
 export type Menu = { handle: string; title: string; items: MenuItem[] };
 
-/** Everything the front page needs, in one request. */
+export type HomeReview = {
+  id: string;
+  name: string;
+  productRating: number | null;
+  comment: string | null;
+};
+
+/** Everything the front page needs, in one request — the theme included. */
 export type Home = {
+  theme: AppTheme;
   shop: { name: string; currency: string };
   menus: Menu[];
   collections: Collection[];
-  rows: (Collection & { products: ProductCard[] })[];
+  /** Products by collection handle. Two blocks on one collection cost one copy. */
+  rows: Record<string, ProductCard[]>;
   newArrivals: ProductCard[];
+  reviews: HomeReview[];
   productCount: number;
 };
 export type PricedLine = {

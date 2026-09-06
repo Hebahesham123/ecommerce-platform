@@ -15,7 +15,7 @@ import { useI18n, egp, num } from "@/lib/i18n";
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui";
 import { StatusPill } from "@/components/dashboard-ui";
-import { IcMobile, IcMeta, IcAlert, IcRefresh, IcClipboard, IcCode } from "@/components/icons";
+import { IcMobile, IcMeta, IcAlert, IcRefresh, IcClipboard, IcCode, IcTheme } from "@/components/icons";
 import { AXIS_STROKE, useAxisTick, useChartColors } from "@/lib/chart-theme";
 import { getAppOverview, type AppOverview } from "./actions";
 
@@ -400,6 +400,22 @@ export function AppHome() {
                   metaOn ? "bg-emerald-500" : "bg-slate-300"
                 }`}
               />
+            </Card>
+          </Link>
+
+          <Link href="/app/theme" className="block">
+            <Card className="flex items-center gap-3 p-4 transition-colors hover:bg-surface-hover">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-fuchsia-50 text-fuchsia-600">
+                <IcTheme className="h-5 w-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium text-ink">
+                  {ar ? "مظهر التطبيق" : "App theme"}
+                </div>
+                <div className="text-xs text-ink-soft">
+                  {ar ? "الصفحة الرئيسية والألوان" : "Its home screen and colours"}
+                </div>
+              </div>
             </Card>
           </Link>
 

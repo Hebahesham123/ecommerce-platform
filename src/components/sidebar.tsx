@@ -102,6 +102,7 @@ const groups: Group[] = [
     label: "group_app",
     items: [
       { href: "/app", key: "nav_app_home", icon: IcMobile },
+      { href: "/app/theme", key: "nav_app_theme", icon: IcTheme },
       { href: "/app/orders", key: "nav_app_orders", icon: IcOrders },
       // Returns, exchanges and enquiries are one entry: on the storefront the
       // shopper fills in one form and picks between them, so two menu items

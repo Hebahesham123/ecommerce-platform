@@ -13,6 +13,7 @@ import {
 } from "./api";
 import { Btn, Empty, money, Note, Sheet, Spinner } from "./ui";
 import { Reviews } from "./reviews";
+import { AppHome } from "@/components/app-home";
 
 /**
  * The shopping half of the preview.
@@ -40,11 +41,14 @@ export function Shop({
   ar,
   onAdd,
   onLeave,
+  onTheme,
 }: {
   ar: boolean;
   onAdd: (itemId: string) => void;
   /** Targets that belong to another tab or another sheet the shell owns. */
   onLeave: (what: "cart" | "requests") => void;
+  /** The shell wears the brand too, and /home is where it arrives. */
+  onTheme?: (settings: Home["theme"]["settings"]) => void;
 }) {
   const [home, setHome] = useState<Home | null>(null);
   const [homeErr, setHomeErr] = useState<string | null>(null);
@@ -61,9 +65,11 @@ export function Shop({
   const loadHome = useCallback(() => {
     setHomeErr(null);
     api.get<Home>("/home").then((r) => {
-      if (r.ok) setHome(r.data);
-      else setHomeErr(r.error);
+      if (!r.ok) return setHomeErr(r.error);
+      setHome(r.data);
+      onTheme?.(r.data.theme.settings);
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(loadHome, [loadHome]);
 
@@ -126,10 +132,22 @@ export function Shop({
     }
   }
 
-  const mainMenu = home?.menus.find((m) => m.handle === "main-menu") ?? home?.menus[0] ?? null;
+  const mainMenu =
+    home?.menus.find((m) => m.handle === home.theme.settings.menuHandle) ??
+    home?.menus[0] ??
+    null;
 
   return (
-    <div className="p-4">
+    <div>
+      {home?.theme.settings.announcementEnabled && home.theme.settings.announcement && (
+        <div
+          className="px-3 py-1.5 text-center text-[11px] font-medium text-white"
+          style={{ background: home.theme.settings.accent }}
+        >
+          {home.theme.settings.announcement}
+        </div>
+      )}
+      <div className="p-4">
       <div className="flex items-center gap-2">
         {mainMenu && (
           <button
@@ -140,12 +158,14 @@ export function Shop({
             ☰
           </button>
         )}
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder={ar ? "ابحثي…" : "Search…"}
-          className="h-10 min-w-0 flex-1 rounded-full border border-slate-300 bg-white px-4 text-sm outline-none focus:border-violet-500"
-        />
+        {home?.theme.settings.showSearch !== false && (
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder={ar ? "ابحثي…" : "Search…"}
+            className="h-10 min-w-0 flex-1 rounded-full border border-slate-300 bg-white px-4 text-sm outline-none focus:border-violet-500"
+          />
+        )}
       </div>
 
       {homeErr ? (
@@ -195,11 +215,21 @@ export function Shop({
       </Sheet>
 
       <ProductSheet ar={ar} productId={open} onClose={() => setOpen(null)} onAdd={onAdd} />
+      </div>
     </div>
   );
 }
 
 // ------------------------------------------------------------------- home --
+/**
+ * The front page, drawn from the theme.
+ *
+ * Nothing here decides what the home screen contains — the merchant does, in
+ * the theme editor, and this renders exactly what they arranged with the same
+ * component their live preview used. Unfinished blocks are skipped: a grey box
+ * saying "banner with no image" belongs in the editor, not in front of a
+ * shopper.
+ */
 function HomeView({
   ar,
   home,
@@ -212,93 +242,29 @@ function HomeView({
   onOpen: (p: ProductCard) => void;
 }) {
   return (
-    <div className="mt-3 space-y-5">
-      {home.collections.length > 0 && (
-        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
-          {home.collections.map((c) => (
-            <button
-              key={c.handle}
-              onClick={() => onOpenCollection(c)}
-              className="shrink-0 whitespace-nowrap rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-600"
-            >
-              {c.title}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {home.newArrivals.length > 0 && (
-        <Row
-          ar={ar}
-          title={ar ? "وصل حديثاً" : "New arrivals"}
-          products={home.newArrivals}
-          onOpen={onOpen}
-        />
-      )}
-
-      {home.rows.map((row) => (
-        <Row
-          key={row.handle}
-          ar={ar}
-          title={row.title}
-          subtitle={row.description}
-          products={row.products}
-          onSeeAll={() => onOpenCollection(row)}
-          onOpen={onOpen}
-        />
-      ))}
-
-      {home.rows.length === 0 && home.newArrivals.length === 0 && (
-        <Empty>{ar ? "لا توجد منتجات منشورة" : "Nothing published yet"}</Empty>
-      )}
+    <div className="mt-3">
+      <AppHome
+        theme={home.theme}
+        ar={ar}
+        data={{
+          collections: home.collections,
+          rows: home.rows,
+          newArrivals: home.newArrivals,
+          reviews: home.reviews,
+        }}
+        handlers={{
+          onOpenCollection: (handle, title) =>
+            onOpenCollection({
+              handle,
+              title,
+              description: null,
+              image: null,
+              productCount: 0,
+            }),
+          onOpenProduct: (id) => onOpen({ id } as ProductCard),
+        }}
+      />
     </div>
-  );
-}
-
-function Row({
-  ar,
-  title,
-  subtitle,
-  products,
-  onSeeAll,
-  onOpen,
-}: {
-  ar: boolean;
-  title: string;
-  subtitle?: string | null;
-  products: ProductCard[];
-  onSeeAll?: () => void;
-  onOpen: (p: ProductCard) => void;
-}) {
-  return (
-    <section>
-      <div className="flex items-end justify-between gap-2">
-        <div className="min-w-0">
-          <h3 className="truncate text-sm font-bold text-slate-900">{title}</h3>
-          {subtitle && <p className="truncate text-[11px] text-slate-500">{subtitle}</p>}
-        </div>
-        {onSeeAll && (
-          <button onClick={onSeeAll} className="shrink-0 text-xs font-semibold text-violet-700">
-            {ar ? "الكل" : "See all"}
-          </button>
-        )}
-      </div>
-      <div className="-mx-4 mt-2 flex gap-3 overflow-x-auto px-4 pb-1">
-        {products.map((p) => (
-          <button
-            key={p.id}
-            onClick={() => onOpen(p)}
-            className="w-32 shrink-0 overflow-hidden rounded-2xl border border-slate-200 bg-white text-start"
-          >
-            <Thumb src={p.image} className="aspect-square" />
-            <div className="p-2">
-              <div className="line-clamp-2 text-[11px] leading-snug text-slate-800">{p.name}</div>
-              <Price ar={ar} p={p} />
-            </div>
-          </button>
-        ))}
-      </div>
-    </section>
   );
 }
 

@@ -15,6 +15,7 @@ import {
 import { Btn, Empty, Field, money, Note, Sheet, Spinner } from "./ui";
 import { Enquiry, Orders, Returns, SignIn } from "./screens";
 import { Shop } from "./shop";
+import { DEFAULT_SETTINGS, type AppSettings } from "@/lib/app-theme";
 
 /**
  * A stand-in app, so the store can be shopped from an app before an app
@@ -59,6 +60,10 @@ export function Preview() {
   const [sheet, setSheet] = useState<"signin" | "returns" | "enquiry" | null>(null);
   const log = useApiLog();
   const [showLog, setShowLog] = useState(false);
+  // The theme arrives with /home, which the Shop tab fetches. Until it does,
+  // the shell wears the defaults rather than flashing a different brand.
+  const [theme, setTheme] = useState<AppSettings | null>(null);
+  const accent = theme?.accent ?? DEFAULT_SETTINGS.accent;
 
   // localStorage is only there after hydration, so the first paint has to be
   // the signed-out, empty-cart state or React complains about the mismatch.
@@ -101,10 +106,19 @@ export function Preview() {
       {/* ------------------------------- the phone ------------------------- */}
       <div className="mx-auto w-full max-w-[400px] shrink-0">
         <div className="relative flex h-[760px] flex-col overflow-hidden rounded-[2rem] border-8 border-slate-900 bg-slate-50 shadow-2xl">
-          {/* status bar */}
+          {/* status bar — the store's own name and mark, from the theme */}
           <div className="flex items-center justify-between bg-slate-900 px-4 pb-2 pt-1.5 text-[11px] font-medium text-white">
-            <span>{ar ? "بيوتي بار" : "BeautyBar"}</span>
-            <span className="rounded-full bg-violet-500/30 px-2 py-0.5 text-[10px] text-violet-100">
+            <span className="flex items-center gap-1.5">
+              {theme?.logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={theme.logoUrl} alt="" className="h-4 w-auto" />
+              ) : null}
+              {theme?.storeName ?? (ar ? "بيوتي بار" : "BeautyBar")}
+            </span>
+            <span
+              className="rounded-full px-2 py-0.5 text-[10px] text-white"
+              style={{ background: `${accent}66` }}
+            >
               {ar ? "معاينة التطبيق" : "app preview"}
             </span>
           </div>
@@ -114,6 +128,7 @@ export function Preview() {
               <Shop
                 ar={ar}
                 onAdd={add}
+                onTheme={setTheme}
                 onLeave={(what) => (what === "cart" ? setTab("cart") : setSheet("enquiry"))}
               />
             )}
@@ -158,14 +173,16 @@ export function Preview() {
               <button
                 key={tb.key}
                 onClick={() => setTab(tb.key)}
-                className={`relative flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium transition ${
-                  tab === tb.key ? "text-violet-700" : "text-slate-400"
-                }`}
+                className="relative flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium transition"
+                style={{ color: tab === tb.key ? accent : "#94a3b8" }}
               >
                 <span className="text-lg leading-none">{tb.icon}</span>
                 {ar ? tb.ar : tb.en}
                 {tb.key === "cart" && count > 0 && (
-                  <span className="absolute end-[22%] top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-violet-600 px-1 text-[10px] font-bold text-white">
+                  <span
+                    className="absolute end-[22%] top-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold text-white"
+                    style={{ background: accent }}
+                  >
                     {count}
                   </span>
                 )}
