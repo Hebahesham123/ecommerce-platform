@@ -64,6 +64,9 @@ export function ThemeEditor() {
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [hovered, setHovered] = useState<string | null>(null);
   const [device, setDevice] = useState<"desktop" | "mobile">("mobile");
+  // Which screen the phone is showing. The website's customizer lets you click
+  // through its preview; arranging links you cannot follow is arranging blind.
+  const [screen, setScreen] = useState<{ handle: string; title: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
   const railRef = useRef<HTMLDivElement>(null);
@@ -113,11 +116,17 @@ export function ThemeEditor() {
     el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [hovered]);
 
+  // Editing a section while the phone is showing a collection would hide the
+  // very thing being changed, so any edit brings the phone home.
+  const home_ = useCallback(() => setScreen(null), []);
+
   const patchSettings = useCallback((patch: Partial<AppTheme["settings"]>) => {
+    home_();
     setDraft((d) => (d ? { ...d, settings: { ...d.settings, ...patch } } : d));
-  }, []);
+  }, [home_]);
 
   const patchBlock = useCallback((id: string, patch: Record<string, unknown>) => {
+    home_();
     setDraft((d) =>
       d
         ? {
@@ -128,7 +137,7 @@ export function ThemeEditor() {
           }
         : d,
     );
-  }, []);
+  }, [home_]);
 
   function move(id: string, by: 1 | -1) {
     setDraft((d) => {
@@ -454,6 +463,15 @@ export function ThemeEditor() {
                 </div>
               )}
 
+              {screen ? (
+                <CollectionScreen
+                  handle={screen.handle}
+                  title={screen.title}
+                  accent={draft.settings.accent}
+                  ar={ar}
+                  onBack={() => setScreen(null)}
+                />
+              ) : (
               <div className="bg-slate-50 p-4">
                 {draft.settings.showSearch && (
                   <div className="mb-4 h-10 rounded-full border border-slate-300 bg-white px-4 text-sm leading-10 text-slate-400">
@@ -478,6 +496,9 @@ export function ThemeEditor() {
                           theme={{ settings: draft.settings, blocks: [block] }}
                           data={home}
                           ar={ar}
+                          handlers={{
+                            onOpenCollection: (handle, title) => setScreen({ handle, title }),
+                          }}
                           showPlaceholders
                         />
                       </div>
@@ -494,6 +515,7 @@ export function ThemeEditor() {
                   </p>
                 )}
               </div>
+              )}
             </div>
           </div>
         </Card>
@@ -1113,6 +1135,113 @@ function CollectionSelect({
         </option>
       ))}
     </select>
+  );
+}
+
+/**
+ * Where a tap in the preview lands.
+ *
+ * The editor is for arranging the home screen, so this is deliberately plain —
+ * enough to prove the link goes where the merchant pointed it and that the
+ * collection has something in it. The full app is one click away for the rest.
+ */
+function CollectionScreen({
+  handle,
+  title,
+  accent,
+  ar,
+  onBack,
+}: {
+  handle: string;
+  title: string;
+  accent: string;
+  ar: boolean;
+  onBack: () => void;
+}) {
+  const [products, setProducts] = useState<
+    { id: string; name: string; image: string | null; priceMin: number | null }[] | null
+  >(null);
+  const [total, setTotal] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setProducts(null);
+    setError(null);
+    fetch(`/api/storefront/collections/${encodeURIComponent(handle)}?limit=12`, {
+      headers: { "x-store-channel": "app" },
+      cache: "no-store",
+    })
+      .then((r) => r.json())
+      .then((j) => {
+        if (!j?.ok) return setError(j?.error ?? "not_found");
+        setProducts(j.data.products ?? []);
+        setTotal(j.data.total ?? 0);
+      })
+      .catch((e) => setError(String((e as Error).message)));
+  }, [handle]);
+
+  const money = (v: number | null) =>
+    v == null
+      ? "—"
+      : `${new Intl.NumberFormat(ar ? "ar-EG" : "en-US", { maximumFractionDigits: 0 }).format(v)} ${
+          ar ? "ج.م" : "EGP"
+        }`;
+
+  return (
+    <div className="bg-slate-50">
+      <div className="flex items-center gap-2 border-b border-slate-200 bg-white px-3 py-2">
+        <button onClick={onBack} className="text-sm font-semibold" style={{ color: accent }}>
+          ‹ {ar ? "رجوع" : "Back"}
+        </button>
+        <span className="min-w-0 flex-1 truncate text-sm font-bold text-slate-900">
+          {title || handle}
+        </span>
+        {products && <span className="shrink-0 text-[11px] text-slate-400">{total}</span>}
+      </div>
+
+      <div className="p-4">
+        {error ? (
+          <div className="rounded-xl bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">
+            <code className="font-mono">{error}</code>
+            <p className="mt-1">
+              {ar
+                ? "هذا القسم غير موجود في هذا المتجر — غيّري الوجهة من المحرّر."
+                : "That collection isn't in this store. Repoint the section in the panel beside you."}
+            </p>
+          </div>
+        ) : !products ? (
+          <p className="py-16 text-center text-sm text-slate-400">{ar ? "…" : "…"}</p>
+        ) : products.length === 0 ? (
+          <p className="py-16 text-center text-sm text-slate-400">
+            {ar ? "لا منتجات في هذا القسم" : "Nothing in this collection"}
+          </p>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            {products.map((p) => (
+              <div
+                key={p.id}
+                className="overflow-hidden rounded-2xl border border-slate-200 bg-white"
+              >
+                <div className="aspect-square bg-slate-100">
+                  {p.image && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={p.image} alt="" className="h-full w-full object-cover" />
+                  )}
+                </div>
+                <div className="p-2">
+                  <div className="line-clamp-2 text-[11px] leading-snug text-slate-800">
+                    {p.name}
+                  </div>
+                  <div className="mt-1 text-sm font-bold" style={{ color: accent }}>
+                    {money(p.priceMin)}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
