@@ -64,9 +64,19 @@ export function ThemeEditor() {
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [hovered, setHovered] = useState<string | null>(null);
   const [device, setDevice] = useState<"desktop" | "mobile">("mobile");
-  // Which screen the phone is showing. The website's customizer lets you click
-  // through its preview; arranging links you cannot follow is arranging blind.
-  const [screen, setScreen] = useState<{ handle: string; title: string } | null>(null);
+  /**
+   * Where the phone has been.
+   *
+   * A stack rather than a single screen, because home → collection → product
+   * is a path, and Back from a product should return to the collection it came
+   * from rather than all the way out. Arranging links you cannot follow is
+   * arranging blind, and following one link only to hit a dead end is barely
+   * better.
+   */
+  const [stack, setStack] = useState<Screen[]>([]);
+  const screen = stack[stack.length - 1] ?? null;
+  const push = useCallback((next: Screen) => setStack((s) => [...s, next]), []);
+  const pop = useCallback(() => setStack((s) => s.slice(0, -1)), []);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
   const railRef = useRef<HTMLDivElement>(null);
@@ -118,7 +128,7 @@ export function ThemeEditor() {
 
   // Editing a section while the phone is showing a collection would hide the
   // very thing being changed, so any edit brings the phone home.
-  const home_ = useCallback(() => setScreen(null), []);
+  const home_ = useCallback(() => setStack([]), []);
 
   const patchSettings = useCallback((patch: Partial<AppTheme["settings"]>) => {
     home_();
@@ -464,13 +474,23 @@ export function ThemeEditor() {
               )}
 
               {screen ? (
-                <CollectionScreen
-                  handle={screen.handle}
-                  title={screen.title}
-                  accent={draft.settings.accent}
-                  ar={ar}
-                  onBack={() => setScreen(null)}
-                />
+                screen.kind === "collection" ? (
+                  <CollectionScreen
+                    handle={screen.handle}
+                    title={screen.title}
+                    accent={draft.settings.accent}
+                    ar={ar}
+                    onBack={pop}
+                    onOpenProduct={(id) => push({ kind: "product", id })}
+                  />
+                ) : (
+                  <ProductScreen
+                    id={screen.id}
+                    accent={draft.settings.accent}
+                    ar={ar}
+                    onBack={pop}
+                  />
+                )
               ) : (
               <div className="bg-slate-50 p-4">
                 {draft.settings.showSearch && (
@@ -497,7 +517,9 @@ export function ThemeEditor() {
                           data={home}
                           ar={ar}
                           handlers={{
-                            onOpenCollection: (handle, title) => setScreen({ handle, title }),
+                            onOpenCollection: (handle, title) =>
+                              push({ kind: "collection", handle, title }),
+                            onOpenProduct: (id) => push({ kind: "product", id }),
                           }}
                           showPlaceholders
                         />
@@ -1145,18 +1167,75 @@ function CollectionSelect({
  * enough to prove the link goes where the merchant pointed it and that the
  * collection has something in it. The full app is one click away for the rest.
  */
+type Screen =
+  | { kind: "collection"; handle: string; title: string }
+  | { kind: "product"; id: string };
+
+/** The bar every screen below home wears. */
+function ScreenBar({
+  title,
+  trailing,
+  accent,
+  ar,
+  onBack,
+}: {
+  title: string;
+  trailing?: React.ReactNode;
+  accent: string;
+  ar: boolean;
+  onBack: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-2 border-b border-slate-200 bg-white px-3 py-2">
+      <button onClick={onBack} className="shrink-0 text-sm font-semibold" style={{ color: accent }}>
+        ‹ {ar ? "رجوع" : "Back"}
+      </button>
+      <span className="min-w-0 flex-1 truncate text-sm font-bold text-slate-900">{title}</span>
+      {trailing}
+    </div>
+  );
+}
+
+function money(v: number | null, ar: boolean) {
+  return v == null
+    ? "—"
+    : `${new Intl.NumberFormat(ar ? "ar-EG" : "en-US", { maximumFractionDigits: 0 }).format(v)} ${
+        ar ? "ج.م" : "EGP"
+      }`;
+}
+
+/** A refusal the merchant can act on, rather than a spinner that never ends. */
+function ScreenError({ error, ar }: { error: string; ar: boolean }) {
+  return (
+    <div className="m-4 rounded-xl bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">
+      <code className="font-mono">{error}</code>
+      <p className="mt-1">
+        {error === "not_found"
+          ? ar
+            ? "غير موجود في هذا المتجر — غيّري الوجهة من المحرّر."
+            : "That isn't in this store. Repoint the section in the panel beside you."
+          : ar
+            ? "تعذّر التحميل."
+            : "Couldn't load it."}
+      </p>
+    </div>
+  );
+}
+
 function CollectionScreen({
   handle,
   title,
   accent,
   ar,
   onBack,
+  onOpenProduct,
 }: {
   handle: string;
   title: string;
   accent: string;
   ar: boolean;
   onBack: () => void;
+  onOpenProduct: (id: string) => void;
 }) {
   const [products, setProducts] = useState<
     { id: string; name: string; image: string | null; priceMin: number | null }[] | null
@@ -1180,67 +1259,158 @@ function CollectionScreen({
       .catch((e) => setError(String((e as Error).message)));
   }, [handle]);
 
-  const money = (v: number | null) =>
-    v == null
-      ? "—"
-      : `${new Intl.NumberFormat(ar ? "ar-EG" : "en-US", { maximumFractionDigits: 0 }).format(v)} ${
-          ar ? "ج.م" : "EGP"
-        }`;
+  return (
+    <div className="bg-slate-50">
+      <ScreenBar
+        title={title || handle}
+        accent={accent}
+        ar={ar}
+        onBack={onBack}
+        trailing={products ? <span className="shrink-0 text-[11px] text-slate-400">{total}</span> : null}
+      />
+      {error ? (
+        <ScreenError error={error} ar={ar} />
+      ) : (
+        <div className="p-4">
+          {!products ? (
+            <p className="py-16 text-center text-sm text-slate-400">…</p>
+          ) : products.length === 0 ? (
+            <p className="py-16 text-center text-sm text-slate-400">
+              {ar ? "لا منتجات في هذا القسم" : "Nothing in this collection"}
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              {products.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => onOpenProduct(p.id)}
+                  className="overflow-hidden rounded-2xl border border-slate-200 bg-white text-start transition hover:border-violet-300"
+                >
+                  <div className="aspect-square bg-slate-100">
+                    {p.image && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={p.image} alt="" className="h-full w-full object-cover" />
+                    )}
+                  </div>
+                  <div className="p-2">
+                    <div className="line-clamp-2 text-[11px] leading-snug text-slate-800">
+                      {p.name}
+                    </div>
+                    <div className="mt-1 text-sm font-bold" style={{ color: accent }}>
+                      {money(p.priceMin, ar)}
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * A product, as the app would show it.
+ *
+ * Its variants and their stock are the part worth seeing here: a collection
+ * that looks full but whose products are all sold out is a section the
+ * merchant should know about before a shopper finds it.
+ */
+function ProductScreen({
+  id,
+  accent,
+  ar,
+  onBack,
+}: {
+  id: string;
+  accent: string;
+  ar: boolean;
+  onBack: () => void;
+}) {
+  const [product, setProduct] = useState<{
+    name: string;
+    image: string | null;
+    description: string | null;
+    priceMin: number | null;
+    compareAt: number | null;
+    variants: { id: string; variantTitle: string | null; price: number | null; available: number }[];
+  } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setProduct(null);
+    setError(null);
+    fetch(`/api/storefront/products/${encodeURIComponent(id)}`, {
+      headers: { "x-store-channel": "app" },
+      cache: "no-store",
+    })
+      .then((r) => r.json())
+      .then((j) => (j?.ok ? setProduct(j.data) : setError(j?.error ?? "not_found")))
+      .catch((e) => setError(String((e as Error).message)));
+  }, [id]);
 
   return (
     <div className="bg-slate-50">
-      <div className="flex items-center gap-2 border-b border-slate-200 bg-white px-3 py-2">
-        <button onClick={onBack} className="text-sm font-semibold" style={{ color: accent }}>
-          ‹ {ar ? "رجوع" : "Back"}
-        </button>
-        <span className="min-w-0 flex-1 truncate text-sm font-bold text-slate-900">
-          {title || handle}
-        </span>
-        {products && <span className="shrink-0 text-[11px] text-slate-400">{total}</span>}
-      </div>
-
-      <div className="p-4">
-        {error ? (
-          <div className="rounded-xl bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">
-            <code className="font-mono">{error}</code>
-            <p className="mt-1">
-              {ar
-                ? "هذا القسم غير موجود في هذا المتجر — غيّري الوجهة من المحرّر."
-                : "That collection isn't in this store. Repoint the section in the panel beside you."}
+      <ScreenBar title={product?.name ?? "…"} accent={accent} ar={ar} onBack={onBack} />
+      {error ? (
+        <ScreenError error={error} ar={ar} />
+      ) : !product ? (
+        <p className="py-16 text-center text-sm text-slate-400">…</p>
+      ) : (
+        <div className="space-y-3 p-4">
+          <div className="aspect-square overflow-hidden rounded-2xl bg-slate-100">
+            {product.image && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={product.image} alt="" className="h-full w-full object-cover" />
+            )}
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900">{product.name}</h3>
+            <div className="mt-1 flex items-baseline gap-2">
+              <span className="text-lg font-bold" style={{ color: accent }}>
+                {money(product.priceMin, ar)}
+              </span>
+              {product.compareAt != null &&
+                product.priceMin != null &&
+                product.compareAt > product.priceMin && (
+                  <span className="text-xs text-slate-400 line-through">
+                    {money(product.compareAt, ar)}
+                  </span>
+                )}
+            </div>
+          </div>
+          {product.description && (
+            <p className="line-clamp-4 text-xs leading-relaxed text-slate-600">
+              {product.description.replace(/<[^>]*>/g, " ").trim()}
             </p>
-          </div>
-        ) : !products ? (
-          <p className="py-16 text-center text-sm text-slate-400">{ar ? "…" : "…"}</p>
-        ) : products.length === 0 ? (
-          <p className="py-16 text-center text-sm text-slate-400">
-            {ar ? "لا منتجات في هذا القسم" : "Nothing in this collection"}
-          </p>
-        ) : (
-          <div className="grid grid-cols-2 gap-3">
-            {products.map((p) => (
-              <div
-                key={p.id}
-                className="overflow-hidden rounded-2xl border border-slate-200 bg-white"
+          )}
+          <ul className="space-y-1.5">
+            {product.variants.map((v) => (
+              <li
+                key={v.id}
+                className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs"
               >
-                <div className="aspect-square bg-slate-100">
-                  {p.image && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={p.image} alt="" className="h-full w-full object-cover" />
-                  )}
-                </div>
-                <div className="p-2">
-                  <div className="line-clamp-2 text-[11px] leading-snug text-slate-800">
-                    {p.name}
-                  </div>
-                  <div className="mt-1 text-sm font-bold" style={{ color: accent }}>
-                    {money(p.priceMin)}
-                  </div>
-                </div>
-              </div>
+                <span className="min-w-0 flex-1 truncate text-slate-800">
+                  {v.variantTitle ?? (ar ? "الأساسي" : "Default")}
+                </span>
+                <span className="shrink-0 text-slate-500">{money(v.price, ar)}</span>
+                <span
+                  className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                    v.available > 0 ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"
+                  }`}
+                >
+                  {v.available > 0
+                    ? `${v.available} ${ar ? "متاح" : "left"}`
+                    : ar
+                      ? "نفد"
+                      : "sold out"}
+                </span>
+              </li>
             ))}
-          </div>
-        )}
-      </div>
+          </ul>
+        </div>
+      )}
     </div>
   );
 }
