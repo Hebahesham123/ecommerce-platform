@@ -252,6 +252,18 @@ export const IcRefresh = (p: P) => (
     <path d="M21 3v6h-6" />
   </svg>
 );
+export const IcUndo = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M3 7v6h6" />
+    <path d="M3 13a9 9 0 1 0 3-7.7L3 8" />
+  </svg>
+);
+export const IcRedo = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M21 7v6h-6" />
+    <path d="M21 13a9 9 0 1 1-3-7.7L21 8" />
+  </svg>
+);
 export const IcDesktop = (p: P) => (
   <svg {...base(p)}>
     <rect x="3" y="4" width="18" height="12" rx="2" />

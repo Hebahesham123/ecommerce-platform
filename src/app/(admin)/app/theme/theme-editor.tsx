@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import Link from "next/link";
 import { useI18n } from "@/lib/i18n";
 import { Card } from "@/components/ui";
@@ -14,6 +14,8 @@ import {
   IcUp,
   IcDown,
   IcAlert,
+  IcUndo,
+  IcRedo,
 } from "@/components/icons";
 import { AppHome, type HomeData } from "@/components/app-home";
 import {
@@ -39,6 +41,7 @@ import {
   type Tab as ThemeTab,
 } from "@/lib/app-theme";
 import { ScreenPanel, TabsPanel } from "./screen-panels";
+import { historyReducer, type Update } from "./history";
 import {
   AccountTab,
   Cart,
@@ -79,7 +82,30 @@ export function ThemeEditor() {
 
   const [data, setData] = useState<ThemeEditorData | null>(null);
   const [home, setHome] = useState<HomeData | null>(null);
-  const [draft, setDraft] = useState<AppTheme | null>(null);
+  const [past, dispatch] = useReducer(historyReducer, {
+    past: [],
+    present: null,
+    future: [],
+    tag: "",
+    at: 0,
+  });
+  const draft = past.present;
+  const canUndo = past.past.length > 0;
+  const canRedo = past.future.length > 0;
+
+  /**
+   * Every edit in the editor goes through here.
+   *
+   * The tag says which field is being edited, so a run of keystrokes in one
+   * box collapses into one undo step. Leave it off and the change is always
+   * its own step, which is what adding, deleting and reordering want.
+   */
+  const setDraft = useCallback(
+    (update: Update, tag = "") => dispatch({ kind: "set", update, tag, at: Date.now() }),
+    [],
+  );
+  const undo = useCallback(() => dispatch({ kind: "undo" }), []);
+  const redo = useCallback(() => dispatch({ kind: "redo" }), []);
   const [savedJson, setSavedJson] = useState("");
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [hovered, setHovered] = useState<string | null>(null);
@@ -177,7 +203,7 @@ export function ThemeEditor() {
     loadThemeEditor().then((r) => {
       if (!r.ok) return setMsg({ tone: "err", text: r.error });
       setData(r.data);
-      setDraft(r.data.theme);
+      dispatch({ kind: "load", theme: r.data.theme });
       setSavedJson(JSON.stringify(r.data.theme));
     });
     // The preview draws from the endpoint the app itself calls, so the data is
@@ -204,6 +230,23 @@ export function ThemeEditor() {
     [draft, savedJson],
   );
 
+  /**
+   * ⌘Z and ⌘⇧Z, everywhere on the page including inside a text box.
+   *
+   * The boxes are controlled by React, so the browser's own undo has nothing
+   * to walk back — letting it through would look broken. This answers instead.
+   */
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "z") return;
+      e.preventDefault();
+      if (e.shiftKey) redo();
+      else undo();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [undo, redo]);
+
   const missingHandles = useMemo(() => {
     if (!draft || !data) return [];
     const have = new Set(data.collections.map((c) => c.handle));
@@ -222,37 +265,50 @@ export function ThemeEditor() {
   // very thing being changed, so any edit brings the phone home.
   const home_ = useCallback(() => setStack([]), []);
 
-  const patchTabs = useCallback((tabs: ThemeTab[]) => {
-    setDraft((d) => (d ? { ...d, tabs } : d));
-  }, []);
+  const patchTabs = useCallback(
+    (tabs: ThemeTab[]) => setDraft((d) => (d ? { ...d, tabs } : d), "tabs"),
+    [setDraft],
+  );
 
   const patchScreen = useCallback(
     <K extends ScreenKey>(key: K, patch: Partial<ScreenSettings[K]>) => {
-      setDraft((d) =>
-        d ? { ...d, screens: { ...d.screens, [key]: { ...d.screens[key], ...patch } } } : d,
+      setDraft(
+        (d) => (d ? { ...d, screens: { ...d.screens, [key]: { ...d.screens[key], ...patch } } } : d),
+        `screen:${key}:${Object.keys(patch).join(",")}`,
       );
     },
-    [],
+    [setDraft],
   );
 
-  const patchSettings = useCallback((patch: Partial<AppTheme["settings"]>) => {
-    home_();
-    setDraft((d) => (d ? { ...d, settings: { ...d.settings, ...patch } } : d));
-  }, [home_]);
+  const patchSettings = useCallback(
+    (patch: Partial<AppTheme["settings"]>) => {
+      home_();
+      setDraft(
+        (d) => (d ? { ...d, settings: { ...d.settings, ...patch } } : d),
+        `settings:${Object.keys(patch).join(",")}`,
+      );
+    },
+    [home_, setDraft],
+  );
 
-  const patchBlock = useCallback((id: string, patch: Record<string, unknown>) => {
-    home_();
-    setDraft((d) =>
-      d
-        ? {
-            ...d,
-            blocks: d.blocks.map((b) =>
-              b.id === id ? { ...b, settings: { ...b.settings, ...patch } } : b,
-            ),
-          }
-        : d,
-    );
-  }, [home_]);
+  const patchBlock = useCallback(
+    (id: string, patch: Record<string, unknown>) => {
+      home_();
+      setDraft(
+        (d) =>
+          d
+            ? {
+                ...d,
+                blocks: d.blocks.map((b) =>
+                  b.id === id ? { ...b, settings: { ...b.settings, ...patch } } : b,
+                ),
+              }
+            : d,
+        `block:${id}:${Object.keys(patch).join(",")}`,
+      );
+    },
+    [home_, setDraft],
+  );
 
   function move(id: string, by: 1 | -1) {
     setDraft((d) => {
@@ -351,8 +407,28 @@ export function ThemeEditor() {
           <IcCode className="h-3.5 w-3.5" />
           {ar ? "الكود" : "Code"}
         </Link>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={undo}
+            disabled={!canUndo}
+            title={ar ? "تراجع (⌘Z)" : "Undo (⌘Z)"}
+            aria-label={ar ? "تراجع" : "Undo"}
+            className="btn-ghost h-9 w-9 p-0 disabled:opacity-30"
+          >
+            <IcUndo className="h-4 w-4" />
+          </button>
+          <button
+            onClick={redo}
+            disabled={!canRedo}
+            title={ar ? "إعادة (⌘⇧Z)" : "Redo (⌘⇧Z)"}
+            aria-label={ar ? "إعادة" : "Redo"}
+            className="btn-ghost h-9 w-9 p-0 disabled:opacity-30"
+          >
+            <IcRedo className="h-4 w-4" />
+          </button>
+        </div>
         <button onClick={onReset} disabled={!dirty} className="btn-ghost h-9 px-3 text-xs disabled:opacity-40">
-          {ar ? "تراجع" : "Reset"}
+          {ar ? "إرجاع للمحفوظ" : "Reset"}
         </button>
         <button onClick={onSave} disabled={saving || !dirty} className="btn-primary disabled:opacity-60">
           {saving ? (ar ? "جارٍ الحفظ…" : "Saving…") : dirty ? (ar ? "حفظ" : "Save") : ar ? "محفوظ" : "Saved"}
