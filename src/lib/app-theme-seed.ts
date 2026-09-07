@@ -1,7 +1,9 @@
 import "server-only";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
 import {
+  DEFAULT_SCREENS,
   DEFAULT_SETTINGS,
+  DEFAULT_TABS,
   itemId,
   type AppSettings,
   type AppTheme,
@@ -321,7 +323,10 @@ export async function seedFromWebsite(shopName?: string): Promise<AppTheme | nul
       storeName: str(shopName, 60) || DEFAULT_SETTINGS.storeName,
       accent: accentOf(raws),
     };
-    return { settings, blocks };
+    // Tabs and the other screens start at their defaults — the website has
+    // no equivalent to translate, and a shop that wants different wording says
+    // so in the editor.
+    return { settings, blocks, tabs: DEFAULT_TABS, screens: DEFAULT_SCREENS };
   } catch {
     // A theme we cannot read is not a reason to have no app.
     return null;

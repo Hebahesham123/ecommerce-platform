@@ -15,7 +15,14 @@ import {
 import { Btn, Empty, Field, money, Note, Sheet, Spinner } from "./ui";
 import { Enquiry, Orders, Returns, SignIn } from "./screens";
 import { Shop } from "./shop";
-import { DEFAULT_SETTINGS, type AppSettings } from "@/lib/app-theme";
+import {
+  DEFAULT_SCREENS,
+  DEFAULT_SETTINGS,
+  DEFAULT_TABS,
+  TAB_DEFAULTS,
+  type AppTheme,
+  type ScreenSettings,
+} from "@/lib/app-theme";
 
 /**
  * A stand-in app, so the store can be shopped from an app before an app
@@ -62,8 +69,10 @@ export function Preview() {
   const [showLog, setShowLog] = useState(false);
   // The theme arrives with /home, which the Shop tab fetches. Until it does,
   // the shell wears the defaults rather than flashing a different brand.
-  const [theme, setTheme] = useState<AppSettings | null>(null);
-  const accent = theme?.accent ?? DEFAULT_SETTINGS.accent;
+  const [theme, setTheme] = useState<AppTheme | null>(null);
+  const brand = theme?.settings ?? DEFAULT_SETTINGS;
+  const accent = brand.accent;
+  const screens: ScreenSettings = theme?.screens ?? DEFAULT_SCREENS;
 
   // localStorage is only there after hydration, so the first paint has to be
   // the signed-out, empty-cart state or React complains about the mismatch.
@@ -94,12 +103,18 @@ export function Preview() {
     });
   }, []);
 
-  const tabs: { key: Tab; ar: string; en: string; icon: string }[] = [
-    { key: "shop", ar: "المتجر", en: "Shop", icon: "◳" },
-    { key: "cart", ar: "السلة", en: "Cart", icon: "◔" },
-    { key: "orders", ar: "طلباتي", en: "Orders", icon: "◨" },
-    { key: "account", ar: "حسابي", en: "Account", icon: "◍" },
-  ];
+  // The bar the merchant arranged: their order, their wording, and only the
+  // tabs they kept. An empty label means the app's own word, in this language.
+  const tabs = (theme?.tabs ?? DEFAULT_TABS)
+    .filter((t) => t.visible)
+    .map((t) => ({
+      key: t.key as Tab,
+      label: t.label || TAB_DEFAULTS[t.key][ar ? "ar" : "en"],
+      icon: TAB_DEFAULTS[t.key].icon,
+    }));
+
+  // A tab that has been hidden must not stay selected underneath it.
+  const activeTab = tabs.some((t) => t.key === tab) ? tab : (tabs[0]?.key ?? "shop");
 
   return (
     <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
@@ -109,11 +124,11 @@ export function Preview() {
           {/* status bar — the store's own name and mark, from the theme */}
           <div className="flex items-center justify-between bg-slate-900 px-4 pb-2 pt-1.5 text-[11px] font-medium text-white">
             <span className="flex items-center gap-1.5">
-              {theme?.logoUrl ? (
+              {brand.logoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={theme.logoUrl} alt="" className="h-4 w-auto" />
+                <img src={brand.logoUrl} alt="" className="h-4 w-auto" />
               ) : null}
-              {theme?.storeName ?? (ar ? "بيوتي بار" : "BeautyBar")}
+              {brand.storeName}
             </span>
             <span
               className="rounded-full px-2 py-0.5 text-[10px] text-white"
@@ -124,7 +139,7 @@ export function Preview() {
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto">
-            {tab === "shop" && (
+            {activeTab === "shop" && (
               <Shop
                 ar={ar}
                 onAdd={add}
@@ -132,13 +147,15 @@ export function Preview() {
                 onLeave={(what) => (what === "cart" ? setTab("cart") : setSheet("enquiry"))}
               />
             )}
-            {tab === "cart" && (
+            {activeTab === "cart" && (
               <Cart
                 ar={ar}
                 cart={cart}
                 setCart={setCart}
                 signedIn={signedIn}
                 phone={phone}
+                screens={screens}
+                accent={accent}
                 onNeedSignIn={() => setSheet("signin")}
                 onPlaced={() => {
                   setCart([]);
@@ -146,16 +163,18 @@ export function Preview() {
                 }}
               />
             )}
-            {tab === "orders" && (
+            {activeTab === "orders" && (
               <div className="p-4">
                 <Orders ar={ar} signedIn={signedIn} />
               </div>
             )}
-            {tab === "account" && (
+            {activeTab === "account" && (
               <AccountTab
                 ar={ar}
                 signedIn={signedIn}
                 phone={phone}
+                screens={screens}
+                accent={accent}
                 onSignIn={() => setSheet("signin")}
                 onSignOut={() => {
                   setToken(null);
@@ -174,10 +193,10 @@ export function Preview() {
                 key={tb.key}
                 onClick={() => setTab(tb.key)}
                 className="relative flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium transition"
-                style={{ color: tab === tb.key ? accent : "#94a3b8" }}
+                style={{ color: activeTab === tb.key ? accent : "#94a3b8" }}
               >
                 <span className="text-lg leading-none">{tb.icon}</span>
-                {ar ? tb.ar : tb.en}
+                {tb.label}
                 {tb.key === "cart" && count > 0 && (
                   <span
                     className="absolute end-[22%] top-1 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[10px] font-bold text-white"
@@ -291,6 +310,8 @@ function Cart({
   setCart,
   signedIn,
   phone,
+  screens,
+  accent,
   onNeedSignIn,
   onPlaced,
 }: {
@@ -299,6 +320,8 @@ function Cart({
   setCart: (f: (c: CartLine[]) => CartLine[]) => void;
   signedIn: boolean;
   phone: string | null;
+  screens: ScreenSettings;
+  accent: string;
   onNeedSignIn: () => void;
   onPlaced: () => void;
 }) {
@@ -307,7 +330,13 @@ function Cart({
   const [discount, setDiscount] = useState<{ amount: number; label: string } | null>(null);
   const [couponErr, setCouponErr] = useState<string | null>(null);
   const [checkout, setCheckout] = useState(false);
-  const [form, setForm] = useState({ name: "", governorate: "", city: "", address: "" });
+  const [form, setForm] = useState({
+    name: "",
+    governorate: "",
+    city: "",
+    address: "",
+    note: "",
+  });
   const [msg, setMsg] = useState<{ tone: "good" | "bad"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -352,6 +381,7 @@ function Cart({
       governorate: form.governorate,
       city: form.city,
       address: form.address,
+      note: form.note,
       couponCode: discount ? coupon : null,
     });
     setBusy(false);
@@ -389,7 +419,7 @@ function Cart({
       )}
 
       {priced.lines.length === 0 ? (
-        <Empty>{ar ? "السلة فارغة" : "The basket is empty"}</Empty>
+        <Empty>{screens.cart.emptyText || (ar ? "السلة فارغة" : "The basket is empty")}</Empty>
       ) : (
         <>
           <ul className="space-y-2">
@@ -444,12 +474,13 @@ function Cart({
             ))}
           </ul>
 
+          {screens.cart.showCoupon && (
           <div className="rounded-2xl border border-slate-200 bg-white p-3">
             <div className="flex gap-2">
               <input
                 value={coupon}
                 onChange={(e) => setCoupon(e.target.value.toUpperCase())}
-                placeholder={ar ? "كود الخصم" : "Discount code"}
+                placeholder={screens.cart.couponLabel || (ar ? "كود الخصم" : "Discount code")}
                 className="h-10 min-w-0 flex-1 rounded-xl border border-slate-300 px-3 text-sm outline-none focus:border-violet-500"
               />
               <Btn variant="outline" onClick={applyCoupon} disabled={!coupon || !signedIn}>
@@ -470,16 +501,19 @@ function Cart({
               </p>
             )}
           </div>
+          )}
 
           <div className="rounded-2xl bg-slate-900 p-4 text-white">
             <div className="flex items-center justify-between text-sm">
-              <span className="text-slate-300">{ar ? "الإجمالي" : "Total"}</span>
+              <span className="text-slate-300">
+                {screens.cart.totalLabel || (ar ? "الإجمالي" : "Total")}
+              </span>
               <span className="text-lg font-bold">{money(total, ar)}</span>
             </div>
             <div className="mt-3">
               {signedIn ? (
                 <Btn full onClick={() => setCheckout(true)}>
-                  {ar ? "إتمام الطلب" : "Checkout"}
+                  {screens.cart.checkoutLabel || (ar ? "إتمام الطلب" : "Checkout")}
                 </Btn>
               ) : (
                 <Btn full onClick={onNeedSignIn}>
@@ -494,9 +528,12 @@ function Cart({
       <Sheet
         open={checkout}
         onClose={() => setCheckout(false)}
-        title={ar ? "الدفع عند الاستلام" : "Cash on delivery"}
+        title={screens.checkout.title || (ar ? "الدفع عند الاستلام" : "Cash on delivery")}
       >
         <div className="space-y-3">
+          {screens.checkout.note && (
+            <p className="text-xs leading-relaxed text-slate-500">{screens.checkout.note}</p>
+          )}
           <Field label={ar ? "الاسم" : "Name"} value={form.name} onChange={(v) => setForm({ ...form, name: v })} />
           <Field
             label={ar ? "رقم الموبايل" : "Phone"}
@@ -520,8 +557,17 @@ function Cart({
             value={form.address}
             onChange={(v) => setForm({ ...form, address: v })}
           />
+          {screens.checkout.askNote && (
+            <Field
+              label={ar ? "ملاحظات" : "Order note"}
+              value={form.note ?? ""}
+              onChange={(v) => setForm({ ...form, note: v })}
+            />
+          )}
           <Btn full onClick={place} disabled={busy || !form.name || !form.address}>
-            {busy ? "…" : `${ar ? "تأكيد" : "Place the order"} · ${money(total, ar)}`}
+            {busy
+              ? "…"
+              : `${screens.checkout.placeLabel || (ar ? "تأكيد الطلب" : "Place the order")} · ${money(total, ar)}`}
           </Btn>
         </div>
       </Sheet>
@@ -554,6 +600,8 @@ function AccountTab({
   ar,
   signedIn,
   phone,
+  screens,
+  accent,
   onSignIn,
   onSignOut,
   onReturns,
@@ -562,6 +610,8 @@ function AccountTab({
   ar: boolean;
   signedIn: boolean;
   phone: string | null;
+  screens: ScreenSettings;
+  accent: string;
   onSignIn: () => void;
   onSignOut: () => void;
   onReturns: () => void;
@@ -596,7 +646,8 @@ function AccountTab({
         ) : (
           <>
             <p className="text-sm text-slate-600">
-              {ar ? "سجّلي الدخول برقم الموبايل" : "Sign in with your phone number"}
+              {screens.account.signedOutText ||
+                (ar ? "سجّلي الدخول برقم الموبايل" : "Sign in with your phone number")}
             </p>
             <div className="mt-3">
               <Btn full onClick={onSignIn}>
@@ -607,8 +658,20 @@ function AccountTab({
         )}
       </div>
 
-      <Row label={ar ? "الاسترجاع والاستبدال" : "Returns & exchanges"} onClick={onReturns} />
-      <Row label={ar ? "اسألينا" : "Ask us a question"} onClick={onEnquiry} />
+      {screens.account.showReturns && (
+        <Row
+          label={
+            screens.account.returnsLabel || (ar ? "الاسترجاع والاستبدال" : "Returns & exchanges")
+          }
+          onClick={onReturns}
+        />
+      )}
+      {screens.account.showRequests && (
+        <Row
+          label={screens.account.requestsLabel || (ar ? "اسألينا" : "Ask us a question")}
+          onClick={onEnquiry}
+        />
+      )}
 
       <p className="px-1 pt-2 text-[11px] leading-relaxed text-slate-400">
         {ar

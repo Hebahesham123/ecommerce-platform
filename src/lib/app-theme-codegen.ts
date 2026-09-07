@@ -1,4 +1,12 @@
-import { BLOCK_META, itemsOf, type AppTheme, type Block, type BlockType, type Item } from "@/lib/app-theme";
+import {
+  BLOCK_META,
+  itemsOf,
+  TAB_DEFAULTS,
+  type AppTheme,
+  type Block,
+  type BlockType,
+  type Item,
+} from "@/lib/app-theme";
 
 /**
  * The app's code, written by the editor.
@@ -133,6 +141,179 @@ export type HomePayload = {
 
 /** Everything the front page needs, in one request. */
 export const fetchHome = () => api<HomePayload>("/home");
+
+export type Variant = {
+  id: string;
+  variantTitle: string | null;
+  sku: string | null;
+  price: number | null;
+  compareAt: number | null;
+  available: number;
+};
+
+export type Product = {
+  id: string;
+  handle: string;
+  name: string;
+  description: string | null;
+  image: string | null;
+  images: string[];
+  category: string | null;
+  vendor: string | null;
+  tags: string[];
+  priceMin: number | null;
+  priceMax: number | null;
+  compareAt: number | null;
+  available: number;
+  variants: Variant[];
+  selectedVariantId: string | null;
+};
+
+export type Collection = {
+  handle: string;
+  title: string;
+  description: string | null;
+  image: string | null;
+  productCount: number;
+};
+
+export type Sort = "manual" | "price-ascending" | "price-descending" | "title-ascending" | "newest";
+
+export type CollectionPayload = {
+  collection: Collection;
+  products: Card[];
+  total: number;
+  offset: number;
+  limit: number;
+  sort: Sort;
+};
+
+export type PricedLine = {
+  itemId: string;
+  productName: string;
+  variantTitle: string | null;
+  sku: string | null;
+  imageUrl: string | null;
+  price: number;
+  quantity: number;
+  maxAvailable: number;
+  /** True when the shop had fewer left than the basket asked for. */
+  adjusted: boolean;
+};
+
+export type PricedCart = {
+  lines: PricedLine[];
+  subtotal: number;
+  itemCount: number;
+  /** Lines that no longer exist or sold out, so the app can say so. */
+  removed: string[];
+};
+
+export type Discount =
+  | { ok: true; code: string; label: string; amount: number; subtotal: number }
+  | { ok: false; reason: string; requiredAmount?: number; requiredQuantity?: number; subtotal: number };
+
+export type Order = {
+  orderNumber: string;
+  total: number;
+  createdAt: string;
+  lifecycle: string;
+  paymentStatus: string;
+  fulfillmentStatus: string;
+};
+
+export type Account = {
+  phone: string;
+  name: string | null;
+  email: string | null;
+  governorate: string | null;
+  city: string | null;
+  address: string | null;
+  orders: Order[];
+};
+
+/** One collection's products. Sorting and paging happen on the server. */
+export const fetchCollection = (handle: string, sort: Sort = "manual", offset = 0, limit = 24) =>
+  api<CollectionPayload>(
+    \`/collections/\${encodeURIComponent(handle)}?sort=\${sort}&offset=\${offset}&limit=\${limit}\`,
+  );
+
+/** One product, by product handle or by variant id. */
+export const fetchProduct = (id: string) => api<Product>(\`/products/\${encodeURIComponent(id)}\`);
+
+/**
+ * What the basket is really worth.
+ *
+ * The app sends only ids and quantities; every price and every "how many are
+ * left" comes back from the shop. A basket held on the phone cannot be talked
+ * into a cheaper total, because the phone never gets a say in the price.
+ */
+export const priceCart = (lines: { itemId: string; quantity: number }[]) =>
+  api<PricedCart>("/cart/price", { method: "POST", body: JSON.stringify({ lines }) });
+
+/** What a code is worth on this basket. Checkout re-runs it, so this is a preview. */
+export const previewDiscount = (code: string, lines: { itemId: string; quantity: number }[]) =>
+  api<Discount>("/discount", { method: "POST", body: JSON.stringify({ code, lines }) });
+
+// ------------------------------------------------------------------ signing in --
+/**
+ * Is this number already known to the shop?
+ *
+ * Asked without a channel, nothing is sent — the shop only answers whether a
+ * code is needed. A returning customer should not have to wait for an SMS to
+ * be told the shop already knows them.
+ */
+export const checkPhone = (phone: string) =>
+  api<{ status: "already_verified" | "needs_code"; phone: string }>("/auth/request-code", {
+    method: "POST",
+    body: JSON.stringify({ phone }),
+  });
+
+/** Send the code, the way the shopper chose. */
+export const requestCode = (phone: string, channel: "sms" | "whatsapp") =>
+  api<{ status: string; phone: string }>("/auth/request-code", {
+    method: "POST",
+    body: JSON.stringify({ phone, channel }),
+  });
+
+/** Trade a code for a token. Keep the token; it is the account. */
+export const verifyCode = (phone: string, code: string, name?: string) =>
+  api<{ token: string; phone: string }>("/auth/verify", {
+    method: "POST",
+    body: JSON.stringify({ phone, code, name }),
+  });
+
+/** A number the shop already trusts needs no code. */
+export const loginVerified = (phone: string) =>
+  api<{ token: string; phone: string }>("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ phone }),
+  });
+
+export const fetchAccount = () => api<Account>("/me");
+export const fetchOrders = () => api<{ orders: Order[] }>("/orders");
+
+export type OrderRequest = {
+  customerName: string;
+  phone: string;
+  email?: string | null;
+  governorate: string;
+  city: string;
+  address: string;
+  note?: string;
+  couponCode?: string | null;
+  lines: { itemId: string; quantity: number }[];
+};
+
+/**
+ * Place the order.
+ *
+ * Stock is taken here and nowhere else: the shop re-prices the basket, then
+ * one database call reserves every line or none of them. Two phones racing
+ * for the last item means one order and one honest "out of stock".
+ */
+export const placeOrder = (payload: OrderRequest) =>
+  api<{ orderNumber: string }>("/orders", { method: "POST", body: JSON.stringify(payload) });
 `,
   };
 }
@@ -195,18 +376,22 @@ export function money(v: number | null) {
 export function ProductTile({
   card,
   width = 128,
+  fill = false,
   onPress,
 }: {
   card: Card;
   width?: number;
+  /** True in a grid, where the column decides the width and the picture squares itself. */
+  fill?: boolean;
   onPress?: (id: string) => void;
 }) {
+  const box = fill ? styles.fillImage : { width, height: width };
   return (
-    <Pressable style={[styles.tile, { width }]} onPress={() => onPress?.(card.id)}>
+    <Pressable style={[styles.tile, fill ? styles.fill : { width }]} onPress={() => onPress?.(card.id)}>
       {card.image ? (
-        <Image source={{ uri: card.image }} style={[styles.tileImage, { width, height: width }]} />
+        <Image source={{ uri: card.image }} style={[styles.tileImage, box]} />
       ) : (
-        <View style={[styles.tileImage, { width, height: width }]} />
+        <View style={[styles.tileImage, box]} />
       )}
       <View style={{ padding: spacing.sm }}>
         <Text style={styles.tileName} numberOfLines={2}>{card.name}</Text>
@@ -226,6 +411,8 @@ const styles = StyleSheet.create({
   heading: { flex: 1, fontSize: 15, fontWeight: "700", color: colors.ink },
   seeAll: { fontSize: 12, fontWeight: "600", color: colors.accent },
   tile: { borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, overflow: "hidden" },
+  fill: { width: "100%" },
+  fillImage: { width: "100%", aspectRatio: 1 },
   tileImage: { backgroundColor: colors.page },
   tileName: { fontSize: 11, lineHeight: 15, color: colors.ink },
   priceRow: { flexDirection: "row", alignItems: "baseline", gap: 6, marginTop: 4 },
@@ -1110,14 +1297,1283 @@ function itemsLiteral(type: BlockType, items: Item[]): string {
   return `[${rendered.join(", ")}]`;
 }
 
-/** Every file the app needs for its home screen, current as of this theme. */
+// ------------------------------------------------------- the other screens --
+/**
+ * The screens below home.
+ *
+ * Home is blocks the merchant arranges, so its code is assembled from them.
+ * These are screens the app already knows how to draw, where what varies is
+ * the wording and which optional parts appear — so their settings arrive as a
+ * constant and the component reads it. Nobody reorders a checkout.
+ */
+function tabBarFile(theme: AppTheme): GeneratedFile {
+  const tabs = theme.tabs
+    .filter((t) => t.visible)
+    .map(
+      (t) =>
+        `  { key: ${q(t.key)}, label: ${q(t.label || TAB_DEFAULTS[t.key].en)}, icon: ${q(
+          TAB_DEFAULTS[t.key].icon,
+        )} },`,
+    )
+    .join("\n");
+
+  return {
+    path: "components/TabBar.tsx",
+    language: "tsx",
+    contents: `/** The bar along the bottom. Generated from the dashboard — App → App theme. */
+import React from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { colors, radius } from "../theme";
+
+export type TabKey = "shop" | "cart" | "orders" | "account";
+
+/** Order, wording and which appear are the merchant's; the keys are not. */
+export const TABS: { key: TabKey; label: string; icon: string }[] = [
+${tabs}
+];
+
+export function TabBar({
+  active,
+  cartCount = 0,
+  onSelect,
+}: {
+  active: TabKey;
+  cartCount?: number;
+  onSelect: (key: TabKey) => void;
+}) {
+  return (
+    <View style={styles.bar}>
+      {TABS.map((t) => {
+        const on = t.key === active;
+        return (
+          <Pressable key={t.key} style={styles.tab} onPress={() => onSelect(t.key)}>
+            <Text style={[styles.icon, on ? styles.on : styles.off]}>{t.icon}</Text>
+            <Text style={[styles.label, on ? styles.on : styles.off]}>{t.label}</Text>
+            {t.key === "cart" && cartCount > 0 ? (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{cartCount}</Text>
+              </View>
+            ) : null}
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  bar: { flexDirection: "row", borderTopWidth: 1, borderTopColor: colors.line, backgroundColor: colors.surface },
+  tab: { flex: 1, alignItems: "center", paddingVertical: 10, gap: 2 },
+  icon: { fontSize: 18, lineHeight: 20 },
+  label: { fontSize: 11, fontWeight: "500" },
+  on: { color: colors.accent },
+  off: { color: colors.inkSoft },
+  badge: { position: "absolute", top: 4, right: "26%", minWidth: 16, height: 16, borderRadius: radius.pill, backgroundColor: colors.accent, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
+  badgeText: { fontSize: 10, fontWeight: "700", color: "#fff" },
+});
+`,
+  };
+}
+
+function screensFile(theme: AppTheme): GeneratedFile {
+  return {
+    path: "screens.ts",
+    language: "ts",
+    contents: `/**
+ * Wording and options for every screen below home.
+ * Generated from the dashboard: App → App theme.
+ *
+ * An empty string means "use the app's own word", so a shop that has not
+ * chosen one still reads correctly in the shopper's language.
+ */
+
+/**
+ * Not \`as const\`: a saved 2 would then be the *type* 2, and code that asks
+ * "is this 3?" would be told the question is meaningless. These are values the
+ * merchant changes, not constants of the app.
+ */
+export const screens = ${JSON.stringify(theme.screens, null, 2)};
+
+export type Screens = typeof screens;
+
+/** The merchant's word when they chose one, otherwise the app's. */
+export const say = (chosen: string, fallback: string) => chosen || fallback;
+`,
+  };
+}
+
+function cartScreenFile(): GeneratedFile {
+  return {
+    path: "components/CartScreen.tsx",
+    language: "tsx",
+    contents: `/** The basket. Wording comes from screens.ts — App → App theme. */
+import React, { useState } from "react";
+import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { colors, radius, spacing } from "../theme";
+import { screens, say } from "../screens";
+import { money } from "./Pieces";
+
+export type CartLine = {
+  itemId: string;
+  productName: string;
+  imageUrl: string | null;
+  price: number;
+  quantity: number;
+  maxAvailable: number;
+};
+
+export function CartScreen({
+  lines,
+  subtotal,
+  discount = 0,
+  onChangeQuantity,
+  onApplyCoupon,
+  onCheckout,
+}: {
+  lines: CartLine[];
+  subtotal: number;
+  discount?: number;
+  onChangeQuantity: (itemId: string, quantity: number) => void;
+  onApplyCoupon?: (code: string) => void;
+  onCheckout: () => void;
+}) {
+  const c = screens.cart;
+  const [code, setCode] = useState("");
+  const total = Math.max(0, subtotal - discount);
+
+  if (!lines.length) {
+    return (
+      <View style={styles.empty}>
+        <Text style={styles.emptyText}>{say(c.emptyText, "The basket is empty")}</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={{ flex: 1 }}>
+      <ScrollView contentContainerStyle={styles.list}>
+        {lines.map((l) => (
+          <View key={l.itemId} style={styles.line}>
+            {l.imageUrl ? (
+              <Image source={{ uri: l.imageUrl }} style={styles.thumb} />
+            ) : (
+              <View style={styles.thumb} />
+            )}
+            <View style={{ flex: 1 }}>
+              <Text style={styles.name} numberOfLines={2}>{l.productName}</Text>
+              <Text style={styles.price}>{money(l.price)}</Text>
+            </View>
+            <View style={styles.stepper}>
+              <Pressable
+                style={styles.step}
+                onPress={() => onChangeQuantity(l.itemId, l.quantity - 1)}
+              >
+                <Text style={styles.stepText}>−</Text>
+              </Pressable>
+              <Text style={styles.qty}>{l.quantity}</Text>
+              <Pressable
+                style={[styles.step, l.quantity >= l.maxAvailable ? styles.stepOff : null]}
+                disabled={l.quantity >= l.maxAvailable}
+                onPress={() => onChangeQuantity(l.itemId, l.quantity + 1)}
+              >
+                <Text style={styles.stepText}>+</Text>
+              </Pressable>
+            </View>
+          </View>
+        ))}
+
+        {c.showCoupon && onApplyCoupon ? (
+          <View style={styles.coupon}>
+            <TextInput
+              style={styles.couponInput}
+              value={code}
+              onChangeText={setCode}
+              autoCapitalize="characters"
+              placeholder={say(c.couponLabel, "Discount code")}
+              placeholderTextColor={colors.inkSoft}
+            />
+            <Pressable style={styles.couponCta} onPress={() => onApplyCoupon(code.trim())}>
+              <Text style={styles.couponCtaText}>Apply</Text>
+            </Pressable>
+          </View>
+        ) : null}
+      </ScrollView>
+
+      <View style={styles.footer}>
+        <View style={styles.totalRow}>
+          <Text style={styles.totalLabel}>{say(c.totalLabel, "Total")}</Text>
+          <Text style={styles.total}>{money(total)}</Text>
+        </View>
+        <Pressable style={styles.cta} onPress={onCheckout}>
+          <Text style={styles.ctaText}>{say(c.checkoutLabel, "Checkout")}</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  empty: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl },
+  emptyText: { fontSize: 14, color: colors.inkSoft },
+  list: { padding: spacing.lg, gap: spacing.sm },
+  line: { flexDirection: "row", alignItems: "center", gap: spacing.md, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, padding: 10 },
+  thumb: { width: 56, height: 56, borderRadius: radius.md, backgroundColor: colors.page },
+  name: { fontSize: 12, color: colors.ink },
+  price: { marginTop: 4, fontSize: 14, fontWeight: "700", color: colors.ink },
+  stepper: { flexDirection: "row", alignItems: "center", gap: 6 },
+  step: { width: 28, height: 28, alignItems: "center", justifyContent: "center", borderRadius: radius.sm, borderWidth: 1, borderColor: colors.line },
+  stepOff: { opacity: 0.4 },
+  stepText: { fontSize: 14, color: colors.inkMuted },
+  qty: { width: 20, textAlign: "center", fontSize: 14, fontWeight: "600", color: colors.ink },
+  coupon: { flexDirection: "row", alignItems: "center", gap: spacing.sm, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, padding: 8 },
+  couponInput: { flex: 1, height: 36, paddingHorizontal: 8, fontSize: 13, color: colors.ink },
+  couponCta: { borderRadius: radius.sm, backgroundColor: colors.accent, paddingHorizontal: 14, paddingVertical: 8 },
+  couponCtaText: { fontSize: 12, fontWeight: "700", color: "#fff" },
+  footer: { borderTopWidth: 1, borderTopColor: colors.line, backgroundColor: colors.surface, padding: spacing.lg },
+  totalRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  totalLabel: { fontSize: 13, color: colors.inkMuted },
+  total: { fontSize: 18, fontWeight: "700", color: colors.ink },
+  cta: { marginTop: spacing.md, borderRadius: radius.md, backgroundColor: colors.accent, paddingVertical: 12, alignItems: "center" },
+  ctaText: { fontSize: 14, fontWeight: "700", color: "#fff" },
+});
+`,
+  };
+}
+
+function checkoutScreenFile(): GeneratedFile {
+  return {
+    path: "components/CheckoutScreen.tsx",
+    language: "tsx",
+    contents: `/**
+ * Cash on delivery. Wording comes from screens.ts — App → App theme.
+ *
+ * Name, phone, governorate, city and address are always asked: an order
+ * cannot be delivered without them and the server refuses an incomplete one.
+ * The phone is the signed-in account's and cannot be edited — the server
+ * refuses any other.
+ */
+import React, { useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { colors, radius, spacing } from "../theme";
+import { screens, say } from "../screens";
+
+export type Address = {
+  customerName: string;
+  governorate: string;
+  city: string;
+  address: string;
+  email?: string;
+  note?: string;
+};
+
+export function CheckoutScreen({
+  phone,
+  busy,
+  onPlace,
+}: {
+  phone: string;
+  busy?: boolean;
+  onPlace: (address: Address) => void;
+}) {
+  const c = screens.checkout;
+  const [form, setForm] = useState<Address>({
+    customerName: "",
+    governorate: "",
+    city: "",
+    address: "",
+    email: "",
+    note: "",
+  });
+  const set = (k: keyof Address) => (v: string) => setForm((f) => ({ ...f, [k]: v }));
+  const ready = Boolean(form.customerName && form.governorate && form.city && form.address);
+
+  return (
+    <ScrollView contentContainerStyle={styles.wrap}>
+      <Text style={styles.title}>{say(c.title, "Cash on delivery")}</Text>
+      {c.note ? <Text style={styles.note}>{c.note}</Text> : null}
+
+      <Field label="Name" value={form.customerName} onChange={set("customerName")} />
+      <Field label="Phone" value={phone} onChange={() => {}} editable={false} />
+      {c.askEmail ? <Field label="Email" value={form.email ?? ""} onChange={set("email")} /> : null}
+      <Field label="Governorate" value={form.governorate} onChange={set("governorate")} />
+      <Field label="City" value={form.city} onChange={set("city")} />
+      <Field label="Address" value={form.address} onChange={set("address")} />
+      {c.askNote ? <Field label="Order note" value={form.note ?? ""} onChange={set("note")} /> : null}
+
+      <Pressable
+        style={[styles.cta, !ready || busy ? styles.ctaOff : null]}
+        disabled={!ready || busy}
+        onPress={() => onPlace(form)}
+      >
+        <Text style={styles.ctaText}>{say(c.placeLabel, "Place the order")}</Text>
+      </Pressable>
+    </ScrollView>
+  );
+}
+
+function Field({
+  label,
+  value,
+  onChange,
+  editable = true,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  editable?: boolean;
+}) {
+  return (
+    <View>
+      <Text style={styles.label}>{label}</Text>
+      <TextInput
+        value={value}
+        onChangeText={onChange}
+        editable={editable}
+        style={[styles.input, editable ? null : styles.inputOff]}
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  wrap: { padding: spacing.lg, gap: spacing.md },
+  title: { fontSize: 16, fontWeight: "700", color: colors.ink },
+  note: { fontSize: 12, color: colors.inkSoft },
+  label: { fontSize: 11, fontWeight: "500", color: colors.inkMuted },
+  input: { marginTop: 4, height: 44, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, paddingHorizontal: 12, fontSize: 14, color: colors.ink },
+  inputOff: { backgroundColor: colors.page, color: colors.inkMuted },
+  cta: { marginTop: spacing.sm, borderRadius: radius.md, backgroundColor: colors.accent, paddingVertical: 13, alignItems: "center" },
+  ctaOff: { opacity: 0.5 },
+  ctaText: { fontSize: 14, fontWeight: "700", color: "#fff" },
+});
+`,
+  };
+}
+
+function accountScreenFile(): GeneratedFile {
+  return {
+    path: "components/AccountScreen.tsx",
+    language: "tsx",
+    contents: `/** The account tab. Wording and rows come from screens.ts — App → App theme. */
+import React from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { colors, radius, spacing } from "../theme";
+import { screens, say } from "../screens";
+
+export type AccountRow = "returns" | "requests" | "reviews";
+
+export function AccountScreen({
+  phone,
+  name,
+  onSignIn,
+  onSignOut,
+  onOpen,
+}: {
+  phone: string | null;
+  name?: string | null;
+  onSignIn: () => void;
+  onSignOut: () => void;
+  onOpen: (row: AccountRow) => void;
+}) {
+  const a = screens.account;
+  const rows: { key: AccountRow; label: string }[] = [
+    ...(a.showReturns ? [{ key: "returns" as const, label: say(a.returnsLabel, "Returns & exchanges") }] : []),
+    ...(a.showRequests ? [{ key: "requests" as const, label: say(a.requestsLabel, "Ask us a question") }] : []),
+    ...(a.showReviews ? [{ key: "reviews" as const, label: say(a.reviewsLabel, "Reviews") }] : []),
+  ];
+
+  return (
+    <ScrollView contentContainerStyle={styles.wrap}>
+      <View style={styles.card}>
+        {phone ? (
+          <>
+            <Text style={styles.name}>{name || "Customer"}</Text>
+            <Text style={styles.phone}>{phone}</Text>
+            <Pressable onPress={onSignOut}>
+              <Text style={styles.signOut}>Sign out</Text>
+            </Pressable>
+          </>
+        ) : (
+          <>
+            <Text style={styles.prompt}>
+              {say(a.signedOutText, "Sign in with your phone number")}
+            </Text>
+            <Pressable style={styles.cta} onPress={onSignIn}>
+              <Text style={styles.ctaText}>Sign in</Text>
+            </Pressable>
+          </>
+        )}
+      </View>
+
+      {rows.map((r) => (
+        <Pressable key={r.key} style={styles.row} onPress={() => onOpen(r.key)}>
+          <Text style={styles.rowText}>{r.label}</Text>
+          <Text style={styles.chevron}>›</Text>
+        </Pressable>
+      ))}
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  wrap: { padding: spacing.lg, gap: spacing.sm },
+  card: { borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, padding: spacing.lg },
+  name: { fontSize: 14, fontWeight: "700", color: colors.ink },
+  phone: { marginTop: 2, fontSize: 12, color: colors.inkSoft },
+  signOut: { marginTop: 12, fontSize: 12, fontWeight: "600", color: "#e11d48" },
+  prompt: { fontSize: 14, color: colors.inkMuted },
+  cta: { marginTop: spacing.md, borderRadius: radius.md, backgroundColor: colors.accent, paddingVertical: 12, alignItems: "center" },
+  ctaText: { fontSize: 14, fontWeight: "700", color: "#fff" },
+  row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, paddingHorizontal: spacing.lg, paddingVertical: 14 },
+  rowText: { fontSize: 14, fontWeight: "500", color: colors.ink },
+  chevron: { fontSize: 18, color: colors.inkSoft },
+});
+`,
+  };
+}
+
+// ------------------------------------------------------- one collection --
+function collectionScreenFile(): GeneratedFile {
+  return {
+    path: "components/CollectionScreen.tsx",
+    language: "tsx",
+    contents: `/**
+ * One collection, as a grid. Columns, sorting and the default order are the
+ * merchant's — App → App theme → Collection.
+ *
+ * Sorting is a request to the shop, not a shuffle of what arrived: sorting
+ * twenty-four loaded products by price would put the cheapest of that page
+ * first and quietly hide the cheaper ones on page two.
+ */
+import React, { useCallback, useEffect, useState } from "react";
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { colors, radius, spacing } from "../theme";
+import { screens } from "../screens";
+import { fetchCollection, type Card, type CollectionPayload, type Sort } from "../api";
+import { ProductTile } from "./Pieces";
+
+const SORTS: { key: Sort; label: string }[] = [
+  { key: "manual", label: "Featured" },
+  { key: "newest", label: "Newest" },
+  { key: "price-ascending", label: "Price ↑" },
+  { key: "price-descending", label: "Price ↓" },
+  { key: "title-ascending", label: "A–Z" },
+];
+
+const PAGE = 24;
+
+export function CollectionScreen({
+  handle,
+  onOpenProduct,
+}: {
+  handle: string;
+  onOpenProduct: (id: string) => void;
+}) {
+  const c = screens.collection;
+  const [sort, setSort] = useState<Sort>((c.sortDefault as Sort) || "manual");
+  const [data, setData] = useState<CollectionPayload | null>(null);
+  const [products, setProducts] = useState<Card[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    setData(null);
+    setProducts([]);
+    setError(null);
+    fetchCollection(handle, sort, 0, PAGE)
+      .then((d) => {
+        if (!live) return;
+        setData(d);
+        setProducts(d.products);
+      })
+      .catch((e) => live && setError(String(e.message ?? e)));
+    return () => {
+      live = false;
+    };
+  }, [handle, sort]);
+
+  const more = useCallback(() => {
+    if (!data || loadingMore || products.length >= data.total) return;
+    setLoadingMore(true);
+    fetchCollection(handle, sort, products.length, PAGE)
+      .then((d) => setProducts((p) => [...p, ...d.products]))
+      .catch(() => {})
+      .finally(() => setLoadingMore(false));
+  }, [data, handle, sort, products.length, loadingMore]);
+
+  if (error) return <View style={styles.center}><Text style={styles.error}>{error}</Text></View>;
+  if (!data) return <View style={styles.center}><ActivityIndicator color={colors.accent} /></View>;
+
+  const columns = c.columns === 3 ? 3 : 2;
+
+  return (
+    <View style={styles.screen}>
+      <View style={styles.head}>
+        <Text style={styles.title}>{data.collection.title}</Text>
+        <Text style={styles.count}>{data.total} products</Text>
+      </View>
+
+      {c.showSort ? (
+        <View style={styles.sorts}>
+          {SORTS.map((s) => (
+            <Pressable
+              key={s.key}
+              style={[styles.sort, s.key === sort ? styles.sortOn : null]}
+              onPress={() => setSort(s.key)}
+            >
+              <Text style={[styles.sortText, s.key === sort ? styles.sortTextOn : null]}>
+                {s.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+
+      <FlatList
+        key={columns}
+        data={products}
+        numColumns={columns}
+        keyExtractor={(p) => p.id}
+        columnWrapperStyle={styles.row}
+        contentContainerStyle={styles.grid}
+        onEndReachedThreshold={0.5}
+        onEndReached={more}
+        renderItem={({ item }) => (
+          <View style={{ flex: 1 / columns }}>
+            <ProductTile card={item} fill onPress={onOpenProduct} />
+          </View>
+        )}
+        ListEmptyComponent={
+          <Text style={styles.empty}>Nothing in this collection yet.</Text>
+        }
+        ListFooterComponent={
+          loadingMore ? <ActivityIndicator style={{ margin: 16 }} color={colors.accent} /> : null
+        }
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.page },
+  head: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg },
+  title: { fontSize: 20, fontWeight: "700", color: colors.ink },
+  count: { marginTop: 2, fontSize: 12, color: colors.inkSoft },
+  sorts: { flexDirection: "row", flexWrap: "wrap", gap: 6, padding: spacing.lg, paddingBottom: 0 },
+  sort: { borderRadius: radius.pill, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 10, paddingVertical: 5 },
+  sortOn: { backgroundColor: colors.accent, borderColor: colors.accent },
+  sortText: { fontSize: 11, color: colors.inkMuted },
+  sortTextOn: { color: "#fff", fontWeight: "600" },
+  grid: { padding: spacing.lg, gap: spacing.md },
+  row: { gap: spacing.md },
+  empty: { padding: spacing.xl, textAlign: "center", fontSize: 13, color: colors.inkSoft },
+  center: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl },
+  error: { color: "#e11d48", fontSize: 13 },
+});
+`,
+  };
+}
+
+// ---------------------------------------------------------- one product --
+function productScreenFile(): GeneratedFile {
+  return {
+    path: "components/ProductScreen.tsx",
+    language: "tsx",
+    contents: `/**
+ * One product. What appears is the merchant's — App → App theme → Product.
+ *
+ * The basket holds variant ids, never products: a product with three sizes has
+ * three different things to have in stock, and an order line that only knows
+ * the product cannot say which one to send.
+ */
+import React, { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { colors, radius, spacing } from "../theme";
+import { screens, say } from "../screens";
+import { fetchProduct, type Product, type Variant } from "../api";
+import { money } from "./Pieces";
+
+export function ProductScreen({
+  id,
+  onAdd,
+}: {
+  id: string;
+  onAdd: (variantId: string, product: Product) => void;
+}) {
+  const p = screens.product;
+  const [product, setProduct] = useState<Product | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [chosen, setChosen] = useState<string | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    setProduct(null);
+    setError(null);
+    fetchProduct(id)
+      .then((d) => {
+        if (!live) return;
+        setProduct(d);
+        const first = d.variants.find((v) => v.available > 0) ?? d.variants[0];
+        setChosen(d.selectedVariantId ?? first?.id ?? null);
+      })
+      .catch((e) => live && setError(String(e.message ?? e)));
+    return () => {
+      live = false;
+    };
+  }, [id]);
+
+  if (error) return <View style={styles.center}><Text style={styles.error}>{error}</Text></View>;
+  if (!product) return <View style={styles.center}><ActivityIndicator color={colors.accent} /></View>;
+
+  const variant: Variant | undefined =
+    product.variants.find((v) => v.id === chosen) ?? product.variants[0];
+  const price = variant?.price ?? product.priceMin;
+  const compareAt = variant?.compareAt ?? product.compareAt;
+  const left = variant ? variant.available : product.available;
+  const soldOut = left <= 0;
+  const images = product.images.length ? product.images : product.image ? [product.image] : [];
+
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.page }}>
+      <ScrollView contentContainerStyle={styles.wrap}>
+        {images.length ? (
+          <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false}>
+            {images.map((src) => (
+              <Image key={src} source={{ uri: src }} style={styles.hero} />
+            ))}
+          </ScrollView>
+        ) : (
+          <View style={styles.hero} />
+        )}
+
+        <View style={styles.body}>
+          {product.vendor ? <Text style={styles.vendor}>{product.vendor}</Text> : null}
+          <Text style={styles.name}>{product.name}</Text>
+
+          <View style={styles.priceRow}>
+            <Text style={styles.price}>{money(price)}</Text>
+            {compareAt != null && price != null && compareAt > price ? (
+              <Text style={styles.compareAt}>{money(compareAt)}</Text>
+            ) : null}
+          </View>
+
+          {p.showVariants && product.variants.length > 1 ? (
+            <View style={styles.variants}>
+              {product.variants.map((v) => {
+                const on = v.id === chosen;
+                const out = v.available <= 0;
+                return (
+                  <Pressable
+                    key={v.id}
+                    disabled={out}
+                    style={[styles.variant, on ? styles.variantOn : null, out ? styles.variantOut : null]}
+                    onPress={() => setChosen(v.id)}
+                  >
+                    <Text style={[styles.variantText, on ? styles.variantTextOn : null]}>
+                      {v.variantTitle ?? "One size"}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : null}
+
+          {p.showStock && !soldOut && left <= 5 ? (
+            <Text style={styles.stock}>Only {left} left</Text>
+          ) : null}
+
+          {p.showDescription && product.description ? (
+            <Text style={styles.description}>{product.description}</Text>
+          ) : null}
+        </View>
+      </ScrollView>
+
+      <View style={styles.footer}>
+        <Pressable
+          style={[styles.cta, soldOut ? styles.ctaOff : null]}
+          disabled={soldOut || !variant}
+          onPress={() => variant && onAdd(variant.id, product)}
+        >
+          <Text style={styles.ctaText}>
+            {soldOut ? say(p.soldOutLabel, "Sold out") : say(p.addLabel, "Add to basket")}
+          </Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  wrap: { paddingBottom: spacing.xl },
+  hero: { width: 320, height: 320, backgroundColor: colors.surface },
+  body: { padding: spacing.lg, gap: spacing.sm },
+  vendor: { fontSize: 11, letterSpacing: 1, textTransform: "uppercase", color: colors.inkSoft },
+  name: { fontSize: 20, fontWeight: "700", color: colors.ink },
+  priceRow: { flexDirection: "row", alignItems: "baseline", gap: 8 },
+  price: { fontSize: 20, fontWeight: "700", color: colors.accent },
+  compareAt: { fontSize: 13, color: colors.inkSoft, textDecorationLine: "line-through" },
+  variants: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 4 },
+  variant: { borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 12, paddingVertical: 8 },
+  variantOn: { borderColor: colors.accent, backgroundColor: colors.accent },
+  variantOut: { opacity: 0.35 },
+  variantText: { fontSize: 12, color: colors.ink },
+  variantTextOn: { color: "#fff", fontWeight: "600" },
+  stock: { fontSize: 12, fontWeight: "600", color: "#b45309" },
+  description: { marginTop: spacing.sm, fontSize: 13, lineHeight: 20, color: colors.inkMuted },
+  footer: { borderTopWidth: 1, borderTopColor: colors.line, backgroundColor: colors.surface, padding: spacing.lg },
+  cta: { borderRadius: radius.md, backgroundColor: colors.accent, paddingVertical: 14, alignItems: "center" },
+  ctaOff: { opacity: 0.45 },
+  ctaText: { fontSize: 15, fontWeight: "700", color: "#fff" },
+  center: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl },
+  error: { color: "#e11d48", fontSize: 13 },
+});
+`,
+  };
+}
+
+// ------------------------------------------------------------ signing in --
+function signInScreenFile(): GeneratedFile {
+  return {
+    path: "components/SignInScreen.tsx",
+    language: "tsx",
+    contents: `/**
+ * Signing in with a phone number.
+ *
+ * The number is asked first and checked before anything is sent, because a
+ * shopper the shop already knows should not be made to wait for a code to be
+ * told so. Only an unknown number is offered SMS or WhatsApp — and it is the
+ * shopper who picks, since the one that reaches them is the one they use.
+ */
+import React, { useState } from "react";
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { colors, radius, spacing } from "../theme";
+import { checkPhone, loginVerified, requestCode, verifyCode } from "../api";
+
+type Stage = "phone" | "choose" | "code";
+
+export function SignInScreen({ onSignedIn }: { onSignedIn: (token: string, phone: string) => void }) {
+  const [stage, setStage] = useState<Stage>("phone");
+  const [phone, setPhone] = useState("");
+  const [name, setName] = useState("");
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const run = async (fn: () => Promise<void>) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await fn();
+    } catch (e) {
+      setError(String((e as Error).message ?? e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const check = () =>
+    run(async () => {
+      const res = await checkPhone(phone);
+      setPhone(res.phone);
+      if (res.status === "already_verified") {
+        const t = await loginVerified(res.phone);
+        onSignedIn(t.token, t.phone);
+      } else {
+        setStage("choose");
+      }
+    });
+
+  const send = (channel: "sms" | "whatsapp") =>
+    run(async () => {
+      await requestCode(phone, channel);
+      setStage("code");
+    });
+
+  const verify = () =>
+    run(async () => {
+      const t = await verifyCode(phone, code, name || undefined);
+      onSignedIn(t.token, t.phone);
+    });
+
+  return (
+    <View style={styles.wrap}>
+      <Text style={styles.title}>Sign in</Text>
+
+      {stage === "phone" ? (
+        <>
+          <Text style={styles.help}>Your phone number is your account.</Text>
+          <TextInput
+            style={styles.input}
+            value={phone}
+            onChangeText={setPhone}
+            keyboardType="phone-pad"
+            placeholder="01xxxxxxxxx"
+            placeholderTextColor={colors.inkSoft}
+          />
+          <Cta label="Continue" busy={busy} onPress={check} />
+        </>
+      ) : null}
+
+      {stage === "choose" ? (
+        <>
+          <Text style={styles.help}>Where should we send your code?</Text>
+          <View style={styles.row}>
+            <Pressable style={styles.choice} onPress={() => send("whatsapp")}>
+              <Text style={styles.choiceText}>WhatsApp</Text>
+            </Pressable>
+            <Pressable style={styles.choice} onPress={() => send("sms")}>
+              <Text style={styles.choiceText}>SMS</Text>
+            </Pressable>
+          </View>
+          {busy ? <ActivityIndicator color={colors.accent} /> : null}
+        </>
+      ) : null}
+
+      {stage === "code" ? (
+        <>
+          <Text style={styles.help}>Enter the code we sent to {phone}.</Text>
+          <TextInput
+            style={styles.input}
+            value={code}
+            onChangeText={setCode}
+            keyboardType="number-pad"
+            placeholder="000000"
+            placeholderTextColor={colors.inkSoft}
+          />
+          <TextInput
+            style={styles.input}
+            value={name}
+            onChangeText={setName}
+            placeholder="Your name"
+            placeholderTextColor={colors.inkSoft}
+          />
+          <Cta label="Sign in" busy={busy} onPress={verify} />
+          <Pressable onPress={() => setStage("choose")}>
+            <Text style={styles.again}>Send it again</Text>
+          </Pressable>
+        </>
+      ) : null}
+
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+    </View>
+  );
+}
+
+function Cta({ label, busy, onPress }: { label: string; busy: boolean; onPress: () => void }) {
+  return (
+    <Pressable style={[styles.cta, busy ? styles.ctaOff : null]} disabled={busy} onPress={onPress}>
+      <Text style={styles.ctaText}>{busy ? "…" : label}</Text>
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  wrap: { flex: 1, backgroundColor: colors.page, padding: spacing.lg, gap: spacing.md },
+  title: { fontSize: 20, fontWeight: "700", color: colors.ink },
+  help: { fontSize: 13, color: colors.inkMuted },
+  input: { height: 46, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, paddingHorizontal: 12, fontSize: 15, color: colors.ink },
+  row: { flexDirection: "row", gap: spacing.sm },
+  choice: { flex: 1, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, paddingVertical: 13, alignItems: "center" },
+  choiceText: { fontSize: 14, fontWeight: "600", color: colors.ink },
+  cta: { borderRadius: radius.md, backgroundColor: colors.accent, paddingVertical: 13, alignItems: "center" },
+  ctaOff: { opacity: 0.5 },
+  ctaText: { fontSize: 15, fontWeight: "700", color: "#fff" },
+  again: { textAlign: "center", fontSize: 12, color: colors.accent },
+  error: { fontSize: 12, color: "#e11d48" },
+});
+`,
+  };
+}
+
+// --------------------------------------------------------------- orders --
+function ordersScreenFile(): GeneratedFile {
+  return {
+    path: "components/OrdersScreen.tsx",
+    language: "tsx",
+    contents: `/** Past orders for the signed-in number. */
+import React, { useEffect, useState } from "react";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { colors, radius, spacing } from "../theme";
+import { fetchOrders, type Order } from "../api";
+import { money } from "./Pieces";
+
+export function OrdersScreen({
+  signedIn,
+  onSignIn,
+}: {
+  signedIn: boolean;
+  onSignIn: () => void;
+}) {
+  const [orders, setOrders] = useState<Order[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!signedIn) return;
+    let live = true;
+    fetchOrders()
+      .then((d) => live && setOrders(d.orders))
+      .catch((e) => live && setError(String(e.message ?? e)));
+    return () => {
+      live = false;
+    };
+  }, [signedIn]);
+
+  if (!signedIn) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.empty}>Sign in to see your orders.</Text>
+        <Pressable style={styles.cta} onPress={onSignIn}>
+          <Text style={styles.ctaText}>Sign in</Text>
+        </Pressable>
+      </View>
+    );
+  }
+  if (error) return <View style={styles.center}><Text style={styles.error}>{error}</Text></View>;
+  if (!orders) return <View style={styles.center}><ActivityIndicator color={colors.accent} /></View>;
+  if (!orders.length)
+    return <View style={styles.center}><Text style={styles.empty}>No orders yet.</Text></View>;
+
+  return (
+    <ScrollView contentContainerStyle={styles.list}>
+      {orders.map((o) => (
+        <View key={o.orderNumber} style={styles.card}>
+          <View style={styles.row}>
+            <Text style={styles.number}>{o.orderNumber}</Text>
+            <Text style={styles.total}>{money(o.total)}</Text>
+          </View>
+          <View style={styles.row}>
+            <Text style={styles.date}>{new Date(o.createdAt).toLocaleDateString()}</Text>
+            <Text style={styles.status}>{o.fulfillmentStatus || o.lifecycle}</Text>
+          </View>
+        </View>
+      ))}
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  list: { padding: spacing.lg, gap: spacing.sm },
+  card: { borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, padding: spacing.lg, gap: 6 },
+  row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  number: { fontSize: 14, fontWeight: "700", color: colors.ink },
+  total: { fontSize: 14, fontWeight: "700", color: colors.accent },
+  date: { fontSize: 12, color: colors.inkSoft },
+  status: { fontSize: 11, fontWeight: "600", color: colors.inkMuted, textTransform: "capitalize" },
+  center: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl, gap: spacing.md },
+  empty: { fontSize: 14, color: colors.inkSoft },
+  error: { color: "#e11d48", fontSize: 13 },
+  cta: { borderRadius: radius.md, backgroundColor: colors.accent, paddingHorizontal: 24, paddingVertical: 12 },
+  ctaText: { fontSize: 14, fontWeight: "700", color: "#fff" },
+});
+`,
+  };
+}
+
+// ------------------------------------------------------- the app itself --
+function appFile(theme: AppTheme): GeneratedFile {
+  const first = (theme.tabs.find((t) => t.visible) ?? theme.tabs[0]).key;
+  return {
+    path: "App.tsx",
+    language: "tsx",
+    contents: `/**
+ * The whole app: the tabs along the bottom, and what sits above them.
+ *
+ * Two things live here because everything else needs them and nothing else
+ * owns them — the basket and the signed-in token. The basket is kept as ids
+ * and quantities only; every price on screen comes back from the shop through
+ * /cart/price, so a basket edited on the phone cannot make anything cheaper.
+ *
+ * Generated from the dashboard — App → App theme. The order and wording of
+ * the tabs are the merchant's; edit them there, not here.
+ */
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { Pressable, SafeAreaView, StatusBar, StyleSheet, Text, View } from "react-native";
+import { colors, spacing, theme } from "./theme";
+import { screens, say } from "./screens";
+import {
+  placeOrder,
+  previewDiscount,
+  priceCart,
+  setToken,
+  type PricedCart,
+  type Product,
+} from "./api";
+import HomeScreen from "./HomeScreen";
+import { TabBar, type TabKey } from "./components/TabBar";
+import { CollectionScreen } from "./components/CollectionScreen";
+import { ProductScreen } from "./components/ProductScreen";
+import { CartScreen } from "./components/CartScreen";
+import { CheckoutScreen, type Address } from "./components/CheckoutScreen";
+import { AccountScreen, type AccountRow } from "./components/AccountScreen";
+import { OrdersScreen } from "./components/OrdersScreen";
+import { SignInScreen } from "./components/SignInScreen";
+
+/** A screen pushed on top of a tab. Tabs themselves are not pushed. */
+type Screen =
+  | { kind: "collection"; handle: string; title?: string }
+  | { kind: "product"; id: string }
+  | { kind: "checkout" }
+  | { kind: "signin" }
+  | { kind: "placed"; orderNumber: string };
+
+type Line = { itemId: string; quantity: number };
+
+export default function App() {
+  const [tab, setTab] = useState<TabKey>(${q(first)});
+  const [stack, setStack] = useState<Screen[]>([]);
+  const [lines, setLines] = useState<Line[]>([]);
+  const [cart, setCart] = useState<PricedCart | null>(null);
+  const [coupon, setCoupon] = useState<{ code: string; amount: number } | null>(null);
+  const [phone, setPhone] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+
+  const top = stack[stack.length - 1];
+
+  /** A note says its piece and goes; one that lingers is in the way. */
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(null), 2600);
+    return () => clearTimeout(t);
+  }, [notice]);
+  const push = (s: Screen) => setStack((v) => [...v, s]);
+  const pop = () => setStack((v) => v.slice(0, -1));
+
+  /**
+   * Re-price whenever the basket changes.
+   *
+   * The answer is the shop's, and it can disagree with the phone: a line that
+   * sold out comes back missing, and one asked for in fives when three are
+   * left comes back as three. The basket follows the shop, not the other way.
+   */
+  useEffect(() => {
+    if (!lines.length) {
+      setCart(null);
+      return;
+    }
+    let live = true;
+    priceCart(lines)
+      .then((c) => {
+        if (!live) return;
+        setCart(c);
+        const corrected = c.lines.map((l) => ({ itemId: l.itemId, quantity: l.quantity }));
+        if (corrected.length !== lines.length || c.lines.some((l) => l.adjusted)) {
+          setLines(corrected);
+          if (c.removed.length) setNotice("Some items sold out and were removed.");
+        }
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [lines]);
+
+  const count = useMemo(() => lines.reduce((n, l) => n + l.quantity, 0), [lines]);
+
+  const add = useCallback((variantId: string, _product: Product) => {
+    setLines((v) => {
+      const found = v.find((l) => l.itemId === variantId);
+      return found
+        ? v.map((l) => (l.itemId === variantId ? { ...l, quantity: l.quantity + 1 } : l))
+        : [...v, { itemId: variantId, quantity: 1 }];
+    });
+    setNotice("Added to your basket");
+  }, []);
+
+  const setQuantity = useCallback((itemId: string, quantity: number) => {
+    setLines((v) =>
+      quantity <= 0
+        ? v.filter((l) => l.itemId !== itemId)
+        : v.map((l) => (l.itemId === itemId ? { ...l, quantity } : l)),
+    );
+  }, []);
+
+  const applyCoupon = useCallback(
+    async (code: string) => {
+      if (!code) return setCoupon(null);
+      try {
+        const res = await previewDiscount(code, lines);
+        if (res.ok) {
+          setCoupon({ code: res.code, amount: res.amount });
+          setNotice(res.label);
+        } else {
+          setCoupon(null);
+          setNotice("That code does not apply to this basket.");
+        }
+      } catch {
+        setCoupon(null);
+        setNotice("That code could not be checked.");
+      }
+    },
+    [lines],
+  );
+
+  const signedIn = (token: string, who: string) => {
+    // The token is the account. A real build should keep it in secure storage
+    // (react-native-keychain, or AsyncStorage at a minimum) and hand it back to
+    // setToken() on launch, so a shopper signs in once rather than every time.
+    setToken(token);
+    setPhone(who);
+    setStack((v) => v.filter((s) => s.kind !== "signin"));
+  };
+
+  const checkout = () => {
+    if (!phone) return push({ kind: "signin" });
+    push({ kind: "checkout" });
+  };
+
+  const place = async (address: Address) => {
+    if (!phone) return;
+    setBusy(true);
+    try {
+      const res = await placeOrder({
+        ...address,
+        phone,
+        couponCode: coupon?.code ?? null,
+        lines,
+      });
+      setLines([]);
+      setCoupon(null);
+      setStack([{ kind: "placed", orderNumber: res.orderNumber }]);
+    } catch (e) {
+      setNotice(String((e as Error).message ?? e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openAccountRow = (row: AccountRow) => {
+    // Returns, questions and reviews each have their own endpoint; until this
+    // build wires a screen for them, say so rather than doing nothing at all.
+    setNotice(row === "reviews" ? "Reviews are on the home screen." : "Coming soon in the app.");
+  };
+
+  const goTab = (k: TabKey) => {
+    setStack([]);
+    setTab(k);
+  };
+
+  const body = top ? (
+    top.kind === "collection" ? (
+      <CollectionScreen handle={top.handle} onOpenProduct={(id) => push({ kind: "product", id })} />
+    ) : top.kind === "product" ? (
+      <ProductScreen id={top.id} onAdd={add} />
+    ) : top.kind === "checkout" ? (
+      <CheckoutScreen phone={phone ?? ""} busy={busy} onPlace={place} />
+    ) : top.kind === "signin" ? (
+      <SignInScreen onSignedIn={signedIn} />
+    ) : (
+      <View style={styles.done}>
+        <Text style={styles.doneTitle}>Thank you</Text>
+        <Text style={styles.doneText}>Your order is {top.orderNumber}.</Text>
+        <Pressable style={styles.doneCta} onPress={() => { setStack([]); goTab("shop"); }}>
+          <Text style={styles.doneCtaText}>Keep shopping</Text>
+        </Pressable>
+      </View>
+    )
+  ) : tab === "shop" ? (
+    <HomeScreen
+      onOpenCollection={(handle) => push({ kind: "collection", handle })}
+      onOpenProduct={(id) => push({ kind: "product", id })}
+    />
+  ) : tab === "cart" ? (
+    <CartScreen
+      lines={cart?.lines ?? []}
+      subtotal={cart?.subtotal ?? 0}
+      discount={coupon?.amount ?? 0}
+      onChangeQuantity={setQuantity}
+      onApplyCoupon={screens.cart.showCoupon ? applyCoupon : undefined}
+      onCheckout={checkout}
+    />
+  ) : tab === "orders" ? (
+    <OrdersScreen signedIn={Boolean(phone)} onSignIn={() => push({ kind: "signin" })} />
+  ) : (
+    <AccountScreen
+      phone={phone}
+      onSignIn={() => push({ kind: "signin" })}
+      onSignOut={() => { setToken(null); setPhone(null); }}
+      onOpen={openAccountRow}
+    />
+  );
+
+  const heading = top
+    ? top.kind === "checkout"
+      ? say(screens.checkout.title, "Checkout")
+      : top.kind === "signin"
+        ? "Sign in"
+        : ""
+    : theme.storeName;
+
+  return (
+    <SafeAreaView style={styles.app}>
+      <StatusBar barStyle="dark-content" />
+      <View style={styles.header}>
+        {stack.length ? (
+          <Pressable style={styles.back} onPress={pop} hitSlop={8}>
+            <Text style={styles.backText}>‹</Text>
+          </Pressable>
+        ) : null}
+        <Text style={styles.heading} numberOfLines={1}>{heading}</Text>
+      </View>
+
+      <View style={{ flex: 1 }}>{body}</View>
+
+      {notice ? (
+        <Pressable style={styles.notice} onPress={() => setNotice(null)}>
+          <Text style={styles.noticeText}>{notice}</Text>
+        </Pressable>
+      ) : null}
+
+      <TabBar active={tab} cartCount={count} onSelect={goTab} />
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  app: { flex: 1, backgroundColor: colors.page },
+  header: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.line, backgroundColor: colors.surface },
+  back: { width: 24 },
+  backText: { fontSize: 26, lineHeight: 28, color: colors.ink },
+  heading: { flex: 1, fontSize: 15, fontWeight: "700", color: colors.ink },
+  notice: { position: "absolute", left: spacing.lg, right: spacing.lg, bottom: 78, borderRadius: 10, backgroundColor: colors.ink, paddingHorizontal: 14, paddingVertical: 10 },
+  noticeText: { color: "#fff", fontSize: 12, textAlign: "center" },
+  done: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.sm, padding: spacing.xl },
+  doneTitle: { fontSize: 22, fontWeight: "700", color: colors.ink },
+  doneText: { fontSize: 14, color: colors.inkMuted },
+  doneCta: { marginTop: spacing.md, borderRadius: 10, backgroundColor: colors.accent, paddingHorizontal: 24, paddingVertical: 12 },
+  doneCtaText: { fontSize: 14, fontWeight: "700", color: "#fff" },
+});
+`,
+  };
+}
+
+/** Every file the app needs, current as of this theme. */
 export function generateApp(theme: AppTheme, baseUrl: string): GeneratedFile[] {
   const used = [...new Set(theme.blocks.map((b) => b.type))];
   return [
     themeFile(theme),
+    screensFile(theme),
     apiFile(baseUrl),
     homeScreenFile(theme),
     piecesFile(),
+    tabBarFile(theme),
+    appFile(theme),
+    collectionScreenFile(),
+    productScreenFile(),
+    cartScreenFile(),
+    checkoutScreenFile(),
+    accountScreenFile(),
+    ordersScreenFile(),
+    signInScreenFile(),
     ...used.map(sectionFile).sort((a, b) => a.path.localeCompare(b.path)),
   ];
 }

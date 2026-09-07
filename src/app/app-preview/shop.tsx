@@ -48,7 +48,7 @@ export function Shop({
   /** Targets that belong to another tab or another sheet the shell owns. */
   onLeave: (what: "cart" | "requests") => void;
   /** The shell wears the brand too, and /home is where it arrives. */
-  onTheme?: (settings: Home["theme"]["settings"]) => void;
+  onTheme?: (theme: Home["theme"]) => void;
 }) {
   const [home, setHome] = useState<Home | null>(null);
   const [homeErr, setHomeErr] = useState<string | null>(null);
@@ -67,7 +67,7 @@ export function Shop({
     api.get<Home>("/home").then((r) => {
       if (!r.ok) return setHomeErr(r.error);
       setHome(r.data);
-      onTheme?.(r.data.theme.settings);
+      onTheme?.(r.data.theme);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

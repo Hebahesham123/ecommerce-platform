@@ -163,7 +163,128 @@ export type AppSettings = {
   showSearch: boolean;
 };
 
-export type AppTheme = { settings: AppSettings; blocks: Block[] };
+/**
+ * The bottom tab bar.
+ *
+ * Order, wording and which of them appear are the merchant's, because a shop
+ * that never takes returns should not have a tab for them and a shop in Cairo
+ * should not be stuck with English labels. The keys are fixed, though: each
+ * one is a screen the app knows how to draw, and a tab pointing at a screen
+ * that does not exist is a tab that crashes.
+ */
+export type TabKey = "shop" | "cart" | "orders" | "account";
+
+export type Tab = { key: TabKey; label: string; visible: boolean };
+
+export const TAB_KEYS: TabKey[] = ["shop", "cart", "orders", "account"];
+
+export const TAB_DEFAULTS: Record<TabKey, { ar: string; en: string; icon: string }> = {
+  shop: { ar: "المتجر", en: "Shop", icon: "◳" },
+  cart: { ar: "السلة", en: "Cart", icon: "◔" },
+  orders: { ar: "طلباتي", en: "Orders", icon: "◨" },
+  account: { ar: "حسابي", en: "Account", icon: "◍" },
+};
+
+/**
+ * Everything below the home screen.
+ *
+ * The home screen is blocks the merchant arranges; these are screens the app
+ * already knows how to draw, where what varies is the wording and which
+ * optional parts appear. Keeping them here rather than as more block types is
+ * the honest split: nobody reorders a checkout.
+ */
+export type ScreenSettings = {
+  collection: { columns: 2 | 3; showSort: boolean; sortDefault: string };
+  product: {
+    showDescription: boolean;
+    showVariants: boolean;
+    showStock: boolean;
+    addLabel: string;
+    soldOutLabel: string;
+  };
+  cart: {
+    emptyText: string;
+    showCoupon: boolean;
+    couponLabel: string;
+    checkoutLabel: string;
+    totalLabel: string;
+  };
+  checkout: {
+    title: string;
+    note: string;
+    placeLabel: string;
+    askEmail: boolean;
+    askNote: boolean;
+  };
+  account: {
+    signedOutText: string;
+    showReturns: boolean;
+    showRequests: boolean;
+    showReviews: boolean;
+    returnsLabel: string;
+    requestsLabel: string;
+    reviewsLabel: string;
+  };
+};
+
+export type ScreenKey = keyof ScreenSettings;
+export const SCREEN_KEYS: ScreenKey[] = [
+  "collection",
+  "product",
+  "cart",
+  "checkout",
+  "account",
+];
+
+export const SCREEN_LABELS: Record<ScreenKey | "home", { ar: string; en: string }> = {
+  home: { ar: "الرئيسية", en: "Home" },
+  collection: { ar: "قسم", en: "Collection" },
+  product: { ar: "منتج", en: "Product" },
+  cart: { ar: "السلة", en: "Cart" },
+  checkout: { ar: "إتمام الطلب", en: "Checkout" },
+  account: { ar: "الحساب", en: "Account" },
+};
+
+export type AppTheme = {
+  settings: AppSettings;
+  blocks: Block[];
+  tabs: Tab[];
+  screens: ScreenSettings;
+};
+
+export const DEFAULT_TABS: Tab[] = TAB_KEYS.map((key) => ({
+  key,
+  label: "",
+  visible: true,
+}));
+
+export const DEFAULT_SCREENS: ScreenSettings = {
+  collection: { columns: 2, showSort: true, sortDefault: "manual" },
+  product: {
+    showDescription: true,
+    showVariants: true,
+    showStock: true,
+    addLabel: "",
+    soldOutLabel: "",
+  },
+  cart: {
+    emptyText: "",
+    showCoupon: true,
+    couponLabel: "",
+    checkoutLabel: "",
+    totalLabel: "",
+  },
+  checkout: { title: "", note: "", placeLabel: "", askEmail: false, askNote: true },
+  account: {
+    signedOutText: "",
+    showReturns: true,
+    showRequests: true,
+    showReviews: true,
+    returnsLabel: "",
+    requestsLabel: "",
+    reviewsLabel: "",
+  },
+};
 
 /**
  * How many collections a row block with no collection chosen shows.
@@ -330,7 +451,12 @@ function colour(v: unknown): string {
  * types are dropped and every setting falls back to its default.
  */
 export function normalizeTheme(raw: unknown): AppTheme {
-  const row = (raw ?? {}) as { settings?: unknown; blocks?: unknown };
+  const row = (raw ?? {}) as {
+    settings?: unknown;
+    blocks?: unknown;
+    tabs?: unknown;
+    screens?: unknown;
+  };
   const s = (row.settings ?? {}) as Record<string, unknown>;
 
   const settings: AppSettings = {
@@ -360,5 +486,44 @@ export function normalizeTheme(raw: unknown): AppTheme {
     })
     .filter((b): b is Block => b !== null);
 
-  return { settings, blocks };
+  // Tabs: the merchant's order and wording, but only over keys the app can
+  // actually draw, and never an empty bar.
+  const rawTabs = Array.isArray(row.tabs) ? (row.tabs as unknown[]) : [];
+  const seen = new Set<TabKey>();
+  const tabs: Tab[] = [];
+  for (const t of rawTabs) {
+    const tab = (t ?? {}) as Record<string, unknown>;
+    const key = str(tab.key) as TabKey;
+    if (!TAB_KEYS.includes(key) || seen.has(key)) continue;
+    seen.add(key);
+    tabs.push({ key, label: str(tab.label, "").slice(0, 24), visible: tab.visible !== false });
+  }
+  for (const key of TAB_KEYS) {
+    if (!seen.has(key)) tabs.push({ key, label: "", visible: true });
+  }
+  if (!tabs.some((t) => t.visible)) tabs[0].visible = true;
+
+  const rawScreens = (row.screens ?? {}) as Record<string, Record<string, unknown>>;
+  const pick = <K extends ScreenKey>(key: K): ScreenSettings[K] => {
+    const base = DEFAULT_SCREENS[key] as Record<string, unknown>;
+    const given = (rawScreens[key] ?? {}) as Record<string, unknown>;
+    const out: Record<string, unknown> = { ...base };
+    for (const [k, v] of Object.entries(base)) {
+      const g = given[k];
+      if (typeof v === "boolean") out[k] = typeof g === "boolean" ? g : v;
+      else if (typeof v === "number") out[k] = Number(g) > 0 ? Number(g) : v;
+      else out[k] = str(g, v as string).slice(0, 200);
+    }
+    return out as ScreenSettings[K];
+  };
+
+  const screens: ScreenSettings = {
+    collection: { ...pick("collection"), columns: Number(rawScreens.collection?.columns) === 3 ? 3 : 2 },
+    product: pick("product"),
+    cart: pick("cart"),
+    checkout: pick("checkout"),
+    account: pick("account"),
+  };
+
+  return { settings, blocks, tabs, screens };
 }
