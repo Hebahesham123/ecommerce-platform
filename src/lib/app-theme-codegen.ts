@@ -142,6 +142,19 @@ export type HomePayload = {
 /** Everything the front page needs, in one request. */
 export const fetchHome = () => api<HomePayload>("/home");
 
+/**
+ * Search the catalogue.
+ *
+ * The shop does the matching, over titles, brands, categories and tags, on the
+ * same catalogue the collections are cut from — so a product that cannot be
+ * found here is one that is genuinely not for sale, not one the app forgot to
+ * download.
+ */
+export const searchProducts = (q: string, limit = 40) =>
+  api<{ products: Card[]; count: number }>(
+    \`/products?limit=\${limit}&q=\${encodeURIComponent(q)}\`,
+  );
+
 export type Variant = {
   id: string;
   variantTitle: string | null;
@@ -1132,6 +1145,7 @@ function homeScreenFile(theme: AppTheme): GeneratedFile {
   const imports = used
     .map((t) => `import { ${exportName(t)} } from "./components/${componentName(t)}";`)
     .join("\n");
+  const search = theme.settings.showSearch;
 
   const rendered = theme.blocks
     .map((b, i) => `        <View key=${q(b.id)} style={styles.block}>\n${renderCall(b, 10)}\n        </View>`)
@@ -1147,10 +1161,17 @@ function homeScreenFile(theme: AppTheme): GeneratedFile {
  * anything typed here is replaced the next time a section moves.
  */
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
-import { colors, spacing, theme } from "./theme";
+import {
+  ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { colors, radius, spacing, theme } from "./theme";
 import { fetchHome, type HomePayload } from "./api";
-${imports}
+${search ? 'import { SearchResults } from "./components/SearchResults";\n' : ""}${imports}
 
 export default function HomeScreen({
   onOpenCollection,
@@ -1160,7 +1181,9 @@ export default function HomeScreen({
   onOpenProduct?: (id: string) => void;
 }) {
   const [data, setData] = useState<HomePayload | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);${
+    search ? "\n  const [query, setQuery] = useState(\"\");" : ""
+  }
 
   useEffect(() => {
     fetchHome().then(setData).catch((e) => setError(String(e.message ?? e)));
@@ -1176,9 +1199,31 @@ export default function HomeScreen({
           <Text style={styles.announcementText}>{theme.announcement.text}</Text>
         </View>
       ) : null}
+${
+      search
+        ? `      <View style={styles.searchWrap}>
+        <TextInput
+          style={styles.search}
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search"
+          placeholderTextColor={colors.inkSoft}
+          returnKeyType="search"
+          clearButtonMode="while-editing"
+        />
+      </View>
+
+      {query.trim() ? (
+        <SearchResults query={query.trim()} onOpenProduct={(id) => onOpenProduct?.(id)} />
+      ) : (
       <ScrollView contentContainerStyle={styles.content}>
 ${rendered}
       </ScrollView>
+      )}`
+        : `      <ScrollView contentContainerStyle={styles.content}>
+${rendered}
+      </ScrollView>`
+    }
     </View>
   );
 }
@@ -1191,6 +1236,8 @@ const styles = StyleSheet.create({
   error: { color: "#e11d48", fontSize: 13 },
   announcement: { backgroundColor: colors.accent, paddingVertical: 6, paddingHorizontal: 12 },
   announcementText: { color: "#fff", fontSize: 11, fontWeight: "600", textAlign: "center" },
+  searchWrap: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg },
+  search: { height: 40, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, paddingHorizontal: 16, fontSize: 14, color: colors.ink },
 });
 `,
   };
@@ -1727,6 +1774,81 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, paddingHorizontal: spacing.lg, paddingVertical: 14 },
   rowText: { fontSize: 14, fontWeight: "500", color: colors.ink },
   chevron: { fontSize: 18, color: colors.inkSoft },
+});
+`,
+  };
+}
+
+// ---------------------------------------------------------- searching --
+function searchScreenFile(): GeneratedFile {
+  return {
+    path: "components/SearchResults.tsx",
+    language: "tsx",
+    contents: `/**
+ * What the search box on the front page turns up.
+ *
+ * The shop does the matching. An app that filtered a downloaded list could
+ * only ever find what it had already fetched, which on a catalogue of any
+ * size is a search that quietly lies about what the shop sells.
+ */
+import React, { useEffect, useState } from "react";
+import { ActivityIndicator, FlatList, StyleSheet, Text, View } from "react-native";
+import { colors, spacing } from "../theme";
+import { searchProducts, type Card } from "../api";
+import { ProductTile } from "./Pieces";
+
+export function SearchResults({
+  query,
+  onOpenProduct,
+}: {
+  query: string;
+  onOpenProduct: (id: string) => void;
+}) {
+  const [rows, setRows] = useState<Card[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // Typing is not a request; a pause is. Without this every letter is a
+  // round trip, and the answers race each other back.
+  useEffect(() => {
+    let live = true;
+    setRows(null);
+    setError(null);
+    const timer = setTimeout(() => {
+      searchProducts(query)
+        .then((d) => live && setRows(d.products))
+        .catch((e) => live && setError(String(e.message ?? e)));
+    }, 300);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [query]);
+
+  if (error) return <Text style={styles.note}>{error}</Text>;
+  if (!rows) return <ActivityIndicator style={styles.spinner} color={colors.accent} />;
+  if (!rows.length) return <Text style={styles.note}>Nothing matches “{query}”.</Text>;
+
+  return (
+    <FlatList
+      data={rows}
+      numColumns={2}
+      keyExtractor={(p) => p.id}
+      columnWrapperStyle={styles.row}
+      contentContainerStyle={styles.grid}
+      renderItem={({ item }) => (
+        <View style={{ flex: 0.5 }}>
+          <ProductTile card={item} fill onPress={onOpenProduct} />
+        </View>
+      )}
+    />
+  );
+}
+
+const styles = StyleSheet.create({
+  grid: { padding: spacing.lg, gap: spacing.md },
+  row: { gap: spacing.md },
+  spinner: { marginVertical: spacing.xl },
+  note: { padding: spacing.xl, textAlign: "center", fontSize: 13, color: colors.inkSoft },
 });
 `,
   };
@@ -2569,6 +2691,7 @@ export function generateApp(theme: AppTheme, baseUrl: string): GeneratedFile[] {
     appFile(theme),
     collectionScreenFile(),
     productScreenFile(),
+    ...(theme.settings.showSearch ? [searchScreenFile()] : []),
     cartScreenFile(),
     checkoutScreenFile(),
     accountScreenFile(),

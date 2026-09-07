@@ -168,6 +168,10 @@ export function ThemeEditor() {
 
   const cartCount = cart.reduce((n, l) => n + l.quantity, 0);
 
+  // The search box on the phone is a search box, not a picture of one — a
+  // merchant deciding whether to keep it needs to see what it turns up.
+  const [query, setQuery] = useState("");
+
   // Which tab the page being edited belongs to, so the bar in the preview
   // agrees with what is on screen above it. Collection and product are reached
   // from the shop tab, so that is the one lit.
@@ -775,11 +779,21 @@ export function ThemeEditor() {
               ) : (
               <div className="bg-slate-50 p-4">
                 {draft.settings.showSearch && (
-                  <div className="mb-4 h-10 rounded-full border border-slate-300 bg-white px-4 text-sm leading-10 text-slate-400">
-                    {ar ? "ابحثي…" : "Search…"}
-                  </div>
+                  <input
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder={ar ? "ابحثي…" : "Search…"}
+                    className="mb-4 h-10 w-full rounded-full border border-slate-300 bg-white px-4 text-sm text-slate-800 outline-none focus:border-violet-500"
+                  />
                 )}
-                {home ? (
+                {query.trim() ? (
+                  <SearchResults
+                    ar={ar}
+                    accent={draft.settings.accent}
+                    query={query.trim()}
+                    onOpenProduct={(id) => push({ kind: "product", id })}
+                  />
+                ) : home ? (
                   <div className="space-y-5">
                     {draft.blocks.map((block) => (
                       <div
@@ -1800,6 +1814,88 @@ function ProductScreen({
   );
 }
 
+
+/**
+ * What the phone's own search finds.
+ *
+ * The same endpoint the app calls, over the merchant's real catalogue, so a
+ * search that comes back empty here comes back empty there — which is worth
+ * knowing before the app ships with a search box on its front page.
+ */
+function SearchResults({
+  ar,
+  accent,
+  query,
+  onOpenProduct,
+}: {
+  ar: boolean;
+  accent: string;
+  query: string;
+  onOpenProduct: (id: string) => void;
+}) {
+  const [rows, setRows] = useState<
+    { id: string; name: string; image: string | null; priceMin: number | null }[] | null
+  >(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // Typing is not a request. A pause is.
+  useEffect(() => {
+    let live = true;
+    setRows(null);
+    setError(null);
+    const timer = setTimeout(() => {
+      fetch(`/api/storefront/products?limit=40&q=${encodeURIComponent(query)}`, {
+        headers: { "x-store-channel": "app" },
+        cache: "no-store",
+      })
+        .then((r) => r.json())
+        .then((j) => {
+          if (!live) return;
+          if (!j?.ok) return setError(j?.error ?? "failed");
+          setRows(j.data.products);
+        })
+        .catch((e) => live && setError(String((e as Error).message)));
+    }, 300);
+    return () => {
+      live = false;
+      clearTimeout(timer);
+    };
+  }, [query]);
+
+  if (error) return <ScreenError error={error} ar={ar} />;
+  if (!rows) return <p className="py-12 text-center text-sm text-slate-400">…</p>;
+  if (!rows.length)
+    return (
+      <p className="py-12 text-center text-sm text-slate-400">
+        {ar ? `لا نتائج لـ "${query}"` : `Nothing matches "${query}"`}
+      </p>
+    );
+
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      {rows.map((p) => (
+        <button
+          key={p.id}
+          onClick={() => onOpenProduct(p.id)}
+          className="overflow-hidden rounded-2xl border border-slate-200 bg-white text-start"
+        >
+          <div className="aspect-square bg-slate-100">
+            {p.image && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={p.image} alt="" className="h-full w-full object-cover" />
+            )}
+          </div>
+          <div className="p-2">
+            <p className="line-clamp-2 text-[11px] leading-tight text-slate-800">{p.name}</p>
+            <p className="mt-1 text-sm font-bold" style={{ color: accent }}>
+              {money(p.priceMin, ar)}
+            </p>
+          </div>
+        </button>
+      ))}
+    </div>
+  );
+}
 
 /** Every collection handle a theme points at, from sections and their items. */
 function referencedHandles(theme: AppTheme): string[] {
