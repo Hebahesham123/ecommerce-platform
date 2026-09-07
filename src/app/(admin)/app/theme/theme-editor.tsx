@@ -600,7 +600,7 @@ export function ThemeEditor() {
             <div
               className={`${
                 device === "mobile" ? "w-[390px]" : "w-full max-w-[900px]"
-              } max-w-full self-start overflow-hidden rounded-[1.75rem] border-8 border-slate-900 bg-slate-50 shadow-card`}
+              } relative flex min-h-[620px] max-w-full flex-col self-start overflow-hidden rounded-[1.75rem] border-8 border-slate-900 bg-slate-50 shadow-card`}
             >
               <div className="flex items-center justify-between bg-slate-900 px-4 pb-2 pt-1.5 text-[11px] font-medium text-white">
                 <span className="flex items-center gap-1.5">
@@ -627,6 +627,7 @@ export function ThemeEditor() {
                 </div>
               )}
 
+              <div className="flex flex-1 flex-col">
               {page === "cart" || page === "checkout" ? (
                 <Cart
                   ar={ar}
@@ -742,6 +743,7 @@ export function ThemeEditor() {
                 )}
               </div>
               )}
+              </div>
 
               {/* The bar the merchant just arranged, on every screen. */}
               <nav className="flex border-t border-slate-200 bg-white">
