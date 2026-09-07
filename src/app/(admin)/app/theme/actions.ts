@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { getAppTheme, saveAppTheme } from "@/lib/app-theme-service";
 import { getCatalog } from "@/lib/storefront-data";
+import { generateApp, type GeneratedFile } from "@/lib/app-theme-codegen";
+import { headers } from "next/headers";
 import type { AppTheme } from "@/lib/app-theme";
 import type { ActionResult } from "@/lib/orders";
 
@@ -47,4 +49,26 @@ export async function saveTheme(theme: AppTheme): Promise<ActionResult> {
   if (!res.ok) return { ok: false, error: res.error };
   revalidatePath("/app/theme");
   return { ok: true, data: undefined };
+}
+
+/**
+ * The app's code, as of a given theme.
+ *
+ * Generated rather than stored: there is no folder of app files to fix, the
+ * way a website theme has Liquid to fix, so arranging a section is what writes
+ * the code for it. Taking the draft as an argument means the code page can
+ * show what an unsaved edit would produce, which is the whole point of showing
+ * it at all.
+ */
+export async function generatedFiles(theme: AppTheme): Promise<ActionResult<GeneratedFile[]>> {
+  try {
+    // The base URL is this deployment's, so the generated api.ts points at the
+    // store the merchant is actually looking at rather than a placeholder.
+    const h = await headers();
+    const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
+    const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
+    return { ok: true, data: generateApp(theme, `${proto}://${host}/api/storefront`) };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
 }

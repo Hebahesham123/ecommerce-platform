@@ -1,10 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useI18n } from "@/lib/i18n";
-import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui";
-import { IcPlus, IcTrash, IcUp, IcDown, IcAlert, IcEye } from "@/components/icons";
+import {
+  IcChevron,
+  IcCode,
+  IcDesktop,
+  IcMobile,
+  IcPlus,
+  IcTrash,
+  IcUp,
+  IcDown,
+  IcAlert,
+} from "@/components/icons";
 import { AppHome, type HomeData } from "@/components/app-home";
 import {
   BLOCK_META,
@@ -14,33 +24,30 @@ import {
   type Block,
   type BlockType,
 } from "@/lib/app-theme";
+import { componentName } from "@/lib/app-theme-codegen";
 import { loadThemeEditor, saveTheme, type ThemeEditorData } from "./actions";
 
 /**
  * The app's theme editor.
  *
- * Shaped like the website's customizer for a reason: the merchant already
- * knows that shape. Controls on one side, the thing itself on the other,
- * redrawing as you type — and the phone really is the app's own home-screen
- * renderer, not a mock-up of it, so what you arrange here is what ships.
+ * Built to the same shape as the website's customizer — a 380px rail of
+ * collapsible sections beside a live preview, a device switch, Reset, and an
+ * explicit Save — because the merchant already knows that shape and should not
+ * have to learn a second one for the same job.
  *
- * Nothing saves as you go. Editing a live shop's front page one keystroke at a
- * time is how a half-typed heading ends up in front of a customer, so the
- * draft is yours until you press Save.
+ * The difference is what sits behind it. A website theme arrives as a folder
+ * of Liquid, so its customizer *overrides* code that already exists and every
+ * section row links to the file you would fix. An app has no such folder: the
+ * screens do not exist until somebody writes them. So here, arranging a
+ * section is what writes them — the code link opens what this editor just
+ * generated rather than something you have to maintain.
+ *
+ * The phone is the app's own home-screen renderer, not a mock-up of it, so
+ * what you arrange is what ships.
  */
 
 const input =
-  "h-10 w-full rounded-xl border border-line bg-surface-page px-3 text-sm text-ink outline-none transition focus:border-brand-600 focus:bg-surface";
-
-function Row({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <label className="block">
-      <span className="text-xs font-medium text-ink-muted">{label}</span>
-      <span className="mt-1 block">{children}</span>
-      {hint && <span className="mt-1 block text-[11px] leading-relaxed text-ink-soft">{hint}</span>}
-    </label>
-  );
-}
+  "h-9 w-full rounded-xl border border-line bg-surface-page px-3 text-sm text-ink outline-none transition focus:border-brand-600 focus:bg-surface";
 
 export function ThemeEditor() {
   const { lang } = useI18n();
@@ -49,39 +56,52 @@ export function ThemeEditor() {
   const [data, setData] = useState<ThemeEditorData | null>(null);
   const [home, setHome] = useState<HomeData | null>(null);
   const [draft, setDraft] = useState<AppTheme | null>(null);
-  const [saved, setSaved] = useState<string>("");
-  const [busy, setBusy] = useState(false);
+  const [savedJson, setSavedJson] = useState("");
+  const [open, setOpen] = useState<Record<string, boolean>>({});
+  const [hovered, setHovered] = useState<string | null>(null);
+  const [device, setDevice] = useState<"desktop" | "mobile">("mobile");
+  const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
-  const [openBlock, setOpenBlock] = useState<string | null>(null);
+  const railRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     loadThemeEditor().then((r) => {
       if (!r.ok) return setMsg({ tone: "err", text: r.error });
       setData(r.data);
       setDraft(r.data.theme);
-      setSaved(JSON.stringify(r.data.theme));
+      setSavedJson(JSON.stringify(r.data.theme));
     });
-    // The preview draws from the same endpoint the app calls, so what you see
-    // is what a phone would get — the theme is the draft, the data is real.
+    // The preview draws from the endpoint the app itself calls, so the data is
+    // real even while the theme is a draft.
     fetch("/api/storefront/home", { headers: { "x-store-channel": "app" }, cache: "no-store" })
       .then((r) => r.json())
-      .then((j) => {
-        if (j?.ok) {
-          setHome({
-            collections: j.data.collections ?? [],
-            rows: j.data.rows ?? {},
-            newArrivals: j.data.newArrivals ?? [],
-            reviews: j.data.reviews ?? [],
-          });
-        }
-      })
+      .then((j) =>
+        setHome(
+          j?.ok
+            ? {
+                collections: j.data.collections ?? [],
+                rows: j.data.rows ?? {},
+                newArrivals: j.data.newArrivals ?? [],
+                reviews: j.data.reviews ?? [],
+              }
+            : { collections: [], rows: {}, newArrivals: [], reviews: [] },
+        ),
+      )
       .catch(() => setHome({ collections: [], rows: {}, newArrivals: [], reviews: [] }));
   }, []);
 
   const dirty = useMemo(
-    () => Boolean(draft) && JSON.stringify(draft) !== saved,
-    [draft, saved],
+    () => Boolean(draft) && JSON.stringify(draft) !== savedJson,
+    [draft, savedJson],
   );
+
+  // Hovering a block in the phone opens and scrolls to its row, the way
+  // hovering a section in the storefront preview does on the website.
+  useEffect(() => {
+    if (!hovered) return;
+    const el = railRef.current?.querySelector(`[data-block-key="${CSS.escape(hovered)}"]`);
+    el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [hovered]);
 
   const patchSettings = useCallback((patch: Partial<AppTheme["settings"]>) => {
     setDraft((d) => (d ? { ...d, settings: { ...d.settings, ...patch } } : d));
@@ -115,19 +135,15 @@ export function ThemeEditor() {
   function add(type: BlockType) {
     const block = newBlock(type);
     setDraft((d) => (d ? { ...d, blocks: [...d.blocks, block] } : d));
-    setOpenBlock(block.id);
-  }
-
-  function remove(id: string) {
-    setDraft((d) => (d ? { ...d, blocks: d.blocks.filter((b) => b.id !== id) } : d));
+    setOpen((s) => ({ ...s, [block.id]: true }));
   }
 
   async function onSave() {
     if (!draft) return;
-    setBusy(true);
+    setSaving(true);
     setMsg(null);
     const res = await saveTheme(normalizeTheme(draft));
-    setBusy(false);
+    setSaving(false);
     if (!res.ok) {
       setMsg({
         tone: "err",
@@ -140,51 +156,78 @@ export function ThemeEditor() {
       });
       return;
     }
-    setSaved(JSON.stringify(draft));
-    setMsg({ tone: "ok", text: ar ? "تم الحفظ — التطبيق سيراه فوراً." : "Saved. The app sees it on its next launch." });
+    setSavedJson(JSON.stringify(draft));
+  }
+
+  function onReset() {
+    if (!data) return;
+    const question = ar
+      ? "إرجاع المظهر إلى آخر نسخة محفوظة؟"
+      : "Put the theme back to the last saved version?";
+    if (!window.confirm(question)) return;
+    setDraft(JSON.parse(savedJson) as AppTheme);
+    setMsg(null);
   }
 
   if (!draft || !data) {
     return (
-      <>
-        <PageHeader title={ar ? "مظهر التطبيق" : "App theme"} />
-        <Card className="p-12 text-center text-sm text-ink-soft">
-          {msg?.text ?? (ar ? "جارٍ التحميل…" : "Loading…")}
-        </Card>
-      </>
+      <Card className="p-12 text-center text-sm text-ink-soft">
+        {msg?.text ?? (ar ? "جارٍ التحميل…" : "Loading…")}
+      </Card>
     );
   }
 
   return (
-    <>
-      <PageHeader
-        title={ar ? "مظهر التطبيق" : "App theme"}
-        subtitle={
-          ar
-            ? "رتّبي الصفحة الرئيسية للتطبيق واختاري ألوانه — المعاينة على اليسار هي شاشة التطبيق نفسها"
-            : "Arrange the app's home screen and choose its colours. The phone beside you is the app's own home screen, not a mock-up of it"
-        }
-        actions={
-          <>
-            {dirty && (
-              <span className="text-xs font-medium text-amber-600">
-                {ar ? "تغييرات غير محفوظة" : "Unsaved changes"}
-              </span>
-            )}
+    <div className="flex h-[calc(100vh-7rem)] flex-col gap-3">
+      {/* ------------------------------- header --------------------------- */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Link href="/app" className="btn-ghost h-9 px-2">
+          <IcChevron className="h-4 w-4 rotate-180 rtl:rotate-0" />
+        </Link>
+        <div className="min-w-0">
+          <div className="truncate text-lg font-bold text-ink">
+            {ar ? "مظهر التطبيق" : "App theme"}
+          </div>
+          <div className="truncate text-xs text-ink-soft">
+            {ar
+              ? "رتّبي شاشة التطبيق — كل قسم تعدّلينه يُكتب له الكود"
+              : "Arrange the app's screen. Editing a section writes the code for it"}
+          </div>
+        </div>
+
+        <div className="ms-auto flex items-center gap-1 rounded-xl bg-surface-page p-1">
+          {(["desktop", "mobile"] as const).map((d) => (
             <button
-              onClick={onSave}
-              disabled={busy || !dirty}
-              className="btn-primary disabled:opacity-50"
+              key={d}
+              onClick={() => setDevice(d)}
+              className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                device === d ? "bg-white text-ink shadow-card" : "text-ink-muted"
+              }`}
             >
-              {busy ? (ar ? "…" : "…") : ar ? "حفظ" : "Save"}
+              {d === "desktop" ? (
+                <IcDesktop className="h-4 w-4" />
+              ) : (
+                <IcMobile className="h-4 w-4" />
+              )}
             </button>
-          </>
-        }
-      />
+          ))}
+        </div>
+
+        <Link href="/app/theme/code" className="btn-outline h-9 gap-1.5 px-3 text-xs">
+          <IcCode className="h-3.5 w-3.5" />
+          {ar ? "الكود" : "Code"}
+        </Link>
+        <button onClick={onReset} disabled={!dirty} className="btn-ghost h-9 px-3 text-xs disabled:opacity-40">
+          {ar ? "تراجع" : "Reset"}
+        </button>
+        <button onClick={onSave} disabled={saving || !dirty} className="btn-primary disabled:opacity-60">
+          {saving ? (ar ? "جارٍ الحفظ…" : "Saving…") : dirty ? (ar ? "حفظ" : "Save") : ar ? "محفوظ" : "Saved"}
+        </button>
+      </div>
 
       {msg && (
         <Card
-          className={`mb-4 p-3.5 text-sm ${
+          className={`p-3 text-sm ${
             msg.tone === "ok"
               ? "border-emerald-200 bg-emerald-50 text-emerald-800"
               : "border-rose-200 bg-rose-50 text-rose-700"
@@ -195,29 +238,35 @@ export function ThemeEditor() {
         </Card>
       )}
 
-      <div className="flex flex-col gap-6 xl:flex-row xl:items-start">
-        {/* ------------------------------ controls ------------------------- */}
-        <div className="min-w-0 flex-1 space-y-4">
-          <Card className="p-5">
-            <h2 className="text-base font-semibold text-ink">{ar ? "الهوية" : "Brand"}</h2>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <Row label={ar ? "اسم المتجر" : "Store name"}>
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[380px_1fr]">
+        {/* ------------------------------ rail ---------------------------- */}
+        <Card className="flex min-h-0 flex-col overflow-hidden">
+          <div ref={railRef} className="flex-1 overflow-y-auto p-3">
+            <div className="mb-1.5 px-1 text-[11px] font-semibold uppercase tracking-wide text-ink-soft">
+              {ar ? "إعدادات عامة" : "Theme settings"}
+            </div>
+            <Group
+              id="__settings"
+              title={ar ? "الهوية" : "Brand"}
+              subtitle="theme.ts"
+              open={open["__settings"] ?? true}
+              onToggle={() => setOpen((s) => ({ ...s, __settings: !(s["__settings"] ?? true) }))}
+              codeHref="/app/theme/code?file=theme.ts"
+            >
+              <Field label={ar ? "اسم المتجر" : "Store name"} type="text">
                 <input
                   value={draft.settings.storeName}
                   onChange={(e) => patchSettings({ storeName: e.target.value })}
                   className={input}
                 />
-              </Row>
-              <Row
-                label={ar ? "اللون الأساسي" : "Accent colour"}
-                hint={ar ? "الأزرار والأسعار والتبويب النشط" : "Buttons, prices, the active tab"}
-              >
+              </Field>
+              <Field label={ar ? "اللون الأساسي" : "Accent colour"} type="color">
                 <span className="flex items-center gap-2">
                   <input
                     type="color"
                     value={draft.settings.accent}
                     onChange={(e) => patchSettings({ accent: e.target.value })}
-                    className="h-10 w-14 cursor-pointer rounded-lg border border-line bg-surface-page p-1"
+                    className="h-9 w-12 shrink-0 cursor-pointer rounded-lg border border-line bg-surface-page p-1"
                   />
                   <input
                     value={draft.settings.accent}
@@ -226,11 +275,8 @@ export function ThemeEditor() {
                     dir="ltr"
                   />
                 </span>
-              </Row>
-              <Row
-                label={ar ? "رابط الشعار" : "Logo URL"}
-                hint={ar ? "من مكتبة الملفات أو أي رابط صورة" : "From your file library, or any image URL"}
-              >
+              </Field>
+              <Field label={ar ? "الشعار" : "Logo"} type="image_picker">
                 <input
                   value={draft.settings.logoUrl ?? ""}
                   onChange={(e) => patchSettings({ logoUrl: e.target.value || null })}
@@ -238,8 +284,8 @@ export function ThemeEditor() {
                   className={input}
                   dir="ltr"
                 />
-              </Row>
-              <Row label={ar ? "قائمة التنقّل" : "Navigation menu"}>
+              </Field>
+              <Field label={ar ? "قائمة التنقّل" : "Navigation menu"} type="link_list">
                 <select
                   value={draft.settings.menuHandle}
                   onChange={(e) => patchSettings({ menuHandle: e.target.value })}
@@ -252,162 +298,304 @@ export function ThemeEditor() {
                     </option>
                   ))}
                 </select>
-              </Row>
-            </div>
-
-            <div className="mt-4 space-y-3 border-t border-line pt-4">
-              <label className="flex cursor-pointer items-center gap-2.5">
-                <input
-                  type="checkbox"
-                  checked={draft.settings.showSearch}
-                  onChange={(e) => patchSettings({ showSearch: e.target.checked })}
-                  className="h-4 w-4 rounded accent-brand-600"
-                />
-                <span className="text-sm text-ink">{ar ? "إظهار البحث" : "Show the search bar"}</span>
-              </label>
-
-              <label className="flex cursor-pointer items-center gap-2.5">
-                <input
-                  type="checkbox"
-                  checked={draft.settings.announcementEnabled}
-                  onChange={(e) => patchSettings({ announcementEnabled: e.target.checked })}
-                  className="h-4 w-4 rounded accent-brand-600"
-                />
-                <span className="text-sm text-ink">
-                  {ar ? "شريط إعلان أعلى الشاشة" : "Announcement bar at the top"}
-                </span>
-              </label>
-              {draft.settings.announcementEnabled && (
-                <input
-                  value={draft.settings.announcement}
-                  onChange={(e) => patchSettings({ announcement: e.target.value })}
-                  placeholder={ar ? "شحن مجاني فوق ١٠٠٠ ج.م" : "Free delivery over 1,000 EGP"}
-                  className={input}
-                />
-              )}
-            </div>
-          </Card>
-
-          {/* ---------------------------- blocks --------------------------- */}
-          <Card className="p-5">
-            <div className="flex items-center justify-between">
-              <h2 className="text-base font-semibold text-ink">
-                {ar ? "الصفحة الرئيسية" : "Home screen"}
-              </h2>
-              <span className="text-xs text-ink-soft">
-                {draft.blocks.length} {ar ? "قسم" : "blocks"}
-              </span>
-            </div>
-            <p className="mt-1 text-xs text-ink-soft">
-              {ar
-                ? "الترتيب هنا هو الترتيب على الشاشة."
-                : "The order here is the order on the screen."}
-            </p>
-
-            <ul className="mt-4 space-y-2">
-              {draft.blocks.map((block, i) => (
-                <BlockCard
-                  key={block.id}
-                  block={block}
+              </Field>
+              <Field label={ar ? "شريط البحث" : "Search bar"} type="checkbox">
+                <Toggle
+                  on={draft.settings.showSearch}
+                  onChange={(v) => patchSettings({ showSearch: v })}
                   ar={ar}
-                  open={openBlock === block.id}
-                  first={i === 0}
-                  last={i === draft.blocks.length - 1}
-                  collections={data.collections}
-                  onToggle={() => setOpenBlock(openBlock === block.id ? null : block.id)}
-                  onPatch={(patch) => patchBlock(block.id, patch)}
-                  onMove={(by) => move(block.id, by)}
-                  onRemove={() => remove(block.id)}
                 />
-              ))}
-            </ul>
+              </Field>
+              <Field label={ar ? "شريط إعلان" : "Announcement bar"} type="checkbox">
+                <Toggle
+                  on={draft.settings.announcementEnabled}
+                  onChange={(v) => patchSettings({ announcementEnabled: v })}
+                  ar={ar}
+                />
+              </Field>
+              {draft.settings.announcementEnabled && (
+                <Field label={ar ? "نص الإعلان" : "Announcement text"} type="text">
+                  <input
+                    value={draft.settings.announcement}
+                    onChange={(e) => patchSettings({ announcement: e.target.value })}
+                    placeholder={ar ? "شحن مجاني فوق ١٠٠٠ ج.م" : "Free delivery over 1,000 EGP"}
+                    className={input}
+                  />
+                </Field>
+              )}
+            </Group>
 
-            <div className="mt-4 border-t border-line pt-4">
-              <div className="text-xs font-medium text-ink-muted">
-                {ar ? "أضيفي قسماً" : "Add a block"}
+            <div className="mb-1.5 mt-4 px-1 text-[11px] font-semibold uppercase tracking-wide text-ink-soft">
+              {ar ? "الشاشة الرئيسية" : "Home screen"}
+            </div>
+
+            {draft.blocks.map((block, i) => (
+              <BlockGroup
+                key={block.id}
+                block={block}
+                ar={ar}
+                open={open[block.id] ?? false}
+                highlighted={hovered === block.id}
+                first={i === 0}
+                last={i === draft.blocks.length - 1}
+                collections={data.collections}
+                input={input}
+                onToggle={() => setOpen((s) => ({ ...s, [block.id]: !s[block.id] }))}
+                onHover={setHovered}
+                onPatch={(patch) => patchBlock(block.id, patch)}
+                onMove={(by) => move(block.id, by)}
+                onRemove={() =>
+                  setDraft((d) => (d ? { ...d, blocks: d.blocks.filter((b) => b.id !== block.id) } : d))
+                }
+              />
+            ))}
+
+            {draft.blocks.length === 0 && (
+              <p className="px-1 py-6 text-center text-xs text-ink-soft">
+                {ar ? "لا توجد أقسام بعد." : "No sections yet."}
+              </p>
+            )}
+
+            <div className="mt-3 border-t border-line pt-3">
+              <div className="px-1 text-[11px] font-semibold uppercase tracking-wide text-ink-soft">
+                {ar ? "إضافة قسم" : "Add a section"}
               </div>
-              <div className="mt-2 flex flex-wrap gap-2">
+              <div className="mt-2 flex flex-wrap gap-1.5">
                 {(Object.keys(BLOCK_META) as BlockType[]).map((type) => (
                   <button
                     key={type}
                     onClick={() => add(type)}
                     title={ar ? BLOCK_META[type].hintAr : BLOCK_META[type].hintEn}
-                    className="btn-outline h-9 gap-1.5 px-3 text-xs"
+                    className="btn-outline h-8 gap-1 px-2.5 text-xs"
                   >
-                    <IcPlus className="h-3.5 w-3.5" />
+                    <IcPlus className="h-3 w-3" />
                     {ar ? BLOCK_META[type].ar : BLOCK_META[type].en}
                   </button>
                 ))}
               </div>
             </div>
-          </Card>
-        </div>
-
-        {/* ------------------------------- phone --------------------------- */}
-        <div className="mx-auto w-full max-w-[380px] shrink-0 xl:sticky xl:top-6">
-          <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-ink-muted">
-            <IcEye className="h-3.5 w-3.5" />
-            {ar ? "معاينة حيّة" : "Live preview"}
           </div>
-          <div className="overflow-hidden rounded-[2rem] border-8 border-slate-900 bg-slate-50 shadow-xl">
-            <div
-              className="flex items-center justify-between px-4 pb-2 pt-1.5 text-[11px] font-medium text-white"
-              style={{ background: "#0f172a" }}
+        </Card>
+
+        {/* ---------------------------- preview --------------------------- */}
+        <Card className="flex min-h-0 flex-col overflow-hidden">
+          <div className="flex items-center gap-2 border-b border-line px-3 py-2">
+            <span className="rounded-lg bg-ink px-2.5 py-1 text-xs font-medium text-white">
+              {ar ? "الرئيسية" : "Home"}
+            </span>
+            <span className="text-[11px] text-ink-soft">
+              {ar
+                ? "هذه شاشة التطبيق نفسها، وليست صورة لها"
+                : "This is the app's own screen, not a picture of it"}
+            </span>
+            <Link
+              href="/app-preview"
+              className="ms-auto text-[11px] font-medium text-brand-600 hover:underline"
             >
-              <span className="flex items-center gap-1.5">
-                {draft.settings.logoUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={draft.settings.logoUrl} alt="" className="h-4 w-auto" />
-                ) : null}
-                {draft.settings.storeName}
-              </span>
-              <span
-                className="rounded-full px-2 py-0.5 text-[10px]"
-                style={{ background: `${draft.settings.accent}40` }}
-              >
-                {ar ? "معاينة" : "preview"}
-              </span>
-            </div>
+              {ar ? "فتح التطبيق كاملاً" : "Open the full app"}
+            </Link>
+          </div>
 
-            {draft.settings.announcementEnabled && draft.settings.announcement && (
-              <div
-                className="px-3 py-1.5 text-center text-[11px] font-medium text-white"
-                style={{ background: draft.settings.accent }}
-              >
-                {draft.settings.announcement}
+          <div className="flex min-h-0 flex-1 justify-center overflow-y-auto bg-surface-page p-4">
+            <div
+              className={`${
+                device === "mobile" ? "w-[390px]" : "w-full max-w-[900px]"
+              } max-w-full self-start overflow-hidden rounded-[1.75rem] border-8 border-slate-900 bg-slate-50 shadow-card`}
+            >
+              <div className="flex items-center justify-between bg-slate-900 px-4 pb-2 pt-1.5 text-[11px] font-medium text-white">
+                <span className="flex items-center gap-1.5">
+                  {draft.settings.logoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={draft.settings.logoUrl} alt="" className="h-4 w-auto" />
+                  ) : null}
+                  {draft.settings.storeName}
+                </span>
+                <span
+                  className="rounded-full px-2 py-0.5 text-[10px]"
+                  style={{ background: `${draft.settings.accent}66` }}
+                >
+                  {ar ? "معاينة" : "preview"}
+                </span>
               </div>
-            )}
 
-            <div className="h-[620px] overflow-y-auto bg-slate-50 p-4">
-              {draft.settings.showSearch && (
-                <div className="mb-4 h-10 rounded-full border border-slate-300 bg-white px-4 text-sm leading-10 text-slate-400">
-                  {ar ? "ابحثي…" : "Search…"}
+              {draft.settings.announcementEnabled && draft.settings.announcement && (
+                <div
+                  className="px-3 py-1.5 text-center text-[11px] font-medium text-white"
+                  style={{ background: draft.settings.accent }}
+                >
+                  {draft.settings.announcement}
                 </div>
               )}
-              {home ? (
-                <AppHome theme={draft} data={home} ar={ar} showPlaceholders />
-              ) : (
-                <p className="py-16 text-center text-sm text-slate-400">
-                  {ar ? "جارٍ التحميل…" : "Loading…"}
-                </p>
-              )}
+
+              <div className="bg-slate-50 p-4">
+                {draft.settings.showSearch && (
+                  <div className="mb-4 h-10 rounded-full border border-slate-300 bg-white px-4 text-sm leading-10 text-slate-400">
+                    {ar ? "ابحثي…" : "Search…"}
+                  </div>
+                )}
+                {home ? (
+                  <div className="space-y-5">
+                    {draft.blocks.map((block) => (
+                      <div
+                        key={block.id}
+                        onMouseEnter={() => {
+                          setHovered(block.id);
+                          setOpen((s) => (s[block.id] ? s : { ...s, [block.id]: true }));
+                        }}
+                        onMouseLeave={() => setHovered(null)}
+                        className={`rounded-2xl transition-shadow ${
+                          hovered === block.id ? "shadow-[0_0_0_2px_rgb(139,92,246)]" : ""
+                        }`}
+                      >
+                        <AppHome
+                          theme={{ settings: draft.settings, blocks: [block] }}
+                          data={home}
+                          ar={ar}
+                          showPlaceholders
+                        />
+                      </div>
+                    ))}
+                    {draft.blocks.length === 0 && (
+                      <p className="py-16 text-center text-sm text-slate-400">
+                        {ar ? "الشاشة فارغة" : "The screen is empty"}
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  <p className="py-16 text-center text-sm text-slate-400">
+                    {ar ? "جارٍ بناء المعاينة…" : "Building the preview…"}
+                  </p>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        </Card>
       </div>
-    </>
+    </div>
   );
 }
 
-// --------------------------------------------------------------- one block --
-function BlockCard({
+// ------------------------------------------------------------------ pieces --
+function Group({
+  id,
+  title,
+  subtitle,
+  open,
+  onToggle,
+  codeHref,
+  highlighted,
+  blockKey,
+  onHover,
+  actions,
+  children,
+}: {
+  id: string;
+  title: string;
+  subtitle?: string;
+  open: boolean;
+  onToggle: () => void;
+  codeHref?: string;
+  highlighted?: boolean;
+  blockKey?: string;
+  onHover?: (key: string | null) => void;
+  actions?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      data-block-key={blockKey}
+      onMouseEnter={() => blockKey && onHover?.(blockKey)}
+      onMouseLeave={() => onHover?.(null)}
+      className={`mb-1.5 rounded-xl border transition-colors ${
+        highlighted ? "border-violet-400 bg-violet-50/40 ring-1 ring-violet-300" : "border-line"
+      }`}
+    >
+      <div className="flex items-center gap-1 px-3 py-2">
+        <button onClick={onToggle} className="flex min-w-0 flex-1 items-center gap-2 text-start">
+          <IcChevron
+            className={`h-3 w-3 shrink-0 text-ink-soft transition-transform ${
+              open ? "rotate-90" : ""
+            } rtl:-scale-x-100`}
+          />
+          <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{title}</span>
+          {subtitle && (
+            <span className="shrink-0 font-mono text-[10px] text-ink-soft">{subtitle}</span>
+          )}
+        </button>
+        {actions}
+        {codeHref && (
+          <Link
+            href={codeHref}
+            className="shrink-0 rounded-lg px-1.5 py-1 text-ink-soft hover:bg-surface-hover hover:text-ink"
+            title="Code"
+          >
+            <IcCode className="h-3.5 w-3.5" />
+          </Link>
+        )}
+      </div>
+      {open && <div className="border-t border-line px-3 pb-2">{children}</div>}
+      <span className="hidden">{id}</span>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  type,
+  children,
+}: {
+  label: string;
+  type: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="py-1.5">
+      <div className="mb-1 flex items-baseline gap-1.5">
+        <span className="text-xs font-medium text-ink-muted">{label}</span>
+        <span className="badge bg-slate-100 text-[10px] text-ink-soft">{type}</span>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function Toggle({
+  on,
+  onChange,
+  ar,
+}: {
+  on: boolean;
+  onChange: (v: boolean) => void;
+  ar: boolean;
+}) {
+  return (
+    <button
+      onClick={() => onChange(!on)}
+      className={`flex h-9 items-center gap-2 rounded-xl px-3 text-sm font-medium transition-colors ${
+        on ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-ink-muted"
+      }`}
+    >
+      <span
+        className={`h-3.5 w-3.5 rounded border ${
+          on ? "border-emerald-600 bg-emerald-600" : "border-line bg-surface"
+        }`}
+      />
+      {on ? (ar ? "مُفعّل" : "On") : ar ? "متوقّف" : "Off"}
+    </button>
+  );
+}
+
+function BlockGroup({
   block,
   ar,
   open,
+  highlighted,
   first,
   last,
   collections,
+  input,
   onToggle,
+  onHover,
   onPatch,
   onMove,
   onRemove,
@@ -415,10 +603,13 @@ function BlockCard({
   block: Block;
   ar: boolean;
   open: boolean;
+  highlighted: boolean;
   first: boolean;
   last: boolean;
   collections: { handle: string; title: string; count: number }[];
+  input: string;
   onToggle: () => void;
+  onHover: (key: string | null) => void;
   onPatch: (patch: Record<string, unknown>) => void;
   onMove: (by: 1 | -1) => void;
   onRemove: () => void;
@@ -427,198 +618,192 @@ function BlockCard({
   const s = block.settings ?? {};
   const text = (k: string) => (typeof s[k] === "string" ? (s[k] as string) : "");
   const num = (k: string, d: number) => (Number(s[k]) > 0 ? Number(s[k]) : d);
-
   const chosen = collections.find((c) => c.handle === text("handle"));
-  const summary =
-    block.type === "collection_row" || block.type === "collection_grid"
-      ? chosen?.title ?? (ar ? "كل الأقسام" : "Every collection")
-      : text("title") || text("heading") || (ar ? meta.ar : meta.en);
 
   return (
-    <li className="overflow-hidden rounded-xl border border-line">
-      <div className="flex items-center gap-2 bg-surface-page px-3 py-2.5">
-        <button onClick={onToggle} className="min-w-0 flex-1 text-start">
-          <div className="text-sm font-medium text-ink">{ar ? meta.ar : meta.en}</div>
-          <div className="truncate text-[11px] text-ink-soft">{summary}</div>
-        </button>
-        <button
-          onClick={() => onMove(-1)}
-          disabled={first}
-          className="btn-ghost h-7 w-7 p-0 disabled:opacity-30"
-          aria-label={ar ? "لأعلى" : "Move up"}
-        >
-          <IcUp className="h-3.5 w-3.5" />
-        </button>
-        <button
-          onClick={() => onMove(1)}
-          disabled={last}
-          className="btn-ghost h-7 w-7 p-0 disabled:opacity-30"
-          aria-label={ar ? "لأسفل" : "Move down"}
-        >
-          <IcDown className="h-3.5 w-3.5" />
-        </button>
-        <button
-          onClick={onRemove}
-          className="btn-ghost h-7 w-7 p-0 text-rose-600"
-          aria-label={ar ? "حذف" : "Remove"}
-        >
-          <IcTrash className="h-3.5 w-3.5" />
-        </button>
-      </div>
+    <Group
+      id={block.id}
+      blockKey={block.id}
+      highlighted={highlighted}
+      onHover={onHover}
+      title={ar ? meta.ar : meta.en}
+      subtitle={`${componentName(block.type)}.tsx`}
+      open={open}
+      onToggle={onToggle}
+      codeHref={`/app/theme/code?file=components/${componentName(block.type)}.tsx`}
+      actions={
+        <>
+          <button
+            onClick={() => onMove(-1)}
+            disabled={first}
+            className="btn-ghost h-7 w-7 shrink-0 p-0 disabled:opacity-30"
+            aria-label={ar ? "لأعلى" : "Move up"}
+          >
+            <IcUp className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={() => onMove(1)}
+            disabled={last}
+            className="btn-ghost h-7 w-7 shrink-0 p-0 disabled:opacity-30"
+            aria-label={ar ? "لأسفل" : "Move down"}
+          >
+            <IcDown className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={onRemove}
+            className="btn-ghost h-7 w-7 shrink-0 p-0 text-rose-600"
+            aria-label={ar ? "حذف" : "Remove"}
+          >
+            <IcTrash className="h-3.5 w-3.5" />
+          </button>
+        </>
+      }
+    >
+      <p className="pt-2 text-[11px] leading-relaxed text-ink-soft">
+        {ar ? meta.hintAr : meta.hintEn}
+      </p>
 
-      {open && (
-        <div className="space-y-3 border-t border-line p-3">
-          <p className="text-[11px] leading-relaxed text-ink-soft">
-            {ar ? meta.hintAr : meta.hintEn}
-          </p>
-
-          {block.type === "banner" && (
-            <>
-              <Row label={ar ? "رابط الصورة" : "Image URL"}>
-                <input
-                  value={text("imageUrl")}
-                  onChange={(e) => onPatch({ imageUrl: e.target.value })}
-                  placeholder="https://…"
-                  className={input}
-                  dir="ltr"
-                />
-              </Row>
-              <Row label={ar ? "العنوان" : "Heading"}>
-                <input
-                  value={text("heading")}
-                  onChange={(e) => onPatch({ heading: e.target.value })}
-                  className={input}
-                />
-              </Row>
-              <Row label={ar ? "سطر فرعي" : "Subheading"}>
-                <input
-                  value={text("subheading")}
-                  onChange={(e) => onPatch({ subheading: e.target.value })}
-                  className={input}
-                />
-              </Row>
-              <CollectionPicker
-                ar={ar}
-                collections={collections}
-                value={text("handle")}
-                onChange={(handle) => onPatch({ handle })}
-                label={ar ? "يفتح عند الضغط" : "Opens when tapped"}
-                anyLabel={ar ? "لا شيء" : "Nothing"}
-              />
-            </>
-          )}
-
-          {(block.type === "collection_row" || block.type === "collection_grid") && (
-            <>
-              <CollectionPicker
-                ar={ar}
-                collections={collections}
-                value={text("handle")}
-                onChange={(handle) => onPatch({ handle })}
-                label={ar ? "القسم" : "Collection"}
-                anyLabel={
-                  ar ? "أول ٨ أقسام بالترتيب" : "Your first 8 collections, in your order"
-                }
-              />
-              {text("handle") && (
-                <Row label={ar ? "عنوان بديل" : "Title override"}>
-                  <input
-                    value={text("title")}
-                    onChange={(e) => onPatch({ title: e.target.value })}
-                    placeholder={chosen?.title ?? ""}
-                    className={input}
-                  />
-                </Row>
-              )}
-              <Row label={ar ? "عدد المنتجات" : "How many products"}>
-                <input
-                  type="number"
-                  min={2}
-                  max={12}
-                  value={num("limit", 8)}
-                  onChange={(e) => onPatch({ limit: Number(e.target.value) })}
-                  className={input}
-                />
-              </Row>
-            </>
-          )}
-
-          {(block.type === "new_arrivals" ||
-            block.type === "reviews" ||
-            block.type === "categories") && (
-            <>
-              <Row label={ar ? "العنوان" : "Title"}>
-                <input
-                  value={text("title")}
-                  onChange={(e) => onPatch({ title: e.target.value })}
-                  className={input}
-                />
-              </Row>
-              {block.type !== "categories" && (
-                <Row label={ar ? "العدد" : "How many"}>
-                  <input
-                    type="number"
-                    min={2}
-                    max={20}
-                    value={num("limit", block.type === "reviews" ? 6 : 12)}
-                    onChange={(e) => onPatch({ limit: Number(e.target.value) })}
-                    className={input}
-                  />
-                </Row>
-              )}
-            </>
-          )}
-
-          {block.type === "text" && (
-            <>
-              <Row label={ar ? "العنوان" : "Heading"}>
-                <input
-                  value={text("heading")}
-                  onChange={(e) => onPatch({ heading: e.target.value })}
-                  className={input}
-                />
-              </Row>
-              <Row label={ar ? "النص" : "Body"}>
-                <textarea
-                  value={text("body")}
-                  onChange={(e) => onPatch({ body: e.target.value })}
-                  rows={3}
-                  className={`${input} h-auto py-2`}
-                />
-              </Row>
-            </>
-          )}
-        </div>
+      {block.type === "banner" && (
+        <>
+          <Field label={ar ? "الصورة" : "Image"} type="image_picker">
+            <input
+              value={text("imageUrl")}
+              onChange={(e) => onPatch({ imageUrl: e.target.value })}
+              placeholder="https://…"
+              className={input}
+              dir="ltr"
+            />
+          </Field>
+          <Field label={ar ? "العنوان" : "Heading"} type="text">
+            <input
+              value={text("heading")}
+              onChange={(e) => onPatch({ heading: e.target.value })}
+              className={input}
+            />
+          </Field>
+          <Field label={ar ? "سطر فرعي" : "Subheading"} type="text">
+            <input
+              value={text("subheading")}
+              onChange={(e) => onPatch({ subheading: e.target.value })}
+              className={input}
+            />
+          </Field>
+          <Field label={ar ? "يفتح" : "Opens"} type="collection">
+            <CollectionSelect
+              collections={collections}
+              value={text("handle")}
+              onChange={(handle) => onPatch({ handle })}
+              anyLabel={ar ? "لا شيء" : "Nothing"}
+              className={input}
+            />
+          </Field>
+        </>
       )}
-    </li>
+
+      {(block.type === "collection_row" || block.type === "collection_grid") && (
+        <>
+          <Field label={ar ? "القسم" : "Collection"} type="collection">
+            <CollectionSelect
+              collections={collections}
+              value={text("handle")}
+              onChange={(handle) => onPatch({ handle })}
+              anyLabel={ar ? "أول ٨ أقسام بالترتيب" : "Your first 8 collections, in your order"}
+              className={input}
+            />
+          </Field>
+          {text("handle") && (
+            <Field label={ar ? "عنوان بديل" : "Title override"} type="text">
+              <input
+                value={text("title")}
+                onChange={(e) => onPatch({ title: e.target.value })}
+                placeholder={chosen?.title ?? ""}
+                className={input}
+              />
+            </Field>
+          )}
+          <Field label={ar ? "عدد المنتجات" : "How many products"} type="range">
+            <input
+              type="number"
+              min={2}
+              max={12}
+              value={num("limit", block.type === "collection_row" ? 8 : 6)}
+              onChange={(e) => onPatch({ limit: Number(e.target.value) })}
+              className={input}
+            />
+          </Field>
+        </>
+      )}
+
+      {(block.type === "new_arrivals" ||
+        block.type === "reviews" ||
+        block.type === "categories") && (
+        <>
+          <Field label={ar ? "العنوان" : "Title"} type="text">
+            <input
+              value={text("title")}
+              onChange={(e) => onPatch({ title: e.target.value })}
+              className={input}
+            />
+          </Field>
+          {block.type !== "categories" && (
+            <Field label={ar ? "العدد" : "How many"} type="range">
+              <input
+                type="number"
+                min={2}
+                max={20}
+                value={num("limit", block.type === "reviews" ? 6 : 12)}
+                onChange={(e) => onPatch({ limit: Number(e.target.value) })}
+                className={input}
+              />
+            </Field>
+          )}
+        </>
+      )}
+
+      {block.type === "text" && (
+        <>
+          <Field label={ar ? "العنوان" : "Heading"} type="text">
+            <input
+              value={text("heading")}
+              onChange={(e) => onPatch({ heading: e.target.value })}
+              className={input}
+            />
+          </Field>
+          <Field label={ar ? "النص" : "Body"} type="richtext">
+            <textarea
+              value={text("body")}
+              onChange={(e) => onPatch({ body: e.target.value })}
+              rows={3}
+              className={`${input} h-auto py-2`}
+            />
+          </Field>
+        </>
+      )}
+    </Group>
   );
 }
 
-function CollectionPicker({
-  ar,
+function CollectionSelect({
   collections,
   value,
   onChange,
-  label,
   anyLabel,
+  className,
 }: {
-  ar: boolean;
   collections: { handle: string; title: string; count: number }[];
   value: string;
   onChange: (handle: string) => void;
-  label: string;
   anyLabel: string;
+  className: string;
 }) {
   return (
-    <Row label={label}>
-      <select value={value} onChange={(e) => onChange(e.target.value)} className={input}>
-        <option value="">{anyLabel}</option>
-        {collections.map((c) => (
-          <option key={c.handle} value={c.handle}>
-            {c.title} ({c.count})
-          </option>
-        ))}
-      </select>
-    </Row>
+    <select value={value} onChange={(e) => onChange(e.target.value)} className={className}>
+      <option value="">{anyLabel}</option>
+      {collections.map((c) => (
+        <option key={c.handle} value={c.handle}>
+          {c.title} ({c.count})
+        </option>
+      ))}
+    </select>
   );
 }
