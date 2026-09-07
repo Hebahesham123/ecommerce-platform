@@ -633,7 +633,7 @@ function BlockGroup({
   highlighted: boolean;
   first: boolean;
   last: boolean;
-  collections: { handle: string; title: string; count: number }[];
+  collections: { handle: string; title: string; count: number; image: string | null }[];
   input: string;
   onToggle: () => void;
   onHover: (key: string | null) => void;
@@ -896,7 +896,7 @@ function ItemList({
 }: {
   block: Block;
   ar: boolean;
-  collections: { handle: string; title: string; count: number }[];
+  collections: { handle: string; title: string; count: number; image: string | null }[];
   input: string;
   onPatch: (patch: Record<string, unknown>) => void;
 }) {
@@ -997,6 +997,18 @@ function ItemList({
                 <div className="space-y-2 border-t border-line px-2 pb-2 pt-1.5">
                   {fields.map((f) => {
                     const value = typeof item[f.key] === "string" ? (item[f.key] as string) : "";
+                    const linked = collections.find(
+                      (c) => c.handle === (typeof item.handle === "string" ? item.handle : ""),
+                    );
+                    // What this field will show if left empty, because the
+                    // collection supplies it. Saying so beats a blank box that
+                    // looks like nothing happened.
+                    const inherited =
+                      f.kind === "image"
+                        ? linked?.image ?? ""
+                        : f.key === "title" || f.key === "label"
+                          ? linked?.title ?? ""
+                          : "";
                     return (
                       <label key={f.key} className="block">
                         <span className="text-[11px] font-medium text-ink-muted">
@@ -1011,13 +1023,38 @@ function ItemList({
                             className={`${input} mt-0.5 h-8 text-xs`}
                           />
                         ) : (
-                          <input
-                            value={value}
-                            onChange={(e) => patchItem(item.id, { [f.key]: e.target.value })}
-                            placeholder={f.kind === "image" ? "https://…" : ""}
-                            dir={f.kind === "image" ? "ltr" : undefined}
-                            className={`${input} mt-0.5 h-8 text-xs`}
-                          />
+                          <span className="mt-0.5 flex items-center gap-1.5">
+                            {f.kind === "image" && (value || inherited) && (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={value || inherited}
+                                alt=""
+                                className="h-8 w-8 shrink-0 rounded object-cover"
+                              />
+                            )}
+                            <input
+                              value={value}
+                              onChange={(e) => patchItem(item.id, { [f.key]: e.target.value })}
+                              placeholder={
+                                inherited
+                                  ? ar
+                                    ? "من القسم"
+                                    : "from the collection"
+                                  : f.kind === "image"
+                                    ? "https://…"
+                                    : ""
+                              }
+                              dir={f.kind === "image" ? "ltr" : undefined}
+                              className={`${input} h-8 text-xs`}
+                            />
+                          </span>
+                        )}
+                        {inherited && !value && (
+                          <span className="mt-0.5 block text-[10px] text-ink-soft">
+                            {ar
+                              ? "يأخذها من القسم المرتبط تلقائياً"
+                              : "Taken from the linked collection"}
+                          </span>
                         )}
                       </label>
                     );
@@ -1055,7 +1092,7 @@ function CollectionSelect({
   anyLabel,
   className,
 }: {
-  collections: { handle: string; title: string; count: number }[];
+  collections: { handle: string; title: string; count: number; image: string | null }[];
   value: string;
   onChange: (handle: string) => void;
   anyLabel: string;

@@ -65,6 +65,25 @@ const int = (v: unknown, fallback: number) => {
   return Number.isFinite(n) && n > 0 ? Math.trunc(n) : fallback;
 };
 
+/**
+ * What a thing pointed at a collection looks like.
+ *
+ * Choosing a collection is already saying what the card is; making the
+ * merchant then find and paste that collection's picture is asking them to
+ * repeat themselves, and guarantees the two drift the day the collection gets
+ * a new image. Their own image always wins when they set one.
+ */
+function inherit(item: Item, data: HomeData): { image: string | null; title: string } {
+  const own = str(item.imageUrl);
+  const named = str(item.title) || str(item.label);
+  const handle = str(item.handle);
+  const collection = handle ? data.collections.find((c) => c.handle === handle) : undefined;
+  return {
+    image: own || collection?.image || null,
+    title: named || collection?.title || "",
+  };
+}
+
 function Thumb({ src, className = "" }: { src: string | null; className?: string }) {
   return (
     <div className={`overflow-hidden rounded-xl bg-slate-100 ${className}`}>
@@ -158,11 +177,11 @@ function BlockView({
 
   switch (block.type) {
     case "banner": {
-      const image = str(s.imageUrl);
       const handle = str(s.handle);
+      const target = data.collections.find((c) => c.handle === handle);
+      const image = str(s.imageUrl) || target?.image || "";
       const heading = str(s.heading);
       const sub = str(s.subheading);
-      const target = data.collections.find((c) => c.handle === handle);
       if (!image && !heading) {
         return <Placeholder ar={ar} label={ar ? "بانر بلا صورة" : "Banner with no image yet"} />;
       }
@@ -184,19 +203,39 @@ function BlockView({
 
     case "categories": {
       const title = str(s.title);
-      if (!data.collections.length) {
+      // The merchant's own picks when they made some, each borrowing its
+      // collection's picture and name; otherwise every collection.
+      const picked = itemsOf(block).filter((i) => str(i.handle));
+      const chips = picked.length
+        ? picked.map((i) => {
+            const { image, title: name } = inherit(i, data);
+            return { handle: str(i.handle), title: name, image, emoji: str(i.emoji) };
+          })
+        : data.collections.map((c) => ({
+            handle: c.handle,
+            title: c.title,
+            image: c.image,
+            emoji: "",
+          }));
+      if (!chips.length) {
         return <Placeholder ar={ar} label={ar ? "لا توجد أقسام" : "No collections yet"} />;
       }
       return (
         <section>
           {title && <Heading title={title} ar={ar} accent={accent} />}
           <div className="-mx-4 mt-2 flex gap-2 overflow-x-auto px-4 pb-1">
-            {data.collections.map((c) => (
+            {chips.map((c) => (
               <button
                 key={c.handle}
                 onClick={() => handlers.onOpenCollection?.(c.handle, c.title)}
-                className="shrink-0 whitespace-nowrap rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-600"
+                className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-slate-300 bg-white ps-1.5 pe-3 py-1 text-xs font-medium text-slate-600"
               >
+                {c.image ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={c.image} alt="" className="h-6 w-6 rounded-full object-cover" />
+                ) : c.emoji ? (
+                  <span className="text-sm">{c.emoji}</span>
+                ) : null}
                 {c.title}
               </button>
             ))}
@@ -354,21 +393,24 @@ function BlockView({
         <section>
           <Heading title={str(s.title)} ar={ar} accent={accent} />
           <div className="-mx-4 mt-2 flex gap-3 overflow-x-auto px-4 pb-1">
-            {cards.map((c) => (
-              <button
-                key={c.id}
-                onClick={() => str(c.handle) && handlers.onOpenCollection?.(str(c.handle), str(c.title))}
-                className="w-36 shrink-0 overflow-hidden rounded-2xl border border-slate-200 bg-white text-start"
-              >
-                <Thumb src={str(c.imageUrl) || null} className="aspect-[4/5] rounded-none" />
-                <div className="p-2">
-                  <div className="truncate text-xs font-semibold text-slate-900">{str(c.title)}</div>
-                  {str(c.subtitle) && (
-                    <div className="truncate text-[10px] text-slate-500">{str(c.subtitle)}</div>
-                  )}
-                </div>
-              </button>
-            ))}
+            {cards.map((c) => {
+              const { image, title } = inherit(c, data);
+              return (
+                <button
+                  key={c.id}
+                  onClick={() => str(c.handle) && handlers.onOpenCollection?.(str(c.handle), title)}
+                  className="w-36 shrink-0 overflow-hidden rounded-2xl border border-slate-200 bg-white text-start"
+                >
+                  <Thumb src={image} className="aspect-[4/5] rounded-none" />
+                  <div className="p-2">
+                    <div className="truncate text-xs font-semibold text-slate-900">{title}</div>
+                    {str(c.subtitle) && (
+                      <div className="truncate text-[10px] text-slate-500">{str(c.subtitle)}</div>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </section>
       );
@@ -410,21 +452,24 @@ function BlockView({
         <section>
           <Heading title={str(s.title)} ar={ar} accent={accent} />
           <div className="mt-2 grid grid-cols-2 gap-2">
-            {panels.map((p) => (
-              <button
-                key={p.id}
-                onClick={() => str(p.handle) && handlers.onOpenCollection?.(str(p.handle), str(p.label))}
-                className="relative overflow-hidden rounded-2xl text-start"
-              >
-                <Thumb src={str(p.imageUrl) || null} className="aspect-[3/4] rounded-none" />
-                <div className="absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-black/55 to-transparent p-2.5">
-                  <div className="text-sm font-bold text-white">{str(p.label)}</div>
-                  {str(p.buttonLabel) && (
-                    <div className="text-[10px] text-white/85">{str(p.buttonLabel)}</div>
-                  )}
-                </div>
-              </button>
-            ))}
+            {panels.map((p) => {
+              const { image, title } = inherit(p, data);
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => str(p.handle) && handlers.onOpenCollection?.(str(p.handle), title)}
+                  className="relative overflow-hidden rounded-2xl text-start"
+                >
+                  <Thumb src={image} className="aspect-[3/4] rounded-none" />
+                  <div className="absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-black/55 to-transparent p-2.5">
+                    <div className="text-sm font-bold text-white">{title}</div>
+                    {str(p.buttonLabel) && (
+                      <div className="text-[10px] text-white/85">{str(p.buttonLabel)}</div>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </section>
       );
@@ -523,7 +568,10 @@ function Hero({
   const [at, setAt] = useState(0);
   const slide = slides[Math.min(at, slides.length - 1)];
   const handle = str(slide.handle);
-  const title = data.collections.find((c) => c.handle === handle)?.title ?? str(slide.heading);
+  const collection = data.collections.find((c) => c.handle === handle);
+  const title = collection?.title ?? str(slide.heading);
+  // A slide with no picture of its own borrows the collection's.
+  const image = str(slide.imageUrl) || collection?.image || null;
 
   return (
     <section>
@@ -531,7 +579,7 @@ function Hero({
         onClick={() => handle && onOpen?.(handle, title)}
         className="relative block w-full overflow-hidden rounded-2xl text-start"
       >
-        <Thumb src={str(slide.imageUrl) || null} className="h-44 w-full rounded-2xl" />
+        <Thumb src={image} className="h-44 w-full rounded-2xl" />
         <div className="absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-black/60 to-transparent p-3">
           {str(slide.kicker) && (
             <div className="text-[10px] uppercase tracking-widest text-white/80">
@@ -698,7 +746,7 @@ function isPlaceholder(node: React.ReactElement): boolean {
     case "banner":
       return !str(s.imageUrl) && !str(s.heading);
     case "categories":
-      return data.collections.length === 0;
+      return itemsOf(block).filter((i) => str(i.handle)).length === 0 && data.collections.length === 0;
     case "new_arrivals":
       return data.newArrivals.length === 0;
     case "reviews":

@@ -145,7 +145,7 @@ function piecesFile(): GeneratedFile {
     contents: `import React from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { colors, radius, spacing } from "../theme";
-import type { Card } from "../api";
+import type { Card, HomePayload } from "../api";
 
 /** The bits every section is made of, so they all look like one app. */
 
@@ -167,6 +167,25 @@ export function SectionHeading({
       ) : null}
     </View>
   );
+}
+
+/**
+ * What a card pointed at a collection looks like.
+ *
+ * Choosing a collection is already saying what the card is; making the
+ * merchant then paste that collection's picture is asking them to repeat
+ * themselves, and guarantees the two drift the day the collection gets a new
+ * image. Their own image wins whenever they set one.
+ */
+export function inherit(
+  item: { imageUrl?: string; title?: string; label?: string; handle?: string },
+  collections: HomePayload["collections"],
+): { image: string | undefined; title: string } {
+  const found = item.handle ? collections.find((c) => c.handle === item.handle) : undefined;
+  return {
+    image: item.imageUrl || found?.image || undefined,
+    title: item.title || item.label || found?.title || "",
+  };
 }
 
 export function money(v: number | null) {
@@ -232,6 +251,7 @@ function sectionFile(type: BlockType): GeneratedFile {
     banner: `import React from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { colors, radius } from "../theme";
+import type { HomePayload } from "../api";
 
 export type BannerSettings = {
   imageUrl?: string;
@@ -243,12 +263,16 @@ export type BannerSettings = {
 
 export function Banner({
   settings,
+  collections,
   onOpenCollection,
 }: {
   settings: BannerSettings;
+  collections: HomePayload["collections"];
   onOpenCollection?: (handle: string) => void;
 }) {
-  const { imageUrl, heading, subheading, handle } = settings;
+  const { heading, subheading, handle } = settings;
+  const imageUrl =
+    settings.imageUrl || collections.find((c) => c.handle === handle)?.image || undefined;
   if (!imageUrl && !heading) return null;
   return (
     <Pressable onPress={() => handle && onOpenCollection?.(handle)} style={styles.wrap}>
@@ -275,9 +299,9 @@ const styles = StyleSheet.create({
 `,
 
     categories: `import React from "react";
-import { Pressable, ScrollView, StyleSheet, Text } from "react-native";
+import { Image, Pressable, ScrollView, StyleSheet, Text } from "react-native";
 import { colors, radius, spacing } from "../theme";
-import { SectionHeading } from "./Pieces";
+import { inherit, SectionHeading } from "./Pieces";
 import type { HomePayload } from "../api";
 
 export type Category = { id: string; handle?: string; label?: string; emoji?: string };
@@ -296,12 +320,11 @@ export function Categories({
   // which is what a store that has not curated this wants anyway.
   const picked = (settings.items ?? []).filter((i) => i.handle);
   const chips = picked.length
-    ? picked.map((i) => ({
-        handle: i.handle!,
-        title: (i.emoji ? i.emoji + " " : "") +
-          (i.label || collections.find((c) => c.handle === i.handle)?.title || i.handle!),
-      }))
-    : collections.map((c) => ({ handle: c.handle, title: c.title }));
+    ? picked.map((i) => {
+        const { image, title } = inherit(i, collections);
+        return { handle: i.handle!, title, image, emoji: i.emoji };
+      })
+    : collections.map((c) => ({ handle: c.handle, title: c.title, image: c.image ?? undefined, emoji: undefined }));
   if (!chips.length) return null;
 
   return (
@@ -310,6 +333,11 @@ export function Categories({
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
         {chips.map((c) => (
           <Pressable key={c.handle} style={styles.chip} onPress={() => onOpenCollection?.(c.handle)}>
+            {c.image ? (
+              <Image source={{ uri: c.image }} style={styles.chipImage} />
+            ) : c.emoji ? (
+              <Text style={styles.chipEmoji}>{c.emoji}</Text>
+            ) : null}
             <Text style={styles.chipText}>{c.title}</Text>
           </Pressable>
         ))}
@@ -320,7 +348,9 @@ export function Categories({
 
 const styles = StyleSheet.create({
   row: { gap: spacing.sm, paddingVertical: spacing.sm },
-  chip: { borderRadius: radius.pill, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, paddingHorizontal: 12, paddingVertical: 6 },
+  chip: { flexDirection: "row", alignItems: "center", gap: 6, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, paddingStart: 6, paddingEnd: 12, paddingVertical: 4 },
+  chipImage: { width: 24, height: 24, borderRadius: 12, backgroundColor: colors.page },
+  chipEmoji: { fontSize: 14 },
   chipText: { fontSize: 12, fontWeight: "500", color: colors.inkMuted },
 });
 `,
@@ -523,6 +553,7 @@ const styles = StyleSheet.create({
     hero: `import React, { useState } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { colors, radius } from "../theme";
+import type { HomePayload } from "../api";
 
 export type Slide = {
   id: string;
@@ -537,15 +568,20 @@ export type HeroSettings = { items?: Slide[] };
 
 export function Hero({
   settings,
+  collections,
   onOpenCollection,
 }: {
   settings: HeroSettings;
+  collections: HomePayload["collections"];
   onOpenCollection?: (handle: string) => void;
 }) {
   const slides = settings.items ?? [];
   const [at, setAt] = useState(0);
   if (!slides.length) return null;
   const slide = slides[Math.min(at, slides.length - 1)];
+  // A slide with no picture of its own borrows the collection's.
+  const image =
+    slide.imageUrl || collections.find((c) => c.handle === slide.handle)?.image || undefined;
 
   return (
     <View>
@@ -553,7 +589,7 @@ export function Hero({
         onPress={() => slide.handle && onOpenCollection?.(slide.handle)}
         style={styles.wrap}
       >
-        {slide.imageUrl ? <Image source={{ uri: slide.imageUrl }} style={styles.image} /> : null}
+        {image ? <Image source={{ uri: image }} style={styles.image} /> : null}
         <View style={styles.overlay}>
           {slide.kicker ? <Text style={styles.kicker}>{slide.kicker}</Text> : null}
           {slide.heading ? <Text style={styles.heading}>{slide.heading}</Text> : null}
@@ -690,16 +726,19 @@ const styles = StyleSheet.create({
     cards: `import React from "react";
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { colors, radius, spacing } from "../theme";
-import { SectionHeading } from "./Pieces";
+import { inherit, SectionHeading } from "./Pieces";
+import type { HomePayload } from "../api";
 
 export type ImageCard = { id: string; imageUrl?: string; title?: string; subtitle?: string; handle?: string };
 export type CardsSettings = { kicker?: string; title?: string; items?: ImageCard[] };
 
 export function Cards({
   settings,
+  collections,
   onOpenCollection,
 }: {
   settings: CardsSettings;
+  collections: HomePayload["collections"];
   onOpenCollection?: (handle: string) => void;
 }) {
   const cards = settings.items ?? [];
@@ -708,19 +747,22 @@ export function Cards({
     <View>
       <SectionHeading title={settings.title ?? ""} />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-        {cards.map((c) => (
-          <Pressable key={c.id} style={styles.card} onPress={() => c.handle && onOpenCollection?.(c.handle)}>
-            {c.imageUrl ? (
-              <Image source={{ uri: c.imageUrl }} style={styles.image} />
-            ) : (
-              <View style={styles.image} />
-            )}
-            <View style={{ padding: spacing.sm }}>
-              <Text style={styles.title} numberOfLines={1}>{c.title}</Text>
-              {c.subtitle ? <Text style={styles.sub} numberOfLines={1}>{c.subtitle}</Text> : null}
-            </View>
-          </Pressable>
-        ))}
+        {cards.map((c) => {
+          const { image, title } = inherit(c, collections);
+          return (
+            <Pressable key={c.id} style={styles.card} onPress={() => c.handle && onOpenCollection?.(c.handle)}>
+              {image ? (
+                <Image source={{ uri: image }} style={styles.image} />
+              ) : (
+                <View style={styles.image} />
+              )}
+              <View style={{ padding: spacing.sm }}>
+                <Text style={styles.title} numberOfLines={1}>{title}</Text>
+                {c.subtitle ? <Text style={styles.sub} numberOfLines={1}>{c.subtitle}</Text> : null}
+              </View>
+            </Pressable>
+          );
+        })}
       </ScrollView>
     </View>
   );
@@ -780,16 +822,19 @@ const styles = StyleSheet.create({
     split: `import React from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { colors, radius, spacing } from "../theme";
-import { SectionHeading } from "./Pieces";
+import { inherit, SectionHeading } from "./Pieces";
+import type { HomePayload } from "../api";
 
 export type Panel = { id: string; imageUrl?: string; label?: string; buttonLabel?: string; handle?: string };
 export type SplitSettings = { title?: string; items?: Panel[] };
 
 export function Split({
   settings,
+  collections,
   onOpenCollection,
 }: {
   settings: SplitSettings;
+  collections: HomePayload["collections"];
   onOpenCollection?: (handle: string) => void;
 }) {
   const panels = (settings.items ?? []).slice(0, 2);
@@ -798,19 +843,22 @@ export function Split({
     <View>
       <SectionHeading title={settings.title ?? ""} />
       <View style={styles.row}>
-        {panels.map((p) => (
-          <Pressable key={p.id} style={styles.panel} onPress={() => p.handle && onOpenCollection?.(p.handle)}>
-            {p.imageUrl ? (
-              <Image source={{ uri: p.imageUrl }} style={styles.image} />
-            ) : (
-              <View style={styles.image} />
-            )}
-            <View style={styles.caption}>
-              <Text style={styles.label}>{p.label}</Text>
-              {p.buttonLabel ? <Text style={styles.button}>{p.buttonLabel}</Text> : null}
-            </View>
-          </Pressable>
-        ))}
+        {panels.map((p) => {
+          const { image, title } = inherit(p, collections);
+          return (
+            <Pressable key={p.id} style={styles.panel} onPress={() => p.handle && onOpenCollection?.(p.handle)}>
+              {image ? (
+                <Image source={{ uri: image }} style={styles.image} />
+              ) : (
+                <View style={styles.image} />
+              )}
+              <View style={styles.caption}>
+                <Text style={styles.label}>{title}</Text>
+                {p.buttonLabel ? <Text style={styles.button}>{p.buttonLabel}</Text> : null}
+              </View>
+            </Pressable>
+          );
+        })}
       </View>
     </View>
   );
@@ -970,18 +1018,18 @@ function renderCall(block: Block, indent: number): string {
   const pad = " ".repeat(indent);
   const name = exportName(block.type);
   const extras: Record<BlockType, string[]> = {
-    hero: ["onOpenCollection={onOpenCollection}"],
+    hero: ["collections={data.collections}", "onOpenCollection={onOpenCollection}"],
     promo_bar: [],
     collection_tabs: [
       "rows={data.rows}",
       "onOpenCollection={onOpenCollection}",
       "onOpenProduct={onOpenProduct}",
     ],
-    cards: ["onOpenCollection={onOpenCollection}"],
+    cards: ["collections={data.collections}", "onOpenCollection={onOpenCollection}"],
     tiers: ["onOpenCollection={onOpenCollection}"],
-    split: ["onOpenCollection={onOpenCollection}"],
+    split: ["collections={data.collections}", "onOpenCollection={onOpenCollection}"],
     trust_badges: [],
-    banner: ["onOpenCollection={onOpenCollection}"],
+    banner: ["collections={data.collections}", "onOpenCollection={onOpenCollection}"],
     categories: ["collections={data.collections}", "onOpenCollection={onOpenCollection}"],
     new_arrivals: ["products={data.newArrivals}", "onOpenProduct={onOpenProduct}"],
     collection_row: [

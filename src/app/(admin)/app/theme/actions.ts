@@ -8,6 +8,13 @@ import { headers } from "next/headers";
 import type { AppTheme } from "@/lib/app-theme";
 import type { ActionResult } from "@/lib/orders";
 
+const imageOf = (v: unknown): string | null => {
+  if (!v) return null;
+  if (typeof v === "string") return v;
+  const src = (v as Record<string, unknown>).src ?? (v as Record<string, unknown>).url;
+  return typeof src === "string" && src ? src : null;
+};
+
 /**
  * The theme editor's two jobs: load what to edit, and save what was edited.
  *
@@ -18,7 +25,7 @@ import type { ActionResult } from "@/lib/orders";
 
 export type ThemeEditorData = {
   theme: AppTheme;
-  collections: { handle: string; title: string; count: number }[];
+  collections: { handle: string; title: string; count: number; image: string | null }[];
   menus: { handle: string; title: string }[];
 };
 
@@ -35,6 +42,9 @@ export async function loadThemeEditor(): Promise<ActionResult<ThemeEditorData>> 
             handle: String(c.handle),
             title: String(c.title),
             count: Number(c.products_count ?? 0),
+            // The editor shows this where a card has no image of its own, so
+            // inheriting a collection's picture is visible rather than magic.
+            image: imageOf(c.featured_image ?? c.image),
           })),
         menus: catalog.menus.map((m) => ({ handle: m.handle, title: m.title })),
       },
