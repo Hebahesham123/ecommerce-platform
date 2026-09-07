@@ -1,6 +1,7 @@
 "use client";
 
-import { ALL_ROWS_CAP, type AppTheme, type Block } from "@/lib/app-theme";
+import { useState } from "react";
+import { ALL_ROWS_CAP, itemsOf, type AppTheme, type Block, type Item } from "@/lib/app-theme";
 
 /**
  * The app's home screen, drawn from a theme.
@@ -296,6 +297,160 @@ function BlockView({
       );
     }
 
+    case "hero": {
+      const slides = itemsOf(block);
+      if (!slides.length) return <Placeholder ar={ar} label={ar ? "لا توجد شرائح" : "No slides yet"} />;
+      return <Hero slides={slides} accent={accent} onOpen={handlers.onOpenCollection} data={data} />;
+    }
+
+    case "promo_bar": {
+      const lead = str(s.lead);
+      const code = str(s.code);
+      if (!lead && !code) return <Placeholder ar={ar} label={ar ? "عرض فارغ" : "Empty offer"} />;
+      return (
+        <div
+          className="flex items-center gap-2 rounded-2xl px-3 py-2.5"
+          style={{ background: `${accent}14` }}
+        >
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-xs font-bold" style={{ color: accent }}>
+              {lead}
+            </div>
+            {str(s.rest) && <div className="truncate text-[10px] text-slate-500">{str(s.rest)}</div>}
+          </div>
+          {code && (
+            <span
+              className="shrink-0 rounded-lg border border-dashed px-2 py-1 font-mono text-[11px] font-bold"
+              style={{ borderColor: accent, color: accent }}
+            >
+              {code}
+            </span>
+          )}
+        </div>
+      );
+    }
+
+    case "collection_tabs": {
+      const tabs = itemsOf(block).filter((t) => str(t.handle));
+      if (!tabs.length) return <Placeholder ar={ar} label={ar ? "لا توجد تبويبات" : "No tabs yet"} />;
+      return (
+        <Tabs
+          title={str(s.title)}
+          kicker={str(s.kicker)}
+          tabs={tabs}
+          limit={int(s.limit, 8)}
+          data={data}
+          ar={ar}
+          accent={accent}
+          handlers={handlers}
+        />
+      );
+    }
+
+    case "cards": {
+      const cards = itemsOf(block);
+      if (!cards.length) return <Placeholder ar={ar} label={ar ? "لا توجد بطاقات" : "No cards yet"} />;
+      return (
+        <section>
+          <Heading title={str(s.title)} ar={ar} accent={accent} />
+          <div className="-mx-4 mt-2 flex gap-3 overflow-x-auto px-4 pb-1">
+            {cards.map((c) => (
+              <button
+                key={c.id}
+                onClick={() => str(c.handle) && handlers.onOpenCollection?.(str(c.handle), str(c.title))}
+                className="w-36 shrink-0 overflow-hidden rounded-2xl border border-slate-200 bg-white text-start"
+              >
+                <Thumb src={str(c.imageUrl) || null} className="aspect-[4/5] rounded-none" />
+                <div className="p-2">
+                  <div className="truncate text-xs font-semibold text-slate-900">{str(c.title)}</div>
+                  {str(c.subtitle) && (
+                    <div className="truncate text-[10px] text-slate-500">{str(c.subtitle)}</div>
+                  )}
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
+      );
+    }
+
+    case "tiers": {
+      const tiers = itemsOf(block);
+      if (!tiers.length) return <Placeholder ar={ar} label={ar ? "لا توجد فئات" : "No tiers yet"} />;
+      return (
+        <section>
+          <Heading title={str(s.title)} ar={ar} accent={accent} />
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            {tiers.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => str(t.handle) && handlers.onOpenCollection?.(str(t.handle), str(t.label))}
+                className="rounded-2xl border border-slate-200 bg-white p-3 text-start"
+              >
+                {str(t.prefix) && (
+                  <div className="text-[10px] uppercase tracking-wide text-slate-400">
+                    {str(t.prefix)}
+                  </div>
+                )}
+                <div className="text-sm font-bold" style={{ color: accent }}>
+                  {str(t.amount)}
+                </div>
+                <div className="truncate text-[11px] text-slate-600">{str(t.label)}</div>
+              </button>
+            ))}
+          </div>
+        </section>
+      );
+    }
+
+    case "split": {
+      const panels = itemsOf(block).slice(0, 2);
+      if (!panels.length) return <Placeholder ar={ar} label={ar ? "لا توجد لوحات" : "No panels yet"} />;
+      return (
+        <section>
+          <Heading title={str(s.title)} ar={ar} accent={accent} />
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            {panels.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => str(p.handle) && handlers.onOpenCollection?.(str(p.handle), str(p.label))}
+                className="relative overflow-hidden rounded-2xl text-start"
+              >
+                <Thumb src={str(p.imageUrl) || null} className="aspect-[3/4] rounded-none" />
+                <div className="absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-black/55 to-transparent p-2.5">
+                  <div className="text-sm font-bold text-white">{str(p.label)}</div>
+                  {str(p.buttonLabel) && (
+                    <div className="text-[10px] text-white/85">{str(p.buttonLabel)}</div>
+                  )}
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
+      );
+    }
+
+    case "trust_badges": {
+      const badges = itemsOf(block);
+      if (!badges.length) return <Placeholder ar={ar} label={ar ? "لا توجد شارات" : "No badges yet"} />;
+      return (
+        <div className="-mx-4 flex gap-2 overflow-x-auto px-4">
+          {badges.map((b) => (
+            <div
+              key={b.id}
+              className="w-28 shrink-0 rounded-2xl border border-slate-200 bg-white p-2.5 text-center"
+            >
+              <div className="text-lg leading-none">{str(b.emoji) || "•"}</div>
+              <div className="mt-1 truncate text-[11px] font-semibold text-slate-900">
+                {str(b.title)}
+              </div>
+              <div className="truncate text-[10px] text-slate-500">{str(b.subtitle)}</div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
     case "reviews": {
       const shown = data.reviews.slice(0, int(s.limit, 6));
       if (!shown.length) {
@@ -351,6 +506,129 @@ function BlockView({
       );
     }
   }
+}
+
+/** The hero, one slide at a time, with dots when there is more than one. */
+function Hero({
+  slides,
+  accent,
+  data,
+  onOpen,
+}: {
+  slides: Item[];
+  accent: string;
+  data: HomeData;
+  onOpen?: (handle: string, title: string) => void;
+}) {
+  const [at, setAt] = useState(0);
+  const slide = slides[Math.min(at, slides.length - 1)];
+  const handle = str(slide.handle);
+  const title = data.collections.find((c) => c.handle === handle)?.title ?? str(slide.heading);
+
+  return (
+    <section>
+      <button
+        onClick={() => handle && onOpen?.(handle, title)}
+        className="relative block w-full overflow-hidden rounded-2xl text-start"
+      >
+        <Thumb src={str(slide.imageUrl) || null} className="h-44 w-full rounded-2xl" />
+        <div className="absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-black/60 to-transparent p-3">
+          {str(slide.kicker) && (
+            <div className="text-[10px] uppercase tracking-widest text-white/80">
+              {str(slide.kicker)}
+            </div>
+          )}
+          {str(slide.heading) && (
+            <div className="text-lg font-bold text-white">{str(slide.heading)}</div>
+          )}
+          {str(slide.subheading) && (
+            <div className="text-[11px] text-white/85">{str(slide.subheading)}</div>
+          )}
+        </div>
+      </button>
+      {slides.length > 1 && (
+        <div className="mt-2 flex justify-center gap-1.5">
+          {slides.map((sl, i) => (
+            <button
+              key={sl.id}
+              onClick={() => setAt(i)}
+              aria-label={`${i + 1}`}
+              className="h-1.5 rounded-full transition-all"
+              style={{
+                width: i === at ? 16 : 6,
+                background: i === at ? accent : "#cbd5e1",
+              }}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** Collections as tabs, with the chosen one's products underneath. */
+function Tabs({
+  title,
+  kicker,
+  tabs,
+  limit,
+  data,
+  ar,
+  accent,
+  handlers,
+}: {
+  title: string;
+  kicker: string;
+  tabs: Item[];
+  limit: number;
+  data: HomeData;
+  ar: boolean;
+  accent: string;
+  handlers: HomeHandlers;
+}) {
+  const [at, setAt] = useState(0);
+  const active = tabs[Math.min(at, tabs.length - 1)];
+  const handle = str(active.handle);
+  const products = (data.rows[handle] ?? []).slice(0, limit);
+
+  return (
+    <section>
+      {kicker && <div className="text-[10px] uppercase tracking-wide text-slate-400">{kicker}</div>}
+      <Heading
+        title={title}
+        onSeeAll={() => handlers.onOpenCollection?.(handle, str(active.label))}
+        ar={ar}
+        accent={accent}
+      />
+      <div className="-mx-4 mt-2 flex gap-1.5 overflow-x-auto px-4 pb-1">
+        {tabs.map((t, i) => (
+          <button
+            key={t.id}
+            onClick={() => setAt(i)}
+            className="shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition"
+            style={
+              i === at
+                ? { background: accent, color: "#fff" }
+                : { background: "#fff", color: "#475569", border: "1px solid #cbd5e1" }
+            }
+          >
+            {str(t.emoji)} {str(t.label) || str(t.handle)}
+          </button>
+        ))}
+      </div>
+      {products.length ? (
+        <div className="-mx-4 mt-2 flex gap-3 overflow-x-auto px-4 pb-1">
+          {products.map((p) => (
+            <Tile key={p.id} card={p} ar={ar} accent={accent} wide onOpen={handlers.onOpenProduct} />
+          ))}
+        </div>
+      ) : (
+        <p className="py-6 text-center text-[11px] text-slate-400">
+          {ar ? "لا منتجات في هذا التبويب" : "Nothing in this tab"}
+        </p>
+      )}
+    </section>
+  );
 }
 
 /**
@@ -435,6 +713,16 @@ function isPlaceholder(node: React.ReactElement): boolean {
         : data.collections.slice(0, ALL_ROWS_CAP);
       return !targets.some((c) => (data.rows[c.handle] ?? []).length > 0);
     }
+    case "hero":
+    case "cards":
+    case "tiers":
+    case "split":
+    case "trust_badges":
+      return itemsOf(block).length === 0;
+    case "collection_tabs":
+      return itemsOf(block).filter((t) => str(t.handle)).length === 0;
+    case "promo_bar":
+      return !str(s.lead) && !str(s.code);
     default:
       return false;
   }

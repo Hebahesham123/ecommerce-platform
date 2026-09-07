@@ -1,6 +1,8 @@
 import "server-only";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
 import { normalizeTheme, type AppTheme } from "@/lib/app-theme";
+import { seedFromWebsite } from "@/lib/app-theme-seed";
+import { getCatalog } from "@/lib/storefront-data";
 
 /**
  * Reading and writing the app's theme.
@@ -30,13 +32,42 @@ export async function getAppTheme(): Promise<AppTheme> {
       .select("settings,blocks")
       .eq("id", "default")
       .maybeSingle();
-    // A missing table means the migration hasn't run. The app should not go
-    // dark over that, so it gets the defaults and the dashboard says why.
-    const value = normalizeTheme(error ? null : data);
+
+    // A saved theme is the merchant's arrangement and always wins. Once they
+    // have pressed Save the website stops being consulted, or an edit on one
+    // side would silently undo an edit on the other.
+    //
+    // "Saved" means having blocks, not merely having a row: the migration
+    // creates one with an empty screen, and treating that as a deliberate
+    // choice would mean a store that ran the migration could never be seeded.
+    // Deleting every block is not a state anyone wants to keep, either.
+    const saved = error ? null : normalizeTheme(data);
+    if (saved && saved.blocks.length) {
+      cache = { at: Date.now(), value: saved };
+      return saved;
+    }
+
+    // Nothing saved yet — so start from the website's own home page rather
+    // than an empty screen. The merchant has already decided what belongs on
+    // their front page; making them rebuild it is asking for a job they have
+    // done. A missing table lands here too, which is right: the app should not
+    // go dark because a migration has not run.
+    const seeded = await seedFromWebsite(await shopName());
+    const value = seeded ?? normalizeTheme(null);
     cache = { at: Date.now(), value };
     return value;
   } catch {
     return normalizeTheme(null);
+  }
+}
+
+/** The shop's own name, so the seeded theme is not branded "BeautyBar" by default. */
+async function shopName(): Promise<string | undefined> {
+  try {
+    const catalog = await getCatalog("");
+    return catalog.shop.name || undefined;
+  } catch {
+    return undefined;
   }
 }
 

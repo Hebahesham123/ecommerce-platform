@@ -2,7 +2,7 @@ import { appCatalog, appMenus, SYNTHETIC, toCard, toCollection } from "@/lib/api
 import { getAppTheme } from "@/lib/app-theme-service";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
 import { fail, ok } from "@/lib/api/http";
-import type { Block } from "@/lib/app-theme";
+import { itemsOf, type Block } from "@/lib/app-theme";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -76,18 +76,37 @@ export async function GET() {
 
     for (const block of theme.blocks as Block[]) {
       const s = block.settings ?? {};
-      if (block.type === "collection_row" || block.type === "collection_grid") {
-        const handle = String(s.handle ?? "").trim().toLowerCase();
-        const limit = int(s.limit, block.type === "collection_row" ? 8 : 6, PER_ROW_MAX);
-        // An empty handle means "every collection I have", capped — see above.
-        if (handle) want(handle, limit);
-        else wantsAll = Math.max(wantsAll, limit);
-      } else if (block.type === "banner") {
-        // A banner needs no products, only somewhere to go.
-      } else if (block.type === "new_arrivals") {
-        newArrivalsLimit = Math.max(newArrivalsLimit, int(s.limit, 12, 40));
-      } else if (block.type === "reviews") {
-        reviewsLimit = Math.max(reviewsLimit, int(s.limit, 6, 20));
+      switch (block.type) {
+        case "collection_row":
+        case "collection_grid": {
+          const handle = String(s.handle ?? "").trim().toLowerCase();
+          const limit = int(s.limit, block.type === "collection_row" ? 8 : 6, PER_ROW_MAX);
+          // An empty handle means "every collection I have", capped — see above.
+          if (handle) want(handle, limit);
+          else wantsAll = Math.max(wantsAll, limit);
+          break;
+        }
+        case "collection_tabs": {
+          // Every tab's products, because switching tab must not cost a round
+          // trip — a tab that pauses is a tab that feels broken.
+          const limit = int(s.limit, 8, PER_ROW_MAX);
+          for (const item of itemsOf(block)) {
+            const handle = String(item.handle ?? "").trim().toLowerCase();
+            if (handle) want(handle, limit);
+          }
+          break;
+        }
+        case "new_arrivals":
+          newArrivalsLimit = Math.max(newArrivalsLimit, int(s.limit, 12, 40));
+          break;
+        case "reviews":
+          reviewsLimit = Math.max(reviewsLimit, int(s.limit, 6, 20));
+          break;
+        default:
+          // hero, banner, cards, tiers, split, categories, trust_badges and
+          // text all point at collections without listing their products —
+          // they need the collection to exist, not its contents.
+          break;
       }
     }
     if (wantsAll) {

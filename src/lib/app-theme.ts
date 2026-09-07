@@ -17,13 +17,132 @@
  */
 
 export type BlockType =
+  | "hero"
+  | "promo_bar"
   | "banner"
+  | "categories"
   | "collection_row"
   | "collection_grid"
+  | "collection_tabs"
   | "new_arrivals"
-  | "categories"
+  | "cards"
+  | "tiers"
+  | "split"
+  | "trust_badges"
   | "reviews"
   | "text";
+
+/**
+ * A repeatable thing inside a section — a slide, a category, a tab, a tier.
+ *
+ * Theme sections have blocks inside them; so do these, for the same reason:
+ * a hero with three slides is one section the merchant arranges, not three
+ * sections that happen to sit together. Stored in `settings.items`.
+ */
+export type Item = { id: string; [k: string]: unknown };
+
+/** The items of a block, whatever shape they are. */
+export function itemsOf(block: Block): Item[] {
+  const raw = (block.settings ?? {}).items;
+  return Array.isArray(raw) ? (raw as Item[]).filter((i) => i && typeof i === "object") : [];
+}
+
+/** Which block types hold a list, and what one new entry looks like. */
+export const ITEM_SHAPE: Partial<Record<BlockType, { ar: string; en: string; blank: () => Item }>> = {
+  hero: {
+    ar: "شريحة",
+    en: "Slide",
+    blank: () => ({ id: itemId(), imageUrl: "", kicker: "", heading: "", subheading: "", handle: "" }),
+  },
+  categories: {
+    ar: "قسم",
+    en: "Category",
+    blank: () => ({ id: itemId(), handle: "", label: "", emoji: "", imageUrl: "" }),
+  },
+  collection_tabs: {
+    ar: "تبويب",
+    en: "Tab",
+    blank: () => ({ id: itemId(), handle: "", label: "", emoji: "" }),
+  },
+  cards: {
+    ar: "بطاقة",
+    en: "Card",
+    blank: () => ({ id: itemId(), imageUrl: "", title: "", subtitle: "", handle: "" }),
+  },
+  tiers: {
+    ar: "فئة سعرية",
+    en: "Tier",
+    blank: () => ({ id: itemId(), prefix: "From", amount: "", label: "", handle: "" }),
+  },
+  split: {
+    ar: "لوحة",
+    en: "Panel",
+    blank: () => ({ id: itemId(), imageUrl: "", label: "", buttonLabel: "", handle: "" }),
+  },
+  trust_badges: {
+    ar: "شارة",
+    en: "Badge",
+    blank: () => ({ id: itemId(), emoji: "", title: "", subtitle: "" }),
+  },
+};
+
+export function itemId(): string {
+  return `i-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+}
+
+/** What one field of an item is, so the editor knows which control to draw. */
+export type FieldKind = "text" | "image" | "collection" | "emoji";
+export type FieldSpec = { key: string; kind: FieldKind; ar: string; en: string };
+
+/**
+ * The fields each kind of item has.
+ *
+ * One list, used by the editor to draw the controls and by the code generator
+ * to decide what travels with the block. Adding a field in one place and
+ * forgetting the other is exactly the drift this avoids.
+ */
+export const ITEM_FIELDS: Partial<Record<BlockType, FieldSpec[]>> = {
+  hero: [
+    { key: "imageUrl", kind: "image", ar: "الصورة", en: "Image" },
+    { key: "kicker", kind: "text", ar: "سطر علوي", en: "Kicker" },
+    { key: "heading", kind: "text", ar: "العنوان", en: "Heading" },
+    { key: "subheading", kind: "text", ar: "سطر فرعي", en: "Subheading" },
+    { key: "handle", kind: "collection", ar: "يفتح", en: "Opens" },
+  ],
+  categories: [
+    { key: "handle", kind: "collection", ar: "القسم", en: "Collection" },
+    { key: "label", kind: "text", ar: "الاسم", en: "Label" },
+    { key: "emoji", kind: "emoji", ar: "أيقونة", en: "Emoji" },
+  ],
+  collection_tabs: [
+    { key: "handle", kind: "collection", ar: "القسم", en: "Collection" },
+    { key: "label", kind: "text", ar: "اسم التبويب", en: "Tab label" },
+    { key: "emoji", kind: "emoji", ar: "أيقونة", en: "Emoji" },
+  ],
+  cards: [
+    { key: "imageUrl", kind: "image", ar: "الصورة", en: "Image" },
+    { key: "title", kind: "text", ar: "العنوان", en: "Title" },
+    { key: "subtitle", kind: "text", ar: "سطر فرعي", en: "Subtitle" },
+    { key: "handle", kind: "collection", ar: "يفتح", en: "Opens" },
+  ],
+  tiers: [
+    { key: "prefix", kind: "text", ar: "قبل السعر", en: "Prefix" },
+    { key: "amount", kind: "text", ar: "السعر", en: "Amount" },
+    { key: "label", kind: "text", ar: "الوصف", en: "Label" },
+    { key: "handle", kind: "collection", ar: "يفتح", en: "Opens" },
+  ],
+  split: [
+    { key: "imageUrl", kind: "image", ar: "الصورة", en: "Image" },
+    { key: "label", kind: "text", ar: "العنوان", en: "Label" },
+    { key: "buttonLabel", kind: "text", ar: "نص الزر", en: "Button text" },
+    { key: "handle", kind: "collection", ar: "يفتح", en: "Opens" },
+  ],
+  trust_badges: [
+    { key: "emoji", kind: "emoji", ar: "أيقونة", en: "Emoji" },
+    { key: "title", kind: "text", ar: "العنوان", en: "Title" },
+    { key: "subtitle", kind: "text", ar: "سطر فرعي", en: "Subtitle" },
+  ],
+};
 
 export type Block = {
   /** Stable across reorders, so React and the editor can follow a block. */
@@ -84,6 +203,48 @@ export const BLOCK_META: Record<
   BlockType,
   { ar: string; en: string; hintAr: string; hintEn: string }
 > = {
+  hero: {
+    ar: "الواجهة",
+    en: "Hero",
+    hintAr: "شرائح كبيرة أعلى الشاشة، كل شريحة صورة وعنوان ورابط",
+    hintEn: "Big slides at the top of the screen — an image, a heading and a link each",
+  },
+  promo_bar: {
+    ar: "شريط العرض",
+    en: "Offer bar",
+    hintAr: "عرض قصير مع كود خصم ينسخه العميل بضغطة",
+    hintEn: "A short offer with a discount code the shopper taps to copy",
+  },
+  collection_tabs: {
+    ar: "تبويبات المنتجات",
+    en: "Product tabs",
+    hintAr: "عدة أقسام في تبويبات، منتجات القسم المختار تظهر تحتها",
+    hintEn: "Several collections as tabs, with the chosen one's products underneath",
+  },
+  cards: {
+    ar: "بطاقات",
+    en: "Image cards",
+    hintAr: "بطاقات بصور وعناوين — للماركات أو الأجواء أو أي تجميعة",
+    hintEn: "Cards with images and titles — for brands, moods, or any edit",
+  },
+  tiers: {
+    ar: "فئات الأسعار",
+    en: "Price tiers",
+    hintAr: "تسوّق حسب الميزانية — كل بطاقة سعر وقسم",
+    hintEn: "Shop by budget — each card a price and a collection",
+  },
+  split: {
+    ar: "لوحتان",
+    en: "Split panels",
+    hintAr: "لوحتان جنباً إلى جنب، مثل «لها» و«له»",
+    hintEn: "Two panels side by side, the way Her / Him works on the website",
+  },
+  trust_badges: {
+    ar: "شارات الثقة",
+    en: "Trust badges",
+    hintAr: "الدفع عند الاستلام، الاستبدال، الشحن — بأيقونة وسطرين",
+    hintEn: "Cash on delivery, returns, shipping — an icon and two lines each",
+  },
   banner: {
     ar: "بانر",
     en: "Banner",
@@ -131,7 +292,15 @@ export const BLOCK_META: Record<
 /** A block of this type, with settings that make sense on day one. */
 export function newBlock(type: BlockType): Block {
   const id = `b-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+  const shape = ITEM_SHAPE[type];
   const settings: Record<string, Record<string, unknown>> = {
+    hero: { items: shape ? [shape.blank()] : [] },
+    promo_bar: { lead: "", rest: "", code: "" },
+    collection_tabs: { kicker: "", title: "", limit: 8, items: shape ? [shape.blank()] : [] },
+    cards: { kicker: "", title: "", items: shape ? [shape.blank()] : [] },
+    tiers: { title: "", items: shape ? [shape.blank()] : [] },
+    split: { title: "", items: shape ? [shape.blank(), shape.blank()] : [] },
+    trust_badges: { items: shape ? [shape.blank()] : [] },
     banner: { imageUrl: "", handle: "", heading: "", subheading: "" },
     collection_row: { handle: "", title: "", limit: 8 },
     collection_grid: { handle: "", title: "", limit: 6 },

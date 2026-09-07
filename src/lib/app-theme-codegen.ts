@@ -1,4 +1,4 @@
-import { BLOCK_META, type AppTheme, type Block, type BlockType } from "@/lib/app-theme";
+import { BLOCK_META, itemsOf, type AppTheme, type Block, type BlockType, type Item } from "@/lib/app-theme";
 
 /**
  * The app's code, written by the editor.
@@ -280,7 +280,8 @@ import { colors, radius, spacing } from "../theme";
 import { SectionHeading } from "./Pieces";
 import type { HomePayload } from "../api";
 
-export type CategoriesSettings = { title?: string };
+export type Category = { id: string; handle?: string; label?: string; emoji?: string };
+export type CategoriesSettings = { title?: string; items?: Category[] };
 
 export function Categories({
   settings,
@@ -291,12 +292,23 @@ export function Categories({
   collections: HomePayload["collections"];
   onOpenCollection?: (handle: string) => void;
 }) {
-  if (!collections.length) return null;
+  // The merchant's own picks when they made some; otherwise every collection,
+  // which is what a store that has not curated this wants anyway.
+  const picked = (settings.items ?? []).filter((i) => i.handle);
+  const chips = picked.length
+    ? picked.map((i) => ({
+        handle: i.handle!,
+        title: (i.emoji ? i.emoji + " " : "") +
+          (i.label || collections.find((c) => c.handle === i.handle)?.title || i.handle!),
+      }))
+    : collections.map((c) => ({ handle: c.handle, title: c.title }));
+  if (!chips.length) return null;
+
   return (
     <>
       <SectionHeading title={settings.title ?? ""} />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-        {collections.map((c) => (
+        {chips.map((c) => (
           <Pressable key={c.handle} style={styles.chip} onPress={() => onOpenCollection?.(c.handle)}>
             <Text style={styles.chipText}>{c.title}</Text>
           </Pressable>
@@ -508,6 +520,344 @@ const styles = StyleSheet.create({
 });
 `,
 
+    hero: `import React, { useState } from "react";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { colors, radius } from "../theme";
+
+export type Slide = {
+  id: string;
+  imageUrl?: string;
+  kicker?: string;
+  heading?: string;
+  subheading?: string;
+  /** Collection handle to open when tapped. */
+  handle?: string;
+};
+export type HeroSettings = { items?: Slide[] };
+
+export function Hero({
+  settings,
+  onOpenCollection,
+}: {
+  settings: HeroSettings;
+  onOpenCollection?: (handle: string) => void;
+}) {
+  const slides = settings.items ?? [];
+  const [at, setAt] = useState(0);
+  if (!slides.length) return null;
+  const slide = slides[Math.min(at, slides.length - 1)];
+
+  return (
+    <View>
+      <Pressable
+        onPress={() => slide.handle && onOpenCollection?.(slide.handle)}
+        style={styles.wrap}
+      >
+        {slide.imageUrl ? <Image source={{ uri: slide.imageUrl }} style={styles.image} /> : null}
+        <View style={styles.overlay}>
+          {slide.kicker ? <Text style={styles.kicker}>{slide.kicker}</Text> : null}
+          {slide.heading ? <Text style={styles.heading}>{slide.heading}</Text> : null}
+          {slide.subheading ? <Text style={styles.sub}>{slide.subheading}</Text> : null}
+        </View>
+      </Pressable>
+      {slides.length > 1 ? (
+        <View style={styles.dots}>
+          {slides.map((s, i) => (
+            <Pressable
+              key={s.id}
+              onPress={() => setAt(i)}
+              style={[styles.dot, i === at ? styles.dotOn : null]}
+            />
+          ))}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  wrap: { borderRadius: radius.lg, overflow: "hidden", height: 176, backgroundColor: colors.page },
+  image: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, width: "100%", height: "100%" },
+  overlay: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, justifyContent: "flex-end", padding: 12, backgroundColor: "rgba(0,0,0,0.3)" },
+  kicker: { fontSize: 10, letterSpacing: 1.5, textTransform: "uppercase", color: "rgba(255,255,255,0.8)" },
+  heading: { fontSize: 20, fontWeight: "700", color: "#fff" },
+  sub: { fontSize: 11, color: "rgba(255,255,255,0.85)" },
+  dots: { flexDirection: "row", justifyContent: "center", gap: 6, marginTop: 8 },
+  dot: { height: 6, width: 6, borderRadius: 3, backgroundColor: "#cbd5e1" },
+  dotOn: { width: 16, backgroundColor: colors.accent },
+});
+`,
+
+    promo_bar: `import React from "react";
+import { StyleSheet, Text, View } from "react-native";
+import { colors, radius, spacing } from "../theme";
+
+export type PromoBarSettings = { lead?: string; rest?: string; code?: string };
+
+export function PromoBar({ settings }: { settings: PromoBarSettings }) {
+  const { lead, rest, code } = settings;
+  if (!lead && !code) return null;
+  return (
+    <View style={styles.wrap}>
+      <View style={{ flex: 1 }}>
+        {lead ? <Text style={styles.lead} numberOfLines={1}>{lead}</Text> : null}
+        {rest ? <Text style={styles.rest} numberOfLines={1}>{rest}</Text> : null}
+      </View>
+      {code ? (
+        <View style={styles.code}>
+          <Text style={styles.codeText}>{code}</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  wrap: { flexDirection: "row", alignItems: "center", gap: spacing.sm, borderRadius: radius.lg, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: colors.accent + "14" },
+  lead: { fontSize: 12, fontWeight: "700", color: colors.accent },
+  rest: { fontSize: 10, color: colors.inkSoft },
+  code: { borderRadius: radius.sm, borderWidth: 1, borderStyle: "dashed", borderColor: colors.accent, paddingHorizontal: 8, paddingVertical: 4 },
+  codeText: { fontSize: 11, fontWeight: "700", color: colors.accent },
+});
+`,
+
+    collection_tabs: `import React, { useState } from "react";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { colors, radius, spacing } from "../theme";
+import { ProductTile, SectionHeading } from "./Pieces";
+import type { HomePayload } from "../api";
+
+export type Tab = { id: string; handle?: string; label?: string; emoji?: string };
+export type CollectionTabsSettings = { kicker?: string; title?: string; limit?: number; items?: Tab[] };
+
+export function CollectionTabs({
+  settings,
+  rows,
+  onOpenCollection,
+  onOpenProduct,
+}: {
+  settings: CollectionTabsSettings;
+  rows: HomePayload["rows"];
+  onOpenCollection?: (handle: string) => void;
+  onOpenProduct?: (id: string) => void;
+}) {
+  const tabs = (settings.items ?? []).filter((t) => t.handle);
+  const [at, setAt] = useState(0);
+  if (!tabs.length) return null;
+
+  const active = tabs[Math.min(at, tabs.length - 1)];
+  const products = (rows[active.handle!] ?? []).slice(0, settings.limit ?? 8);
+
+  return (
+    <View>
+      {settings.kicker ? <Text style={styles.kicker}>{settings.kicker}</Text> : null}
+      <SectionHeading
+        title={settings.title ?? ""}
+        onSeeAll={() => onOpenCollection?.(active.handle!)}
+      />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs}>
+        {tabs.map((t, i) => (
+          <Pressable
+            key={t.id}
+            onPress={() => setAt(i)}
+            style={[styles.tab, i === at ? styles.tabOn : styles.tabOff]}
+          >
+            <Text style={i === at ? styles.tabTextOn : styles.tabTextOff}>
+              {(t.emoji ? t.emoji + " " : "") + (t.label || t.handle)}
+            </Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+        {products.map((p) => <ProductTile key={p.id} card={p} onPress={onOpenProduct} />)}
+      </ScrollView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  kicker: { fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: colors.inkSoft },
+  tabs: { gap: 6, paddingVertical: spacing.sm },
+  row: { gap: spacing.md, paddingVertical: spacing.sm },
+  tab: { borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 6 },
+  tabOn: { backgroundColor: colors.accent },
+  tabOff: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line },
+  tabTextOn: { fontSize: 12, fontWeight: "500", color: "#fff" },
+  tabTextOff: { fontSize: 12, fontWeight: "500", color: colors.inkMuted },
+});
+`,
+
+    cards: `import React from "react";
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { colors, radius, spacing } from "../theme";
+import { SectionHeading } from "./Pieces";
+
+export type ImageCard = { id: string; imageUrl?: string; title?: string; subtitle?: string; handle?: string };
+export type CardsSettings = { kicker?: string; title?: string; items?: ImageCard[] };
+
+export function Cards({
+  settings,
+  onOpenCollection,
+}: {
+  settings: CardsSettings;
+  onOpenCollection?: (handle: string) => void;
+}) {
+  const cards = settings.items ?? [];
+  if (!cards.length) return null;
+  return (
+    <View>
+      <SectionHeading title={settings.title ?? ""} />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+        {cards.map((c) => (
+          <Pressable key={c.id} style={styles.card} onPress={() => c.handle && onOpenCollection?.(c.handle)}>
+            {c.imageUrl ? (
+              <Image source={{ uri: c.imageUrl }} style={styles.image} />
+            ) : (
+              <View style={styles.image} />
+            )}
+            <View style={{ padding: spacing.sm }}>
+              <Text style={styles.title} numberOfLines={1}>{c.title}</Text>
+              {c.subtitle ? <Text style={styles.sub} numberOfLines={1}>{c.subtitle}</Text> : null}
+            </View>
+          </Pressable>
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  row: { gap: spacing.md, paddingVertical: spacing.sm },
+  card: { width: 144, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, overflow: "hidden" },
+  image: { width: 144, height: 180, backgroundColor: colors.page },
+  title: { fontSize: 12, fontWeight: "600", color: colors.ink },
+  sub: { fontSize: 10, color: colors.inkSoft },
+});
+`,
+
+    tiers: `import React from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { colors, radius, spacing } from "../theme";
+import { SectionHeading } from "./Pieces";
+
+export type Tier = { id: string; prefix?: string; amount?: string; label?: string; handle?: string };
+export type TiersSettings = { title?: string; items?: Tier[] };
+
+export function Tiers({
+  settings,
+  onOpenCollection,
+}: {
+  settings: TiersSettings;
+  onOpenCollection?: (handle: string) => void;
+}) {
+  const tiers = settings.items ?? [];
+  if (!tiers.length) return null;
+  return (
+    <View>
+      <SectionHeading title={settings.title ?? ""} />
+      <View style={styles.grid}>
+        {tiers.map((t) => (
+          <Pressable key={t.id} style={styles.card} onPress={() => t.handle && onOpenCollection?.(t.handle)}>
+            {t.prefix ? <Text style={styles.prefix}>{t.prefix}</Text> : null}
+            <Text style={styles.amount}>{t.amount}</Text>
+            <Text style={styles.label} numberOfLines={1}>{t.label}</Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, paddingVertical: spacing.sm },
+  card: { flexGrow: 1, flexBasis: "46%", borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, padding: spacing.md },
+  prefix: { fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: colors.inkSoft },
+  amount: { fontSize: 15, fontWeight: "700", color: colors.accent },
+  label: { fontSize: 11, color: colors.inkMuted },
+});
+`,
+
+    split: `import React from "react";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { colors, radius, spacing } from "../theme";
+import { SectionHeading } from "./Pieces";
+
+export type Panel = { id: string; imageUrl?: string; label?: string; buttonLabel?: string; handle?: string };
+export type SplitSettings = { title?: string; items?: Panel[] };
+
+export function Split({
+  settings,
+  onOpenCollection,
+}: {
+  settings: SplitSettings;
+  onOpenCollection?: (handle: string) => void;
+}) {
+  const panels = (settings.items ?? []).slice(0, 2);
+  if (!panels.length) return null;
+  return (
+    <View>
+      <SectionHeading title={settings.title ?? ""} />
+      <View style={styles.row}>
+        {panels.map((p) => (
+          <Pressable key={p.id} style={styles.panel} onPress={() => p.handle && onOpenCollection?.(p.handle)}>
+            {p.imageUrl ? (
+              <Image source={{ uri: p.imageUrl }} style={styles.image} />
+            ) : (
+              <View style={styles.image} />
+            )}
+            <View style={styles.caption}>
+              <Text style={styles.label}>{p.label}</Text>
+              {p.buttonLabel ? <Text style={styles.button}>{p.buttonLabel}</Text> : null}
+            </View>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  row: { flexDirection: "row", gap: spacing.sm, paddingVertical: spacing.sm },
+  panel: { flex: 1, height: 220, borderRadius: radius.lg, overflow: "hidden", backgroundColor: colors.page },
+  image: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, width: "100%", height: "100%" },
+  caption: { position: "absolute", right: 0, bottom: 0, left: 0, padding: 10, backgroundColor: "rgba(0,0,0,0.35)" },
+  label: { fontSize: 14, fontWeight: "700", color: "#fff" },
+  button: { fontSize: 10, color: "rgba(255,255,255,0.85)" },
+});
+`,
+
+    trust_badges: `import React from "react";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { colors, radius, spacing } from "../theme";
+
+export type Badge = { id: string; emoji?: string; title?: string; subtitle?: string };
+export type TrustBadgesSettings = { items?: Badge[] };
+
+export function TrustBadges({ settings }: { settings: TrustBadgesSettings }) {
+  const badges = settings.items ?? [];
+  if (!badges.length) return null;
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+      {badges.map((b) => (
+        <View key={b.id} style={styles.card}>
+          <Text style={styles.emoji}>{b.emoji || "•"}</Text>
+          <Text style={styles.title} numberOfLines={1}>{b.title}</Text>
+          <Text style={styles.sub} numberOfLines={1}>{b.subtitle}</Text>
+        </View>
+      ))}
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  row: { gap: spacing.sm, paddingVertical: spacing.sm },
+  card: { width: 112, alignItems: "center", borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, padding: 10 },
+  emoji: { fontSize: 18 },
+  title: { marginTop: 4, fontSize: 11, fontWeight: "600", color: colors.ink },
+  sub: { fontSize: 10, color: colors.inkSoft },
+});
+`,
+
     text: `import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { colors, radius, spacing } from "../theme";
@@ -620,6 +970,17 @@ function renderCall(block: Block, indent: number): string {
   const pad = " ".repeat(indent);
   const name = exportName(block.type);
   const extras: Record<BlockType, string[]> = {
+    hero: ["onOpenCollection={onOpenCollection}"],
+    promo_bar: [],
+    collection_tabs: [
+      "rows={data.rows}",
+      "onOpenCollection={onOpenCollection}",
+      "onOpenProduct={onOpenProduct}",
+    ],
+    cards: ["onOpenCollection={onOpenCollection}"],
+    tiers: ["onOpenCollection={onOpenCollection}"],
+    split: ["onOpenCollection={onOpenCollection}"],
+    trust_badges: [],
     banner: ["onOpenCollection={onOpenCollection}"],
     categories: ["collections={data.collections}", "onOpenCollection={onOpenCollection}"],
     new_arrivals: ["products={data.newArrivals}", "onOpenProduct={onOpenProduct}"],
@@ -645,6 +1006,13 @@ function renderCall(block: Block, indent: number): string {
 /** A block's settings as a JS object literal, keeping only what it uses. */
 function settingsLiteral(block: Block): string {
   const keep: Record<BlockType, string[]> = {
+    hero: [],
+    promo_bar: ["lead", "rest", "code"],
+    collection_tabs: ["kicker", "title", "limit"],
+    cards: ["kicker", "title"],
+    tiers: ["title"],
+    split: ["title"],
+    trust_badges: [],
     banner: ["imageUrl", "heading", "subheading", "handle"],
     categories: ["title"],
     new_arrivals: ["title", "limit"],
@@ -662,7 +1030,36 @@ function settingsLiteral(block: Block): string {
       return text ? `${k}: ${q(text)}` : null;
     })
     .filter(Boolean);
+
+  // Slides, tabs, cards, tiers, panels and badges travel with the block —
+  // they are the merchant's content, not the component's business.
+  const items = itemsOf(block);
+  if (items.length) parts.push(`items: ${itemsLiteral(block.type, items)}`);
+
   return parts.length ? `{ ${parts.join(", ")} }` : "{}";
+}
+
+/** Only the fields a given block type's items actually carry. */
+function itemsLiteral(type: BlockType, items: Item[]): string {
+  const fields: Partial<Record<BlockType, string[]>> = {
+    hero: ["imageUrl", "kicker", "heading", "subheading", "handle"],
+    categories: ["handle", "label", "emoji", "imageUrl"],
+    collection_tabs: ["handle", "label", "emoji"],
+    cards: ["imageUrl", "title", "subtitle", "handle"],
+    tiers: ["prefix", "amount", "label", "handle"],
+    split: ["imageUrl", "label", "buttonLabel", "handle"],
+    trust_badges: ["emoji", "title", "subtitle"],
+  };
+  const keys = fields[type] ?? [];
+  const rendered = items.map((item) => {
+    const parts = [`id: ${q(item.id)}`];
+    for (const k of keys) {
+      const text = s(item[k]);
+      if (text) parts.push(`${k}: ${q(text)}`);
+    }
+    return `{ ${parts.join(", ")} }`;
+  });
+  return `[${rendered.join(", ")}]`;
 }
 
 /** Every file the app needs for its home screen, current as of this theme. */

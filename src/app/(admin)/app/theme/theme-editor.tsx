@@ -18,11 +18,15 @@ import {
 import { AppHome, type HomeData } from "@/components/app-home";
 import {
   BLOCK_META,
+  ITEM_FIELDS,
+  ITEM_SHAPE,
+  itemsOf,
   newBlock,
   normalizeTheme,
   type AppTheme,
   type Block,
   type BlockType,
+  type Item,
 } from "@/lib/app-theme";
 import { componentName } from "@/lib/app-theme-codegen";
 import { loadThemeEditor, saveTheme, type ThemeEditorData } from "./actions";
@@ -94,6 +98,12 @@ export function ThemeEditor() {
     () => Boolean(draft) && JSON.stringify(draft) !== savedJson,
     [draft, savedJson],
   );
+
+  const missingHandles = useMemo(() => {
+    if (!draft || !data) return [];
+    const have = new Set(data.collections.map((c) => c.handle));
+    return referencedHandles(draft).filter((h) => !have.has(h));
+  }, [draft, data]);
 
   // Hovering a block in the phone opens and scrolls to its row, the way
   // hovering a section in the storefront preview does on the website.
@@ -242,6 +252,23 @@ export function ThemeEditor() {
         {/* ------------------------------ rail ---------------------------- */}
         <Card className="flex min-h-0 flex-col overflow-hidden">
           <div ref={railRef} className="flex-1 overflow-y-auto p-3">
+            {missingHandles.length > 0 && (
+              <div className="mb-3 rounded-xl bg-amber-50 p-3 text-[11px] leading-relaxed text-amber-900">
+                <span className="font-semibold">
+                  {missingHandles.length}{" "}
+                  {ar
+                    ? "قسماً مذكوراً في المظهر غير موجود في هذا المتجر"
+                    : missingHandles.length === 1
+                      ? "collection this theme points at isn't in this store"
+                      : "collections this theme points at aren't in this store"}
+                </span>
+                <p className="mt-1">
+                  {ar
+                    ? "المظهر مأخوذ من ثيم شوبيفاي، وهذه الأقسام لم تُنشأ هنا. الأقسام التي تشير إليها ستظهر فارغة حتى توجّهيها لقسم موجود — وهي معلّمة بالأصفر."
+                    : "This came from your Shopify theme, and these collections were never recreated here. Sections pointing at them will be empty until you repoint them — they're marked in amber."}
+                </p>
+              </div>
+            )}
             <div className="mb-1.5 px-1 text-[11px] font-semibold uppercase tracking-wide text-ink-soft">
               {ar ? "إعدادات عامة" : "Theme settings"}
             </div>
@@ -760,6 +787,75 @@ function BlockGroup({
         </>
       )}
 
+      {block.type === "promo_bar" && (
+        <>
+          <Field label={ar ? "العرض" : "Offer"} type="text">
+            <input
+              value={text("lead")}
+              onChange={(e) => onPatch({ lead: e.target.value })}
+              placeholder={ar ? "خصم ١٠٪ على أول طلب" : "Extra 10% off"}
+              className={input}
+            />
+          </Field>
+          <Field label={ar ? "تفاصيل" : "Detail"} type="text">
+            <input
+              value={text("rest")}
+              onChange={(e) => onPatch({ rest: e.target.value })}
+              className={input}
+            />
+          </Field>
+          <Field label={ar ? "كود الخصم" : "Discount code"} type="text">
+            <input
+              value={text("code")}
+              onChange={(e) => onPatch({ code: e.target.value.toUpperCase() })}
+              className={`${input} font-mono`}
+              dir="ltr"
+            />
+          </Field>
+        </>
+      )}
+
+      {(block.type === "hero" ||
+        block.type === "cards" ||
+        block.type === "tiers" ||
+        block.type === "split" ||
+        block.type === "collection_tabs" ||
+        block.type === "trust_badges") && (
+        <>
+          {block.type !== "hero" && block.type !== "trust_badges" && (
+            <Field label={ar ? "العنوان" : "Title"} type="text">
+              <input
+                value={text("title")}
+                onChange={(e) => onPatch({ title: e.target.value })}
+                className={input}
+              />
+            </Field>
+          )}
+          {block.type === "collection_tabs" && (
+            <Field label={ar ? "عدد المنتجات" : "How many products"} type="range">
+              <input
+                type="number"
+                min={2}
+                max={12}
+                value={num("limit", 8)}
+                onChange={(e) => onPatch({ limit: Number(e.target.value) })}
+                className={input}
+              />
+            </Field>
+          )}
+        </>
+      )}
+
+      {ITEM_FIELDS[block.type] && (
+        <ItemList
+          block={block}
+          ar={ar}
+          collections={collections}
+          input={input}
+          onPatch={onPatch}
+        />
+      )}
+
       {block.type === "text" && (
         <>
           <Field label={ar ? "العنوان" : "Heading"} type="text">
@@ -783,6 +879,175 @@ function BlockGroup({
   );
 }
 
+/**
+ * The repeatable part of a section: slides, tabs, tiers, cards, badges.
+ *
+ * A theme section has blocks inside it and so does this, for the same reason —
+ * a hero with three slides is one thing the merchant arranges, not three
+ * things that happen to sit together. Each row collapses so a section with ten
+ * categories does not bury the section after it.
+ */
+function ItemList({
+  block,
+  ar,
+  collections,
+  input,
+  onPatch,
+}: {
+  block: Block;
+  ar: boolean;
+  collections: { handle: string; title: string; count: number }[];
+  input: string;
+  onPatch: (patch: Record<string, unknown>) => void;
+}) {
+  const [openItem, setOpenItem] = useState<string | null>(null);
+  const fields = ITEM_FIELDS[block.type] ?? [];
+  const shape = ITEM_SHAPE[block.type];
+  const items = itemsOf(block);
+
+  const write = (next: Item[]) => onPatch({ items: next });
+  const patchItem = (id: string, patch: Record<string, unknown>) =>
+    write(items.map((i) => (i.id === id ? { ...i, ...patch } : i)));
+  const moveItem = (id: string, by: 1 | -1) => {
+    const i = items.findIndex((x) => x.id === id);
+    const j = i + by;
+    if (i < 0 || j < 0 || j >= items.length) return;
+    const next = [...items];
+    [next[i], next[j]] = [next[j], next[i]];
+    write(next);
+  };
+
+  const labelOf = (item: Item) => {
+    for (const f of fields) {
+      if (f.kind === "image") continue;
+      const v = item[f.key];
+      if (typeof v === "string" && v) {
+        return f.kind === "collection"
+          ? collections.find((c) => c.handle === v)?.title ?? v
+          : v;
+      }
+    }
+    return ar ? "بدون عنوان" : "Untitled";
+  };
+
+  return (
+    <div className="mt-2 rounded-xl border border-line bg-surface-page p-2">
+      <div className="flex items-center justify-between px-1">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-soft">
+          {shape ? (ar ? shape.ar : shape.en) : ""} · {items.length}
+        </span>
+        {shape && (
+          <button
+            onClick={() => {
+              const created = shape.blank();
+              write([...items, created]);
+              setOpenItem(created.id);
+            }}
+            className="btn-ghost h-6 gap-1 px-1.5 text-[11px]"
+          >
+            <IcPlus className="h-3 w-3" />
+            {ar ? "إضافة" : "Add"}
+          </button>
+        )}
+      </div>
+
+      <ul className="mt-1.5 space-y-1">
+        {items.map((item, i) => {
+          const isOpen = openItem === item.id;
+          return (
+            <li key={item.id} className="rounded-lg border border-line bg-surface">
+              <div className="flex items-center gap-0.5 px-2 py-1.5">
+                <button
+                  onClick={() => setOpenItem(isOpen ? null : item.id)}
+                  className="flex min-w-0 flex-1 items-center gap-1.5 text-start"
+                >
+                  <IcChevron
+                    className={`h-2.5 w-2.5 shrink-0 text-ink-soft transition-transform ${
+                      isOpen ? "rotate-90" : ""
+                    } rtl:-scale-x-100`}
+                  />
+                  <span className="min-w-0 flex-1 truncate text-xs text-ink">{labelOf(item)}</span>
+                </button>
+                <button
+                  onClick={() => moveItem(item.id, -1)}
+                  disabled={i === 0}
+                  className="btn-ghost h-6 w-6 shrink-0 p-0 disabled:opacity-30"
+                  aria-label={ar ? "لأعلى" : "Move up"}
+                >
+                  <IcUp className="h-3 w-3" />
+                </button>
+                <button
+                  onClick={() => moveItem(item.id, 1)}
+                  disabled={i === items.length - 1}
+                  className="btn-ghost h-6 w-6 shrink-0 p-0 disabled:opacity-30"
+                  aria-label={ar ? "لأسفل" : "Move down"}
+                >
+                  <IcDown className="h-3 w-3" />
+                </button>
+                <button
+                  onClick={() => write(items.filter((x) => x.id !== item.id))}
+                  className="btn-ghost h-6 w-6 shrink-0 p-0 text-rose-600"
+                  aria-label={ar ? "حذف" : "Remove"}
+                >
+                  <IcTrash className="h-3 w-3" />
+                </button>
+              </div>
+
+              {isOpen && (
+                <div className="space-y-2 border-t border-line px-2 pb-2 pt-1.5">
+                  {fields.map((f) => {
+                    const value = typeof item[f.key] === "string" ? (item[f.key] as string) : "";
+                    return (
+                      <label key={f.key} className="block">
+                        <span className="text-[11px] font-medium text-ink-muted">
+                          {ar ? f.ar : f.en}
+                        </span>
+                        {f.kind === "collection" ? (
+                          <CollectionSelect
+                            collections={collections}
+                            value={value}
+                            onChange={(handle) => patchItem(item.id, { [f.key]: handle })}
+                            anyLabel={ar ? "لا شيء" : "Nothing"}
+                            className={`${input} mt-0.5 h-8 text-xs`}
+                          />
+                        ) : (
+                          <input
+                            value={value}
+                            onChange={(e) => patchItem(item.id, { [f.key]: e.target.value })}
+                            placeholder={f.kind === "image" ? "https://…" : ""}
+                            dir={f.kind === "image" ? "ltr" : undefined}
+                            className={`${input} mt-0.5 h-8 text-xs`}
+                          />
+                        )}
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+
+      {items.length === 0 && (
+        <p className="py-3 text-center text-[11px] text-ink-soft">
+          {ar ? "لا عناصر بعد" : "Nothing here yet"}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Pick a collection — including one this store does not have.
+ *
+ * The theme was exported from Shopify, and most of the collections it points
+ * at were never recreated here. A plain select would show those as blank and
+ * quietly overwrite them the moment anything else in the section changed, so
+ * an unknown handle keeps its place in the list and says what it is. Losing
+ * the merchant's own wiring while claiming to have imported it would be worse
+ * than not importing it at all.
+ */
 function CollectionSelect({
   collections,
   value,
@@ -796,9 +1061,15 @@ function CollectionSelect({
   anyLabel: string;
   className: string;
 }) {
+  const missing = Boolean(value) && !collections.some((c) => c.handle === value);
   return (
-    <select value={value} onChange={(e) => onChange(e.target.value)} className={className}>
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className={`${className} ${missing ? "border-amber-400 text-amber-700" : ""}`}
+    >
       <option value="">{anyLabel}</option>
+      {missing && <option value={value}>{value} — not in this store</option>}
       {collections.map((c) => (
         <option key={c.handle} value={c.handle}>
           {c.title} ({c.count})
@@ -806,4 +1077,17 @@ function CollectionSelect({
       ))}
     </select>
   );
+}
+
+/** Every collection handle a theme points at, from sections and their items. */
+function referencedHandles(theme: AppTheme): string[] {
+  const out = new Set<string>();
+  for (const block of theme.blocks) {
+    const handle = block.settings?.handle;
+    if (typeof handle === "string" && handle) out.add(handle);
+    for (const item of itemsOf(block)) {
+      if (typeof item.handle === "string" && item.handle) out.add(item.handle);
+    }
+  }
+  return [...out];
 }
