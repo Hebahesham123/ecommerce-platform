@@ -43,10 +43,18 @@ import {
  */
 
 type Tab = "shop" | "cart" | "orders" | "account";
-type CartLine = { itemId: string; quantity: number };
-const CART_KEY = "app_preview_cart";
+export type CartLine = { itemId: string; quantity: number };
 
-function readCart(): CartLine[] {
+/**
+ * One basket, wherever the shop is being tried from.
+ *
+ * The theme editor's phone and this app are two windows onto the same store,
+ * so a basket filled in one and empty in the other would be a lie about what
+ * the shopper has. They share this key.
+ */
+export const CART_KEY = "app_preview_cart";
+
+export function readCart(): CartLine[] {
   try {
     const raw = localStorage.getItem(CART_KEY);
     const parsed = raw ? JSON.parse(raw) : [];
@@ -304,7 +312,7 @@ export function Preview() {
 }
 
 // ------------------------------------------------------------------- cart --
-function Cart({
+export function Cart({
   ar,
   cart,
   setCart,
@@ -312,6 +320,7 @@ function Cart({
   phone,
   screens,
   accent,
+  startAtCheckout = false,
   onNeedSignIn,
   onPlaced,
 }: {
@@ -322,6 +331,8 @@ function Cart({
   phone: string | null;
   screens: ScreenSettings;
   accent: string;
+  /** The editor opens straight onto the checkout when that page is selected. */
+  startAtCheckout?: boolean;
   onNeedSignIn: () => void;
   onPlaced: () => void;
 }) {
@@ -329,7 +340,7 @@ function Cart({
   const [coupon, setCoupon] = useState("");
   const [discount, setDiscount] = useState<{ amount: number; label: string } | null>(null);
   const [couponErr, setCouponErr] = useState<string | null>(null);
-  const [checkout, setCheckout] = useState(false);
+  const [checkout, setCheckout] = useState(startAtCheckout);
   const [form, setForm] = useState({
     name: "",
     governorate: "",
@@ -596,7 +607,7 @@ function StepBtn({
 }
 
 // ---------------------------------------------------------------- account --
-function AccountTab({
+export function AccountTab({
   ar,
   signedIn,
   phone,

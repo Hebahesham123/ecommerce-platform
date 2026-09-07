@@ -39,6 +39,16 @@ import {
   type Tab as ThemeTab,
 } from "@/lib/app-theme";
 import { ScreenPanel, TabsPanel } from "./screen-panels";
+import {
+  AccountTab,
+  Cart,
+  CART_KEY,
+  readCart,
+  type CartLine,
+} from "@/app/app-preview/preview";
+import { Orders, SignIn } from "@/app/app-preview/screens";
+import { Sheet } from "@/app/app-preview/ui";
+import { getPhone, getToken, setToken } from "@/app/app-preview/api";
 import { loadThemeEditor, saveTheme, type ThemeEditorData } from "./actions";
 
 /**
@@ -93,11 +103,56 @@ export function ThemeEditor() {
   const [msg, setMsg] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
   const railRef = useRef<HTMLDivElement>(null);
 
+  /**
+   * The editor's phone is a real shopper, not a picture of one.
+   *
+   * The basket and the signed-in number are the same ones the full test app
+   * uses, so a product added here is in the basket there — and an order placed
+   * from either is an app order the store cannot tell apart.
+   */
+  const [cart, setCart] = useState<CartLine[]>([]);
+  const [shopper, setShopper] = useState<string | null>(null);
+  const [signInOpen, setSignInOpen] = useState(false);
+  const [cartReady, setCartReady] = useState(false);
+
+  useEffect(() => {
+    setCart(readCart());
+    setShopper(getToken() ? getPhone() : null);
+    setCartReady(true);
+  }, []);
+
+  useEffect(() => {
+    if (!cartReady) return;
+    try {
+      localStorage.setItem(CART_KEY, JSON.stringify(cart));
+    } catch {
+      /* private browsing */
+    }
+  }, [cart, cartReady]);
+
+  const addToCart = useCallback((itemId: string) => {
+    setCart((c) => {
+      const found = c.find((l) => l.itemId === itemId);
+      return found
+        ? c.map((l) => (l.itemId === itemId ? { ...l, quantity: l.quantity + 1 } : l))
+        : [...c, { itemId, quantity: 1 }];
+    });
+    setPage("cart");
+  }, []);
+
+  const cartCount = cart.reduce((n, l) => n + l.quantity, 0);
+
   // Which tab the page being edited belongs to, so the bar in the preview
   // agrees with what is on screen above it. Collection and product are reached
   // from the shop tab, so that is the one lit.
   const activeTab: TabKey =
-    page === "cart" ? "cart" : page === "account" ? "account" : "shop";
+    screen?.kind === "orders"
+      ? "orders"
+      : page === "cart"
+        ? "cart"
+        : page === "account"
+          ? "account"
+          : "shop";
 
   // Landing on the Collection or Product tab with nothing tapped yet shows the
   // first real one, so the settings have something to act on immediately.
@@ -572,8 +627,40 @@ export function ThemeEditor() {
                 </div>
               )}
 
-              {page !== "home" && page !== "collection" && page !== "product" ? (
-                <MockScreen page={page} theme={draft} ar={ar} />
+              {page === "cart" || page === "checkout" ? (
+                <Cart
+                  ar={ar}
+                  cart={cart}
+                  setCart={setCart}
+                  signedIn={Boolean(shopper)}
+                  phone={shopper}
+                  screens={draft.screens}
+                  accent={draft.settings.accent}
+                  startAtCheckout={page === "checkout"}
+                  onNeedSignIn={() => setSignInOpen(true)}
+                  onPlaced={() => {
+                    setCart([]);
+                    setPage("account");
+                  }}
+                />
+              ) : page === "account" ? (
+                <AccountTab
+                  ar={ar}
+                  signedIn={Boolean(shopper)}
+                  phone={shopper}
+                  screens={draft.screens}
+                  accent={draft.settings.accent}
+                  onSignIn={() => setSignInOpen(true)}
+                  onSignOut={() => {
+                    setToken(null);
+                    setShopper(null);
+                  }}
+                  // Returns and questions have screens of their own in the full
+                  // app; a row that did nothing here would be worse than a row
+                  // that says where it goes.
+                  onReturns={() => window.open("/app-preview", "_blank")}
+                  onEnquiry={() => window.open("/app-preview", "_blank")}
+                />
               ) : page !== "home" && !screen ? (
                 <p className="bg-slate-50 px-6 py-16 text-center text-sm leading-relaxed text-slate-400">
                   {page === "collection"
@@ -585,7 +672,11 @@ export function ThemeEditor() {
                       : "Nothing to stand in for a product. Open one from the home screen."}
                 </p>
               ) : screen ? (
-                screen.kind === "collection" ? (
+                screen.kind === "orders" ? (
+                  <div className="bg-slate-50 p-4">
+                    <Orders ar={ar} signedIn={Boolean(shopper)} />
+                  </div>
+                ) : screen.kind === "collection" ? (
                   <CollectionScreen
                     handle={screen.handle}
                     title={screen.title}
@@ -599,6 +690,8 @@ export function ThemeEditor() {
                     id={screen.id}
                     accent={draft.settings.accent}
                     ar={ar}
+                    settings={draft.screens.product}
+                    onAdd={addToCart}
                     onBack={pop}
                   />
                 )
@@ -655,16 +748,50 @@ export function ThemeEditor() {
                 {draft.tabs
                   .filter((t) => t.visible)
                   .map((t) => (
-                    <span
+                    <button
                       key={t.key}
+                      type="button"
+                      onClick={() => {
+                        setStack([]);
+                        if (t.key === "orders") {
+                          setPage("home");
+                          setStack([{ kind: "orders" }]);
+                        } else {
+                          setPage(t.key === "shop" ? "home" : t.key);
+                        }
+                      }}
                       className="flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-medium"
                       style={{ color: t.key === activeTab ? draft.settings.accent : "#94a3b8" }}
                     >
-                      <span className="text-base leading-none">{TAB_DEFAULTS[t.key].icon}</span>
+                      <span className="relative text-base leading-none">
+                        {TAB_DEFAULTS[t.key].icon}
+                        {t.key === "cart" && cartCount > 0 && (
+                          <span
+                            className="absolute -end-2 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-1 text-[9px] font-bold text-white"
+                            style={{ background: draft.settings.accent }}
+                          >
+                            {cartCount}
+                          </span>
+                        )}
+                      </span>
                       {t.label || TAB_DEFAULTS[t.key][ar ? "ar" : "en"]}
-                    </span>
+                    </button>
                   ))}
               </nav>
+
+              <Sheet
+                open={signInOpen}
+                onClose={() => setSignInOpen(false)}
+                title={ar ? "تسجيل الدخول" : "Sign in"}
+              >
+                <SignIn
+                  ar={ar}
+                  onDone={(who) => {
+                    setShopper(who);
+                    setSignInOpen(false);
+                  }}
+                />
+              </Sheet>
             </div>
           </div>
         </Card>
@@ -1307,7 +1434,10 @@ function screenFile(key: ScreenKey): string {
 
 type Screen =
   | { kind: "collection"; handle: string; title: string }
-  | { kind: "product"; id: string };
+  | { kind: "product"; id: string }
+  // Orders has no settings to design, so it has no pill — but the tab is real
+  // and pressing it should show real orders, not nothing.
+  | { kind: "orders" };
 
 /** The bar every screen below home wears. */
 function ScreenBar({
@@ -1459,12 +1589,16 @@ function ProductScreen({
   id,
   accent,
   ar,
+  settings,
   onBack,
+  onAdd,
 }: {
   id: string;
   accent: string;
   ar: boolean;
+  settings: ScreenSettings["product"];
   onBack: () => void;
+  onAdd: (itemId: string) => void;
 }) {
   const [product, setProduct] = useState<{
     name: string;
@@ -1475,16 +1609,26 @@ function ProductScreen({
     variants: { id: string; variantTitle: string | null; price: number | null; available: number }[];
   } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [chosen, setChosen] = useState<string | null>(null);
 
   useEffect(() => {
     setProduct(null);
     setError(null);
+    setChosen(null);
     fetch(`/api/storefront/products/${encodeURIComponent(id)}`, {
       headers: { "x-store-channel": "app" },
       cache: "no-store",
     })
       .then((r) => r.json())
-      .then((j) => (j?.ok ? setProduct(j.data) : setError(j?.error ?? "not_found")))
+      .then((j) => {
+        if (!j?.ok) return setError(j?.error ?? "not_found");
+        setProduct(j.data);
+        // The first size that is actually there, so the button means something
+        // the moment the screen appears.
+        const first =
+          j.data.variants.find((v: { available: number }) => v.available > 0) ?? j.data.variants[0];
+        setChosen(first?.id ?? null);
+      })
       .catch((e) => setError(String((e as Error).message)));
   }, [id]);
 
@@ -1527,7 +1671,14 @@ function ProductScreen({
             {product.variants.map((v) => (
               <li
                 key={v.id}
-                className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs"
+                role="button"
+                tabIndex={0}
+                onClick={() => v.available > 0 && setChosen(v.id)}
+                onKeyDown={(e) => e.key === "Enter" && v.available > 0 && setChosen(v.id)}
+                className={`flex items-center gap-2 rounded-xl border bg-white px-3 py-2 text-xs ${
+                  v.id === chosen ? "border-2" : "border-slate-200"
+                } ${v.available > 0 ? "cursor-pointer" : "opacity-60"}`}
+                style={v.id === chosen ? { borderColor: accent } : undefined}
               >
                 <span className="min-w-0 flex-1 truncate text-slate-800">
                   {v.variantTitle ?? (ar ? "الأساسي" : "Default")}
@@ -1547,174 +1698,30 @@ function ProductScreen({
               </li>
             ))}
           </ul>
+
+          {(() => {
+            const v = product.variants.find((x) => x.id === chosen) ?? product.variants[0];
+            const soldOut = !v || v.available <= 0;
+            return (
+              <button
+                type="button"
+                disabled={soldOut}
+                onClick={() => v && onAdd(v.id)}
+                className="w-full rounded-xl py-3 text-sm font-bold text-white disabled:opacity-45"
+                style={{ background: accent }}
+              >
+                {soldOut
+                  ? settings.soldOutLabel || (ar ? "نفد" : "Sold out")
+                  : settings.addLabel || (ar ? "أضيفي إلى السلة" : "Add to basket")}
+              </button>
+            );
+          })()}
         </div>
       )}
     </div>
   );
 }
 
-/**
- * Cart, checkout and account, drawn from their settings.
- *
- * These are the one place the editor shows something the shopper's own data
- * would fill in — an empty basket has nothing to preview, and a checkout
- * cannot be filled in on the merchant's behalf. So they are drawn with sample
- * rows, clearly a sample, to show the wording and which parts appear. The full
- * app one click away is where they are exercised for real.
- */
-function MockScreen({
-  page,
-  theme,
-  ar,
-}: {
-  page: ScreenKey;
-  theme: AppTheme;
-  ar: boolean;
-}) {
-  const accent = theme.settings.accent;
-  const s = theme.screens;
-
-  if (page === "cart") {
-    const c = s.cart;
-    return (
-      <div className="space-y-3 bg-slate-50 p-4">
-        <div className="rounded-2xl border border-dashed border-slate-300 p-2 text-center text-[10px] text-slate-400">
-          {ar ? "سلة كمثال" : "a sample basket"}
-        </div>
-        {[1, 2].map((i) => (
-          <div
-            key={i}
-            className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-2.5"
-          >
-            <div className="h-14 w-14 shrink-0 rounded-xl bg-slate-100" />
-            <div className="min-w-0 flex-1">
-              <div className="h-2.5 w-4/5 rounded bg-slate-200" />
-              <div className="mt-1.5 text-sm font-bold text-slate-900">
-                {(i * 1250).toLocaleString()} {ar ? "ج.م" : "EGP"}
-              </div>
-            </div>
-            <div className="flex items-center gap-1.5 text-slate-400">
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-300">
-                −
-              </span>
-              <span className="w-4 text-center text-sm font-semibold text-slate-700">1</span>
-              <span className="flex h-7 w-7 items-center justify-center rounded-lg border border-slate-300">
-                +
-              </span>
-            </div>
-          </div>
-        ))}
-
-        {c.showCoupon && (
-          <div className="rounded-2xl border border-slate-200 bg-white p-3">
-            <div className="flex gap-2">
-              <div className="h-10 flex-1 rounded-xl border border-slate-300 px-3 text-sm leading-10 text-slate-400">
-                {c.couponLabel || (ar ? "كود الخصم" : "Discount code")}
-              </div>
-              <span className="flex h-10 items-center rounded-xl border border-slate-300 px-4 text-sm font-semibold text-slate-700">
-                {ar ? "تطبيق" : "Apply"}
-              </span>
-            </div>
-          </div>
-        )}
-
-        <div className="rounded-2xl bg-slate-900 p-4 text-white">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-slate-300">{c.totalLabel || (ar ? "الإجمالي" : "Total")}</span>
-            <span className="text-lg font-bold">3,750 {ar ? "ج.م" : "EGP"}</span>
-          </div>
-          <div
-            className="mt-3 rounded-xl py-2.5 text-center text-sm font-semibold text-white"
-            style={{ background: accent }}
-          >
-            {c.checkoutLabel || (ar ? "إتمام الطلب" : "Checkout")}
-          </div>
-        </div>
-
-        <p className="pt-2 text-center text-[11px] text-slate-400">
-          {ar ? "عند الفراغ: " : "When empty: "}
-          {c.emptyText || (ar ? "السلة فارغة" : "The basket is empty")}
-        </p>
-      </div>
-    );
-  }
-
-  if (page === "checkout") {
-    const c = s.checkout;
-    const fields: string[] = [
-      ar ? "الاسم" : "Name",
-      ar ? "رقم الموبايل" : "Phone",
-      ...(c.askEmail ? [ar ? "البريد" : "Email"] : []),
-      ar ? "المحافظة" : "Governorate",
-      ar ? "المدينة" : "City",
-      ar ? "العنوان" : "Address",
-      ...(c.askNote ? [ar ? "ملاحظات" : "Order note"] : []),
-    ];
-    return (
-      <div className="space-y-3 bg-slate-50 p-4">
-        <h3 className="text-sm font-bold text-slate-900">
-          {c.title || (ar ? "الدفع عند الاستلام" : "Cash on delivery")}
-        </h3>
-        {c.note && <p className="text-[11px] text-slate-500">{c.note}</p>}
-        {fields.map((f) => (
-          <div key={f}>
-            <div className="text-[11px] font-medium text-slate-600">{f}</div>
-            <div className="mt-1 h-10 rounded-xl border border-slate-300 bg-white" />
-          </div>
-        ))}
-        <div
-          className="rounded-xl py-2.5 text-center text-sm font-semibold text-white"
-          style={{ background: accent }}
-        >
-          {c.placeLabel || (ar ? "تأكيد الطلب" : "Place the order")}
-        </div>
-        <p className="text-[11px] leading-relaxed text-slate-400">
-          {ar
-            ? "الرقم مقفول على حساب العميل — الخادم يرفض أي رقم آخر."
-            : "The phone is locked to the signed-in account; the server refuses any other."}
-        </p>
-      </div>
-    );
-  }
-
-  const a = s.account;
-  const rows: string[] = [
-    ...(a.showReturns
-      ? [a.returnsLabel || (ar ? "الاسترجاع والاستبدال" : "Returns & exchanges")]
-      : []),
-    ...(a.showRequests ? [a.requestsLabel || (ar ? "اسألينا" : "Ask us a question")] : []),
-    ...(a.showReviews ? [a.reviewsLabel || (ar ? "التقييمات" : "Reviews")] : []),
-  ];
-  return (
-    <div className="space-y-3 bg-slate-50 p-4">
-      <div className="rounded-2xl border border-slate-200 bg-white p-4">
-        <p className="text-sm text-slate-600">
-          {a.signedOutText || (ar ? "سجّلي الدخول برقم الموبايل" : "Sign in with your phone number")}
-        </p>
-        <div
-          className="mt-3 rounded-xl py-2.5 text-center text-sm font-semibold text-white"
-          style={{ background: accent }}
-        >
-          {ar ? "تسجيل الدخول" : "Sign in"}
-        </div>
-      </div>
-      {rows.map((r) => (
-        <div
-          key={r}
-          className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-sm font-medium text-slate-800"
-        >
-          {r}
-          <span className="text-slate-300">›</span>
-        </div>
-      ))}
-      {rows.length === 0 && (
-        <p className="py-8 text-center text-[11px] text-slate-400">
-          {ar ? "كل الصفوف مخفية" : "Every row is hidden"}
-        </p>
-      )}
-    </div>
-  );
-}
 
 /** Every collection handle a theme points at, from sections and their items. */
 function referencedHandles(theme: AppTheme): string[] {
