@@ -206,7 +206,6 @@ export async function placeOrderCore(
     const discount = verdict.ok ? verdict.amount : 0;
     const discountCode = verdict.ok ? verdict.code : null;
     const total = Math.max(0, subtotal - discount + shipping);
-    const orderNumber = "BB" + Date.now().toString().slice(-8);
 
     // Delivery schedule, gift options and the coupon fold into the merchant
     // note — all of it captured without a schema change.
@@ -230,8 +229,11 @@ export async function placeOrderCore(
     // transaction, which locks each item's levels and rolls the whole order
     // back if any line is short — so an app buyer and a web buyer contend for
     // the last unit properly instead of both getting it.
-    const { error: rpcErr } = await supabase.rpc("place_store_order", {
-      p_order_number: orderNumber,
+    const { data: placed, error: rpcErr } = await supabase.rpc("place_store_order", {
+      // The number is the shop's to give, not this process's to invent. It is
+      // handed out inside the same transaction that reserves the stock, so it
+      // counts orders that happened rather than attempts that were made.
+      p_order_number: null,
       p_customer_name: payload.customerName.trim(),
       p_phone: ph,
       p_governorate: payload.governorate.trim() || null,
@@ -255,8 +257,18 @@ export async function placeOrderCore(
       if ((rpcErr.message || "").includes("insufficient_stock")) {
         return { ok: false, error: "out_of_stock" };
       }
+      // Before 0024 the function returned a uuid and numbered nothing; saying
+      // which migration is missing beats a Postgres signature error.
+      if ((rpcErr.message || "").includes("order_counter_missing")) {
+        return { ok: false, error: "migration_missing" };
+      }
       return { ok: false, error: rpcErr.message };
     }
+
+    const orderNumber = String(
+      (placed as { order_number?: string } | null)?.order_number ?? "",
+    );
+    if (!orderNumber) return { ok: false, error: "migration_missing" };
 
     // Channel and discount are stamped after the fact so the stock function's
     // signature stays the one thing that never changes.

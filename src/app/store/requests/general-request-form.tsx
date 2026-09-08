@@ -186,7 +186,7 @@ export default function GeneralRequestForm({ onBack }: { onBack?: () => void }) 
           <input
             value={orderNumber}
             onChange={(e) => setOrderNumber(e.target.value)}
-            placeholder="BB12345678"
+            placeholder="1234"
             dir="ltr"
             className={`mt-1.5 ${field}`}
           />
