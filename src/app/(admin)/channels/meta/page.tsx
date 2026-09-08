@@ -274,6 +274,43 @@ export default function MetaPage() {
               : "Copy these two values out of Events Manager and paste them here."}
         </p>
 
+        {/*
+          Meta will not let a dataset take app events until an app is linked to
+          it, and the linking needs an App ID. That is a wall a merchant hits in
+          Facebook's own wizard with no explanation of which parts apply, so it
+          is spelled out here — including the part that does not: the SDK is for
+          events sent from the phone, and these are sent from the server.
+        */}
+        {app && (
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm leading-relaxed text-amber-900">
+            <p className="font-semibold">
+              {ar ? "قبل أن تعمل هذه المجموعة" : "Before this dataset will accept anything"}
+            </p>
+            <ol className="mt-2 list-inside list-decimal space-y-1">
+              <li>
+                {ar
+                  ? "أنشئي تطبيقاً على developers.facebook.com للحصول على App ID."
+                  : "Create an app at developers.facebook.com to get an App ID."}
+              </li>
+              <li>
+                {ar
+                  ? "في Events Manager، اربطي التطبيق بمجموعة البيانات هذه — مجموعة غير مرتبطة ترفض أحداث التطبيق."
+                  : "In Events Manager, link that app to this dataset. An unlinked dataset refuses app events."}
+              </li>
+              <li>
+                {ar
+                  ? "أنشئي توكن واجهة التحويلات لهذه المجموعة والصقيه بالأسفل."
+                  : "Generate a Conversions API token for this dataset and paste it below."}
+              </li>
+            </ol>
+            <p className="mt-2">
+              {ar
+                ? "لا تحتاجين إلى تثبيت Facebook SDK: تلك الخطوة للأحداث المُرسلة من الهاتف، وهذه تُرسل من الخادم."
+                : "You do not need the Facebook SDK. That step is for events sent from the phone; these are sent from your server."}
+            </p>
+          </div>
+        )}
+
         <div className="mt-5 space-y-5">
           <Field
             label={app ? (ar ? "معرّف مجموعة البيانات" : "Dataset ID") : ar ? "معرّف البيكسل" : "Pixel ID"}

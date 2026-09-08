@@ -163,6 +163,19 @@ export async function catalogItemsBatch(
 }
 
 // ---- Conversions API (used by the events tester) ---------------------------
+/**
+ * The device half of an app event.
+ *
+ * Meta requires this on anything with action_source "app" — without it the
+ * request is accepted and the event is dropped. Built in meta-app-data.ts from
+ * what the phone tells us.
+ */
+export type AppData = {
+  advertiser_tracking_enabled: number;
+  application_tracking_enabled: number;
+  extinfo: string[];
+};
+
 export type ConversionEvent = {
   event_name: string;
   event_id: string;
@@ -172,6 +185,8 @@ export type ConversionEvent = {
   event_source_url?: string;
   user_data?: Record<string, string[] | string>;
   custom_data?: Record<string, unknown>;
+  /** Required when action_source is "app", meaningless otherwise. */
+  app_data?: AppData;
 };
 
 export async function sendConversionEvent(
@@ -189,6 +204,7 @@ export async function sendConversionEvent(
       event_source_url: event.event_source_url,
       user_data: event.user_data ?? {},
       custom_data: event.custom_data ?? {},
+      ...(event.app_data ? { app_data: event.app_data } : {}),
     },
   ];
   const payload: Record<string, unknown> = { data, access_token: token };

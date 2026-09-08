@@ -11,6 +11,7 @@ import {
   type CatalogItem,
   type Named,
 } from "@/lib/meta";
+import { appDataFrom } from "@/lib/meta-app-data";
 import { invalidatePixelSnippet } from "@/lib/theme-render-service";
 import { products } from "@/lib/data";
 import type { Channel } from "@/lib/channel";
@@ -341,6 +342,10 @@ export async function sendTestEvent(
       // worst way: accepted, then dropped from attribution.
       ...(isApp ? {} : { event_source_url: SITE_URL }),
       user_data: { em: [sha256("test@your-store.example.com")], client_user_agent: "cowork-admin-tester" },
+      // An app event needs its device half or Meta drops it silently. There is
+      // no device here — this is a button in a dashboard — so it carries the
+      // shape and says nothing it does not know.
+      ...(isApp ? { app_data: appDataFrom(null) } : {}),
       custom_data:
         eventName === "Purchase"
           ? { currency: "EGP", value: 540 }

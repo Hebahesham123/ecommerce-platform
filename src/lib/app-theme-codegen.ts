@@ -101,17 +101,46 @@ function apiFile(baseUrl: string): GeneratedFile {
  * dashboard, and which Meta dataset its purchase reports to. It is a label,
  * not a permission.
  */
+import { Dimensions, PixelRatio, Platform } from "react-native";
 
 export const API_BASE = ${q(baseUrl)};
 
 let token: string | null = null;
 export const setToken = (t: string | null) => { token = t; };
 
+/**
+ * What the phone is, in one header.
+ *
+ * Meta will not count an app sale without it: an event marked as coming from
+ * an app has to carry the device it came from, and a request that leaves it
+ * out is accepted and then quietly dropped. Only the phone knows any of this,
+ * so it says so on every request and the shop passes it on.
+ *
+ * \`tracking\` is the person's answer on iOS, not a default to be assumed.
+ * Wire it to whatever your ATT prompt returned; until you have one, say false
+ * rather than claim a permission nobody gave.
+ */
+export const device = {
+  platform: Platform.OS,
+  osVersion: String(Platform.Version),
+  bundleId: "",
+  appVersion: "",
+  buildVersion: "",
+  model: "",
+  locale: "",
+  timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  width: Math.round(Dimensions.get("window").width),
+  height: Math.round(Dimensions.get("window").height),
+  density: PixelRatio.get(),
+  tracking: false,
+};
+
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(API_BASE + path, {
     ...init,
     headers: {
       "x-store-channel": "app",
+      "x-app-device": encodeURIComponent(JSON.stringify(device)),
       ...(init?.body ? { "content-type": "application/json" } : {}),
       ...(token ? { authorization: \`Bearer \${token}\` } : {}),
       ...(init?.headers ?? {}),

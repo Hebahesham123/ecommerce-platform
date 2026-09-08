@@ -2,6 +2,7 @@ import "server-only";
 import { cookies, headers } from "next/headers";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
 import { sendConversionEvent, sha256 } from "@/lib/meta";
+import { appDataFrom, deviceFromHeader } from "@/lib/meta-app-data";
 import type { Channel } from "@/lib/channel";
 
 /**
@@ -53,7 +54,7 @@ function phoneDigits(p: string | null | undefined): string | null {
  * an ad, so both are readable here — which is the whole reason the pixel and
  * the Conversions API are worth having together rather than either alone.
  */
-async function browserSignals(orderNumber: string) {
+async function browserSignals(orderNumber: string, isApp: boolean) {
   try {
     const [h, c] = await Promise.all([headers(), cookies()]);
     const forwarded = h.get("x-forwarded-for") ?? "";
@@ -62,16 +63,22 @@ async function browserSignals(orderNumber: string) {
     return {
       ip: forwarded.split(",")[0].trim() || h.get("x-real-ip") || null,
       ua: h.get("user-agent") || null,
-      fbp: c.get("_fbp")?.value ?? null,
-      fbc: c.get("_fbc")?.value ?? null,
-      // Required whenever action_source is "website", which it is.
-      sourceUrl: host
-        ? `${proto}://${host}/store/order/${orderNumber}`
-        : process.env.NEXT_PUBLIC_SITE_URL || undefined,
+      // Cookies and a page URL belong to a browser. An app has neither, and
+      // sending empty ones only muddies the payload — but its IP, its user
+      // agent and the device it told us about are as real as the website's.
+      fbp: isApp ? null : (c.get("_fbp")?.value ?? null),
+      fbc: isApp ? null : (c.get("_fbc")?.value ?? null),
+      device: isApp ? deviceFromHeader(h.get("x-app-device")) : null,
+      // Required for a website event, and rejected on an app one.
+      sourceUrl: isApp
+        ? undefined
+        : host
+          ? `${proto}://${host}/store/order/${orderNumber}`
+          : process.env.NEXT_PUBLIC_SITE_URL || undefined,
     };
   } catch {
     // Called outside a request (a job, a webhook) — send what we have.
-    return { ip: null, ua: null, fbp: null, fbc: null, sourceUrl: undefined };
+    return { ip: null, ua: null, fbp: null, fbc: null, device: null, sourceUrl: undefined };
   }
 }
 
@@ -100,11 +107,7 @@ export async function sendOrderPurchase(order: PurchaseInput): Promise<void> {
       : (data.capi_token as string) || (data.access_token as string)) ?? "";
     if (!pixelId || !token) return;
 
-    // Browser identifiers only exist for the website. An app has no _fbp
-    // cookie and no page URL; sending empty ones would only muddy the payload.
-    const signals = isApp
-      ? { ip: null, ua: null, fbp: null, fbc: null, sourceUrl: undefined }
-      : await browserSignals(order.orderNumber);
+    const signals = await browserSignals(order.orderNumber, isApp);
 
     const name = String(order.customerName ?? "").trim();
     const [first, ...rest] = name ? name.split(/\s+/) : [];
@@ -147,6 +150,9 @@ export async function sendOrderPurchase(order: PurchaseInput): Promise<void> {
         event_source_url: signals.sourceUrl,
         user_data,
         custom_data,
+        // An app event without app_data is accepted and then dropped, so the
+        // dataset's "events received" climbs while nothing is attributed.
+        ...(isApp ? { app_data: appDataFrom(signals.device) } : {}),
       });
       // Deliberately no test_event_code. It belongs to the "send a test
       // button, and passing it here would route every real sale into the Test
