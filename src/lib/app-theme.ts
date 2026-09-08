@@ -29,6 +29,7 @@ export type BlockType =
   | "tiers"
   | "split"
   | "trust_badges"
+  | "live_now"
   | "reviews"
   | "text";
 
@@ -83,6 +84,11 @@ export const ITEM_SHAPE: Partial<Record<BlockType, { ar: string; en: string; bla
     ar: "شارة",
     en: "Badge",
     blank: () => ({ id: itemId(), emoji: "", title: "", subtitle: "" }),
+  },
+  live_now: {
+    ar: "بث",
+    en: "Live",
+    blank: () => ({ id: itemId(), imageUrl: "", name: "", viewers: "", handle: "" }),
   },
 };
 
@@ -141,6 +147,12 @@ export const ITEM_FIELDS: Partial<Record<BlockType, FieldSpec[]>> = {
     { key: "emoji", kind: "emoji", ar: "أيقونة", en: "Emoji" },
     { key: "title", kind: "text", ar: "العنوان", en: "Title" },
     { key: "subtitle", kind: "text", ar: "سطر فرعي", en: "Subtitle" },
+  ],
+  live_now: [
+    { key: "imageUrl", kind: "image", ar: "الصورة", en: "Photo" },
+    { key: "name", kind: "text", ar: "الاسم", en: "Name" },
+    { key: "viewers", kind: "text", ar: "المشاهدون", en: "Viewers" },
+    { key: "handle", kind: "collection", ar: "يفتح", en: "Opens" },
   ],
 };
 
@@ -396,6 +408,12 @@ export const BLOCK_META: Record<
     hintAr: "أقسامك كأزرار في شريط أفقي",
     hintEn: "Your collections as a row of tappable chips",
   },
+  live_now: {
+    ar: "البث المباشر",
+    en: "Live now",
+    hintAr: "صور دائرية لمن يبثّون الآن، وتحتها عرض خاص بالعميل مع عدّاد",
+    hintEn: "Round photos of whoever is live now, with a private countdown offer underneath",
+  },
   reviews: {
     ar: "آراء العملاء",
     en: "Customer reviews",
@@ -422,6 +440,19 @@ export function newBlock(type: BlockType): Block {
     tiers: { title: "", items: shape ? [shape.blank()] : [] },
     split: { title: "", items: shape ? [shape.blank(), shape.blank()] : [] },
     trust_badges: { items: shape ? [shape.blank()] : [] },
+    live_now: {
+      title: "",
+      liveLabel: "LIVE",
+      showReplays: true,
+      replaysLabel: "Replays",
+      replaysHandle: "",
+      offerEnabled: true,
+      offerTitle: "{name}, your private offer is live",
+      offerText: "",
+      offerMinutes: 10,
+      offerHandle: "",
+      items: shape ? [shape.blank()] : [],
+    },
     banner: { imageUrl: "", handle: "", heading: "", subheading: "" },
     collection_row: { handle: "", title: "", limit: 8 },
     collection_grid: { handle: "", title: "", limit: 6 },

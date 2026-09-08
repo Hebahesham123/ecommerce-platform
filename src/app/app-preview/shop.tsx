@@ -42,6 +42,7 @@ export function Shop({
   onAdd,
   onLeave,
   onTheme,
+  shopperName,
 }: {
   ar: boolean;
   onAdd: (itemId: string) => void;
@@ -49,6 +50,8 @@ export function Shop({
   onLeave: (what: "cart" | "requests") => void;
   /** The shell wears the brand too, and /home is where it arrives. */
   onTheme?: (theme: Home["theme"]) => void;
+  /** Only the live-now offer uses it, and it reads fine without one. */
+  shopperName?: string | null;
 }) {
   const [home, setHome] = useState<Home | null>(null);
   const [homeErr, setHomeErr] = useState<string | null>(null);
@@ -235,11 +238,13 @@ function HomeView({
   home,
   onOpenCollection,
   onOpen,
+  shopperName,
 }: {
   ar: boolean;
   home: Home;
   onOpenCollection: (c: Collection) => void;
   onOpen: (p: ProductCard) => void;
+  shopperName?: string | null;
 }) {
   return (
     <div className="mt-3">
@@ -251,6 +256,7 @@ function HomeView({
           rows: home.rows,
           newArrivals: home.newArrivals,
           reviews: home.reviews,
+          shopperName,
         }}
         handlers={{
           onOpenCollection: (handle, title) =>

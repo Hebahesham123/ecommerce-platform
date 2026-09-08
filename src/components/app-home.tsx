@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ALL_ROWS_CAP, itemsOf, type AppTheme, type Block, type Item } from "@/lib/app-theme";
 
 /**
@@ -45,6 +45,12 @@ export type HomeData = {
   rows: Record<string, Card[]>;
   newArrivals: Card[];
   reviews: HomeReview[];
+  /**
+   * The signed-in shopper first name, when the surface drawing this knows it.
+   * Only the live-now offer uses it, and it degrades to an unnamed greeting,
+   * so nothing here has to go and fetch an account it does not otherwise need.
+   */
+  shopperName?: string | null;
 };
 
 export type HomeHandlers = {
@@ -73,6 +79,23 @@ const int = (v: unknown, fallback: number) => {
  * repeat themselves, and guarantees the two drift the day the collection gets
  * a new image. Their own image always wins when they set one.
  */
+/**
+ * Put the shopper name into a line the merchant wrote, or take the token out.
+ *
+ * The offer is addressed to someone by name, which is the whole point of it,
+ * but the app also draws this screen before anyone has signed in. Leaving a
+ * literal "{name}" on screen would be worse than not personalising at all, so
+ * an unknown name drops the token and the comma that followed it and the line
+ * simply starts one word later.
+ */
+function personalise(template: string, name?: string | null): string {
+  const first = String(name ?? "").trim().split(" ")[0] ?? "";
+  if (first) return template.split("{name}").join(first);
+  let out = template.split("{name}").join("").trim();
+  while (out.startsWith(",") || out.startsWith("،")) out = out.slice(1).trim();
+  return out ? out[0].toUpperCase() + out.slice(1) : "";
+}
+
 function inherit(item: Item, data: HomeData): { image: string | null; title: string } {
   const own = str(item.imageUrl);
   const named = str(item.title) || str(item.label);
@@ -366,6 +389,27 @@ function BlockView({
             </span>
           )}
         </div>
+      );
+    }
+
+    case "live_now": {
+      const people = itemsOf(block).filter((i) => str(i.name) || str(i.imageUrl));
+      const offerOn = s.offerEnabled !== false;
+      const offerTitle = personalise(str(s.offerTitle), data.shopperName);
+      const offerText = str(s.offerText);
+      const hasOffer = offerOn && Boolean(offerTitle || offerText);
+      if (!people.length && !hasOffer) {
+        return <Placeholder ar={ar} label={ar ? "لا أحد يبثّ بعد" : "Nobody live yet"} />;
+      }
+      return (
+        <LiveNow
+          block={block}
+          people={people}
+          data={data}
+          ar={ar}
+          accent={accent}
+          handlers={handlers}
+        />
       );
     }
 
@@ -686,6 +730,142 @@ function Tabs({
  * is the merchant's business, not the shopper's, and a grey box saying "banner
  * with no image" on a live home screen is worse than one fewer banner.
  */
+/** mm:ss, counting down. Stops at zero rather than going negative. */
+function useCountdown(minutes: number): string {
+  const total = Math.max(0, Math.trunc(minutes * 60));
+  const [left, setLeft] = useState(total);
+  // Restart whenever the merchant changes the length, so the editor shows the
+  // new duration immediately instead of finishing the old one first.
+  useEffect(() => setLeft(total), [total]);
+  useEffect(() => {
+    if (left <= 0) return;
+    const t = setTimeout(() => setLeft((v) => (v > 0 ? v - 1 : 0)), 1000);
+    return () => clearTimeout(t);
+  }, [left]);
+  const mm = Math.floor(left / 60);
+  const ss = left % 60;
+  return String(mm).padStart(2, "0") + ":" + String(ss).padStart(2, "0");
+}
+
+/**
+ * Who is live now, and the offer that belongs to this shopper alone.
+ *
+ * One block rather than two because it reads as one thing on the screen: the
+ * row draws people in, the offer underneath is what it draws them into. A
+ * merchant who wants only the row turns the offer off, and vice versa.
+ */
+function LiveNow({
+  block,
+  people,
+  data,
+  ar,
+  accent,
+  handlers,
+}: {
+  block: Block;
+  people: Item[];
+  data: HomeData;
+  ar: boolean;
+  accent: string;
+  handlers: HomeHandlers;
+}) {
+  const s = block.settings ?? {};
+  const title = str(s.title);
+  const liveLabel = str(s.liveLabel, ar ? "مباشر" : "LIVE");
+  const showReplays = s.showReplays !== false;
+  const replaysLabel = str(s.replaysLabel, ar ? "المسجّلة" : "Replays");
+  const offerOn = s.offerEnabled !== false;
+  const offerTitle = personalise(str(s.offerTitle), data.shopperName);
+  const offerText = str(s.offerText);
+  const timer = useCountdown(int(s.offerMinutes, 10));
+  const open = (handle: string) => {
+    const target = data.collections.find((c) => c.handle === handle);
+    if (target) handlers.onOpenCollection?.(target.handle, target.title);
+  };
+
+  return (
+    <section>
+      {title && <Heading title={title} ar={ar} accent={accent} />}
+
+      {people.length > 0 && (
+        <div className="-mx-4 mt-2 flex gap-3 overflow-x-auto px-4 pb-1">
+          {people.map((person) => {
+            const { image, title: fallbackName } = inherit(person, data);
+            const name = str(person.name, fallbackName);
+            const viewers = str(person.viewers);
+            return (
+              <button
+                key={person.id}
+                onClick={() => open(str(person.handle))}
+                className="flex w-16 shrink-0 flex-col items-center gap-1"
+              >
+                <span className="relative block">
+                  <span
+                    className="block rounded-full p-[2px]"
+                    style={{ background: accent }}
+                  >
+                    <Thumb src={image} className="h-14 w-14 rounded-full border-2 border-white" />
+                  </span>
+                  {liveLabel && (
+                    <span
+                      className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-[4px] px-1 py-px text-[8px] font-bold uppercase tracking-wide text-white"
+                      style={{ background: "#e11d48" }}
+                    >
+                      {liveLabel}
+                    </span>
+                  )}
+                </span>
+                <span className="mt-1 w-full truncate text-center text-[10px] font-semibold text-slate-800">
+                  {name}
+                </span>
+                {viewers && (
+                  <span className="w-full truncate text-center text-[9px] text-slate-500">
+                    {viewers}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+
+          {showReplays && (
+            <button
+              onClick={() => open(str(s.replaysHandle))}
+              className="flex w-16 shrink-0 flex-col items-center gap-1"
+            >
+              <span className="flex h-14 w-14 items-center justify-center rounded-full border border-dashed border-slate-300 bg-slate-50 text-base text-slate-400">
+                ▶
+              </span>
+              <span className="mt-1 w-full truncate text-center text-[10px] font-semibold text-slate-500">
+                {replaysLabel}
+              </span>
+            </button>
+          )}
+        </div>
+      )}
+
+      {offerOn && (offerTitle || offerText) && (
+        <button
+          onClick={() => open(str(s.offerHandle))}
+          className="mt-3 flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-start"
+          style={{ background: accent }}
+        >
+          <span className="min-w-0 flex-1">
+            {offerTitle && (
+              <span className="block truncate text-[13px] font-bold text-white">{offerTitle}</span>
+            )}
+            {offerText && (
+              <span className="mt-0.5 block truncate text-[11px] text-white/85">{offerText}</span>
+            )}
+          </span>
+          <span className="shrink-0 rounded-lg bg-white/20 px-2.5 py-1.5 font-mono text-[13px] font-bold tabular-nums text-white">
+            {timer}
+          </span>
+        </button>
+      )}
+    </section>
+  );
+}
+
 function Placeholder({ ar, label }: { ar: boolean; label: string }) {
   return (
     <div
@@ -771,6 +951,11 @@ function isPlaceholder(node: React.ReactElement): boolean {
       return itemsOf(block).filter((t) => str(t.handle)).length === 0;
     case "promo_bar":
       return !str(s.lead) && !str(s.code);
+    case "live_now": {
+      const anyone = itemsOf(block).filter((i) => str(i.name) || str(i.imageUrl)).length > 0;
+      const offer = s.offerEnabled !== false && Boolean(str(s.offerTitle) || str(s.offerText));
+      return !anyone && !offer;
+    }
     default:
       return false;
   }

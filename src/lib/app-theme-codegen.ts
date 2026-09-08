@@ -1106,6 +1106,164 @@ const styles = StyleSheet.create({
 });
 `,
 
+    live_now: `import React, { useEffect, useState } from "react";
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { colors, radius, spacing } from "../theme";
+import { inherit, SectionHeading } from "./Pieces";
+import { fetchAccount, type HomePayload } from "../api";
+
+export type LivePerson = { id: string; imageUrl?: string; name?: string; viewers?: string; handle?: string };
+export type LiveNowSettings = {
+  title?: string;
+  liveLabel?: string;
+  showReplays?: boolean;
+  replaysLabel?: string;
+  replaysHandle?: string;
+  offerEnabled?: boolean;
+  offerTitle?: string;
+  offerText?: string;
+  offerMinutes?: number;
+  offerHandle?: string;
+  items?: LivePerson[];
+};
+
+/**
+ * Put the shopper name into the line the merchant wrote, or take the token out.
+ * A literal "{name}" on screen is worse than no personalisation, so when nobody
+ * is signed in the token and the comma after it go, and the line starts later.
+ */
+function personalise(template: string, name: string | null): string {
+  const first = String(name ?? "").trim().split(" ")[0] ?? "";
+  if (first) return template.split("{name}").join(first);
+  let out = template.split("{name}").join("").trim();
+  while (out.startsWith(",") || out.startsWith("،")) out = out.slice(1).trim();
+  return out ? out[0].toUpperCase() + out.slice(1) : "";
+}
+
+const pad = (n: number) => (n < 10 ? "0" + n : String(n));
+
+export function LiveNow({
+  settings,
+  collections,
+  onOpenCollection,
+}: {
+  settings: LiveNowSettings;
+  collections: HomePayload["collections"];
+  onOpenCollection?: (handle: string) => void;
+}) {
+  const people = (settings.items ?? []).filter((i) => i.name || i.imageUrl);
+  const showReplays = settings.showReplays !== false;
+  const liveLabel = settings.liveLabel || "LIVE";
+
+  // The offer is addressed by name, so ask who is signed in. Signed out this
+  // rejects, and the greeting simply loses the name — never a blocked screen.
+  const [name, setName] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    fetchAccount()
+      .then((a) => {
+        if (alive) setName(a.name);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const total = Math.max(0, Math.trunc((settings.offerMinutes ?? 10) * 60));
+  const [left, setLeft] = useState(total);
+  useEffect(() => setLeft(total), [total]);
+  useEffect(() => {
+    if (left <= 0) return;
+    const t = setTimeout(() => setLeft((v) => (v > 0 ? v - 1 : 0)), 1000);
+    return () => clearTimeout(t);
+  }, [left]);
+
+  const offerTitle = personalise(settings.offerTitle ?? "", name);
+  const offerText = settings.offerText ?? "";
+  const hasOffer = settings.offerEnabled !== false && Boolean(offerTitle || offerText);
+  if (!people.length && !hasOffer) return null;
+
+  return (
+    <>
+      {settings.title ? <SectionHeading title={settings.title} /> : null}
+
+      {people.length ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+          {people.map((p) => {
+            const borrowed = inherit(p, collections);
+            const photo = p.imageUrl || borrowed.image;
+            return (
+              <Pressable
+                key={p.id}
+                style={styles.person}
+                onPress={() => p.handle && onOpenCollection?.(p.handle)}
+              >
+                <View style={styles.ring}>
+                  {photo ? <Image source={{ uri: photo }} style={styles.avatar} /> : <View style={styles.avatar} />}
+                </View>
+                {liveLabel ? (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>{liveLabel}</Text>
+                  </View>
+                ) : null}
+                <Text style={styles.name} numberOfLines={1}>{p.name || borrowed.title}</Text>
+                {p.viewers ? <Text style={styles.viewers} numberOfLines={1}>{p.viewers}</Text> : null}
+              </Pressable>
+            );
+          })}
+
+          {showReplays ? (
+            <Pressable
+              style={styles.person}
+              onPress={() => settings.replaysHandle && onOpenCollection?.(settings.replaysHandle)}
+            >
+              <View style={styles.replays}>
+                <Text style={styles.replaysIcon}>▶</Text>
+              </View>
+              <Text style={styles.name} numberOfLines={1}>{settings.replaysLabel || "Replays"}</Text>
+            </Pressable>
+          ) : null}
+        </ScrollView>
+      ) : null}
+
+      {hasOffer ? (
+        <Pressable
+          style={styles.offer}
+          onPress={() => settings.offerHandle && onOpenCollection?.(settings.offerHandle)}
+        >
+          <View style={{ flex: 1 }}>
+            {offerTitle ? <Text style={styles.offerTitle} numberOfLines={1}>{offerTitle}</Text> : null}
+            {offerText ? <Text style={styles.offerText} numberOfLines={1}>{offerText}</Text> : null}
+          </View>
+          <View style={styles.timer}>
+            <Text style={styles.timerText}>{pad(Math.floor(left / 60)) + ":" + pad(left % 60)}</Text>
+          </View>
+        </Pressable>
+      ) : null}
+    </>
+  );
+}
+
+const styles = StyleSheet.create({
+  row: { gap: spacing.md, paddingVertical: spacing.sm },
+  person: { width: 68, alignItems: "center" },
+  ring: { padding: 2, borderRadius: 34, backgroundColor: colors.accent },
+  avatar: { width: 56, height: 56, borderRadius: 28, backgroundColor: colors.page, borderWidth: 2, borderColor: colors.surface },
+  badge: { marginTop: -9, borderRadius: 4, backgroundColor: "#e11d48", paddingHorizontal: 5, paddingVertical: 1 },
+  badgeText: { fontSize: 8, fontWeight: "700", color: "#fff", letterSpacing: 0.5 },
+  name: { marginTop: 5, fontSize: 10, fontWeight: "600", color: colors.ink, textAlign: "center" },
+  viewers: { fontSize: 9, color: colors.inkSoft, textAlign: "center" },
+  replays: { width: 60, height: 60, borderRadius: 30, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.line, backgroundColor: colors.page },
+  replaysIcon: { fontSize: 16, color: colors.inkSoft },
+  offer: { marginTop: spacing.md, flexDirection: "row", alignItems: "center", gap: spacing.sm, borderRadius: radius.lg, backgroundColor: colors.accent, paddingHorizontal: 14, paddingVertical: 12 },
+  offerTitle: { fontSize: 13, fontWeight: "700", color: "#fff" },
+  offerText: { marginTop: 2, fontSize: 11, color: "rgba(255,255,255,0.85)" },
+  timer: { borderRadius: radius.sm, backgroundColor: "rgba(255,255,255,0.2)", paddingHorizontal: 10, paddingVertical: 6 },
+  timerText: { fontSize: 13, fontWeight: "700", color: "#fff" },
+});
+`,
+
     text: `import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { colors, radius, spacing } from "../theme";
@@ -1263,6 +1421,7 @@ function renderCall(block: Block, indent: number): string {
     tiers: ["onOpenCollection={onOpenCollection}"],
     split: ["collections={data.collections}", "onOpenCollection={onOpenCollection}"],
     trust_badges: [],
+    live_now: ["collections={data.collections}", "onOpenCollection={onOpenCollection}"],
     banner: ["collections={data.collections}", "onOpenCollection={onOpenCollection}"],
     categories: ["collections={data.collections}", "onOpenCollection={onOpenCollection}"],
     new_arrivals: ["products={data.newArrivals}", "onOpenProduct={onOpenProduct}"],
@@ -1295,6 +1454,18 @@ function settingsLiteral(block: Block): string {
     tiers: ["title"],
     split: ["title"],
     trust_badges: [],
+    live_now: [
+      "title",
+      "liveLabel",
+      "showReplays",
+      "replaysLabel",
+      "replaysHandle",
+      "offerEnabled",
+      "offerTitle",
+      "offerText",
+      "offerMinutes",
+      "offerHandle",
+    ],
     banner: ["imageUrl", "heading", "subheading", "handle"],
     categories: ["title"],
     new_arrivals: ["title", "limit"],
@@ -1308,6 +1479,12 @@ function settingsLiteral(block: Block): string {
     .map((k) => {
       const v = set[k];
       if (k === "limit") return `${k}: ${n(v, 8)}`;
+      // Not every setting is a string: a toggle that arrived as text would be
+      // truthy in the app whichever way the merchant set it.
+      if (k === "offerMinutes") return `${k}: ${n(v, 10)}`;
+      if (k === "showReplays" || k === "offerEnabled") {
+        return `${k}: ${v === false ? "false" : "true"}`;
+      }
       const text = s(v);
       return text ? `${k}: ${q(text)}` : null;
     })
@@ -1331,6 +1508,7 @@ function itemsLiteral(type: BlockType, items: Item[]): string {
     tiers: ["prefix", "amount", "label", "handle"],
     split: ["imageUrl", "label", "buttonLabel", "handle"],
     trust_badges: ["emoji", "title", "subtitle"],
+    live_now: ["imageUrl", "name", "viewers", "handle"],
   };
   const keys = fields[type] ?? [];
   const rendered = items.map((item) => {

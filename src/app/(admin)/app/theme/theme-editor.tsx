@@ -1035,6 +1035,7 @@ function BlockGroup({
   const s = block.settings ?? {};
   const text = (k: string) => (typeof s[k] === "string" ? (s[k] as string) : "");
   const num = (k: string, d: number) => (Number(s[k]) > 0 ? Number(s[k]) : d);
+  const bool = (k: string, d: boolean) => (typeof s[k] === "boolean" ? (s[k] as boolean) : d);
   const chosen = collections.find((c) => c.handle === text("handle"));
 
   return (
@@ -1202,6 +1203,100 @@ function BlockGroup({
               dir="ltr"
             />
           </Field>
+        </>
+      )}
+
+      {block.type === "live_now" && (
+        <>
+          <Field label={ar ? "العنوان" : "Title"} type="text">
+            <input
+              value={text("title")}
+              onChange={(e) => onPatch({ title: e.target.value })}
+              placeholder={ar ? "اتركيه فارغاً بلا عنوان" : "Leave empty for no heading"}
+              className={input}
+            />
+          </Field>
+          <Field label={ar ? "كلمة الشارة" : "Live badge word"} type="text">
+            <input
+              value={text("liveLabel")}
+              onChange={(e) => onPatch({ liveLabel: e.target.value })}
+              placeholder="LIVE"
+              className={input}
+            />
+          </Field>
+
+          <Field label={ar ? "زر المسجّلة" : "Replays circle"} type="checkbox">
+            <Toggle on={bool("showReplays", true)} onChange={(v) => onPatch({ showReplays: v })} ar={ar} />
+          </Field>
+          {bool("showReplays", true) && (
+            <>
+              <Field label={ar ? "اسم الزر" : "Replays label"} type="text">
+                <input
+                  value={text("replaysLabel")}
+                  onChange={(e) => onPatch({ replaysLabel: e.target.value })}
+                  placeholder={ar ? "المسجّلة" : "Replays"}
+                  className={input}
+                />
+              </Field>
+              <Field label={ar ? "يفتح" : "Opens"} type="collection">
+                <CollectionSelect
+                  collections={collections}
+                  value={text("replaysHandle")}
+                  onChange={(handle) => onPatch({ replaysHandle: handle })}
+                  anyLabel={ar ? "لا شيء" : "Nothing"}
+                  className={input}
+                />
+              </Field>
+            </>
+          )}
+
+          <Field label={ar ? "العرض الخاص" : "Private offer"} type="checkbox">
+            <Toggle on={bool("offerEnabled", true)} onChange={(v) => onPatch({ offerEnabled: v })} ar={ar} />
+          </Field>
+          {bool("offerEnabled", true) && (
+            <>
+              <Field label={ar ? "سطر العرض" : "Offer line"} type="text">
+                <input
+                  value={text("offerTitle")}
+                  onChange={(e) => onPatch({ offerTitle: e.target.value })}
+                  placeholder={ar ? "{name}، عرضك الخاص متاح الآن" : "{name}, your private offer is live"}
+                  className={input}
+                />
+                <p className="mt-1 text-[11px] text-ink-soft">
+                  {ar
+                    ? "‏{name} يُستبدل باسم العميلة. بدون تسجيل دخول يُحذف الاسم ويبدأ السطر بعده."
+                    : "{name} becomes the shopper's first name. Signed out, the token is dropped and the line starts after it."}
+                </p>
+              </Field>
+              <Field label={ar ? "التفاصيل" : "Detail"} type="text">
+                <input
+                  value={text("offerText")}
+                  onChange={(e) => onPatch({ offerText: e.target.value })}
+                  placeholder={ar ? "خصم ٤٠٠ ج.م على أي طلب فوق ٥٠٠٠" : "EGP 400 off anything over 5,000"}
+                  className={input}
+                />
+              </Field>
+              <Field label={ar ? "مدة العدّاد (دقائق)" : "Countdown (minutes)"} type="range">
+                <input
+                  type="number"
+                  min={1}
+                  max={180}
+                  value={num("offerMinutes", 10)}
+                  onChange={(e) => onPatch({ offerMinutes: Number(e.target.value) })}
+                  className={input}
+                />
+              </Field>
+              <Field label={ar ? "يفتح" : "Opens"} type="collection">
+                <CollectionSelect
+                  collections={collections}
+                  value={text("offerHandle")}
+                  onChange={(handle) => onPatch({ offerHandle: handle })}
+                  anyLabel={ar ? "لا شيء" : "Nothing"}
+                  className={input}
+                />
+              </Field>
+            </>
+          )}
         </>
       )}
 

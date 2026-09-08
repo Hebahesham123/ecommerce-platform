@@ -99,6 +99,14 @@ export function Preview() {
     }
   }, [cart, ready]);
 
+  // Only the live-now offer greets the shopper by name, and it reads fine
+  // without one, so this is best effort — the shop never waits on it.
+  const [shopperName, setShopperName] = useState<string | null>(null);
+  useEffect(() => {
+    if (!phone) return setShopperName(null);
+    api.get<Account>("/me").then((r) => setShopperName(r.ok ? r.data.name : null));
+  }, [phone]);
+
   const signedIn = Boolean(phone);
   const count = cart.reduce((s, l) => s + l.quantity, 0);
 
@@ -152,6 +160,7 @@ export function Preview() {
                 ar={ar}
                 onAdd={add}
                 onTheme={setTheme}
+                shopperName={shopperName}
                 onLeave={(what) => (what === "cart" ? setTab("cart") : setSheet("enquiry"))}
               />
             )}
