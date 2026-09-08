@@ -93,18 +93,14 @@ export const fulfillmentTone: Record<Fulfillment, string> = {
   returned: tone.rose,
 };
 
-export const orders: Order[] = [
-  { id: "1042", customer: "منى عبد الله", phone: "0100 123 4567", governorate: "القاهرة", total: 720, method: "cod", lifecycle: "shipped", payment: "pending", fulfillment: "out", courier: "كريم", date: "2026-06-25" },
-  { id: "1041", customer: "علي حسن", phone: "0111 222 3344", governorate: "الجيزة", total: 540, method: "card", lifecycle: "packed", payment: "paid", fulfillment: "assigned", courier: "محمود", date: "2026-06-25" },
-  { id: "1040", customer: "سارة محمد", phone: "0122 555 7788", governorate: "الإسكندرية", total: 990, method: "cod", lifecycle: "completed", payment: "paid", fulfillment: "delivered", courier: "كريم", date: "2026-06-24" },
-  { id: "1039", customer: "ياسمين فؤاد", phone: "0100 999 1212", governorate: "القاهرة", total: 1350, method: "wallet", lifecycle: "confirmed", payment: "paid", fulfillment: "unfulfilled", date: "2026-06-24" },
-  { id: "1038", customer: "أحمد سمير", phone: "0128 444 9090", governorate: "الدقهلية", total: 430, method: "cod", lifecycle: "shipped", payment: "pending", fulfillment: "delivered", courier: "محمود", date: "2026-06-24", flag: "unpaid_delivered" },
-  { id: "1037", customer: "نورهان عادل", phone: "0115 678 2345", governorate: "القاهرة", total: 610, method: "cod", lifecycle: "placed", payment: "pending", fulfillment: "unfulfilled", date: "2026-06-23", flag: "fake_cod" },
-  { id: "1036", customer: "كريم وليد", phone: "0106 321 8899", governorate: "الجيزة", total: 250, method: "card", lifecycle: "cancelled", payment: "refunded", fulfillment: "returned", date: "2026-06-23", flag: "return" },
-  { id: "1035", customer: "هند طارق", phone: "0109 234 5566", governorate: "أسيوط", total: 880, method: "cod", lifecycle: "completed", payment: "paid", fulfillment: "delivered", courier: "سيد", date: "2026-06-22" },
-  { id: "1034", customer: "مريم خالد", phone: "0114 765 4321", governorate: "القاهرة", total: 1720, method: "card", lifecycle: "completed", payment: "paid", fulfillment: "delivered", courier: "كريم", date: "2026-06-22" },
-  { id: "1033", customer: "ليلى مصطفى", phone: "0127 888 1234", governorate: "الإسكندرية", total: 360, method: "cod", lifecycle: "shipped", payment: "pending", fulfillment: "out", courier: "سيد", date: "2026-06-22" },
-];
+/**
+ * There is no demo order list any more.
+ *
+ * Ten invented orders used to sit here and get appended to the real ones, so
+ * the orders page, its revenue and the whole customers page read as fiction
+ * once the store went live. Both now read store_orders and nothing else. The
+ * Order type stays: it is the shape a real order is mapped into.
+ */
 
 export type Product = {
   id: string;

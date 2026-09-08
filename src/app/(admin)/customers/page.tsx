@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useI18n, egp, num } from "@/lib/i18n";
-import { orders, labels, type PayMethod } from "@/lib/data";
+import { labels, type PayMethod } from "@/lib/data";
+import { listStoreOrders } from "../../store/actions";
 import { PageHeader } from "@/components/page-header";
 import { Card, Avatar, Badge } from "@/components/ui";
 import {
@@ -33,10 +34,20 @@ type Customer = {
 type Segment = "all" | "repeat" | "new" | "vip";
 type SortKey = "top_spenders" | "most_orders" | "recent";
 
+/** One row of an order, as far as this page is concerned. */
+type OrderRow = {
+  customer: string;
+  phone: string;
+  governorate: string;
+  total: number;
+  date: string;
+  method: PayMethod;
+};
+
 /** Group orders into unique customers (by name + phone + governorate) and
  *  roll up their order count, total spend, most recent order date and the
  *  payment method they use most often. */
-function buildCustomers(): Customer[] {
+function buildCustomers(orders: OrderRow[]): Customer[] {
   const map = new Map<
     string,
     { name: string; phone: string; governorate: string; orders: number; spent: number; lastDate: string; methods: Record<PayMethod, number> }
@@ -86,7 +97,36 @@ export default function CustomersPage() {
   const { t, lang } = useI18n();
   const ar = lang === "ar";
 
-  const customers = useMemo(buildCustomers, []);
+  /**
+   * The shop's real customers, worked out from the orders they placed.
+   *
+   * This page used to be built from ten invented orders, so it listed ten
+   * people who do not exist and never listed anyone who does. A customer list
+   * that is wrong is worse than a short one: it is the list she would message.
+   */
+  const [rows, setRows] = useState<OrderRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    listStoreOrders()
+      .then((res) => {
+        if (res.ok) {
+          setRows(
+            res.data.map((o) => ({
+              customer: o.customer,
+              phone: o.phone,
+              governorate: o.governorate,
+              total: o.total,
+              date: o.date,
+              method: o.method,
+            })),
+          );
+        }
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  const customers = useMemo(() => buildCustomers(rows), [rows]);
 
   // VIP = customers spending well above the average — a moving, data-driven bar
   // rather than a hardcoded number, so it stays meaningful as data changes.
@@ -371,12 +411,28 @@ export default function CustomersPage() {
               </span>
               <div>
                 <div className="font-semibold text-ink">
-                  {ar ? "لا يوجد عملاء مطابقون" : "No matching customers"}
+                  {loading
+                    ? ar
+                      ? "جارٍ التحميل…"
+                      : "Loading…"
+                    : customers.length === 0
+                      ? ar
+                        ? "لا يوجد عملاء بعد"
+                        : "No customers yet"
+                      : ar
+                        ? "لا يوجد عملاء مطابقون"
+                        : "No matching customers"}
                 </div>
                 <p className="mt-1 text-sm text-ink-soft">
-                  {ar
-                    ? "جرّب تعديل البحث أو الفلاتر."
-                    : "Try adjusting your search or filters."}
+                  {loading
+                    ? ""
+                    : customers.length === 0
+                      ? ar
+                        ? "سيظهر العملاء هنا بمجرد وصول أول طلب."
+                        : "Customers appear here as soon as the first order comes in."
+                      : ar
+                        ? "جرّب تعديل البحث أو الفلاتر."
+                        : "Try adjusting your search or filters."}
                 </p>
               </div>
               {filtersActive && (

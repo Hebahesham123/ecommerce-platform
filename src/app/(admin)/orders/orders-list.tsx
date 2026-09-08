@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useI18n, egp, num } from "@/lib/i18n";
 import {
-  orders as mockOrders,
   labels,
   salesSeries,
   type Order,
@@ -108,18 +107,10 @@ export function OrdersList({ lockChannel }: { lockChannel?: Channel } = {}) {
     })();
   }, []);
 
-  // Real placed orders first, then the demo orders (given a stable item count).
-  const orders = useMemo<Row[]>(
-    () => [
-      ...placed,
-      ...mockOrders.map((m) => ({
-        ...m,
-        itemsCount: 1 + (Number(m.id) % 3),
-        channel: "web" as Channel,
-      })),
-    ],
-    [placed],
-  );
+  // Orders that were actually placed, and nothing else. This list used to end
+  // with ten invented ones from the days before the store was live; they made
+  // the counts, the revenue and the customer list read as fiction.
+  const orders = placed;
 
   const ar = lang === "ar";
   const fmtDate = (d: string) =>
