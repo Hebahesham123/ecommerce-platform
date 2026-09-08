@@ -7,6 +7,7 @@ import {
   getStorefrontCatalog,
   type StorefrontResponse,
 } from "@/lib/theme-render-service";
+import { refreshProductStock } from "@/lib/storefront-data";
 import {
   CART_COOKIE,
   CART_MAX_AGE,
@@ -102,6 +103,51 @@ document.addEventListener('DOMContentLoaded',function(){run(collect(document.bod
  *  right count even on a cached shell — independent of whether the CDN honored
  *  our `Vary: Cookie`. It only ever rewrites numeric/empty badges, never rich
  *  markup, so it can't corrupt a theme's header. */
+/**
+ * Put the storefront mount back on URLs the theme builds at runtime.
+ *
+ * A Shopify theme is written for a shop that lives at the site root, so its
+ * JavaScript hard-codes "/cart/add", "/products/x.js" and friends. Here the
+ * shop is mounted under a prefix, and rewriteUrls() deliberately skips
+ * <script> bodies (rewriting a URL inside a JS string literal corrupts the
+ * script), so anything a theme assembles after render arrives unprefixed and
+ * 404s.
+ *
+ * Observed on the product page: the "Buy Now" link is rendered correctly as
+ * ${mount}/cart/add?..., but the moment the shopper picks a variant or changes
+ * the quantity the theme rebuilds it as "/cart/add?..." — a dead link. The
+ * shopper is then stuck with whatever the cart already held, which reads as
+ * checkout always showing the same product.
+ *
+ * Fixing this at click/submit/fetch time covers every URL the theme can
+ * invent, without the platform having to know how any given theme builds them.
+ */
+function mountPathScript(mount: string): string {
+  return `<script>(function(){try{
+var M=${JSON.stringify(mount)};
+if(!M)return;
+var ROOTS=['/cart','/checkout','/products','/collections','/search','/account','/recommendations'];
+function rooted(u){for(var i=0;i<ROOTS.length;i++){var r=ROOTS[i];
+if(u===r||u.indexOf(r+'/')===0||u.indexOf(r+'?')===0||u.indexOf(r+'#')===0)return true;}return false;}
+function fix(u){if(typeof u!=='string'||!u)return u;
+if(u===M||u.indexOf(M+'/')===0)return u;
+return rooted(u)?M+u:u;}
+document.addEventListener('click',function(e){try{
+var t=e.target;if(!t||!t.closest)return;var a=t.closest('a[href]');if(!a)return;
+var h=a.getAttribute('href');var n=fix(h);if(n!==h)a.setAttribute('href',n);
+}catch(_e){}},true);
+document.addEventListener('submit',function(e){try{
+var f=e.target;if(!f||!f.getAttribute)return;var a=f.getAttribute('action');
+var n=fix(a);if(n!==a)f.setAttribute('action',n);
+}catch(_e){}},true);
+var F=window.fetch;if(F){window.fetch=function(input,init){try{
+if(typeof input==='string')input=fix(input);
+else if(input&&typeof input.url==='string'){var n=fix(input.url);
+if(n!==input.url)input=new Request(n,input);}
+}catch(_e){}return F.call(this,input,init);};}
+}catch(_e){}})();</script>`;
+}
+
 function cartCountSyncScript(mount: string): string {
   return `<script>(function(){try{
 var M=${JSON.stringify(mount)};
@@ -557,6 +603,21 @@ async function clampLinesToStockDirect(lines: CartLine[]): Promise<CartLine[]> {
   }
 }
 
+/**
+ * The product handle in a "/products/<handle>" path, ignoring any sub-path,
+ * query or fragment the theme may append. Returns "" for a non-product path.
+ */
+function productHandleOf(path: string): string {
+  const prefix = "/products/";
+  if (!path.toLowerCase().startsWith(prefix)) return "";
+  const raw = path.slice(prefix.length).split(/[/?#]/)[0] ?? "";
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
+
 const HTML = "text/html; charset=utf-8";
 
 // ---- Cache policy -----------------------------------------------------------
@@ -690,10 +751,14 @@ async function storefrontGet(req: Request, config: MountConfig): Promise<Respons
 
   if (path.startsWith("/products/") && path.endsWith(".js")) {
     const handle = path.slice("/products/".length, -3);
+    // This is what the injected guard calls to cap the quantity picker, so it
+    // carries stock and must be as fresh as the page itself — a shared-cached
+    // copy would let the picker offer more units than are actually left.
+    await refreshProductStock(mount, handle);
     const catalog = await getStorefrontCatalog(mount);
     const product = catalog.productByHandle.get(handle);
     if (!product) return json({ error: "not_found" }, 404);
-    return json(product, 200, undefined, shared);
+    return json(product, 200, undefined, NO_STORE);
   }
 
   // Predictive (typeahead) search: return real matching products so the theme's
@@ -772,6 +837,28 @@ async function storefrontGet(req: Request, config: MountConfig): Promise<Respons
   const cacheable = !shopperSpecific;
   const renderLines = cacheable ? [] : lines;
 
+  /**
+   * A product page states how many units are left: the count is baked into the
+   * HTML twice, as our __BB_STOCK__ map and as the theme section's own
+   * variantStock object. A shared cache therefore hands later shoppers a count
+   * that was already wrong when someone bought in the meantime — and with
+   * stale-while-revalidate the edge may keep answering with it for far longer
+   * than s-maxage suggests (observed in production: a 32-minute-old copy).
+   *
+   * Stock is the one number a shop cannot show stale, so these pages skip the
+   * shared cache and are rendered per request. Every other catalogue page still
+   * edge-caches exactly as before.
+   */
+  const stockSensitive = /^\/products\//i.test(path);
+  // Rendering per request is only half the job: the catalog behind the render
+  // is itself cached for CACHE_MS, so without this a "fresh" page could still
+  // print a two-minute-old count. One indexed query puts this product's stock
+  // right before the theme and the injected stock guard read it.
+  if (stockSensitive) {
+    const stockHandle = productHandleOf(path);
+    if (stockHandle) await refreshProductStock(mount, stockHandle);
+  }
+
   // Reviews / Requests: our hosted widgets, rendered as real pages inside the
   // theme (header/footer inherited from the store).
   const widgetTitle = WIDGET_PAGES[path];
@@ -809,7 +896,7 @@ async function storefrontGet(req: Request, config: MountConfig): Promise<Respons
 
   // The account icon is identical for every shopper, so it stays cache-safe.
   // navLinksScript adds Reviews & Requests into the store menu (both cache-safe).
-  const inject = `${stockGuard}${localizationScript(mount)}${cartSync}${accountLinkScript(mount)}${navLinksScript(mount)}${nudge}`;
+  const inject = `${mountPathScript(mount)}${stockGuard}${localizationScript(mount)}${cartSync}${accountLinkScript(mount)}${navLinksScript(mount)}${nudge}`;
   const withLoc = res.html.includes("</body>")
     ? res.html.replace(/<\/body>/i, `${inject}</body>`)
     : res.html + inject;
@@ -836,9 +923,10 @@ async function storefrontGet(req: Request, config: MountConfig): Promise<Respons
       // The matching browser max-age lets a prefetched page be reused on click
       // without a revalidation round trip, which is what makes navigation feel
       // instant. It also bounds how long one shopper can hold a stale price.
-      "Cache-Control": cacheable
-        ? "public, max-age=15, s-maxage=15, stale-while-revalidate=86400"
-        : "private, no-store",
+      "Cache-Control":
+        cacheable && !stockSensitive
+          ? "public, max-age=15, s-maxage=15, stale-while-revalidate=86400"
+          : "private, no-store",
     },
   });
 }
