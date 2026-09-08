@@ -1107,23 +1107,48 @@ const styles = StyleSheet.create({
 `,
 
     live_now: `import React, { useEffect, useState } from "react";
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { colors, radius, spacing } from "../theme";
 import { inherit, SectionHeading } from "./Pieces";
 import { fetchAccount, type HomePayload } from "../api";
 
-export type LivePerson = { id: string; imageUrl?: string; name?: string; viewers?: string; handle?: string };
+export type LivePerson = {
+  id: string;
+  imageUrl?: string;
+  name?: string;
+  viewers?: string;
+  handle?: string;
+  url?: string;
+};
+
 export type LiveNowSettings = {
   title?: string;
   liveLabel?: string;
   showReplays?: boolean;
   replaysLabel?: string;
   replaysHandle?: string;
+  replaysUrl?: string;
   offerEnabled?: boolean;
   offerTitle?: string;
   offerText?: string;
   offerMinutes?: number;
   offerHandle?: string;
+  offerUrl?: string;
+  avatarShape?: string;
+  avatarSize?: number;
+  ringWidth?: number;
+  ringColor?: string;
+  badgeBg?: string;
+  badgeTextColor?: string;
+  nameSize?: number;
+  viewersSize?: number;
+  bannerRadius?: number;
+  offerBg?: string;
+  offerTextColor?: string;
+  offerTitleSize?: number;
+  offerTextSize?: number;
+  timerBg?: string;
+  timerTextColor?: string;
   items?: LivePerson[];
 };
 
@@ -1155,6 +1180,29 @@ export function LiveNow({
   const showReplays = settings.showReplays !== false;
   const liveLabel = settings.liveLabel || "LIVE";
 
+  // An empty colour means "follow the brand", so the section keeps up with the
+  // accent instead of stranding a hex somebody typed once and forgot.
+  const ringColor = settings.ringColor || colors.accent;
+  const badgeBg = settings.badgeBg || "#e11d48";
+  const badgeFg = settings.badgeTextColor || "#ffffff";
+  const offerBg = settings.offerBg || colors.accent;
+  const offerFg = settings.offerTextColor || "#ffffff";
+  const timerBg = settings.timerBg || "rgba(255,255,255,0.22)";
+  const timerFg = settings.timerTextColor || "#ffffff";
+
+  const size = settings.avatarSize && settings.avatarSize > 0 ? settings.avatarSize : 56;
+  // Zero is a real answer here — it means no ring at all — so this cannot use
+  // the "positive or default" rule the other numbers use.
+  const ringW = typeof settings.ringWidth === "number" && settings.ringWidth >= 0 ? settings.ringWidth : 2;
+  const shape = settings.avatarShape || "circle";
+  const photoRadius = shape === "square" ? 4 : shape === "rounded" ? Math.round(size * 0.28) : Math.round(size / 2);
+  const nameSize = settings.nameSize && settings.nameSize > 0 ? settings.nameSize : 10;
+  const viewersSize = settings.viewersSize && settings.viewersSize > 0 ? settings.viewersSize : 9;
+  const bannerRadius = settings.bannerRadius && settings.bannerRadius > 0 ? settings.bannerRadius : radius.lg;
+  const offerTitleSize = settings.offerTitleSize && settings.offerTitleSize > 0 ? settings.offerTitleSize : 13;
+  const offerTextSize = settings.offerTextSize && settings.offerTextSize > 0 ? settings.offerTextSize : 11;
+  const cell = Math.max(size + 12, 56);
+
   // The offer is addressed by name, so ask who is signed in. Signed out this
   // rejects, and the greeting simply loses the name — never a blocked screen.
   const [name, setName] = useState<string | null>(null);
@@ -1184,6 +1232,15 @@ export function LiveNow({
   const hasOffer = settings.offerEnabled !== false && Boolean(offerTitle || offerText);
   if (!people.length && !hasOffer) return null;
 
+  /** A typed link wins over a collection: it is the more specific thing to set. */
+  const go = (url?: string, handle?: string) => {
+    if (url) {
+      Linking.openURL(url).catch(() => {});
+      return;
+    }
+    if (handle) onOpenCollection?.(handle);
+  };
+
   return (
     <>
       {settings.title ? <SectionHeading title={settings.title} /> : null}
@@ -1194,34 +1251,50 @@ export function LiveNow({
             const borrowed = inherit(p, collections);
             const photo = p.imageUrl || borrowed.image;
             return (
-              <Pressable
-                key={p.id}
-                style={styles.person}
-                onPress={() => p.handle && onOpenCollection?.(p.handle)}
-              >
-                <View style={styles.ring}>
-                  {photo ? <Image source={{ uri: photo }} style={styles.avatar} /> : <View style={styles.avatar} />}
+              <Pressable key={p.id} style={[styles.person, { width: cell }]} onPress={() => go(p.url, p.handle)}>
+                <View
+                  style={{
+                    backgroundColor: ringW > 0 ? ringColor : "transparent",
+                    padding: ringW,
+                    borderRadius: photoRadius + ringW,
+                  }}
+                >
+                  {photo ? (
+                    <Image source={{ uri: photo }} style={{ width: size, height: size, borderRadius: photoRadius }} />
+                  ) : (
+                    <View style={{ width: size, height: size, borderRadius: photoRadius, backgroundColor: colors.page }} />
+                  )}
                 </View>
                 {liveLabel ? (
-                  <View style={styles.badge}>
-                    <Text style={styles.badgeText}>{liveLabel}</Text>
+                  <View style={[styles.badge, { backgroundColor: badgeBg }]}>
+                    <Text style={[styles.badgeText, { color: badgeFg }]}>{liveLabel}</Text>
                   </View>
                 ) : null}
-                <Text style={styles.name} numberOfLines={1}>{p.name || borrowed.title}</Text>
-                {p.viewers ? <Text style={styles.viewers} numberOfLines={1}>{p.viewers}</Text> : null}
+                {p.name || borrowed.title ? (
+                  <Text style={[styles.name, { fontSize: nameSize }]} numberOfLines={1}>
+                    {p.name || borrowed.title}
+                  </Text>
+                ) : null}
+                {p.viewers ? (
+                  <Text style={[styles.viewers, { fontSize: viewersSize }]} numberOfLines={1}>
+                    {p.viewers}
+                  </Text>
+                ) : null}
               </Pressable>
             );
           })}
 
           {showReplays ? (
             <Pressable
-              style={styles.person}
-              onPress={() => settings.replaysHandle && onOpenCollection?.(settings.replaysHandle)}
+              style={[styles.person, { width: cell }]}
+              onPress={() => go(settings.replaysUrl, settings.replaysHandle)}
             >
-              <View style={styles.replays}>
-                <Text style={styles.replaysIcon}>▶</Text>
+              <View style={[styles.replays, { width: size, height: size, borderRadius: photoRadius }]}>
+                <Text style={[styles.replaysIcon, { fontSize: Math.round(size / 3.5) }]}>▶</Text>
               </View>
-              <Text style={styles.name} numberOfLines={1}>{settings.replaysLabel || "Replays"}</Text>
+              <Text style={[styles.name, { fontSize: nameSize, color: colors.inkSoft }]} numberOfLines={1}>
+                {settings.replaysLabel || "Replays"}
+              </Text>
             </Pressable>
           ) : null}
         </ScrollView>
@@ -1229,15 +1302,25 @@ export function LiveNow({
 
       {hasOffer ? (
         <Pressable
-          style={styles.offer}
-          onPress={() => settings.offerHandle && onOpenCollection?.(settings.offerHandle)}
+          style={[styles.offer, { backgroundColor: offerBg, borderRadius: bannerRadius }]}
+          onPress={() => go(settings.offerUrl, settings.offerHandle)}
         >
           <View style={{ flex: 1 }}>
-            {offerTitle ? <Text style={styles.offerTitle} numberOfLines={1}>{offerTitle}</Text> : null}
-            {offerText ? <Text style={styles.offerText} numberOfLines={1}>{offerText}</Text> : null}
+            {offerTitle ? (
+              <Text style={[styles.offerTitle, { color: offerFg, fontSize: offerTitleSize }]} numberOfLines={1}>
+                {offerTitle}
+              </Text>
+            ) : null}
+            {offerText ? (
+              <Text style={[styles.offerText, { color: offerFg, fontSize: offerTextSize }]} numberOfLines={1}>
+                {offerText}
+              </Text>
+            ) : null}
           </View>
-          <View style={styles.timer}>
-            <Text style={styles.timerText}>{pad(Math.floor(left / 60)) + ":" + pad(left % 60)}</Text>
+          <View style={[styles.timer, { backgroundColor: timerBg, borderRadius: Math.min(bannerRadius, 10) }]}>
+            <Text style={[styles.timerText, { color: timerFg, fontSize: offerTitleSize }]}>
+              {pad(Math.floor(left / 60)) + ":" + pad(left % 60)}
+            </Text>
           </View>
         </Pressable>
       ) : null}
@@ -1247,20 +1330,18 @@ export function LiveNow({
 
 const styles = StyleSheet.create({
   row: { gap: spacing.md, paddingVertical: spacing.sm },
-  person: { width: 68, alignItems: "center" },
-  ring: { padding: 2, borderRadius: 34, backgroundColor: colors.accent },
-  avatar: { width: 56, height: 56, borderRadius: 28, backgroundColor: colors.page, borderWidth: 2, borderColor: colors.surface },
-  badge: { marginTop: -9, borderRadius: 4, backgroundColor: "#e11d48", paddingHorizontal: 5, paddingVertical: 1 },
-  badgeText: { fontSize: 8, fontWeight: "700", color: "#fff", letterSpacing: 0.5 },
-  name: { marginTop: 5, fontSize: 10, fontWeight: "600", color: colors.ink, textAlign: "center" },
-  viewers: { fontSize: 9, color: colors.inkSoft, textAlign: "center" },
-  replays: { width: 60, height: 60, borderRadius: 30, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.line, backgroundColor: colors.page },
-  replaysIcon: { fontSize: 16, color: colors.inkSoft },
-  offer: { marginTop: spacing.md, flexDirection: "row", alignItems: "center", gap: spacing.sm, borderRadius: radius.lg, backgroundColor: colors.accent, paddingHorizontal: 14, paddingVertical: 12 },
-  offerTitle: { fontSize: 13, fontWeight: "700", color: "#fff" },
-  offerText: { marginTop: 2, fontSize: 11, color: "rgba(255,255,255,0.85)" },
-  timer: { borderRadius: radius.sm, backgroundColor: "rgba(255,255,255,0.2)", paddingHorizontal: 10, paddingVertical: 6 },
-  timerText: { fontSize: 13, fontWeight: "700", color: "#fff" },
+  person: { alignItems: "center" },
+  badge: { marginTop: -9, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 },
+  badgeText: { fontSize: 8, fontWeight: "700", letterSpacing: 0.5 },
+  name: { marginTop: 7, fontWeight: "600", color: colors.ink, textAlign: "center" },
+  viewers: { color: colors.inkSoft, textAlign: "center" },
+  replays: { alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.line, backgroundColor: colors.page },
+  replaysIcon: { color: colors.inkSoft },
+  offer: { marginTop: spacing.md, flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingHorizontal: 14, paddingVertical: 12 },
+  offerTitle: { fontWeight: "700" },
+  offerText: { marginTop: 2, opacity: 0.85 },
+  timer: { paddingHorizontal: 10, paddingVertical: 6 },
+  timerText: { fontWeight: "700" },
 });
 `,
 
@@ -1444,6 +1525,20 @@ function renderCall(block: Block, indent: number): string {
   return `${pad}<${name}\n${props.map((p) => `${pad}  ${p}`).join("\n")}\n${pad}/>`;
 }
 
+/**
+ * Settings that are numbers rather than text, and where zero is meaningful
+ * (a ring width of zero is "no ring", not "unset").
+ */
+const SIZE_KEYS = new Set([
+  "avatarSize",
+  "ringWidth",
+  "nameSize",
+  "viewersSize",
+  "bannerRadius",
+  "offerTitleSize",
+  "offerTextSize",
+]);
+
 /** A block's settings as a JS object literal, keeping only what it uses. */
 function settingsLiteral(block: Block): string {
   const keep: Record<BlockType, string[]> = {
@@ -1460,11 +1555,28 @@ function settingsLiteral(block: Block): string {
       "showReplays",
       "replaysLabel",
       "replaysHandle",
+      "replaysUrl",
       "offerEnabled",
       "offerTitle",
       "offerText",
       "offerMinutes",
       "offerHandle",
+      "offerUrl",
+      "avatarShape",
+      "avatarSize",
+      "ringWidth",
+      "ringColor",
+      "badgeBg",
+      "badgeTextColor",
+      "nameSize",
+      "viewersSize",
+      "bannerRadius",
+      "offerBg",
+      "offerTextColor",
+      "offerTitleSize",
+      "offerTextSize",
+      "timerBg",
+      "timerTextColor",
     ],
     banner: ["imageUrl", "heading", "subheading", "handle"],
     categories: ["title"],
@@ -1480,10 +1592,17 @@ function settingsLiteral(block: Block): string {
       const v = set[k];
       if (k === "limit") return `${k}: ${n(v, 8)}`;
       // Not every setting is a string: a toggle that arrived as text would be
-      // truthy in the app whichever way the merchant set it.
+      // truthy in the app whichever way the merchant set it, and a size would
+      // be compared as one.
       if (k === "offerMinutes") return `${k}: ${n(v, 10)}`;
       if (k === "showReplays" || k === "offerEnabled") {
         return `${k}: ${v === false ? "false" : "true"}`;
+      }
+      // Sizes are only sent when the merchant actually set one, so the
+      // component's own default stays the single source of that number.
+      if (SIZE_KEYS.has(k)) {
+        const size = Number(v);
+        return Number.isFinite(size) && size >= 0 ? `${k}: ${size}` : null;
       }
       const text = s(v);
       return text ? `${k}: ${q(text)}` : null;
@@ -1508,7 +1627,7 @@ function itemsLiteral(type: BlockType, items: Item[]): string {
     tiers: ["prefix", "amount", "label", "handle"],
     split: ["imageUrl", "label", "buttonLabel", "handle"],
     trust_badges: ["emoji", "title", "subtitle"],
-    live_now: ["imageUrl", "name", "viewers", "handle"],
+    live_now: ["imageUrl", "name", "viewers", "handle", "url"],
   };
   const keys = fields[type] ?? [];
   const rendered = items.map((item) => {

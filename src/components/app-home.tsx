@@ -107,9 +107,17 @@ function inherit(item: Item, data: HomeData): { image: string | null; title: str
   };
 }
 
-function Thumb({ src, className = "" }: { src: string | null; className?: string }) {
+function Thumb({
+  src,
+  className = "",
+  style,
+}: {
+  src: string | null;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
   return (
-    <div className={`overflow-hidden rounded-xl bg-slate-100 ${className}`}>
+    <div className={`overflow-hidden rounded-xl bg-slate-100 ${className}`} style={style}>
       {src && (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={src} alt="" className="h-full w-full object-cover" />
@@ -778,7 +786,38 @@ function LiveNow({
   const offerTitle = personalise(str(s.offerTitle), data.shopperName);
   const offerText = str(s.offerText);
   const timer = useCountdown(int(s.offerMinutes, 10));
-  const open = (handle: string) => {
+
+  // An empty colour means "follow the brand", so a store that changes its
+  // accent takes this section with it instead of stranding a hex that somebody
+  // typed once and forgot.
+  const ringColor = str(s.ringColor, accent);
+  const badgeBg = str(s.badgeBg, "#e11d48");
+  const badgeFg = str(s.badgeTextColor, "#ffffff");
+  const offerBg = str(s.offerBg, accent);
+  const offerFg = str(s.offerTextColor, "#ffffff");
+  const timerBg = str(s.timerBg, "rgba(255,255,255,0.22)");
+  const timerFg = str(s.timerTextColor, "#ffffff");
+
+  const size = int(s.avatarSize, 56);
+  // Zero is a real answer here — it means no ring at all — so this one cannot
+  // go through int(), which treats zero as "unset".
+  const rawRing = Number(s.ringWidth);
+  const ringW = Number.isFinite(rawRing) && rawRing >= 0 ? rawRing : 2;
+  const shape = str(s.avatarShape, "circle");
+  const photoRadius = shape === "square" ? 4 : shape === "rounded" ? Math.round(size * 0.28) : 9999;
+  const nameSize = int(s.nameSize, 10);
+  const viewersSize = int(s.viewersSize, 9);
+  const bannerRadius = int(s.bannerRadius, 16);
+  const offerTitleSize = int(s.offerTitleSize, 13);
+  const offerTextSize = int(s.offerTextSize, 11);
+  const cell = Math.max(size + 12, 56);
+
+  /** A typed link wins over a collection: it is the more specific thing to set. */
+  const go = (url: string, handle: string) => {
+    if (url) {
+      if (typeof window !== "undefined") window.open(url, "_blank", "noopener,noreferrer");
+      return;
+    }
     const target = data.collections.find((c) => c.handle === handle);
     if (target) handlers.onOpenCollection?.(target.handle, target.title);
   };
@@ -790,36 +829,58 @@ function LiveNow({
       {people.length > 0 && (
         <div className="-mx-4 mt-2 flex gap-3 overflow-x-auto px-4 pb-1">
           {people.map((person) => {
-            const { image, title: fallbackName } = inherit(person, data);
-            const name = str(person.name, fallbackName);
+            const borrowed = inherit(person, data);
+            const name = str(person.name, borrowed.title);
             const viewers = str(person.viewers);
             return (
               <button
                 key={person.id}
-                onClick={() => open(str(person.handle))}
-                className="flex w-16 shrink-0 flex-col items-center gap-1"
+                onClick={() => go(str(person.url), str(person.handle))}
+                className="flex shrink-0 flex-col items-center"
+                style={{ width: cell }}
               >
                 <span className="relative block">
                   <span
-                    className="block rounded-full p-[2px]"
-                    style={{ background: accent }}
+                    className="block"
+                    style={{
+                      background: ringW > 0 ? ringColor : "transparent",
+                      padding: ringW,
+                      borderRadius: photoRadius + ringW,
+                    }}
                   >
-                    <Thumb src={image} className="h-14 w-14 rounded-full border-2 border-white" />
+                    <Thumb
+                      src={borrowed.image}
+                      className="border-2 border-white"
+                      style={{ width: size, height: size, borderRadius: photoRadius }}
+                    />
                   </span>
                   {liveLabel && (
                     <span
-                      className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-[4px] px-1 py-px text-[8px] font-bold uppercase tracking-wide text-white"
-                      style={{ background: "#e11d48" }}
+                      className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap px-1 py-px text-[8px] font-bold uppercase tracking-wide"
+                      style={{
+                        background: badgeBg,
+                        color: badgeFg,
+                        borderRadius: 4,
+                        bottom: -6,
+                      }}
                     >
                       {liveLabel}
                     </span>
                   )}
                 </span>
-                <span className="mt-1 w-full truncate text-center text-[10px] font-semibold text-slate-800">
-                  {name}
-                </span>
+                {name && (
+                  <span
+                    className="mt-2 w-full truncate text-center font-semibold text-slate-800"
+                    style={{ fontSize: nameSize }}
+                  >
+                    {name}
+                  </span>
+                )}
                 {viewers && (
-                  <span className="w-full truncate text-center text-[9px] text-slate-500">
+                  <span
+                    className="w-full truncate text-center text-slate-500"
+                    style={{ fontSize: viewersSize }}
+                  >
                     {viewers}
                   </span>
                 )}
@@ -829,13 +890,20 @@ function LiveNow({
 
           {showReplays && (
             <button
-              onClick={() => open(str(s.replaysHandle))}
-              className="flex w-16 shrink-0 flex-col items-center gap-1"
+              onClick={() => go(str(s.replaysUrl), str(s.replaysHandle))}
+              className="flex shrink-0 flex-col items-center"
+              style={{ width: cell }}
             >
-              <span className="flex h-14 w-14 items-center justify-center rounded-full border border-dashed border-slate-300 bg-slate-50 text-base text-slate-400">
+              <span
+                className="flex items-center justify-center border border-dashed border-slate-300 bg-slate-50 text-slate-400"
+                style={{ width: size, height: size, borderRadius: photoRadius, fontSize: Math.round(size / 3.5) }}
+              >
                 ▶
               </span>
-              <span className="mt-1 w-full truncate text-center text-[10px] font-semibold text-slate-500">
+              <span
+                className="mt-2 w-full truncate text-center font-semibold text-slate-500"
+                style={{ fontSize: nameSize }}
+              >
                 {replaysLabel}
               </span>
             </button>
@@ -845,19 +913,32 @@ function LiveNow({
 
       {offerOn && (offerTitle || offerText) && (
         <button
-          onClick={() => open(str(s.offerHandle))}
-          className="mt-3 flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-start"
-          style={{ background: accent }}
+          onClick={() => go(str(s.offerUrl), str(s.offerHandle))}
+          className="mt-3 flex w-full items-center gap-3 px-4 py-3 text-start"
+          style={{ background: offerBg, borderRadius: bannerRadius }}
         >
           <span className="min-w-0 flex-1">
             {offerTitle && (
-              <span className="block truncate text-[13px] font-bold text-white">{offerTitle}</span>
+              <span
+                className="block truncate font-bold"
+                style={{ color: offerFg, fontSize: offerTitleSize }}
+              >
+                {offerTitle}
+              </span>
             )}
             {offerText && (
-              <span className="mt-0.5 block truncate text-[11px] text-white/85">{offerText}</span>
+              <span
+                className="mt-0.5 block truncate"
+                style={{ color: offerFg, opacity: 0.85, fontSize: offerTextSize }}
+              >
+                {offerText}
+              </span>
             )}
           </span>
-          <span className="shrink-0 rounded-lg bg-white/20 px-2.5 py-1.5 font-mono text-[13px] font-bold tabular-nums text-white">
+          <span
+            className="shrink-0 px-2.5 py-1.5 font-mono font-bold tabular-nums"
+            style={{ background: timerBg, color: timerFg, borderRadius: Math.min(bannerRadius, 10), fontSize: offerTitleSize }}
+          >
             {timer}
           </span>
         </button>

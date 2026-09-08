@@ -88,7 +88,7 @@ export const ITEM_SHAPE: Partial<Record<BlockType, { ar: string; en: string; bla
   live_now: {
     ar: "بث",
     en: "Live",
-    blank: () => ({ id: itemId(), imageUrl: "", name: "", viewers: "", handle: "" }),
+    blank: () => ({ id: itemId(), imageUrl: "", name: "", viewers: "", handle: "", url: "" }),
   },
 };
 
@@ -153,6 +153,7 @@ export const ITEM_FIELDS: Partial<Record<BlockType, FieldSpec[]>> = {
     { key: "name", kind: "text", ar: "الاسم", en: "Name" },
     { key: "viewers", kind: "text", ar: "المشاهدون", en: "Viewers" },
     { key: "handle", kind: "collection", ar: "يفتح", en: "Opens" },
+    { key: "url", kind: "text", ar: "أو رابط", en: "Or a link" },
   ],
 };
 
@@ -451,6 +452,26 @@ export function newBlock(type: BlockType): Block {
       offerText: "",
       offerMinutes: 10,
       offerHandle: "",
+      offerUrl: "",
+      replaysUrl: "",
+      // Shape and size. Colours are left empty on purpose: empty means "follow
+      // the brand", so a store that changes its accent takes this with it
+      // instead of stranding a hex someone typed once.
+      avatarShape: "circle",
+      avatarSize: 56,
+      ringWidth: 2,
+      ringColor: "",
+      badgeBg: "#e11d48",
+      badgeTextColor: "#ffffff",
+      nameSize: 10,
+      viewersSize: 9,
+      bannerRadius: 16,
+      offerBg: "",
+      offerTextColor: "#ffffff",
+      offerTitleSize: 13,
+      offerTextSize: 11,
+      timerBg: "",
+      timerTextColor: "#ffffff",
       items: shape ? [shape.blank()] : [],
     },
     banner: { imageUrl: "", handle: "", heading: "", subheading: "" },

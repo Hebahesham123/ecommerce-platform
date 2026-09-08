@@ -609,6 +609,7 @@ export function ThemeEditor() {
                 first={i === 0}
                 last={i === draft.blocks.length - 1}
                 collections={data.collections}
+                accent={draft.settings.accent}
                 input={input}
                 onToggle={() => setOpen((s) => ({ ...s, [block.id]: !s[block.id] }))}
                 onHover={setHovered}
@@ -976,6 +977,59 @@ function Field({
   );
 }
 
+/**
+ * A colour that may be left empty.
+ *
+ * Empty means "follow the brand", which is the right default for a section
+ * that should keep up with the accent — so this cannot be a bare
+ * <input type="color">, which always holds a value. The swatch edits, the text
+ * field shows what is actually stored, and Reset puts it back to the brand.
+ */
+function ColorRow({
+  label,
+  value,
+  fallback,
+  onChange,
+  input,
+  ar,
+}: {
+  label: string;
+  value: string;
+  fallback: string;
+  onChange: (v: string) => void;
+  input: string;
+  ar: boolean;
+}) {
+  const hex = /^#[0-9a-f]{6}$/i.test(value) ? value : fallback;
+  return (
+    <Field label={label} type="color">
+      <div className="flex items-center gap-2">
+        <input
+          type="color"
+          value={hex}
+          onChange={(e) => onChange(e.target.value)}
+          className="h-9 w-10 shrink-0 cursor-pointer rounded-lg border border-line bg-surface p-1"
+        />
+        <input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={ar ? "لون الهوية" : "Brand colour"}
+          className={`${input} font-mono`}
+          dir="ltr"
+        />
+        {value ? (
+          <button
+            onClick={() => onChange("")}
+            className="shrink-0 rounded-lg px-2 py-1 text-[11px] text-ink-muted hover:bg-surface-hover"
+          >
+            {ar ? "افتراضي" : "Reset"}
+          </button>
+        ) : null}
+      </div>
+    </Field>
+  );
+}
+
 function Toggle({
   on,
   onChange,
@@ -1010,6 +1064,7 @@ function BlockGroup({
   first,
   last,
   collections,
+  accent,
   input,
   onToggle,
   onHover,
@@ -1024,6 +1079,8 @@ function BlockGroup({
   first: boolean;
   last: boolean;
   collections: { handle: string; title: string; count: number; image: string | null }[];
+  /** Shown as the fallback wherever a colour is left empty. */
+  accent: string;
   input: string;
   onToggle: () => void;
   onHover: (key: string | null) => void;
@@ -1247,6 +1304,15 @@ function BlockGroup({
                   className={input}
                 />
               </Field>
+              <Field label={ar ? "أو رابط" : "Or a link"} type="url">
+                <input
+                  value={text("replaysUrl")}
+                  onChange={(e) => onPatch({ replaysUrl: e.target.value })}
+                  placeholder="https://…"
+                  className={input}
+                  dir="ltr"
+                />
+              </Field>
             </>
           )}
 
@@ -1295,8 +1361,113 @@ function BlockGroup({
                   className={input}
                 />
               </Field>
+              <Field label={ar ? "أو رابط" : "Or a link"} type="url">
+                <input
+                  value={text("offerUrl")}
+                  onChange={(e) => onPatch({ offerUrl: e.target.value })}
+                  placeholder="https://…"
+                  className={input}
+                  dir="ltr"
+                />
+              </Field>
             </>
           )}
+
+          <div className="mt-3 border-t border-line pt-3 text-[11px] font-semibold text-ink-muted">
+            {ar ? "الشكل والمقاس" : "Shape and size"}
+          </div>
+          <Field label={ar ? "شكل الصورة" : "Photo shape"} type="select">
+            <select
+              value={text("avatarShape") || "circle"}
+              onChange={(e) => onPatch({ avatarShape: e.target.value })}
+              className={input}
+            >
+              <option value="circle">{ar ? "دائرة" : "Circle"}</option>
+              <option value="rounded">{ar ? "مربع بحواف" : "Rounded square"}</option>
+              <option value="square">{ar ? "مربع" : "Square"}</option>
+            </select>
+          </Field>
+          <Field label={ar ? "مقاس الصورة" : "Photo size"} type="range">
+            <input
+              type="number"
+              min={32}
+              max={120}
+              value={num("avatarSize", 56)}
+              onChange={(e) => onPatch({ avatarSize: Number(e.target.value) })}
+              className={input}
+            />
+          </Field>
+          <Field label={ar ? "سُمك الإطار" : "Ring width"} type="range">
+            <input
+              type="number"
+              min={0}
+              max={8}
+              value={Number.isFinite(Number(s.ringWidth)) ? Number(s.ringWidth) : 2}
+              onChange={(e) => onPatch({ ringWidth: Number(e.target.value) })}
+              className={input}
+            />
+          </Field>
+          <Field label={ar ? "حجم الاسم" : "Name size"} type="range">
+            <input
+              type="number"
+              min={8}
+              max={20}
+              value={num("nameSize", 10)}
+              onChange={(e) => onPatch({ nameSize: Number(e.target.value) })}
+              className={input}
+            />
+          </Field>
+          <Field label={ar ? "حجم عدد المشاهدين" : "Viewers size"} type="range">
+            <input
+              type="number"
+              min={7}
+              max={18}
+              value={num("viewersSize", 9)}
+              onChange={(e) => onPatch({ viewersSize: Number(e.target.value) })}
+              className={input}
+            />
+          </Field>
+          <Field label={ar ? "استدارة البانر" : "Banner corners"} type="range">
+            <input
+              type="number"
+              min={0}
+              max={32}
+              value={num("bannerRadius", 16)}
+              onChange={(e) => onPatch({ bannerRadius: Number(e.target.value) })}
+              className={input}
+            />
+          </Field>
+          <Field label={ar ? "حجم سطر العرض" : "Offer line size"} type="range">
+            <input
+              type="number"
+              min={10}
+              max={22}
+              value={num("offerTitleSize", 13)}
+              onChange={(e) => onPatch({ offerTitleSize: Number(e.target.value) })}
+              className={input}
+            />
+          </Field>
+          <Field label={ar ? "حجم التفاصيل" : "Detail size"} type="range">
+            <input
+              type="number"
+              min={8}
+              max={18}
+              value={num("offerTextSize", 11)}
+              onChange={(e) => onPatch({ offerTextSize: Number(e.target.value) })}
+              className={input}
+            />
+          </Field>
+
+          <div className="mt-3 border-t border-line pt-3 text-[11px] font-semibold text-ink-muted">
+            {ar ? "الألوان" : "Colours"}
+          </div>
+          <ColorRow label={ar ? "الإطار" : "Photo ring"} value={text("ringColor")} fallback={accent} onChange={(v) => onPatch({ ringColor: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "خلفية الشارة" : "Badge background"} value={text("badgeBg")} fallback="#e11d48" onChange={(v) => onPatch({ badgeBg: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "لون كلمة الشارة" : "Badge text"} value={text("badgeTextColor")} fallback="#ffffff" onChange={(v) => onPatch({ badgeTextColor: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "خلفية البانر" : "Banner background"} value={text("offerBg")} fallback={accent} onChange={(v) => onPatch({ offerBg: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "نص البانر" : "Banner text"} value={text("offerTextColor")} fallback="#ffffff" onChange={(v) => onPatch({ offerTextColor: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "خلفية العدّاد" : "Timer background"} value={text("timerBg")} fallback="#ffffff" onChange={(v) => onPatch({ timerBg: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "نص العدّاد" : "Timer text"} value={text("timerTextColor")} fallback="#ffffff" onChange={(v) => onPatch({ timerTextColor: v })} input={input} ar={ar} />
         </>
       )}
 
