@@ -13,7 +13,7 @@ import {
   totalAvailable,
   emptyItem,
 } from "@/lib/inventory";
-import { listInventory, listLocations } from "../inventory/actions";
+import { deleteItems, listInventory, listLocations, setItemsStatus } from "../inventory/actions";
 import { ProductEditor } from "../inventory/product-editor";
 import { ProductImport } from "@/components/product-import";
 import { PageHeader } from "@/components/page-header";
@@ -31,7 +31,7 @@ import {
   usePagination,
   type PillTone,
 } from "@/components/dashboard-ui";
-import { IcPlus, IcInventory, IcImage, IcUpload } from "@/components/icons";
+import { IcPlus, IcInventory, IcImage, IcUpload, IcTrash, IcX } from "@/components/icons";
 
 type StatusTab = "all" | ProductStatus;
 type StockFilter = "all" | "in_stock" | "low_stock" | "out_stock";
@@ -122,6 +122,8 @@ export default function ProductsPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editItem, setEditItem] = useState<InventoryItem | null>(null);
   const [importing, setImporting] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
 
   async function load() {
     const [inv, locs] = await Promise.all([listInventory(), listLocations()]);
@@ -208,6 +210,66 @@ export default function ProductsPage() {
   const allSelected = pg.items.length > 0 && pg.items.every((p) => selected.has(p.key));
   const someSelected = pg.items.some((p) => selected.has(p.key));
 
+  /**
+   * What the ticked rows actually are, underneath.
+   *
+   * A row on this page is a product — a name several variants share — but the
+   * table underneath stores variants. So "delete two products" is "delete the
+   * five rows those two names cover", and the count shown says so.
+   */
+  const chosen = useMemo(
+    () => allProducts.filter((p) => selected.has(p.key)),
+    [allProducts, selected],
+  );
+  const chosenIds = useMemo(
+    () => chosen.flatMap((p) => p.items.map((i) => i.id).filter((id): id is string => Boolean(id))),
+    [chosen],
+  );
+
+  async function afterBulk(res: { ok: boolean; error?: string }, done: string) {
+    if (!res.ok) {
+      setNote({ tone: "err", text: res.error ?? "failed" });
+      return;
+    }
+    setSelected(new Set());
+    await load();
+    setNote({ tone: "ok", text: done });
+  }
+
+  async function bulkStatus(status: "active" | "draft" | "archived") {
+    if (!chosenIds.length) return;
+    setBusy(true);
+    setNote(null);
+    const res = await setItemsStatus(chosenIds, status);
+    setBusy(false);
+    await afterBulk(
+      res,
+      ar
+        ? `تم تحديث ${chosen.length} منتج`
+        : `${chosen.length} product${chosen.length === 1 ? "" : "s"} updated`,
+    );
+  }
+
+  async function bulkDelete() {
+    if (!chosenIds.length) return;
+    // Deleting a product is not undoable, and the row on screen hides how many
+    // variants go with it, so the question names both.
+    const question = ar
+      ? `حذف ${chosen.length} منتج (${chosenIds.length} خيار) نهائياً؟ الطلبات السابقة تحتفظ بسجلها.`
+      : `Delete ${chosen.length} product${chosen.length === 1 ? "" : "s"} (${chosenIds.length} variant${chosenIds.length === 1 ? "" : "s"}) for good? Past orders keep their record.`;
+    if (!window.confirm(question)) return;
+    setBusy(true);
+    setNote(null);
+    const res = await deleteItems(chosenIds);
+    setBusy(false);
+    await afterBulk(
+      res,
+      ar
+        ? `تم حذف ${chosen.length} منتج`
+        : `${chosen.length} product${chosen.length === 1 ? "" : "s"} deleted`,
+    );
+  }
+
   const invTone = (st: string) =>
     st === "out_stock" ? "text-rose-600" : st === "low_stock" ? "text-amber-600" : "text-ink-muted";
   const priceLabel = (p: Product) =>
@@ -287,6 +349,70 @@ export default function ProductsPage() {
           )}
           <span className="ms-auto text-xs text-ink-soft">{num(filtered.length, lang)} {t("results_word")}</span>
         </Toolbar>
+
+        {/*
+          The bar that appears once something is ticked. Archive sits before
+          Delete and reads as the ordinary choice, because it is: a product that
+          stops being sold usually needs to stop appearing, not to stop having
+          existed — and archiving is the half of that you can take back.
+        */}
+        {chosen.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 border-b border-line bg-brand-50/60 px-5 py-2.5">
+            <span className="text-xs font-semibold text-ink">
+              {ar
+                ? `${num(chosen.length, lang)} محدد`
+                : `${num(chosen.length, lang)} selected`}
+              {chosenIds.length !== chosen.length && (
+                <span className="font-normal text-ink-soft">
+                  {ar
+                    ? ` · ${num(chosenIds.length, lang)} خيار`
+                    : ` · ${num(chosenIds.length, lang)} variants`}
+                </span>
+              )}
+            </span>
+
+            <button
+              onClick={() => bulkStatus("archived")}
+              disabled={busy || !chosenIds.length}
+              className="btn-outline h-8 px-3 text-xs disabled:opacity-50"
+            >
+              {ar ? "أرشفة" : "Archive"}
+            </button>
+            <button
+              onClick={() => bulkStatus("active")}
+              disabled={busy || !chosenIds.length}
+              className="btn-ghost h-8 px-3 text-xs disabled:opacity-50"
+            >
+              {ar ? "تفعيل" : "Activate"}
+            </button>
+            <button
+              onClick={bulkDelete}
+              disabled={busy || !chosenIds.length}
+              className="btn-ghost h-8 gap-1.5 px-3 text-xs text-rose-600 hover:bg-rose-50 disabled:opacity-50"
+            >
+              <IcTrash className="h-3.5 w-3.5" />
+              {ar ? "حذف" : "Delete"}
+            </button>
+
+            <button
+              onClick={() => setSelected(new Set())}
+              className="btn-ghost ms-auto h-8 gap-1 px-2 text-xs text-ink-muted"
+            >
+              <IcX className="h-3.5 w-3.5" />
+              {ar ? "إلغاء التحديد" : "Clear"}
+            </button>
+          </div>
+        )}
+
+        {note && (
+          <div
+            className={`border-b border-line px-5 py-2 text-xs ${
+              note.tone === "ok" ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-700"
+            }`}
+          >
+            {note.text}
+          </div>
+        )}
 
         {view === "list" ? (
           <div className="overflow-x-auto">

@@ -375,6 +375,55 @@ export async function updateItem(
   }
 }
 
+/**
+ * Delete several variants at once.
+ *
+ * Safe against order history by design: store_order_items keeps its own copy
+ * of the name, sku, price and picture, and its link to the item is `on delete
+ * set null`. So a sold product can be removed from the catalogue without
+ * rewriting what a customer was charged for — the order still reads the same.
+ */
+export async function deleteItems(ids: string[]): Promise<ActionResult<number>> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  const clean = [...new Set(ids.filter(Boolean))];
+  if (!clean.length) return { ok: true, data: 0 };
+  try {
+    const supabase = getServerSupabase();
+    const { error } = await supabase.from("inventory_items").delete().in("id", clean);
+    if (error) return { ok: false, error: error.message };
+    invalidateCatalog();
+    revalidatePath("/inventory");
+    revalidatePath("/products");
+    return { ok: true, data: clean.length };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+/** Move several variants to active, draft or archived in one go. */
+export async function setItemsStatus(
+  ids: string[],
+  status: "active" | "draft" | "archived",
+): Promise<ActionResult<number>> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  const clean = [...new Set(ids.filter(Boolean))];
+  if (!clean.length) return { ok: true, data: 0 };
+  try {
+    const supabase = getServerSupabase();
+    const { error } = await supabase
+      .from("inventory_items")
+      .update({ status })
+      .in("id", clean);
+    if (error) return { ok: false, error: error.message };
+    invalidateCatalog();
+    revalidatePath("/inventory");
+    revalidatePath("/products");
+    return { ok: true, data: clean.length };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
 export async function deleteItem(id: string): Promise<ActionResult> {
   if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
   try {
