@@ -1270,6 +1270,85 @@ function BlockGroup({
         </>
       )}
 
+      {(block.type === "coming_up_live" ||
+        block.type === "countdown_deals" ||
+        block.type === "info_rows") && (
+        <>
+          <Field label={ar ? "العنوان" : "Title"} type="text">
+            <input
+              value={text("title")}
+              onChange={(e) => onPatch({ title: e.target.value })}
+              placeholder={ar ? "اتركيه فارغاً بلا عنوان" : "Leave empty for no heading"}
+              className={input}
+            />
+          </Field>
+
+          {block.type === "coming_up_live" && (
+            <Field label={ar ? "نص الزر" : "Button text"} type="text">
+              <input
+                value={text("remindLabel")}
+                onChange={(e) => onPatch({ remindLabel: e.target.value })}
+                placeholder={ar ? "ذكّريني" : "Remind me"}
+                className={input}
+              />
+            </Field>
+          )}
+
+          {block.type === "countdown_deals" && (
+            <>
+              <Field label={ar ? "العدّاد" : "Countdown"} type="checkbox">
+                <Toggle on={bool("showTimer", true)} onChange={(v) => onPatch({ showTimer: v })} ar={ar} />
+              </Field>
+              {bool("showTimer", true) && (
+                <Field label={ar ? "ينتهي بعد (دقائق)" : "Ends in (minutes)"} type="range">
+                  <input
+                    type="number"
+                    min={1}
+                    max={2880}
+                    value={num("endsInMinutes", 135)}
+                    onChange={(e) => onPatch({ endsInMinutes: Number(e.target.value) })}
+                    className={input}
+                  />
+                </Field>
+              )}
+              <Field label={ar ? "شريط المباع" : "Claimed bar"} type="checkbox">
+                <Toggle on={bool("showClaimed", true)} onChange={(v) => onPatch({ showClaimed: v })} ar={ar} />
+              </Field>
+              <ColorRow
+                label={ar ? "لون الشارة" : "Badge colour"}
+                value={text("badgeBg")}
+                fallback={accent}
+                onChange={(v) => onPatch({ badgeBg: v })}
+                input={input}
+                ar={ar}
+              />
+            </>
+          )}
+
+          {(block.type === "coming_up_live" || block.type === "info_rows") && (
+            <ColorRow
+              label={ar ? "خلفية البطاقة" : "Card background"}
+              value={text("cardBg")}
+              fallback="#ffffff"
+              onChange={(v) => onPatch({ cardBg: v })}
+              input={input}
+              ar={ar}
+            />
+          )}
+
+          <Field label={ar ? "استدارة الحواف" : "Corner radius"} type="range">
+            <input
+              type="number"
+              min={0}
+              max={32}
+              value={num("radius", block.type === "coming_up_live" ? 16 : 14)}
+              onChange={(e) => onPatch({ radius: Number(e.target.value) })}
+              className={input}
+            />
+          </Field>
+        </>
+      )}
+
       {block.type === "live_now" && (
         <>
           <Field label={ar ? "العنوان" : "Title"} type="text">

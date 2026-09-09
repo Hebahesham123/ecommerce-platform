@@ -30,6 +30,9 @@ export type BlockType =
   | "split"
   | "trust_badges"
   | "live_now"
+  | "coming_up_live"
+  | "countdown_deals"
+  | "info_rows"
   | "reviews"
   | "text";
 
@@ -89,6 +92,30 @@ export const ITEM_SHAPE: Partial<Record<BlockType, { ar: string; en: string; bla
     ar: "بث",
     en: "Live",
     blank: () => ({ id: itemId(), imageUrl: "", name: "", viewers: "", handle: "", url: "" }),
+  },
+  coming_up_live: {
+    ar: "موعد",
+    en: "Session",
+    blank: () => ({ id: itemId(), imageUrl: "", title: "", when: "", handle: "", url: "" }),
+  },
+  countdown_deals: {
+    ar: "صفقة",
+    en: "Deal",
+    blank: () => ({
+      id: itemId(),
+      imageUrl: "",
+      badge: "",
+      price: "",
+      comparePrice: "",
+      claimed: "",
+      handle: "",
+      url: "",
+    }),
+  },
+  info_rows: {
+    ar: "سطر",
+    en: "Row",
+    blank: () => ({ id: itemId(), emoji: "", title: "", subtitle: "", note: "", handle: "", url: "" }),
   },
 };
 
@@ -152,6 +179,30 @@ export const ITEM_FIELDS: Partial<Record<BlockType, FieldSpec[]>> = {
     { key: "imageUrl", kind: "image", ar: "الصورة", en: "Photo" },
     { key: "name", kind: "text", ar: "الاسم", en: "Name" },
     { key: "viewers", kind: "text", ar: "المشاهدون", en: "Viewers" },
+    { key: "handle", kind: "collection", ar: "يفتح", en: "Opens" },
+    { key: "url", kind: "text", ar: "أو رابط", en: "Or a link" },
+  ],
+  coming_up_live: [
+    { key: "imageUrl", kind: "image", ar: "الصورة", en: "Photo" },
+    { key: "title", kind: "text", ar: "العنوان", en: "Title" },
+    { key: "when", kind: "text", ar: "الموعد", en: "When" },
+    { key: "handle", kind: "collection", ar: "يفتح", en: "Opens" },
+    { key: "url", kind: "text", ar: "أو رابط", en: "Or a link" },
+  ],
+  countdown_deals: [
+    { key: "imageUrl", kind: "image", ar: "الصورة", en: "Photo" },
+    { key: "badge", kind: "text", ar: "الشارة", en: "Badge" },
+    { key: "price", kind: "text", ar: "السعر", en: "Price" },
+    { key: "comparePrice", kind: "text", ar: "قبل الخصم", en: "Was" },
+    { key: "claimed", kind: "text", ar: "نسبة المباع", en: "Claimed" },
+    { key: "handle", kind: "collection", ar: "يفتح", en: "Opens" },
+    { key: "url", kind: "text", ar: "أو رابط", en: "Or a link" },
+  ],
+  info_rows: [
+    { key: "emoji", kind: "emoji", ar: "أيقونة", en: "Icon" },
+    { key: "title", kind: "text", ar: "العنوان", en: "Title" },
+    { key: "subtitle", kind: "text", ar: "سطر فرعي", en: "Subtitle" },
+    { key: "note", kind: "text", ar: "على اليسار", en: "Right note" },
     { key: "handle", kind: "collection", ar: "يفتح", en: "Opens" },
     { key: "url", kind: "text", ar: "أو رابط", en: "Or a link" },
   ],
@@ -314,8 +365,11 @@ export const ALL_ROWS_CAP = 8;
 export const DEFAULT_SETTINGS: AppSettings = {
   storeName: "BeautyBar",
   logoUrl: null,
-  accent: "#7c3aed",
-  background: "#f8fafc",
+  // The published web theme's own colours, so a store that has never opened
+  // this editor still gets an app that matches the site shoppers already know:
+  // its terracotta on its cream, not a stock violet on near-white.
+  accent: "#c1674a",
+  background: "#f3ede5",
   announcement: "",
   announcementEnabled: false,
   menuHandle: "main-menu",
@@ -418,6 +472,24 @@ export const BLOCK_META: Record<
     hintAr: "صور دائرية لمن يبثّون الآن، وتحتها عرض خاص بالعميل مع عدّاد",
     hintEn: "Round photos of whoever is live now, with a private countdown offer underneath",
   },
+  coming_up_live: {
+    ar: "بث قادم",
+    en: "Coming up live",
+    hintAr: "مواعيد البث القادمة، لكل موعد صورة ووقت وزر تذكير",
+    hintEn: "The sessions coming up — a picture, a time and a remind button each",
+  },
+  countdown_deals: {
+    ar: "صفقات اليوم",
+    en: "Deals of the day",
+    hintAr: "عروض بعدّاد ينتهي، وشريط يوضح كم بيع من كل صفقة",
+    hintEn: "Offers on a countdown, each showing how much of it has gone",
+  },
+  info_rows: {
+    ar: "أسطر معلومات",
+    en: "Info rows",
+    hintAr: "الشحن، الاسترجاع، طرق الدفع — أيقونة وسطران ورقم على اليسار",
+    hintEn: "Delivery, returns, ways to pay — an icon, two lines and a note on the end",
+  },
   reviews: {
     ar: "آراء العملاء",
     en: "Customer reviews",
@@ -464,7 +536,7 @@ export function newBlock(type: BlockType): Block {
       avatarSize: 56,
       ringWidth: 2,
       ringColor: "",
-      badgeBg: "#e11d48",
+      badgeBg: "",
       badgeTextColor: "#ffffff",
       nameSize: 10,
       viewersSize: 9,
@@ -475,6 +547,28 @@ export function newBlock(type: BlockType): Block {
       offerTextSize: 11,
       timerBg: "",
       timerTextColor: "#ffffff",
+      items: shape ? [shape.blank()] : [],
+    },
+    coming_up_live: {
+      title: "Coming up live",
+      remindLabel: "Remind me",
+      cardBg: "",
+      radius: 16,
+      items: shape ? [shape.blank()] : [],
+    },
+    countdown_deals: {
+      title: "Deals of the day",
+      endsInMinutes: 135,
+      showTimer: true,
+      showClaimed: true,
+      badgeBg: "",
+      radius: 14,
+      items: shape ? [shape.blank()] : [],
+    },
+    info_rows: {
+      title: "",
+      cardBg: "",
+      radius: 14,
       items: shape ? [shape.blank()] : [],
     },
     banner: { imageUrl: "", handle: "", heading: "", subheading: "" },

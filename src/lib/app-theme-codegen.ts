@@ -1347,6 +1347,291 @@ const styles = StyleSheet.create({
 });
 `,
 
+    coming_up_live: `import React from "react";
+import { Image, Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { colors, radius, spacing } from "../theme";
+import { inherit, SectionHeading } from "./Pieces";
+import type { HomePayload } from "../api";
+
+export type Session = { id: string; imageUrl?: string; title?: string; when?: string; handle?: string; url?: string };
+export type ComingUpLiveSettings = {
+  title?: string;
+  remindLabel?: string;
+  cardBg?: string;
+  radius?: number;
+  items?: Session[];
+};
+
+export function ComingUpLive({
+  settings,
+  collections,
+  onOpenCollection,
+}: {
+  settings: ComingUpLiveSettings;
+  collections: HomePayload["collections"];
+  onOpenCollection?: (handle: string) => void;
+}) {
+  const items = (settings.items ?? []).filter((i) => i.title || i.imageUrl);
+  if (!items.length) return null;
+
+  /** A typed link wins over a collection: it is the more specific thing to set. */
+  const go = (url?: string, handle?: string) => {
+    if (url) {
+      Linking.openURL(url).catch(() => {});
+      return;
+    }
+    if (handle) onOpenCollection?.(handle);
+  };
+
+  const r = settings.radius && settings.radius > 0 ? settings.radius : radius.lg;
+  const bg = settings.cardBg || colors.surface;
+  const remind = settings.remindLabel || "Remind me";
+
+  return (
+    <>
+      {settings.title ? <SectionHeading title={settings.title} /> : null}
+      <View style={[styles.card, { backgroundColor: bg, borderRadius: r }]}>
+        {items.map((i) => {
+          const borrowed = inherit(i, collections);
+          const photo = i.imageUrl || borrowed.image;
+          return (
+            <View key={i.id} style={styles.row}>
+              {photo ? <Image source={{ uri: photo }} style={styles.thumb} /> : <View style={styles.thumb} />}
+              <View style={{ flex: 1 }}>
+                <Text style={styles.title} numberOfLines={1}>{i.title || borrowed.title}</Text>
+                {i.when ? <Text style={styles.when} numberOfLines={1}>{i.when}</Text> : null}
+              </View>
+              {remind ? (
+                <Pressable style={styles.remind} onPress={() => go(i.url, i.handle)}>
+                  <Text style={styles.remindText}>{remind}</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          );
+        })}
+      </View>
+    </>
+  );
+}
+
+const styles = StyleSheet.create({
+  card: { marginTop: spacing.sm, borderWidth: 1, borderColor: colors.line, padding: spacing.md, gap: spacing.md },
+  row: { flexDirection: "row", alignItems: "center", gap: spacing.md },
+  thumb: { width: 48, height: 48, borderRadius: 10, backgroundColor: colors.page },
+  title: { fontSize: 12, fontWeight: "700", color: colors.ink },
+  when: { fontSize: 11, color: colors.inkSoft },
+  remind: { borderRadius: radius.pill, backgroundColor: colors.accent, paddingHorizontal: 12, paddingVertical: 6 },
+  remindText: { fontSize: 11, fontWeight: "600", color: "#fff" },
+});
+`,
+
+    countdown_deals: `import React, { useEffect, useState } from "react";
+import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { colors, radius, spacing } from "../theme";
+import { inherit } from "./Pieces";
+import type { HomePayload } from "../api";
+
+export type Deal = {
+  id: string;
+  imageUrl?: string;
+  badge?: string;
+  price?: string;
+  comparePrice?: string;
+  claimed?: string;
+  handle?: string;
+  url?: string;
+};
+export type CountdownDealsSettings = {
+  title?: string;
+  endsInMinutes?: number;
+  showTimer?: boolean;
+  showClaimed?: boolean;
+  badgeBg?: string;
+  radius?: number;
+  items?: Deal[];
+};
+
+const two = (n: number) => (n < 10 ? "0" + n : String(n));
+
+export function CountdownDeals({
+  settings,
+  collections,
+  onOpenCollection,
+}: {
+  settings: CountdownDealsSettings;
+  collections: HomePayload["collections"];
+  onOpenCollection?: (handle: string) => void;
+}) {
+  const items = (settings.items ?? []).filter((i) => i.price || i.imageUrl);
+  const total = Math.max(0, Math.trunc((settings.endsInMinutes ?? 135) * 60));
+  const [left, setLeft] = useState(total);
+  useEffect(() => setLeft(total), [total]);
+  useEffect(() => {
+    if (left <= 0) return;
+    const t = setTimeout(() => setLeft((v) => (v > 0 ? v - 1 : 0)), 1000);
+    return () => clearTimeout(t);
+  }, [left]);
+  if (!items.length) return null;
+
+  const go = (url?: string, handle?: string) => {
+    if (url) {
+      Linking.openURL(url).catch(() => {});
+      return;
+    }
+    if (handle) onOpenCollection?.(handle);
+  };
+
+  const r = settings.radius && settings.radius > 0 ? settings.radius : 14;
+  const badgeBg = settings.badgeBg || colors.accent;
+  const parts = [two(Math.floor(left / 3600)), two(Math.floor((left % 3600) / 60)), two(left % 60)];
+
+  return (
+    <>
+      <View style={styles.head}>
+        <Text style={styles.heading} numberOfLines={1}>{settings.title ?? ""}</Text>
+        {settings.showTimer !== false ? (
+          <View style={styles.timer}>
+            {parts.map((p, i) => (
+              <View key={i} style={[styles.tick, { backgroundColor: colors.accent }]}>
+                <Text style={styles.tickText}>{p}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+      </View>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+        {items.map((i) => {
+          const borrowed = inherit(i, collections);
+          const photo = i.imageUrl || borrowed.image;
+          const pct = Math.max(0, Math.min(100, parseInt(i.claimed ?? "", 10) || 0));
+          return (
+            <Pressable key={i.id} style={[styles.card, { borderRadius: r }]} onPress={() => go(i.url, i.handle)}>
+              <View>
+                {photo ? <Image source={{ uri: photo }} style={styles.photo} /> : <View style={styles.photo} />}
+                {i.badge ? (
+                  <View style={[styles.badge, { backgroundColor: badgeBg }]}>
+                    <Text style={styles.badgeText}>{i.badge}</Text>
+                  </View>
+                ) : null}
+              </View>
+              <View style={styles.body}>
+                <View style={styles.priceRow}>
+                  <Text style={styles.price}>{i.price}</Text>
+                  {i.comparePrice ? <Text style={styles.was}>{i.comparePrice}</Text> : null}
+                </View>
+                {settings.showClaimed !== false && i.claimed ? (
+                  <View style={{ marginTop: 6 }}>
+                    <View style={styles.track}>
+                      <View style={[styles.fill, { width: pct + "%" }]} />
+                    </View>
+                    <Text style={styles.claimed}>{i.claimed}</Text>
+                  </View>
+                ) : null}
+              </View>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+    </>
+  );
+}
+
+const styles = StyleSheet.create({
+  head: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: spacing.sm },
+  heading: { flex: 1, fontSize: 14, fontWeight: "700", color: colors.ink },
+  timer: { flexDirection: "row", gap: 4 },
+  tick: { borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
+  tickText: { fontSize: 11, fontWeight: "700", color: "#fff" },
+  row: { gap: spacing.md, paddingVertical: spacing.sm },
+  card: { width: 132, overflow: "hidden", borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface },
+  photo: { width: "100%", height: 104, backgroundColor: colors.page },
+  badge: { position: "absolute", top: 6, left: 6, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
+  badgeText: { fontSize: 10, fontWeight: "700", color: "#fff" },
+  body: { padding: 8 },
+  priceRow: { flexDirection: "row", alignItems: "baseline", gap: 4 },
+  price: { fontSize: 13, fontWeight: "700", color: colors.accent },
+  was: { fontSize: 10, color: colors.inkSoft, textDecorationLine: "line-through" },
+  track: { height: 6, borderRadius: 3, backgroundColor: colors.page, overflow: "hidden" },
+  fill: { height: 6, borderRadius: 3, backgroundColor: colors.accent },
+  claimed: { marginTop: 4, fontSize: 9, color: colors.inkSoft },
+});
+`,
+
+    info_rows: `import React from "react";
+import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { colors, radius, spacing } from "../theme";
+import { SectionHeading } from "./Pieces";
+
+export type InfoRow = {
+  id: string;
+  emoji?: string;
+  title?: string;
+  subtitle?: string;
+  note?: string;
+  handle?: string;
+  url?: string;
+};
+export type InfoRowsSettings = { title?: string; cardBg?: string; radius?: number; items?: InfoRow[] };
+
+export function InfoRows({
+  settings,
+  onOpenCollection,
+}: {
+  settings: InfoRowsSettings;
+  onOpenCollection?: (handle: string) => void;
+}) {
+  const items = (settings.items ?? []).filter((i) => i.title);
+  if (!items.length) return null;
+
+  const go = (url?: string, handle?: string) => {
+    if (url) {
+      Linking.openURL(url).catch(() => {});
+      return;
+    }
+    if (handle) onOpenCollection?.(handle);
+  };
+
+  const r = settings.radius && settings.radius > 0 ? settings.radius : 14;
+  const bg = settings.cardBg || colors.surface;
+
+  return (
+    <>
+      {settings.title ? <SectionHeading title={settings.title} /> : null}
+      <View style={{ marginTop: spacing.sm, gap: spacing.sm }}>
+        {items.map((i) => (
+          <Pressable
+            key={i.id}
+            style={[styles.row, { backgroundColor: bg, borderRadius: r }]}
+            onPress={() => go(i.url, i.handle)}
+          >
+            {i.emoji ? (
+              <View style={styles.icon}>
+                <Text style={styles.iconText}>{i.emoji}</Text>
+              </View>
+            ) : null}
+            <View style={{ flex: 1 }}>
+              <Text style={styles.title} numberOfLines={1}>{i.title}</Text>
+              {i.subtitle ? <Text style={styles.subtitle} numberOfLines={1}>{i.subtitle}</Text> : null}
+            </View>
+            {i.note ? <Text style={styles.note}>{i.note}</Text> : null}
+          </Pressable>
+        ))}
+      </View>
+    </>
+  );
+}
+
+const styles = StyleSheet.create({
+  row: { flexDirection: "row", alignItems: "center", gap: spacing.md, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 12, paddingVertical: 10 },
+  icon: { width: 32, height: 32, borderRadius: radius.sm, alignItems: "center", justifyContent: "center", backgroundColor: colors.page },
+  iconText: { fontSize: 16 },
+  title: { fontSize: 12, fontWeight: "700", color: colors.ink },
+  subtitle: { fontSize: 11, color: colors.inkSoft },
+  note: { fontSize: 11, fontWeight: "600", color: colors.accent },
+});
+`,
+
     text: `import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { colors, radius, spacing } from "../theme";
@@ -1505,6 +1790,9 @@ function renderCall(block: Block, indent: number): string {
     split: ["collections={data.collections}", "onOpenCollection={onOpenCollection}"],
     trust_badges: [],
     live_now: ["collections={data.collections}", "onOpenCollection={onOpenCollection}"],
+    coming_up_live: ["collections={data.collections}", "onOpenCollection={onOpenCollection}"],
+    countdown_deals: ["collections={data.collections}", "onOpenCollection={onOpenCollection}"],
+    info_rows: ["onOpenCollection={onOpenCollection}"],
     banner: ["collections={data.collections}", "onOpenCollection={onOpenCollection}"],
     categories: ["collections={data.collections}", "onOpenCollection={onOpenCollection}"],
     new_arrivals: ["products={data.newArrivals}", "onOpenProduct={onOpenProduct}"],
@@ -1539,6 +1827,7 @@ const SIZE_KEYS = new Set([
   "bannerRadius",
   "offerTitleSize",
   "offerTextSize",
+  "radius",
 ]);
 
 /** A block's settings as a JS object literal, keeping only what it uses. */
@@ -1580,6 +1869,16 @@ function settingsLiteral(block: Block): string {
       "timerBg",
       "timerTextColor",
     ],
+    coming_up_live: ["title", "remindLabel", "cardBg", "radius"],
+    countdown_deals: [
+      "title",
+      "endsInMinutes",
+      "showTimer",
+      "showClaimed",
+      "badgeBg",
+      "radius",
+    ],
+    info_rows: ["title", "cardBg", "radius"],
     banner: ["imageUrl", "heading", "subheading", "handle"],
     categories: ["title"],
     new_arrivals: ["title", "limit"],
@@ -1597,7 +1896,8 @@ function settingsLiteral(block: Block): string {
       // truthy in the app whichever way the merchant set it, and a size would
       // be compared as one.
       if (k === "offerMinutes") return `${k}: ${n(v, 10)}`;
-      if (k === "showReplays" || k === "offerEnabled") {
+      if (k === "endsInMinutes") return `${k}: ${n(v, 135)}`;
+      if (k === "showReplays" || k === "offerEnabled" || k === "showTimer" || k === "showClaimed") {
         return `${k}: ${v === false ? "false" : "true"}`;
       }
       // Sizes are only sent when the merchant actually set one, so the
@@ -1630,6 +1930,9 @@ function itemsLiteral(type: BlockType, items: Item[]): string {
     split: ["imageUrl", "label", "buttonLabel", "handle"],
     trust_badges: ["emoji", "title", "subtitle"],
     live_now: ["imageUrl", "name", "viewers", "handle", "url"],
+    coming_up_live: ["imageUrl", "title", "when", "handle", "url"],
+    countdown_deals: ["imageUrl", "badge", "price", "comparePrice", "claimed", "handle", "url"],
+    info_rows: ["emoji", "title", "subtitle", "note", "handle", "url"],
   };
   const keys = fields[type] ?? [];
   const rendered = items.map((item) => {

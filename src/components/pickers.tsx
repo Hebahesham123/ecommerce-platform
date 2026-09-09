@@ -34,6 +34,18 @@ export const SWATCHES: string[] = [
   "#9f1239", "#e11d48", "#db2777", "#9d6540", "#c1674a", "#f3ede5", "#fde68a",
 ];
 
+/**
+ * The published web theme's palette.
+ *
+ * The app and the site are the same shop, so the colours the storefront is
+ * already built from are the ones a merchant reaches for first — offering them
+ * here saves reading hexes out of a stylesheet.
+ */
+export const WEB_THEME: string[] = [
+  "#c1674a", "#9c4c29", "#a4522c", "#c8902a", "#e2c898",
+  "#f3ede5", "#eeddd5", "#faf7f3", "#2d1e24", "#191614",
+];
+
 const HEX = /^#[0-9a-f]{6}$/i;
 
 export function ColorPicker({
@@ -159,6 +171,10 @@ export function ColorPicker({
               <div className="mb-2 flex flex-wrap gap-1.5">{own.map(swatch)}</div>
             </>
           )}
+          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-ink-soft">
+            {ar ? "ألوان الموقع" : "Web theme"}
+          </div>
+          <div className="mb-2 flex flex-wrap gap-1.5">{WEB_THEME.map(swatch)}</div>
           <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-ink-soft">
             {ar ? "لوحة الألوان" : "Palette"}
           </div>
