@@ -12,8 +12,8 @@ import {
   type Named,
 } from "@/lib/meta";
 import { appDataFrom } from "@/lib/meta-app-data";
+import { appCatalog, toProduct, type AppProduct } from "@/lib/api/catalog";
 import { invalidatePixelSnippet } from "@/lib/theme-render-service";
-import { products } from "@/lib/data";
 import type { Channel } from "@/lib/channel";
 
 export type MetaResult<T = void> =
@@ -267,17 +267,32 @@ export async function disconnect(channel?: Channel | "all"): Promise<MetaResult>
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://your-store.example.com";
 
-function productToCatalogItem(p: (typeof products)[number]): CatalogItem {
+/**
+ * One product, as Facebook's catalogue wants it.
+ *
+ * Read from the storefront's own resolver, so what is advertised is what is
+ * for sale: the same prices, the same stock, the same pictures. This used to
+ * map a hardcoded list of six sample products with placeholder images, which
+ * meant "Sync catalog" uploaded six things the shop does not sell.
+ */
+function productToCatalogItem(p: AppProduct): CatalogItem | null {
+  // A catalogue row with no price or no picture is rejected by Meta anyway,
+  // and a rejected row in a batch is a failure the merchant has to go read.
+  if (p.priceMin == null || !p.image) return null;
   return {
-    id: p.sku,
+    id: p.handle || p.id,
     title: p.name,
-    description: `${p.name} — ${p.category}`,
-    availability: p.stock > 0 ? "in stock" : "out of stock",
+    description: (p.description || `${p.name}${p.category ? ` — ${p.category}` : ""}`)
+      .replace(/<[^>]*>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 5000),
+    availability: p.available > 0 ? "in stock" : "out of stock",
     condition: "new",
-    price: `${p.price.toFixed(2)} EGP`,
-    link: `${SITE_URL}/products/${p.sku}`,
-    image_link: `https://placehold.co/600x600/png?text=${encodeURIComponent(p.name)}`,
-    brand: "Fashion Store",
+    price: `${p.priceMin.toFixed(2)} EGP`,
+    link: `${SITE_URL}/store/product/${encodeURIComponent(p.id)}`,
+    image_link: p.image,
+    brand: p.vendor || "Beauty Bar",
   };
 }
 
@@ -291,7 +306,12 @@ export async function syncCatalog(): Promise<MetaResult<{ count: number }>> {
     if (!token) return { ok: false, error: "not_connected" };
     if (!catalogId) return { ok: false, error: "no_catalog" };
 
-    const items = products.map(productToCatalogItem);
+    const catalog = await appCatalog();
+    const items = catalog.products
+      .map(toProduct)
+      .map(productToCatalogItem)
+      .filter((i): i is CatalogItem => i !== null);
+    if (!items.length) return { ok: false, error: "nothing_to_sync" };
     await catalogItemsBatch(catalogId, token, items);
 
     await supabase

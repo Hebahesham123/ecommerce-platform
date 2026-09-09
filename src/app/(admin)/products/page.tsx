@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useI18n, egp, num } from "@/lib/i18n";
-import { products as demoProducts } from "@/lib/data";
 import { collectionHandle } from "@/lib/collections";
 import {
   type InventoryItem,
@@ -88,22 +87,6 @@ function groupProducts(items: InventoryItem[]): Product[] {
   return out;
 }
 
-// Fallback to the demo catalog only when the DB has no products yet.
-function demoAsProducts(): Product[] {
-  return demoProducts.map((p) => ({
-    key: p.id,
-    name: p.name,
-    image: null,
-    category: p.category,
-    vendor: null,
-    status: "active" as ProductStatus,
-    variants: p.variants,
-    available: p.stock,
-    priceMin: p.price,
-    priceMax: p.price,
-    items: [],
-  }));
-}
 
 export default function ProductsPage() {
   const { t, lang } = useI18n();
@@ -142,7 +125,12 @@ export default function ProductsPage() {
   }
 
   const allProducts = useMemo(
-    () => (items.length ? groupProducts(items) : demoAsProducts()),
+    // Real products, or none. This used to fall back to a demo catalogue when
+    // the list was empty — including the moment before the first fetch lands,
+    // so every visit opened on six invented products and 50% sell-through,
+    // then blinked to the real 1,293. A number that is wrong for a second is
+    // still a number someone read.
+    () => groupProducts(items),
     [items],
   );
 
@@ -305,11 +293,11 @@ export default function ProductsPage() {
         <KpiStrip
           period={<span>{ar ? "الكتالوج" : "Catalog"}</span>}
           segments={[
-            { label: t("kpi_products"), value: num(kpi.total, lang), tone: "brand" },
-            { label: ar ? "معدل التصريف" : "Sell-through rate", value: `${kpi.sellThrough}%`, delta: 4, tone: "emerald" },
-            { label: t("in_stock"), value: num(kpi.inStock, lang), tone: "emerald", active: stock === "in_stock", onClick: () => setStock(stock === "in_stock" ? "all" : "in_stock") },
-            { label: t("low_stock"), value: num(kpi.low, lang), tone: "slate", active: stock === "low_stock", onClick: () => setStock(stock === "low_stock" ? "all" : "low_stock") },
-            { label: t("out_stock"), value: num(kpi.out, lang), tone: "rose", active: stock === "out_stock", onClick: () => setStock(stock === "out_stock" ? "all" : "out_stock") },
+            { label: t("kpi_products"), value: loading ? "—" : num(kpi.total, lang), tone: "brand" },
+            { label: ar ? "معدل التصريف" : "Sell-through rate", value: loading ? "—" : `${kpi.sellThrough}%`, delta: loading ? undefined : 4, tone: "emerald" },
+            { label: t("in_stock"), value: loading ? "—" : num(kpi.inStock, lang), tone: "emerald", active: stock === "in_stock", onClick: () => setStock(stock === "in_stock" ? "all" : "in_stock") },
+            { label: t("low_stock"), value: loading ? "—" : num(kpi.low, lang), tone: "slate", active: stock === "low_stock", onClick: () => setStock(stock === "low_stock" ? "all" : "low_stock") },
+            { label: t("out_stock"), value: loading ? "—" : num(kpi.out, lang), tone: "rose", active: stock === "out_stock", onClick: () => setStock(stock === "out_stock" ? "all" : "out_stock") },
           ]}
         />
       </div>
@@ -347,7 +335,7 @@ export default function ProductsPage() {
               {t("clear_filters")}
             </button>
           )}
-          <span className="ms-auto text-xs text-ink-soft">{num(filtered.length, lang)} {t("results_word")}</span>
+          <span className="ms-auto text-xs text-ink-soft">{loading ? "…" : `${num(filtered.length, lang)} ${t("results_word")}`}</span>
         </Toolbar>
 
         {/*
@@ -478,7 +466,15 @@ export default function ProductsPage() {
               </tbody>
             </table>
             {!loading && filtered.length === 0 && (
-              <div className="py-16 text-center text-sm text-ink-soft">{ar ? "لا توجد منتجات مطابقة" : "No matching products"}</div>
+              <div className="py-16 text-center text-sm text-ink-soft">
+                {allProducts.length === 0
+                  ? ar
+                    ? "لا توجد منتجات بعد"
+                    : "No products yet"
+                  : ar
+                    ? "لا توجد منتجات مطابقة"
+                    : "No matching products"}
+              </div>
             )}
             {loading && <div className="py-16 text-center text-sm text-ink-soft">{t("loading")}</div>}
           </div>
@@ -506,7 +502,15 @@ export default function ProductsPage() {
               </div>
             ))}
             {!loading && filtered.length === 0 && (
-              <div className="col-span-full py-16 text-center text-sm text-ink-soft">{ar ? "لا توجد منتجات مطابقة" : "No matching products"}</div>
+              <div className="col-span-full py-16 text-center text-sm text-ink-soft">
+                {allProducts.length === 0
+                  ? ar
+                    ? "لا توجد منتجات بعد"
+                    : "No products yet"
+                  : ar
+                    ? "لا توجد منتجات مطابقة"
+                    : "No matching products"}
+              </div>
             )}
           </div>
         )}
