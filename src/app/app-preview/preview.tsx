@@ -15,6 +15,8 @@ import {
 import { Btn, Empty, Field, money, Note, Sheet, Spinner } from "./ui";
 import { Enquiry, Orders, Returns, SignIn } from "./screens";
 import { Shop } from "./shop";
+import { AppNudge } from "@/components/app-nudge";
+import type { NudgeCampaign } from "@/lib/nudge";
 import {
   DEFAULT_SCREENS,
   DEFAULT_SETTINGS,
@@ -53,6 +55,26 @@ export type CartLine = { itemId: string; quantity: number };
  * the shopper has. They share this key.
  */
 export const CART_KEY = "app_preview_cart";
+
+/**
+ * Who this device is, for popup frequency and reporting.
+ *
+ * The web storefront counts a visitor the same way, so a shopper who has
+ * already seen today's campaign on the site is not a fresh face here.
+ */
+const VISITOR_KEY = "app_preview_visitor";
+
+function visitorId(): string {
+  try {
+    const found = localStorage.getItem(VISITOR_KEY);
+    if (found) return found;
+    const made = "v-" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    localStorage.setItem(VISITOR_KEY, made);
+    return made;
+  } catch {
+    return "v-anon";
+  }
+}
 
 export function readCart(): CartLine[] {
   try {
@@ -106,6 +128,15 @@ export function Preview() {
     if (!phone) return setShopperName(null);
     api.get<Account>("/me").then((r) => setShopperName(r.ok ? r.data.name : null));
   }, [phone]);
+
+  // The smart popup the merchant built in Marketing - Smart popups. The app
+  // draws the same campaign the site does rather than owning a second one.
+  const [nudge, setNudge] = useState<NudgeCampaign | null>(null);
+  useEffect(() => {
+    api.get<{ campaign: NudgeCampaign | null }>("/nudge").then((r) => {
+      if (r.ok) setNudge(r.data.campaign);
+    });
+  }, []);
 
   const signedIn = Boolean(phone);
   const count = cart.reduce((s, l) => s + l.quantity, 0);
@@ -230,6 +261,23 @@ export function Preview() {
               </button>
             ))}
           </nav>
+
+          <AppNudge
+            campaign={nudge}
+            ar={ar}
+            onEvent={(type, extra) => {
+              // Analytics riding along on someone's shopping: it must never
+              // interrupt them, so nothing here is awaited or surfaced.
+              api.post("/nudge", {
+                campaignId: nudge?.id ?? null,
+                visitorId: visitorId(),
+                type,
+                trigger: "dwell",
+                path: "/app",
+                code: extra?.code ?? null,
+              });
+            }}
+          />
 
           <Sheet
             open={sheet === "signin"}
