@@ -12,6 +12,7 @@ import { recordNudgeConversion } from "@/lib/nudge-service";
 import { sendOrderPurchase } from "@/lib/meta-purchase";
 import type { Channel } from "@/lib/channel";
 import { repriceLines } from "@/lib/cart-pricing";
+import { invalidateCatalog } from "@/lib/storefront-data";
 
 /**
  * Placing an order — the one path, whichever surface asked.
@@ -264,6 +265,12 @@ export async function placeOrderCore(
       }
       return { ok: false, error: rpcErr.message };
     }
+
+    // Stock just moved, so the storefront's cached catalog is now stale. Admin
+    // stock edits already drop it (see inventory/actions.ts); an order is the
+    // other way stock moves, and it used to leave the catalog serving the
+    // pre-order count until its 120s TTL lapsed.
+    invalidateCatalog();
 
     const orderNumber = String(
       (placed as { order_number?: string } | null)?.order_number ?? "",

@@ -689,6 +689,72 @@ export async function getCatalog(mount = ""): Promise<Catalog> {
 }
 
 /**
+ * Re-read live stock for a single product and fold it into the cached catalog.
+ *
+ * The catalog as a whole is rebuilt at most every CACHE_MS because assembling
+ * it across the entire inventory is expensive. Stock is the one field that
+ * cannot wait that long: a product page states how many units are left, and
+ * that number is wrong the moment anybody buys. Rebuilding the catalog per
+ * product view would be far too costly, so this re-reads inventory_levels for
+ * just this product's variants — one indexed query on a handful of ids — and
+ * updates the cached objects in place.
+ *
+ * Mutating in place is deliberate: variantById holds references to these same
+ * variant objects, so both the theme render and the injected stock guard see
+ * the corrected numbers, and the next reader of the cache benefits too.
+ */
+export async function refreshProductStock(mount: string, handle: string): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  let product: ProductDrop | undefined;
+  try {
+    // Same normalisation getStorefrontCatalog applies, so this hits the very
+    // same cache entry the render will read.
+    const base = mount.endsWith("/") ? mount.slice(0, -1) : mount;
+    const catalog = await getCatalog(base);
+    product = catalog.productByHandle.get(handle);
+  } catch {
+    return;
+  }
+  if (!product?.variants?.length) return;
+
+  try {
+    const supabase = getServerSupabase();
+    const { data, error } = await supabase
+      .from("inventory_items")
+      .select("id,tracked,inventory_levels(on_hand,committed,incoming)")
+      .in("id", product.variants.map((v) => String(v.id)));
+    if (error || !data) return;
+
+    const live = new Map<string, Row>();
+    for (const r of data as unknown as Row[]) live.set(String(r.id), r);
+
+    for (const v of product.variants) {
+      const r = live.get(String(v.id));
+      if (!r) continue;
+      const tracked = r.tracked === undefined ? true : Boolean(r.tracked);
+      const qty = availableOf(r);
+      v.inventory_quantity = qty;
+      // Untracked variants are always sellable, matching buildProduct.
+      v.available = tracked ? qty > 0 : true;
+    }
+
+    // Product-level mirrors are derived from the variants, so they have to be
+    // recomputed or the page would show a fresh per-variant count beside a
+    // stale "sold out" banner.
+    const firstAvailable = product.variants.find((v) => v.available) ?? null;
+    product.available = product.variants.some((v) => v.available);
+    product.first_available_variant = firstAvailable;
+    product.selected_or_first_available_variant = firstAvailable ?? product.variants[0] ?? null;
+    product.quantity_available = product.variants.reduce(
+      (sum, v) => sum + v.inventory_quantity,
+      0,
+    );
+  } catch {
+    /* A failed refresh keeps the cached numbers — never blank the page. */
+  }
+}
+
+/**
  * Fetch the parts of a product that are too heavy to keep in the catalog.
  *
  * `description` and the `images` gallery are together ~60% of the catalog

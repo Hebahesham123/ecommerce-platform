@@ -18,6 +18,7 @@ import {
   IcRedo,
 } from "@/components/icons";
 import { AppHome, type HomeData } from "@/components/app-home";
+import { ColorPicker, ImageUpload } from "@/components/pickers";
 import {
   BLOCK_META,
   ITEM_FIELDS,
@@ -492,29 +493,44 @@ export function ThemeEditor() {
                 />
               </Field>
               <Field label={ar ? "اللون الأساسي" : "Accent colour"} type="color">
+                <ColorPicker
+                  value={draft.settings.accent}
+                  onChange={(v) => patchSettings({ accent: v })}
+                  fallback="#7c3aed"
+                  brand={[draft.settings.accent, draft.settings.background]}
+                  input={input}
+                  ar={ar}
+                />
+              </Field>
+              <Field label={ar ? "لون الخلفية" : "Background colour"} type="color">
+                <ColorPicker
+                  value={draft.settings.background}
+                  onChange={(v) => patchSettings({ background: v })}
+                  fallback="#f8fafc"
+                  brand={[draft.settings.accent, draft.settings.background]}
+                  input={input}
+                  ar={ar}
+                />
+              </Field>
+              <Field label={ar ? "الشعار" : "Logo"} type="image_picker">
                 <span className="flex items-center gap-2">
+                  {draft.settings.logoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={draft.settings.logoUrl}
+                      alt=""
+                      className="h-9 w-9 shrink-0 rounded-lg border border-line object-contain"
+                    />
+                  ) : null}
+                  <ImageUpload onUploaded={(url) => patchSettings({ logoUrl: url })} ar={ar} />
                   <input
-                    type="color"
-                    value={draft.settings.accent}
-                    onChange={(e) => patchSettings({ accent: e.target.value })}
-                    className="h-9 w-12 shrink-0 cursor-pointer rounded-lg border border-line bg-surface-page p-1"
-                  />
-                  <input
-                    value={draft.settings.accent}
-                    onChange={(e) => patchSettings({ accent: e.target.value })}
-                    className={`${input} font-mono`}
+                    value={draft.settings.logoUrl ?? ""}
+                    onChange={(e) => patchSettings({ logoUrl: e.target.value || null })}
+                    placeholder="https://…"
+                    className={input}
                     dir="ltr"
                   />
                 </span>
-              </Field>
-              <Field label={ar ? "الشعار" : "Logo"} type="image_picker">
-                <input
-                  value={draft.settings.logoUrl ?? ""}
-                  onChange={(e) => patchSettings({ logoUrl: e.target.value || null })}
-                  placeholder="https://…"
-                  className={input}
-                  dir="ltr"
-                />
               </Field>
               <Field label={ar ? "قائمة التنقّل" : "Navigation menu"} type="link_list">
                 <select
@@ -609,6 +625,7 @@ export function ThemeEditor() {
                 first={i === 0}
                 last={i === draft.blocks.length - 1}
                 collections={data.collections}
+                accent={draft.settings.accent}
                 input={input}
                 onToggle={() => setOpen((s) => ({ ...s, [block.id]: !s[block.id] }))}
                 onHover={setHovered}
@@ -680,7 +697,13 @@ export function ThemeEditor() {
             <div
               className={`${
                 device === "mobile" ? "w-[390px]" : "w-full max-w-[900px]"
-              } relative flex min-h-[620px] max-w-full flex-col self-start overflow-hidden rounded-[1.75rem] border-8 border-slate-900 bg-slate-50 shadow-card`}
+              } relative flex min-h-[620px] max-w-full flex-col self-start overflow-hidden rounded-[1.75rem] border-8 border-slate-900 shadow-card`}
+              style={
+                {
+                  background: draft.settings.background,
+                  "--app-page": draft.settings.background,
+                } as React.CSSProperties
+              }
             >
               <div className="flex items-center justify-between bg-slate-900 px-4 pb-2 pt-1.5 text-[11px] font-medium text-white">
                 <span className="flex items-center gap-1.5">
@@ -743,7 +766,7 @@ export function ThemeEditor() {
                   onEnquiry={() => window.open("/app-preview", "_blank")}
                 />
               ) : page !== "home" && !screen ? (
-                <p className="bg-slate-50 px-6 py-16 text-center text-sm leading-relaxed text-slate-400">
+                <p className="bg-[var(--app-page,#f8fafc)] px-6 py-16 text-center text-sm leading-relaxed text-slate-400">
                   {page === "collection"
                     ? ar
                       ? "لا يوجد قسم لعرضه. افتحي أي قسم من الشاشة الرئيسية."
@@ -754,7 +777,7 @@ export function ThemeEditor() {
                 </p>
               ) : screen ? (
                 screen.kind === "orders" ? (
-                  <div className="bg-slate-50 p-4">
+                  <div className="bg-[var(--app-page,#f8fafc)] p-4">
                     <Orders ar={ar} signedIn={Boolean(shopper)} />
                   </div>
                 ) : screen.kind === "collection" ? (
@@ -777,7 +800,7 @@ export function ThemeEditor() {
                   />
                 )
               ) : (
-              <div className="bg-slate-50 p-4">
+              <div className="bg-[var(--app-page,#f8fafc)] p-4">
                 {draft.settings.showSearch && (
                   <input
                     value={query}
@@ -976,6 +999,44 @@ function Field({
   );
 }
 
+/**
+ * A colour that may be left empty.
+ *
+ * Empty means "follow the brand", which is the right default for a section
+ * that should keep up with the accent — so this cannot be a bare
+ * <input type="color">, which always holds a value. The swatch edits, the text
+ * field shows what is actually stored, and Reset puts it back to the brand.
+ */
+function ColorRow({
+  label,
+  value,
+  fallback,
+  onChange,
+  input,
+  ar,
+}: {
+  label: string;
+  value: string;
+  fallback: string;
+  onChange: (v: string) => void;
+  input: string;
+  ar: boolean;
+}) {
+  return (
+    <Field label={label} type="color">
+      <ColorPicker
+        value={value}
+        onChange={onChange}
+        fallback={fallback}
+        allowEmpty
+        brand={[fallback]}
+        input={input}
+        ar={ar}
+      />
+    </Field>
+  );
+}
+
 function Toggle({
   on,
   onChange,
@@ -1010,6 +1071,7 @@ function BlockGroup({
   first,
   last,
   collections,
+  accent,
   input,
   onToggle,
   onHover,
@@ -1024,6 +1086,8 @@ function BlockGroup({
   first: boolean;
   last: boolean;
   collections: { handle: string; title: string; count: number; image: string | null }[];
+  /** Shown as the fallback wherever a colour is left empty. */
+  accent: string;
   input: string;
   onToggle: () => void;
   onHover: (key: string | null) => void;
@@ -1035,6 +1099,7 @@ function BlockGroup({
   const s = block.settings ?? {};
   const text = (k: string) => (typeof s[k] === "string" ? (s[k] as string) : "");
   const num = (k: string, d: number) => (Number(s[k]) > 0 ? Number(s[k]) : d);
+  const bool = (k: string, d: boolean) => (typeof s[k] === "boolean" ? (s[k] as boolean) : d);
   const chosen = collections.find((c) => c.handle === text("handle"));
 
   return (
@@ -1205,6 +1270,591 @@ function BlockGroup({
         </>
       )}
 
+      {block.type === "style_profile" && (
+        <>
+          <Field label={ar ? "العنوان" : "Title"} type="text">
+            <input value={text("title")} onChange={(e) => onPatch({ title: e.target.value })} className={input} />
+          </Field>
+          <Field label={ar ? "الشرح" : "Subtitle"} type="text">
+            <input value={text("subtitle")} onChange={(e) => onPatch({ subtitle: e.target.value })} className={input} />
+          </Field>
+          <Field label={ar ? "عنوان البطاقة" : "Card title"} type="text">
+            <input
+              value={text("cardTitle")}
+              onChange={(e) => onPatch({ cardTitle: e.target.value })}
+              placeholder={ar ? "ملف {name}" : "{name}'s profile"}
+              className={input}
+            />
+            <p className="mt-1 text-[11px] text-ink-soft">
+              {ar
+                ? "‏{name} يُستبدل باسم العميلة، ويُحذف بدون تسجيل دخول."
+                : "{name} becomes the shopper's first name, and drops out when nobody is signed in."}
+            </p>
+          </Field>
+          <Field label={ar ? "تحت العنوان" : "Card subtitle"} type="text">
+            <input value={text("cardSubtitle")} onChange={(e) => onPatch({ cardSubtitle: e.target.value })} className={input} />
+          </Field>
+          <Field label={ar ? "السطر الأخير" : "Foot note"} type="text">
+            <input value={text("footNote")} onChange={(e) => onPatch({ footNote: e.target.value })} className={input} />
+          </Field>
+          <ColorRow label={ar ? "خلفية البطاقة" : "Card background"} value={text("cardBg")} fallback="#ffffff" onChange={(v) => onPatch({ cardBg: v })} input={input} ar={ar} />
+          <Field label={ar ? "استدارة الحواف" : "Corner radius"} type="range">
+            <input type="number" min={0} max={32} value={num("radius", 14)} onChange={(e) => onPatch({ radius: Number(e.target.value) })} className={input} />
+          </Field>
+        </>
+      )}
+
+      {block.type === "promo_card" && (
+        <>
+          <Field label={ar ? "العنوان" : "Title"} type="text">
+            <input value={text("title")} onChange={(e) => onPatch({ title: e.target.value })} className={input} />
+          </Field>
+          <Field label={ar ? "النص" : "Body"} type="richtext">
+            <textarea value={text("body")} onChange={(e) => onPatch({ body: e.target.value })} rows={3} className={`${input} h-auto py-2`} />
+          </Field>
+          <Field label={ar ? "نص الزر" : "Button text"} type="text">
+            <input value={text("buttonLabel")} onChange={(e) => onPatch({ buttonLabel: e.target.value })} className={input} />
+          </Field>
+          <Field label={ar ? "يفتح" : "Opens"} type="collection">
+            <CollectionSelect
+              collections={collections}
+              value={text("handle")}
+              onChange={(handle) => onPatch({ handle })}
+              anyLabel={ar ? "لا شيء" : "Nothing"}
+              className={input}
+            />
+          </Field>
+          <Field label={ar ? "أو رابط" : "Or a link"} type="url">
+            <input value={text("url")} onChange={(e) => onPatch({ url: e.target.value })} placeholder="https://…" className={input} dir="ltr" />
+          </Field>
+          <Field label={ar ? "صورة أعلى البطاقة" : "Picture on top"} type="image_picker">
+            <span className="flex items-center gap-2">
+              <ImageUpload onUploaded={(url) => onPatch({ imageUrl: url })} ar={ar} />
+              <input value={text("imageUrl")} onChange={(e) => onPatch({ imageUrl: e.target.value })} placeholder="https://…" className={input} dir="ltr" />
+            </span>
+          </Field>
+          <ColorRow label={ar ? "لون البطاقة" : "Card colour"} value={text("bg")} fallback={accent} onChange={(v) => onPatch({ bg: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "لون النص" : "Text colour"} value={text("textColor")} fallback="#ffffff" onChange={(v) => onPatch({ textColor: v })} input={input} ar={ar} />
+          <Field label={ar ? "استدارة الحواف" : "Corner radius"} type="range">
+            <input type="number" min={0} max={32} value={num("radius", 16)} onChange={(e) => onPatch({ radius: Number(e.target.value) })} className={input} />
+          </Field>
+        </>
+      )}
+
+      {block.type === "reviews" && (
+        <>
+          <Field label={ar ? "سطر التقييم" : "Rating line"} type="text">
+            <input
+              value={text("ratingLabel")}
+              onChange={(e) => onPatch({ ratingLabel: e.target.value })}
+              placeholder={ar ? "٤٫٩ من ١٦٢٧ مشترية" : "4.9 from 1,627 buyers"}
+              className={input}
+            />
+            <p className="mt-1 text-[11px] text-ink-soft">
+              {ar ? "يحل محل العنوان أعلاه عند كتابته." : "Replaces the title above when set."}
+            </p>
+          </Field>
+          <Field label={ar ? "الشرح" : "Subtitle"} type="text">
+            <input value={text("subtitle")} onChange={(e) => onPatch({ subtitle: e.target.value })} className={input} />
+          </Field>
+          <Field label={ar ? "نص «الكل»" : "See-all text"} type="text">
+            <input value={text("seeAllLabel")} onChange={(e) => onPatch({ seeAllLabel: e.target.value })} className={input} />
+          </Field>
+          <Field label={ar ? "يفتح" : "Opens"} type="collection">
+            <CollectionSelect
+              collections={collections}
+              value={text("seeAllHandle")}
+              onChange={(handle) => onPatch({ seeAllHandle: handle })}
+              anyLabel={ar ? "لا شيء" : "Nothing"}
+              className={input}
+            />
+          </Field>
+          <Field label={ar ? "أو رابط" : "Or a link"} type="url">
+            <input value={text("seeAllUrl")} onChange={(e) => onPatch({ seeAllUrl: e.target.value })} placeholder="https://…" className={input} dir="ltr" />
+          </Field>
+        </>
+      )}
+
+      {(block.type === "product_reasons" ||
+        block.type === "circle_row" ||
+        block.type === "pick_colour" ||
+        block.type === "price_drop") && (
+        <>
+          <Field label={ar ? "العنوان" : "Title"} type="text">
+            <input value={text("title")} onChange={(e) => onPatch({ title: e.target.value })} className={input} />
+          </Field>
+          <Field label={ar ? "الشرح" : "Subtitle"} type="text">
+            <input value={text("subtitle")} onChange={(e) => onPatch({ subtitle: e.target.value })} className={input} />
+          </Field>
+
+          {(block.type === "product_reasons" || block.type === "circle_row") && (
+            <>
+              <Field label={ar ? "نص «الكل»" : "See-all text"} type="text">
+                <input
+                  value={text("seeAllLabel")}
+                  onChange={(e) => onPatch({ seeAllLabel: e.target.value })}
+                  placeholder={ar ? "اتركيه فارغاً بلا زر" : "Leave empty for no link"}
+                  className={input}
+                />
+              </Field>
+              <Field label={ar ? "يفتح" : "Opens"} type="collection">
+                <CollectionSelect
+                  collections={collections}
+                  value={text("seeAllHandle")}
+                  onChange={(handle) => onPatch({ seeAllHandle: handle })}
+                  anyLabel={ar ? "لا شيء" : "Nothing"}
+                  className={input}
+                />
+              </Field>
+              <Field label={ar ? "أو رابط" : "Or a link"} type="url">
+                <input value={text("seeAllUrl")} onChange={(e) => onPatch({ seeAllUrl: e.target.value })} placeholder="https://…" className={input} dir="ltr" />
+              </Field>
+            </>
+          )}
+
+          {block.type === "product_reasons" && (
+            <>
+              <Field label={ar ? "نص الزر" : "Button text"} type="text">
+                <input
+                  value={text("buttonLabel")}
+                  onChange={(e) => onPatch({ buttonLabel: e.target.value })}
+                  placeholder={ar ? "اتركيه فارغاً بلا زر" : "Leave empty for no button"}
+                  className={input}
+                />
+              </Field>
+              <Field label={ar ? "استدارة الحواف" : "Corner radius"} type="range">
+                <input type="number" min={0} max={32} value={num("radius", 14)} onChange={(e) => onPatch({ radius: Number(e.target.value) })} className={input} />
+              </Field>
+            </>
+          )}
+
+          {block.type === "circle_row" && (
+            <>
+              <Field label={ar ? "مقاس الدائرة" : "Circle size"} type="range">
+                <input type="number" min={32} max={120} value={num("size", 64)} onChange={(e) => onPatch({ size: Number(e.target.value) })} className={input} />
+              </Field>
+              <Field label={ar ? "إظهار الاسم" : "Show label"} type="checkbox">
+                <Toggle on={bool("showLabel", true)} onChange={(v) => onPatch({ showLabel: v })} ar={ar} />
+              </Field>
+              <Field label={ar ? "إظهار السطر تحته" : "Show the line under it"} type="checkbox">
+                <Toggle on={bool("showNote", true)} onChange={(v) => onPatch({ showNote: v })} ar={ar} />
+              </Field>
+            </>
+          )}
+
+          {block.type === "pick_colour" && (
+            <Field label={ar ? "مقاس الدائرة" : "Circle size"} type="range">
+              <input type="number" min={24} max={80} value={num("size", 44)} onChange={(e) => onPatch({ size: Number(e.target.value) })} className={input} />
+            </Field>
+          )}
+
+          {block.type === "price_drop" && (
+            <>
+              <Field label={ar ? "نص الزر" : "Button text"} type="text">
+                <input value={text("buttonLabel")} onChange={(e) => onPatch({ buttonLabel: e.target.value })} className={input} />
+              </Field>
+              <Field label={ar ? "يفتح" : "Opens"} type="collection">
+                <CollectionSelect
+                  collections={collections}
+                  value={text("handle")}
+                  onChange={(handle) => onPatch({ handle })}
+                  anyLabel={ar ? "لا شيء" : "Nothing"}
+                  className={input}
+                />
+              </Field>
+              <Field label={ar ? "أو رابط" : "Or a link"} type="url">
+                <input value={text("url")} onChange={(e) => onPatch({ url: e.target.value })} placeholder="https://…" className={input} dir="ltr" />
+              </Field>
+              <ColorRow label={ar ? "خلفية البطاقة" : "Card background"} value={text("cardBg")} fallback="#ffffff" onChange={(v) => onPatch({ cardBg: v })} input={input} ar={ar} />
+              <Field label={ar ? "استدارة الحواف" : "Corner radius"} type="range">
+                <input type="number" min={0} max={32} value={num("radius", 14)} onChange={(e) => onPatch({ radius: Number(e.target.value) })} className={input} />
+              </Field>
+            </>
+          )}
+        </>
+      )}
+
+      {block.type === "shipping_goal" && (
+        <>
+          <Field label={ar ? "العنوان" : "Title"} type="text">
+            <input value={text("title")} onChange={(e) => onPatch({ title: e.target.value })} className={input} />
+          </Field>
+          <Field label={ar ? "الشرح" : "Subtitle"} type="text">
+            <input value={text("subtitle")} onChange={(e) => onPatch({ subtitle: e.target.value })} className={input} />
+          </Field>
+          <Field label={ar ? "بداية الشريط" : "Start label"} type="text">
+            <input value={text("startLabel")} onChange={(e) => onPatch({ startLabel: e.target.value })} className={input} />
+          </Field>
+          <Field label={ar ? "نهاية الشريط" : "End label"} type="text">
+            <input value={text("endLabel")} onChange={(e) => onPatch({ endLabel: e.target.value })} className={input} />
+          </Field>
+          <Field label={ar ? "نسبة الامتلاء ٪" : "How full (%)"} type="range">
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={Number.isFinite(Number(s.percent)) ? Number(s.percent) : 100}
+              onChange={(e) => onPatch({ percent: Number(e.target.value) })}
+              className={input}
+            />
+          </Field>
+          <ColorRow label={ar ? "لون الشريط" : "Bar colour"} value={text("barColor")} fallback={accent} onChange={(v) => onPatch({ barColor: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "خلفية البطاقة" : "Card background"} value={text("cardBg")} fallback="#ffffff" onChange={(v) => onPatch({ cardBg: v })} input={input} ar={ar} />
+          <Field label={ar ? "استدارة الحواف" : "Corner radius"} type="range">
+            <input type="number" min={0} max={32} value={num("radius", 14)} onChange={(e) => onPatch({ radius: Number(e.target.value) })} className={input} />
+          </Field>
+        </>
+      )}
+
+      {(block.type === "payment_plans" || block.type === "price_slider" || block.type === "offer_cards") && (
+        <>
+          <Field label={ar ? "العنوان" : "Title"} type="text">
+            <input value={text("title")} onChange={(e) => onPatch({ title: e.target.value })} className={input} />
+          </Field>
+          <Field label={ar ? "الشرح" : "Subtitle"} type="text">
+            <input value={text("subtitle")} onChange={(e) => onPatch({ subtitle: e.target.value })} className={input} />
+          </Field>
+
+          {block.type === "payment_plans" && (
+            <>
+              <Field label={ar ? "نص «الكل»" : "See-all text"} type="text">
+                <input value={text("seeAllLabel")} onChange={(e) => onPatch({ seeAllLabel: e.target.value })} className={input} />
+              </Field>
+              <Field label={ar ? "يفتح" : "Opens"} type="collection">
+                <CollectionSelect
+                  collections={collections}
+                  value={text("seeAllHandle")}
+                  onChange={(handle) => onPatch({ seeAllHandle: handle })}
+                  anyLabel={ar ? "لا شيء" : "Nothing"}
+                  className={input}
+                />
+              </Field>
+              <Field label={ar ? "أو رابط" : "Or a link"} type="url">
+                <input value={text("seeAllUrl")} onChange={(e) => onPatch({ seeAllUrl: e.target.value })} placeholder="https://…" className={input} dir="ltr" />
+              </Field>
+            </>
+          )}
+
+          {block.type === "price_slider" && (
+            <>
+              <Field label={ar ? "كلمة السعر" : "Price label"} type="text">
+                <input value={text("priceLabel")} onChange={(e) => onPatch({ priceLabel: e.target.value })} className={input} />
+              </Field>
+              <Field label={ar ? "العملة" : "Currency"} type="text">
+                <input value={text("currency")} onChange={(e) => onPatch({ currency: e.target.value })} placeholder="EGP" className={input} />
+              </Field>
+              <Field label={ar ? "أقل سعر" : "Lowest price"} type="range">
+                <input type="number" min={1} value={num("minPrice", 2999)} onChange={(e) => onPatch({ minPrice: Number(e.target.value) })} className={input} />
+              </Field>
+              <Field label={ar ? "أعلى سعر" : "Highest price"} type="range">
+                <input type="number" min={2} value={num("maxPrice", 16000)} onChange={(e) => onPatch({ maxPrice: Number(e.target.value) })} className={input} />
+              </Field>
+              <Field label={ar ? "السعر عند الفتح" : "Opens at"} type="range">
+                <input type="number" min={1} value={num("startPrice", 7750)} onChange={(e) => onPatch({ startPrice: Number(e.target.value) })} className={input} />
+              </Field>
+              <ColorRow label={ar ? "خلفية البطاقة" : "Card background"} value={text("cardBg")} fallback="#ffffff" onChange={(v) => onPatch({ cardBg: v })} input={input} ar={ar} />
+            </>
+          )}
+
+          {block.type === "offer_cards" && (
+            <Field label={ar ? "نص الزر" : "Button text"} type="text">
+              <input value={text("claimLabel")} onChange={(e) => onPatch({ claimLabel: e.target.value })} className={input} />
+            </Field>
+          )}
+
+          <Field label={ar ? "استدارة الحواف" : "Corner radius"} type="range">
+            <input type="number" min={0} max={32} value={num("radius", 14)} onChange={(e) => onPatch({ radius: Number(e.target.value) })} className={input} />
+          </Field>
+        </>
+      )}
+
+      {(block.type === "coming_up_live" ||
+        block.type === "countdown_deals" ||
+        block.type === "info_rows") && (
+        <>
+          <Field label={ar ? "العنوان" : "Title"} type="text">
+            <input
+              value={text("title")}
+              onChange={(e) => onPatch({ title: e.target.value })}
+              placeholder={ar ? "اتركيه فارغاً بلا عنوان" : "Leave empty for no heading"}
+              className={input}
+            />
+          </Field>
+
+          {block.type === "coming_up_live" && (
+            <Field label={ar ? "نص الزر" : "Button text"} type="text">
+              <input
+                value={text("remindLabel")}
+                onChange={(e) => onPatch({ remindLabel: e.target.value })}
+                placeholder={ar ? "ذكّريني" : "Remind me"}
+                className={input}
+              />
+            </Field>
+          )}
+
+          {block.type === "countdown_deals" && (
+            <>
+              <Field label={ar ? "العدّاد" : "Countdown"} type="checkbox">
+                <Toggle on={bool("showTimer", true)} onChange={(v) => onPatch({ showTimer: v })} ar={ar} />
+              </Field>
+              {bool("showTimer", true) && (
+                <Field label={ar ? "ينتهي بعد (دقائق)" : "Ends in (minutes)"} type="range">
+                  <input
+                    type="number"
+                    min={1}
+                    max={2880}
+                    value={num("endsInMinutes", 135)}
+                    onChange={(e) => onPatch({ endsInMinutes: Number(e.target.value) })}
+                    className={input}
+                  />
+                </Field>
+              )}
+              <Field label={ar ? "شريط المباع" : "Claimed bar"} type="checkbox">
+                <Toggle on={bool("showClaimed", true)} onChange={(v) => onPatch({ showClaimed: v })} ar={ar} />
+              </Field>
+              <ColorRow
+                label={ar ? "لون الشارة" : "Badge colour"}
+                value={text("badgeBg")}
+                fallback={accent}
+                onChange={(v) => onPatch({ badgeBg: v })}
+                input={input}
+                ar={ar}
+              />
+            </>
+          )}
+
+          {(block.type === "coming_up_live" || block.type === "info_rows") && (
+            <ColorRow
+              label={ar ? "خلفية البطاقة" : "Card background"}
+              value={text("cardBg")}
+              fallback="#ffffff"
+              onChange={(v) => onPatch({ cardBg: v })}
+              input={input}
+              ar={ar}
+            />
+          )}
+
+          <Field label={ar ? "استدارة الحواف" : "Corner radius"} type="range">
+            <input
+              type="number"
+              min={0}
+              max={32}
+              value={num("radius", block.type === "coming_up_live" ? 16 : 14)}
+              onChange={(e) => onPatch({ radius: Number(e.target.value) })}
+              className={input}
+            />
+          </Field>
+        </>
+      )}
+
+      {block.type === "live_now" && (
+        <>
+          <Field label={ar ? "العنوان" : "Title"} type="text">
+            <input
+              value={text("title")}
+              onChange={(e) => onPatch({ title: e.target.value })}
+              placeholder={ar ? "اتركيه فارغاً بلا عنوان" : "Leave empty for no heading"}
+              className={input}
+            />
+          </Field>
+          <Field label={ar ? "كلمة الشارة" : "Live badge word"} type="text">
+            <input
+              value={text("liveLabel")}
+              onChange={(e) => onPatch({ liveLabel: e.target.value })}
+              placeholder="LIVE"
+              className={input}
+            />
+          </Field>
+
+          <Field label={ar ? "زر المسجّلة" : "Replays circle"} type="checkbox">
+            <Toggle on={bool("showReplays", true)} onChange={(v) => onPatch({ showReplays: v })} ar={ar} />
+          </Field>
+          {bool("showReplays", true) && (
+            <>
+              <Field label={ar ? "اسم الزر" : "Replays label"} type="text">
+                <input
+                  value={text("replaysLabel")}
+                  onChange={(e) => onPatch({ replaysLabel: e.target.value })}
+                  placeholder={ar ? "المسجّلة" : "Replays"}
+                  className={input}
+                />
+              </Field>
+              <Field label={ar ? "يفتح" : "Opens"} type="collection">
+                <CollectionSelect
+                  collections={collections}
+                  value={text("replaysHandle")}
+                  onChange={(handle) => onPatch({ replaysHandle: handle })}
+                  anyLabel={ar ? "لا شيء" : "Nothing"}
+                  className={input}
+                />
+              </Field>
+              <Field label={ar ? "أو رابط" : "Or a link"} type="url">
+                <input
+                  value={text("replaysUrl")}
+                  onChange={(e) => onPatch({ replaysUrl: e.target.value })}
+                  placeholder="https://…"
+                  className={input}
+                  dir="ltr"
+                />
+              </Field>
+            </>
+          )}
+
+          <Field label={ar ? "العرض الخاص" : "Private offer"} type="checkbox">
+            <Toggle on={bool("offerEnabled", true)} onChange={(v) => onPatch({ offerEnabled: v })} ar={ar} />
+          </Field>
+          {bool("offerEnabled", true) && (
+            <>
+              <Field label={ar ? "سطر العرض" : "Offer line"} type="text">
+                <input
+                  value={text("offerTitle")}
+                  onChange={(e) => onPatch({ offerTitle: e.target.value })}
+                  placeholder={ar ? "{name}، عرضك الخاص متاح الآن" : "{name}, your private offer is live"}
+                  className={input}
+                />
+                <p className="mt-1 text-[11px] text-ink-soft">
+                  {ar
+                    ? "‏{name} يُستبدل باسم العميلة. بدون تسجيل دخول يُحذف الاسم ويبدأ السطر بعده."
+                    : "{name} becomes the shopper's first name. Signed out, the token is dropped and the line starts after it."}
+                </p>
+              </Field>
+              <Field label={ar ? "التفاصيل" : "Detail"} type="text">
+                <input
+                  value={text("offerText")}
+                  onChange={(e) => onPatch({ offerText: e.target.value })}
+                  placeholder={ar ? "خصم ٤٠٠ ج.م على أي طلب فوق ٥٠٠٠" : "EGP 400 off anything over 5,000"}
+                  className={input}
+                />
+              </Field>
+              <Field label={ar ? "مدة العدّاد (دقائق)" : "Countdown (minutes)"} type="range">
+                <input
+                  type="number"
+                  min={1}
+                  max={180}
+                  value={num("offerMinutes", 10)}
+                  onChange={(e) => onPatch({ offerMinutes: Number(e.target.value) })}
+                  className={input}
+                />
+              </Field>
+              <Field label={ar ? "يفتح" : "Opens"} type="collection">
+                <CollectionSelect
+                  collections={collections}
+                  value={text("offerHandle")}
+                  onChange={(handle) => onPatch({ offerHandle: handle })}
+                  anyLabel={ar ? "لا شيء" : "Nothing"}
+                  className={input}
+                />
+              </Field>
+              <Field label={ar ? "أو رابط" : "Or a link"} type="url">
+                <input
+                  value={text("offerUrl")}
+                  onChange={(e) => onPatch({ offerUrl: e.target.value })}
+                  placeholder="https://…"
+                  className={input}
+                  dir="ltr"
+                />
+              </Field>
+            </>
+          )}
+
+          <div className="mt-3 border-t border-line pt-3 text-[11px] font-semibold text-ink-muted">
+            {ar ? "الشكل والمقاس" : "Shape and size"}
+          </div>
+          <Field label={ar ? "شكل الصورة" : "Photo shape"} type="select">
+            <select
+              value={text("avatarShape") || "circle"}
+              onChange={(e) => onPatch({ avatarShape: e.target.value })}
+              className={input}
+            >
+              <option value="circle">{ar ? "دائرة" : "Circle"}</option>
+              <option value="rounded">{ar ? "مربع بحواف" : "Rounded square"}</option>
+              <option value="square">{ar ? "مربع" : "Square"}</option>
+            </select>
+          </Field>
+          <Field label={ar ? "مقاس الصورة" : "Photo size"} type="range">
+            <input
+              type="number"
+              min={32}
+              max={120}
+              value={num("avatarSize", 56)}
+              onChange={(e) => onPatch({ avatarSize: Number(e.target.value) })}
+              className={input}
+            />
+          </Field>
+          <Field label={ar ? "سُمك الإطار" : "Ring width"} type="range">
+            <input
+              type="number"
+              min={0}
+              max={8}
+              value={Number.isFinite(Number(s.ringWidth)) ? Number(s.ringWidth) : 2}
+              onChange={(e) => onPatch({ ringWidth: Number(e.target.value) })}
+              className={input}
+            />
+          </Field>
+          <Field label={ar ? "حجم الاسم" : "Name size"} type="range">
+            <input
+              type="number"
+              min={8}
+              max={20}
+              value={num("nameSize", 10)}
+              onChange={(e) => onPatch({ nameSize: Number(e.target.value) })}
+              className={input}
+            />
+          </Field>
+          <Field label={ar ? "حجم عدد المشاهدين" : "Viewers size"} type="range">
+            <input
+              type="number"
+              min={7}
+              max={18}
+              value={num("viewersSize", 9)}
+              onChange={(e) => onPatch({ viewersSize: Number(e.target.value) })}
+              className={input}
+            />
+          </Field>
+          <Field label={ar ? "استدارة البانر" : "Banner corners"} type="range">
+            <input
+              type="number"
+              min={0}
+              max={32}
+              value={num("bannerRadius", 16)}
+              onChange={(e) => onPatch({ bannerRadius: Number(e.target.value) })}
+              className={input}
+            />
+          </Field>
+          <Field label={ar ? "حجم سطر العرض" : "Offer line size"} type="range">
+            <input
+              type="number"
+              min={10}
+              max={22}
+              value={num("offerTitleSize", 13)}
+              onChange={(e) => onPatch({ offerTitleSize: Number(e.target.value) })}
+              className={input}
+            />
+          </Field>
+          <Field label={ar ? "حجم التفاصيل" : "Detail size"} type="range">
+            <input
+              type="number"
+              min={8}
+              max={18}
+              value={num("offerTextSize", 11)}
+              onChange={(e) => onPatch({ offerTextSize: Number(e.target.value) })}
+              className={input}
+            />
+          </Field>
+
+          <div className="mt-3 border-t border-line pt-3 text-[11px] font-semibold text-ink-muted">
+            {ar ? "الألوان" : "Colours"}
+          </div>
+          <ColorRow label={ar ? "الإطار" : "Photo ring"} value={text("ringColor")} fallback={accent} onChange={(v) => onPatch({ ringColor: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "خلفية الشارة" : "Badge background"} value={text("badgeBg")} fallback="#e11d48" onChange={(v) => onPatch({ badgeBg: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "لون كلمة الشارة" : "Badge text"} value={text("badgeTextColor")} fallback="#ffffff" onChange={(v) => onPatch({ badgeTextColor: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "خلفية البانر" : "Banner background"} value={text("offerBg")} fallback={accent} onChange={(v) => onPatch({ offerBg: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "نص البانر" : "Banner text"} value={text("offerTextColor")} fallback="#ffffff" onChange={(v) => onPatch({ offerTextColor: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "خلفية العدّاد" : "Timer background"} value={text("timerBg")} fallback="#ffffff" onChange={(v) => onPatch({ timerBg: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "نص العدّاد" : "Timer text"} value={text("timerTextColor")} fallback="#ffffff" onChange={(v) => onPatch({ timerTextColor: v })} input={input} ar={ar} />
+        </>
+      )}
+
       {(block.type === "hero" ||
         block.type === "cards" ||
         block.type === "tiers" ||
@@ -1241,6 +1891,7 @@ function BlockGroup({
           block={block}
           ar={ar}
           collections={collections}
+          accent={accent}
           input={input}
           onPatch={onPatch}
         />
@@ -1281,9 +1932,11 @@ function ItemList({
   block,
   ar,
   collections,
+  accent,
   input,
   onPatch,
 }: {
+  accent: string;
   block: Block;
   ar: boolean;
   collections: { handle: string; title: string; count: number; image: string | null }[];
@@ -1404,7 +2057,17 @@ function ItemList({
                         <span className="text-[11px] font-medium text-ink-muted">
                           {ar ? f.ar : f.en}
                         </span>
-                        {f.kind === "collection" ? (
+                        {f.kind === "color" ? (
+                          <ColorPicker
+                            value={value}
+                            onChange={(v) => patchItem(item.id, { [f.key]: v })}
+                            fallback={accent}
+                            allowEmpty
+                            brand={[accent]}
+                            input={`${input} h-8 text-xs`}
+                            ar={ar}
+                          />
+                        ) : f.kind === "collection" ? (
                           <CollectionSelect
                             collections={collections}
                             value={value}
@@ -1420,6 +2083,13 @@ function ItemList({
                                 src={value || inherited}
                                 alt=""
                                 className="h-8 w-8 shrink-0 rounded object-cover"
+                              />
+                            )}
+                            {f.kind === "image" && (
+                              <ImageUpload
+                                onUploaded={(url) => patchItem(item.id, { [f.key]: url })}
+                                ar={ar}
+                                compact
                               />
                             )}
                             <input

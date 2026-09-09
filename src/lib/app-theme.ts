@@ -29,6 +29,20 @@ export type BlockType =
   | "tiers"
   | "split"
   | "trust_badges"
+  | "live_now"
+  | "coming_up_live"
+  | "countdown_deals"
+  | "info_rows"
+  | "shipping_goal"
+  | "payment_plans"
+  | "price_slider"
+  | "offer_cards"
+  | "product_reasons"
+  | "circle_row"
+  | "pick_colour"
+  | "price_drop"
+  | "style_profile"
+  | "promo_card"
   | "reviews"
   | "text";
 
@@ -84,6 +98,87 @@ export const ITEM_SHAPE: Partial<Record<BlockType, { ar: string; en: string; bla
     en: "Badge",
     blank: () => ({ id: itemId(), emoji: "", title: "", subtitle: "" }),
   },
+  live_now: {
+    ar: "بث",
+    en: "Live",
+    blank: () => ({ id: itemId(), imageUrl: "", name: "", viewers: "", handle: "", url: "" }),
+  },
+  coming_up_live: {
+    ar: "موعد",
+    en: "Session",
+    blank: () => ({ id: itemId(), imageUrl: "", title: "", when: "", handle: "", url: "" }),
+  },
+  countdown_deals: {
+    ar: "صفقة",
+    en: "Deal",
+    blank: () => ({
+      id: itemId(),
+      imageUrl: "",
+      badge: "",
+      price: "",
+      comparePrice: "",
+      claimed: "",
+      handle: "",
+      url: "",
+    }),
+  },
+  info_rows: {
+    ar: "سطر",
+    en: "Row",
+    blank: () => ({ id: itemId(), emoji: "", title: "", subtitle: "", note: "", handle: "", url: "" }),
+  },
+  payment_plans: {
+    ar: "طريقة دفع",
+    en: "Plan",
+    blank: () => ({ id: itemId(), name: "", headline: "", note: "", color: "", handle: "", url: "" }),
+  },
+  price_slider: {
+    ar: "خطة تقسيط",
+    en: "Instalment plan",
+    blank: () => ({ id: itemId(), name: "", months: "", badge: "", color: "" }),
+  },
+  offer_cards: {
+    ar: "عرض",
+    en: "Offer",
+    blank: () => ({ id: itemId(), badge: "", title: "", subtitle: "", color: "", handle: "", url: "" }),
+  },
+  product_reasons: {
+    ar: "منتج",
+    en: "Product",
+    blank: () => ({
+      id: itemId(),
+      imageUrl: "",
+      reason: "",
+      name: "",
+      price: "",
+      comparePrice: "",
+      badge: "",
+      rating: "",
+      sold: "",
+      handle: "",
+      url: "",
+    }),
+  },
+  circle_row: {
+    ar: "دائرة",
+    en: "Circle",
+    blank: () => ({ id: itemId(), imageUrl: "", label: "", note: "", handle: "", url: "" }),
+  },
+  pick_colour: {
+    ar: "لون",
+    en: "Colour",
+    blank: () => ({ id: itemId(), color: "", label: "", handle: "", url: "" }),
+  },
+  price_drop: {
+    ar: "صورة",
+    en: "Thumbnail",
+    blank: () => ({ id: itemId(), imageUrl: "" }),
+  },
+  style_profile: {
+    ar: "وسم",
+    en: "Tag",
+    blank: () => ({ id: itemId(), label: "", color: "", handle: "", url: "" }),
+  },
 };
 
 export function itemId(): string {
@@ -91,7 +186,7 @@ export function itemId(): string {
 }
 
 /** What one field of an item is, so the editor knows which control to draw. */
-export type FieldKind = "text" | "image" | "collection" | "emoji";
+export type FieldKind = "text" | "image" | "collection" | "emoji" | "color";
 export type FieldSpec = { key: string; kind: FieldKind; ar: string; en: string };
 
 /**
@@ -142,6 +237,91 @@ export const ITEM_FIELDS: Partial<Record<BlockType, FieldSpec[]>> = {
     { key: "title", kind: "text", ar: "العنوان", en: "Title" },
     { key: "subtitle", kind: "text", ar: "سطر فرعي", en: "Subtitle" },
   ],
+  live_now: [
+    { key: "imageUrl", kind: "image", ar: "الصورة", en: "Photo" },
+    { key: "name", kind: "text", ar: "الاسم", en: "Name" },
+    { key: "viewers", kind: "text", ar: "المشاهدون", en: "Viewers" },
+    { key: "handle", kind: "collection", ar: "يفتح", en: "Opens" },
+    { key: "url", kind: "text", ar: "أو رابط", en: "Or a link" },
+  ],
+  coming_up_live: [
+    { key: "imageUrl", kind: "image", ar: "الصورة", en: "Photo" },
+    { key: "title", kind: "text", ar: "العنوان", en: "Title" },
+    { key: "when", kind: "text", ar: "الموعد", en: "When" },
+    { key: "handle", kind: "collection", ar: "يفتح", en: "Opens" },
+    { key: "url", kind: "text", ar: "أو رابط", en: "Or a link" },
+  ],
+  countdown_deals: [
+    { key: "imageUrl", kind: "image", ar: "الصورة", en: "Photo" },
+    { key: "badge", kind: "text", ar: "الشارة", en: "Badge" },
+    { key: "price", kind: "text", ar: "السعر", en: "Price" },
+    { key: "comparePrice", kind: "text", ar: "قبل الخصم", en: "Was" },
+    { key: "claimed", kind: "text", ar: "نسبة المباع", en: "Claimed" },
+    { key: "handle", kind: "collection", ar: "يفتح", en: "Opens" },
+    { key: "url", kind: "text", ar: "أو رابط", en: "Or a link" },
+  ],
+  info_rows: [
+    { key: "emoji", kind: "emoji", ar: "أيقونة", en: "Icon" },
+    { key: "title", kind: "text", ar: "العنوان", en: "Title" },
+    { key: "subtitle", kind: "text", ar: "سطر فرعي", en: "Subtitle" },
+    { key: "note", kind: "text", ar: "على اليسار", en: "Right note" },
+    { key: "handle", kind: "collection", ar: "يفتح", en: "Opens" },
+    { key: "url", kind: "text", ar: "أو رابط", en: "Or a link" },
+  ],
+  payment_plans: [
+    { key: "name", kind: "text", ar: "الجهة", en: "Provider" },
+    { key: "headline", kind: "text", ar: "العرض", en: "Headline" },
+    { key: "note", kind: "text", ar: "التفاصيل", en: "Detail" },
+    { key: "color", kind: "color", ar: "لون البطاقة", en: "Card colour" },
+    { key: "handle", kind: "collection", ar: "يفتح", en: "Opens" },
+    { key: "url", kind: "text", ar: "أو رابط", en: "Or a link" },
+  ],
+  price_slider: [
+    { key: "name", kind: "text", ar: "الجهة", en: "Provider" },
+    { key: "months", kind: "text", ar: "عدد الشهور", en: "Months" },
+    { key: "badge", kind: "text", ar: "الشارة", en: "Badge" },
+    { key: "color", kind: "color", ar: "لون الشارة", en: "Badge colour" },
+  ],
+  offer_cards: [
+    { key: "badge", kind: "text", ar: "الرقم الكبير", en: "Big number" },
+    { key: "title", kind: "text", ar: "العنوان", en: "Title" },
+    { key: "subtitle", kind: "text", ar: "الشرح", en: "Detail" },
+    { key: "color", kind: "color", ar: "اللون", en: "Colour" },
+    { key: "handle", kind: "collection", ar: "يفتح", en: "Opens" },
+    { key: "url", kind: "text", ar: "أو رابط", en: "Or a link" },
+  ],
+  product_reasons: [
+    { key: "imageUrl", kind: "image", ar: "الصورة", en: "Photo" },
+    { key: "reason", kind: "text", ar: "سبب الاقتراح", en: "Why this" },
+    { key: "name", kind: "text", ar: "اسم المنتج", en: "Product name" },
+    { key: "price", kind: "text", ar: "السعر", en: "Price" },
+    { key: "comparePrice", kind: "text", ar: "قبل الخصم", en: "Was" },
+    { key: "badge", kind: "text", ar: "الشارة", en: "Badge" },
+    { key: "rating", kind: "text", ar: "التقييم", en: "Rating" },
+    { key: "sold", kind: "text", ar: "عدد المبيعات", en: "Sold" },
+    { key: "handle", kind: "collection", ar: "يفتح", en: "Opens" },
+    { key: "url", kind: "text", ar: "أو رابط", en: "Or a link" },
+  ],
+  circle_row: [
+    { key: "imageUrl", kind: "image", ar: "الصورة", en: "Photo" },
+    { key: "label", kind: "text", ar: "الاسم", en: "Label" },
+    { key: "note", kind: "text", ar: "تحت الاسم", en: "Under the label" },
+    { key: "handle", kind: "collection", ar: "يفتح", en: "Opens" },
+    { key: "url", kind: "text", ar: "أو رابط", en: "Or a link" },
+  ],
+  pick_colour: [
+    { key: "color", kind: "color", ar: "اللون", en: "Colour" },
+    { key: "label", kind: "text", ar: "الاسم", en: "Label" },
+    { key: "handle", kind: "collection", ar: "يفتح", en: "Opens" },
+    { key: "url", kind: "text", ar: "أو رابط", en: "Or a link" },
+  ],
+  price_drop: [{ key: "imageUrl", kind: "image", ar: "الصورة", en: "Photo" }],
+  style_profile: [
+    { key: "label", kind: "text", ar: "الوسم", en: "Tag" },
+    { key: "color", kind: "color", ar: "لونه", en: "Its colour" },
+    { key: "handle", kind: "collection", ar: "يفتح", en: "Opens" },
+    { key: "url", kind: "text", ar: "أو رابط", en: "Or a link" },
+  ],
 };
 
 export type Block = {
@@ -156,6 +336,8 @@ export type AppSettings = {
   logoUrl: string | null;
   /** The one colour the app is built around: buttons, prices, the active tab. */
   accent: string;
+  /** What every screen sits on, behind the cards. */
+  background: string;
   announcement: string;
   announcementEnabled: boolean;
   /** Which navigation menu fills the app's drawer. */
@@ -299,7 +481,11 @@ export const ALL_ROWS_CAP = 8;
 export const DEFAULT_SETTINGS: AppSettings = {
   storeName: "BeautyBar",
   logoUrl: null,
-  accent: "#7c3aed",
+  // The published web theme's own colours, so a store that has never opened
+  // this editor still gets an app that matches the site shoppers already know:
+  // its terracotta on its cream, not a stock violet on near-white.
+  accent: "#c1674a",
+  background: "#f3ede5",
   announcement: "",
   announcementEnabled: false,
   menuHandle: "main-menu",
@@ -396,6 +582,90 @@ export const BLOCK_META: Record<
     hintAr: "أقسامك كأزرار في شريط أفقي",
     hintEn: "Your collections as a row of tappable chips",
   },
+  live_now: {
+    ar: "البث المباشر",
+    en: "Live now",
+    hintAr: "صور دائرية لمن يبثّون الآن، وتحتها عرض خاص بالعميل مع عدّاد",
+    hintEn: "Round photos of whoever is live now, with a private countdown offer underneath",
+  },
+  coming_up_live: {
+    ar: "بث قادم",
+    en: "Coming up live",
+    hintAr: "مواعيد البث القادمة، لكل موعد صورة ووقت وزر تذكير",
+    hintEn: "The sessions coming up — a picture, a time and a remind button each",
+  },
+  countdown_deals: {
+    ar: "صفقات اليوم",
+    en: "Deals of the day",
+    hintAr: "عروض بعدّاد ينتهي، وشريط يوضح كم بيع من كل صفقة",
+    hintEn: "Offers on a countdown, each showing how much of it has gone",
+  },
+  info_rows: {
+    ar: "أسطر معلومات",
+    en: "Info rows",
+    hintAr: "الشحن، الاسترجاع، طرق الدفع — أيقونة وسطران ورقم على اليسار",
+    hintEn: "Delivery, returns, ways to pay — an icon, two lines and a note on the end",
+  },
+  shipping_goal: {
+    ar: "شريط الشحن المجاني",
+    en: "Free delivery bar",
+    hintAr: "كم تبقّى على الشحن المجاني، كشريط تقدّم",
+    hintEn: "How far the basket is from free delivery, as a progress bar",
+  },
+  payment_plans: {
+    ar: "طرق الدفع",
+    en: "Pay your way",
+    hintAr: "بطاقات التقسيط وعروض البنوك، كل بطاقة بلونها",
+    hintEn: "Instalment and bank offers, each card in its own colour",
+  },
+  price_slider: {
+    ar: "قسّطي أي سعر",
+    en: "Split any price",
+    hintAr: "شريط يحرّكه العميل ليرى القسط الشهري لكل جهة",
+    hintEn: "A slider the shopper moves to see the monthly amount from each provider",
+  },
+  offer_cards: {
+    ar: "عروض لك",
+    en: "Offers for you",
+    hintAr: "عروض يمكن للعميل المطالبة بها، كل عرض ببطاقة",
+    hintEn: "Offers the shopper can claim, one card each",
+  },
+  product_reasons: {
+    ar: "مقترح لك",
+    en: "Because you viewed",
+    hintAr: "منتجات مع سبب اقتراح كل واحد، وسعره وتقييمه وزر إضافة",
+    hintEn: "Products with the reason each is being shown, its price, rating and an add button",
+  },
+  circle_row: {
+    ar: "صف دائري",
+    en: "Circle row",
+    hintAr: "صور دائرية باسم وسطر تحته — «اشتري مرة أخرى» أو «تسوّقي حسب القسم»",
+    hintEn: "Round pictures with a label and a line under it — Buy it again, or Shop by department",
+  },
+  pick_colour: {
+    ar: "اختاري اللون",
+    en: "Pick a colour",
+    hintAr: "دوائر ألوان، كل لون يفتح قسمه",
+    hintEn: "Colour circles, each opening its own collection",
+  },
+  price_drop: {
+    ar: "تنبيه انخفاض السعر",
+    en: "Price drop",
+    hintAr: "بطاقة تقول إن قطعاً محفوظة نزل سعرها، بصور صغيرة وزر",
+    hintEn: "A card saying saved pieces have dropped, with thumbnails and a button",
+  },
+  style_profile: {
+    ar: "ملف ذوقك",
+    en: "Style profile",
+    hintAr: "وسوم تصف ذوق العميلة، كل وسم يفتح ما يناسبه",
+    hintEn: "Tags describing the shopper's taste, each opening what matches it",
+  },
+  promo_card: {
+    ar: "بطاقة عرض",
+    en: "Promo card",
+    hintAr: "بطاقة بلون واحد بعنوان ونص وزر — مثل «الصندوق الغامض»",
+    hintEn: "A solid colour card with a heading, a line and a button — a Mystery box, say",
+  },
   reviews: {
     ar: "آراء العملاء",
     en: "Customer reviews",
@@ -422,12 +692,171 @@ export function newBlock(type: BlockType): Block {
     tiers: { title: "", items: shape ? [shape.blank()] : [] },
     split: { title: "", items: shape ? [shape.blank(), shape.blank()] : [] },
     trust_badges: { items: shape ? [shape.blank()] : [] },
+    live_now: {
+      title: "",
+      liveLabel: "LIVE",
+      showReplays: true,
+      replaysLabel: "Replays",
+      replaysHandle: "",
+      offerEnabled: true,
+      offerTitle: "{name}, your private offer is live",
+      offerText: "",
+      offerMinutes: 10,
+      offerHandle: "",
+      offerUrl: "",
+      replaysUrl: "",
+      // Shape and size. Colours are left empty on purpose: empty means "follow
+      // the brand", so a store that changes its accent takes this with it
+      // instead of stranding a hex someone typed once.
+      avatarShape: "circle",
+      avatarSize: 56,
+      ringWidth: 2,
+      ringColor: "",
+      badgeBg: "",
+      badgeTextColor: "#ffffff",
+      nameSize: 10,
+      viewersSize: 9,
+      bannerRadius: 16,
+      offerBg: "",
+      offerTextColor: "#ffffff",
+      offerTitleSize: 13,
+      offerTextSize: 11,
+      timerBg: "",
+      timerTextColor: "#ffffff",
+      items: shape ? [shape.blank()] : [],
+    },
+    coming_up_live: {
+      title: "Coming up live",
+      remindLabel: "Remind me",
+      cardBg: "",
+      radius: 16,
+      items: shape ? [shape.blank()] : [],
+    },
+    countdown_deals: {
+      title: "Deals of the day",
+      endsInMinutes: 135,
+      showTimer: true,
+      showClaimed: true,
+      badgeBg: "",
+      radius: 14,
+      items: shape ? [shape.blank()] : [],
+    },
+    info_rows: {
+      title: "",
+      cardBg: "",
+      radius: 14,
+      items: shape ? [shape.blank()] : [],
+    },
+    shipping_goal: {
+      title: "Free delivery unlocked",
+      subtitle: "",
+      startLabel: "EGP 0",
+      endLabel: "EGP 5,000",
+      percent: 100,
+      barColor: "",
+      cardBg: "",
+      radius: 14,
+    },
+    payment_plans: {
+      title: "Pay your way",
+      subtitle: "Instalments and bank offers",
+      seeAllLabel: "All offers",
+      seeAllHandle: "",
+      seeAllUrl: "",
+      radius: 14,
+      items: shape ? [shape.blank()] : [],
+    },
+    price_slider: {
+      title: "Split any price",
+      subtitle: "Move the slider to see the monthly amount",
+      priceLabel: "Piece price",
+      currency: "EGP",
+      minPrice: 2999,
+      maxPrice: 16000,
+      startPrice: 7750,
+      cardBg: "",
+      radius: 14,
+      items: shape ? [shape.blank()] : [],
+    },
+    offer_cards: {
+      title: "Offers for you",
+      subtitle: "",
+      claimLabel: "Claim",
+      radius: 14,
+      items: shape ? [shape.blank()] : [],
+    },
+    product_reasons: {
+      title: "Because you viewed",
+      subtitle: "",
+      seeAllLabel: "See all",
+      seeAllHandle: "",
+      seeAllUrl: "",
+      buttonLabel: "Add to bag",
+      radius: 14,
+      items: shape ? [shape.blank()] : [],
+    },
+    circle_row: {
+      title: "Buy it again",
+      subtitle: "",
+      seeAllLabel: "",
+      seeAllHandle: "",
+      seeAllUrl: "",
+      size: 64,
+      showLabel: true,
+      showNote: true,
+      items: shape ? [shape.blank()] : [],
+    },
+    pick_colour: {
+      title: "Pick your colour",
+      subtitle: "",
+      size: 44,
+      items: shape ? [shape.blank()] : [],
+    },
+    price_drop: {
+      title: "",
+      subtitle: "",
+      buttonLabel: "View",
+      handle: "",
+      url: "",
+      cardBg: "",
+      radius: 14,
+      items: shape ? [shape.blank()] : [],
+    },
+    style_profile: {
+      title: "Your style profile",
+      subtitle: "Tap to change what we show you",
+      cardTitle: "{name}'s profile",
+      cardSubtitle: "Built from what you save and buy",
+      footNote: "",
+      cardBg: "",
+      radius: 14,
+      items: shape ? [shape.blank()] : [],
+    },
+    promo_card: {
+      title: "",
+      body: "",
+      buttonLabel: "",
+      handle: "",
+      url: "",
+      imageUrl: "",
+      bg: "",
+      textColor: "#ffffff",
+      radius: 16,
+    },
     banner: { imageUrl: "", handle: "", heading: "", subheading: "" },
     collection_row: { handle: "", title: "", limit: 8 },
     collection_grid: { handle: "", title: "", limit: 6 },
     new_arrivals: { title: "New arrivals", limit: 12 },
     categories: { title: "" },
-    reviews: { title: "What customers say", limit: 6 },
+    reviews: {
+      title: "What customers say",
+      subtitle: "",
+      ratingLabel: "",
+      seeAllLabel: "",
+      seeAllHandle: "",
+      seeAllUrl: "",
+      limit: 6,
+    },
     text: { heading: "", body: "" },
   };
   return { id, type, settings: settings[type] ?? {} };
@@ -436,10 +865,10 @@ export function newBlock(type: BlockType): Block {
 const str = (v: unknown, fallback = ""): string =>
   typeof v === "string" ? v : fallback;
 
-/** A hex colour, or the default. Anything else would reach the app as CSS. */
-function colour(v: unknown): string {
+/** A hex colour, or the given default. Anything else would reach the app as CSS. */
+function colour(v: unknown, fallback: string = DEFAULT_SETTINGS.accent): string {
   const s = String(v ?? "").trim();
-  return /^#[0-9a-f]{6}$/i.test(s) ? s : DEFAULT_SETTINGS.accent;
+  return /^#[0-9a-f]{6}$/i.test(s) ? s : fallback;
 }
 
 /**
@@ -463,6 +892,7 @@ export function normalizeTheme(raw: unknown): AppTheme {
     storeName: str(s.storeName, DEFAULT_SETTINGS.storeName).slice(0, 60),
     logoUrl: str(s.logoUrl) || null,
     accent: colour(s.accent),
+    background: colour(s.background, DEFAULT_SETTINGS.background),
     announcement: str(s.announcement).slice(0, 200),
     announcementEnabled: Boolean(s.announcementEnabled),
     menuHandle: str(s.menuHandle, DEFAULT_SETTINGS.menuHandle).slice(0, 60),

@@ -161,17 +161,27 @@ export default function CheckoutClient({
   const router = useRouter();
   const { items: cartItems, clear, seed, hydrated } = useCart();
 
-  // A shopper arriving from the theme's "Buy it now" has their cart in the
-  // sf_cart cookie, already resolved server-side into `initialItems`. Render
-  // those until the local cart has hydrated, so the first paint is the real
-  // order — never an empty one we have to correct a moment later.
-  const items = cartItems.length > 0 ? cartItems : initialItems;
+  // Two carts can reach this page, and they are stored in different places:
+  // the theme storefront at /shop keeps its lines in the sf_cart cookie
+  // (resolved server-side into `initialItems`), while the React storefront at
+  // /store keeps its own in localStorage. They never sync.
+  //
+  // The handoff has to win. A browser that once visited /store can hold a
+  // months-old localStorage basket, and letting it outrank the cookie meant a
+  // shopper who filled a cart on /shop was shown — and charged for — whatever
+  // that old basket happened to contain, no matter what they had just added.
+  // The cookie is only populated by the cart the shopper is looking at now,
+  // and it is cleared once an order is placed, so a non-empty handoff is
+  // always the more recent intent.
+  const items = initialItems.length > 0 ? initialItems : cartItems;
   const subtotal = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
 
-  // Once hydration confirms the local cart really is empty, adopt the handed-off
-  // lines so edits and order placement work against one source of truth.
+  // Adopt the handed-off lines into the local cart so the summary, the order
+  // submitted below and anything read back later all agree. This overwrites a
+  // stale localStorage basket on purpose: it is exactly the basket that must
+  // not survive the handoff.
   useEffect(() => {
-    if (hydrated && cartItems.length === 0 && initialItems.length > 0) seed(initialItems);
+    if (hydrated && initialItems.length > 0) seed(initialItems);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated]);
 

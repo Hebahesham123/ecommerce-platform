@@ -15,6 +15,8 @@ import {
 import { Btn, Empty, Field, money, Note, Sheet, Spinner } from "./ui";
 import { Enquiry, Orders, Returns, SignIn } from "./screens";
 import { Shop } from "./shop";
+import { AppNudge } from "@/components/app-nudge";
+import type { NudgeCampaign } from "@/lib/nudge";
 import {
   DEFAULT_SCREENS,
   DEFAULT_SETTINGS,
@@ -53,6 +55,26 @@ export type CartLine = { itemId: string; quantity: number };
  * the shopper has. They share this key.
  */
 export const CART_KEY = "app_preview_cart";
+
+/**
+ * Who this device is, for popup frequency and reporting.
+ *
+ * The web storefront counts a visitor the same way, so a shopper who has
+ * already seen today's campaign on the site is not a fresh face here.
+ */
+const VISITOR_KEY = "app_preview_visitor";
+
+function visitorId(): string {
+  try {
+    const found = localStorage.getItem(VISITOR_KEY);
+    if (found) return found;
+    const made = "v-" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    localStorage.setItem(VISITOR_KEY, made);
+    return made;
+  } catch {
+    return "v-anon";
+  }
+}
 
 export function readCart(): CartLine[] {
   try {
@@ -99,6 +121,23 @@ export function Preview() {
     }
   }, [cart, ready]);
 
+  // Only the live-now offer greets the shopper by name, and it reads fine
+  // without one, so this is best effort — the shop never waits on it.
+  const [shopperName, setShopperName] = useState<string | null>(null);
+  useEffect(() => {
+    if (!phone) return setShopperName(null);
+    api.get<Account>("/me").then((r) => setShopperName(r.ok ? r.data.name : null));
+  }, [phone]);
+
+  // The smart popup the merchant built in Marketing - Smart popups. The app
+  // draws the same campaign the site does rather than owning a second one.
+  const [nudge, setNudge] = useState<NudgeCampaign | null>(null);
+  useEffect(() => {
+    api.get<{ campaign: NudgeCampaign | null }>("/nudge").then((r) => {
+      if (r.ok) setNudge(r.data.campaign);
+    });
+  }, []);
+
   const signedIn = Boolean(phone);
   const count = cart.reduce((s, l) => s + l.quantity, 0);
 
@@ -128,7 +167,12 @@ export function Preview() {
     <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
       {/* ------------------------------- the phone ------------------------- */}
       <div className="mx-auto w-full max-w-[400px] shrink-0">
-        <div className="relative flex h-[760px] flex-col overflow-hidden rounded-[2rem] border-8 border-slate-900 bg-slate-50 shadow-2xl">
+        <div
+          className="relative flex h-[760px] flex-col overflow-hidden rounded-[2rem] border-8 border-slate-900 shadow-2xl"
+          style={
+            { background: brand.background, "--app-page": brand.background } as React.CSSProperties
+          }
+        >
           {/* status bar — the store's own name and mark, from the theme */}
           <div className="flex items-center justify-between bg-slate-900 px-4 pb-2 pt-1.5 text-[11px] font-medium text-white">
             <span className="flex items-center gap-1.5">
@@ -152,6 +196,7 @@ export function Preview() {
                 ar={ar}
                 onAdd={add}
                 onTheme={setTheme}
+                shopperName={shopperName}
                 onLeave={(what) => (what === "cart" ? setTab("cart") : setSheet("enquiry"))}
               />
             )}
@@ -216,6 +261,23 @@ export function Preview() {
               </button>
             ))}
           </nav>
+
+          <AppNudge
+            campaign={nudge}
+            ar={ar}
+            onEvent={(type, extra) => {
+              // Analytics riding along on someone's shopping: it must never
+              // interrupt them, so nothing here is awaited or surfaced.
+              api.post("/nudge", {
+                campaignId: nudge?.id ?? null,
+                visitorId: visitorId(),
+                type,
+                trigger: "dwell",
+                path: "/app",
+                code: extra?.code ?? null,
+              });
+            }}
+          />
 
           <Sheet
             open={sheet === "signin"}

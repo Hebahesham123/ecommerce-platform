@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ALL_ROWS_CAP, itemsOf, type AppTheme, type Block, type Item } from "@/lib/app-theme";
 
 /**
@@ -45,6 +45,12 @@ export type HomeData = {
   rows: Record<string, Card[]>;
   newArrivals: Card[];
   reviews: HomeReview[];
+  /**
+   * The signed-in shopper first name, when the surface drawing this knows it.
+   * Only the live-now offer uses it, and it degrades to an unnamed greeting,
+   * so nothing here has to go and fetch an account it does not otherwise need.
+   */
+  shopperName?: string | null;
 };
 
 export type HomeHandlers = {
@@ -73,6 +79,27 @@ const int = (v: unknown, fallback: number) => {
  * repeat themselves, and guarantees the two drift the day the collection gets
  * a new image. Their own image always wins when they set one.
  */
+/**
+ * Put the shopper name into a line the merchant wrote, or take the token out.
+ *
+ * The offer is addressed to someone by name, which is the whole point of it,
+ * but the app also draws this screen before anyone has signed in. Leaving a
+ * literal "{name}" on screen would be worse than not personalising at all, so
+ * an unknown name drops the token and the comma that followed it and the line
+ * simply starts one word later.
+ */
+function personalise(template: string, name?: string | null): string {
+  const first = String(name ?? "").trim().split(" ")[0] ?? "";
+  if (first) return template.split("{name}").join(first);
+  let out = template.split("{name}").join("").trim();
+  // A possessive reads as "'s profile" once the name is gone, so the
+  // apostrophe leaves with it rather than dangling at the front of the line.
+  if (out.startsWith("'s ") || out.startsWith("’s ")) out = out.slice(3).trim();
+  if (out === "'s" || out === "’s") out = "";
+  while (out.startsWith(",") || out.startsWith("،")) out = out.slice(1).trim();
+  return out ? out[0].toUpperCase() + out.slice(1) : "";
+}
+
 function inherit(item: Item, data: HomeData): { image: string | null; title: string } {
   const own = str(item.imageUrl);
   const named = str(item.title) || str(item.label);
@@ -84,9 +111,17 @@ function inherit(item: Item, data: HomeData): { image: string | null; title: str
   };
 }
 
-function Thumb({ src, className = "" }: { src: string | null; className?: string }) {
+function Thumb({
+  src,
+  className = "",
+  style,
+}: {
+  src: string | null;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
   return (
-    <div className={`overflow-hidden rounded-xl bg-slate-100 ${className}`}>
+    <div className={`overflow-hidden rounded-xl bg-slate-100 ${className}`} style={style}>
       {src && (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={src} alt="" className="h-full w-full object-cover" />
@@ -369,6 +404,130 @@ function BlockView({
       );
     }
 
+    case "live_now": {
+      const people = itemsOf(block).filter((i) => str(i.name) || str(i.imageUrl));
+      const offerOn = s.offerEnabled !== false;
+      const offerTitle = personalise(str(s.offerTitle), data.shopperName);
+      const offerText = str(s.offerText);
+      const hasOffer = offerOn && Boolean(offerTitle || offerText);
+      if (!people.length && !hasOffer) {
+        return <Placeholder ar={ar} label={ar ? "لا أحد يبثّ بعد" : "Nobody live yet"} />;
+      }
+      return (
+        <LiveNow
+          block={block}
+          people={people}
+          data={data}
+          ar={ar}
+          accent={accent}
+          handlers={handlers}
+        />
+      );
+    }
+
+    case "style_profile": {
+      const tags = itemsOf(block).filter((i) => str(i.label));
+      if (!tags.length && !str(s.cardTitle)) {
+        return <Placeholder ar={ar} label={ar ? "لا وسوم بعد" : "No tags yet"} />;
+      }
+      return (
+        <StyleProfile block={block} items={tags} data={data} ar={ar} accent={accent} handlers={handlers} />
+      );
+    }
+
+    case "promo_card": {
+      if (!str(s.title) && !str(s.body)) {
+        return <Placeholder ar={ar} label={ar ? "بطاقة بلا نص" : "Card with no wording yet"} />;
+      }
+      return <PromoCard block={block} data={data} ar={ar} accent={accent} handlers={handlers} />;
+    }
+
+    case "product_reasons": {
+      const picks = itemsOf(block).filter((i) => str(i.name) || str(i.imageUrl));
+      if (!picks.length) return <Placeholder ar={ar} label={ar ? "لا مقترحات بعد" : "Nothing suggested yet"} />;
+      return (
+        <ProductReasons block={block} items={picks} data={data} ar={ar} accent={accent} handlers={handlers} />
+      );
+    }
+
+    case "circle_row": {
+      const circles = itemsOf(block).filter((i) => str(i.imageUrl) || str(i.label) || str(i.handle));
+      if (!circles.length) return <Placeholder ar={ar} label={ar ? "لا عناصر بعد" : "Nothing here yet"} />;
+      return (
+        <CircleRow block={block} items={circles} data={data} ar={ar} accent={accent} handlers={handlers} />
+      );
+    }
+
+    case "pick_colour": {
+      const colours = itemsOf(block).filter((i) => str(i.color));
+      if (!colours.length) return <Placeholder ar={ar} label={ar ? "لا ألوان بعد" : "No colours yet"} />;
+      return (
+        <PickColour block={block} items={colours} data={data} ar={ar} accent={accent} handlers={handlers} />
+      );
+    }
+
+    case "price_drop": {
+      if (!str(s.title) && !str(s.subtitle)) {
+        return <Placeholder ar={ar} label={ar ? "تنبيه بلا نص" : "Alert with no wording yet"} />;
+      }
+      return (
+        <PriceDrop block={block} items={itemsOf(block)} data={data} ar={ar} accent={accent} handlers={handlers} />
+      );
+    }
+
+    case "shipping_goal": {
+      if (!str(s.title) && !str(s.subtitle)) {
+        return <Placeholder ar={ar} label={ar ? "شريط بلا نص" : "Bar with no wording yet"} />;
+      }
+      return <ShippingGoal block={block} ar={ar} accent={accent} />;
+    }
+
+    case "payment_plans": {
+      const plans = itemsOf(block).filter((i) => str(i.name) || str(i.headline));
+      if (!plans.length) return <Placeholder ar={ar} label={ar ? "لا طرق دفع بعد" : "No plans yet"} />;
+      return (
+        <PaymentPlans block={block} items={plans} data={data} ar={ar} accent={accent} handlers={handlers} />
+      );
+    }
+
+    case "price_slider": {
+      const plans = itemsOf(block).filter((i) => str(i.name) && str(i.months));
+      if (!plans.length) return <Placeholder ar={ar} label={ar ? "لا خطط تقسيط بعد" : "No instalment plans yet"} />;
+      return <PriceSlider block={block} items={plans} ar={ar} accent={accent} />;
+    }
+
+    case "offer_cards": {
+      const offers = itemsOf(block).filter((i) => str(i.badge) || str(i.title));
+      if (!offers.length) return <Placeholder ar={ar} label={ar ? "لا عروض بعد" : "No offers yet"} />;
+      return (
+        <OfferCards block={block} items={offers} data={data} ar={ar} accent={accent} handlers={handlers} />
+      );
+    }
+
+    case "coming_up_live": {
+      const sessions = itemsOf(block).filter((i) => str(i.title) || str(i.imageUrl));
+      if (!sessions.length) {
+        return <Placeholder ar={ar} label={ar ? "لا مواعيد بعد" : "Nothing scheduled yet"} />;
+      }
+      return (
+        <ComingUpLive block={block} items={sessions} data={data} ar={ar} accent={accent} handlers={handlers} />
+      );
+    }
+
+    case "countdown_deals": {
+      const deals = itemsOf(block).filter((i) => str(i.price) || str(i.imageUrl));
+      if (!deals.length) return <Placeholder ar={ar} label={ar ? "لا صفقات بعد" : "No deals yet"} />;
+      return (
+        <CountdownDeals block={block} items={deals} data={data} ar={ar} accent={accent} handlers={handlers} />
+      );
+    }
+
+    case "info_rows": {
+      const rows = itemsOf(block).filter((i) => str(i.title));
+      if (!rows.length) return <Placeholder ar={ar} label={ar ? "لا أسطر بعد" : "No rows yet"} />;
+      return <InfoRows block={block} items={rows} data={data} ar={ar} accent={accent} handlers={handlers} />;
+    }
+
     case "collection_tabs": {
       const tabs = itemsOf(block).filter((t) => str(t.handle));
       if (!tabs.length) return <Placeholder ar={ar} label={ar ? "لا توجد تبويبات" : "No tabs yet"} />;
@@ -508,9 +667,11 @@ function BlockView({
       }
       return (
         <section>
-          <Heading
-            title={str(s.title, ar ? "آراء العملاء" : "What customers say")}
-            ar={ar}
+          <RowHead
+            title={str(s.ratingLabel) || str(s.title, ar ? "آراء العملاء" : "What customers say")}
+            subtitle={str(s.subtitle)}
+            seeAll={str(s.seeAllLabel)}
+            onSeeAll={() => opener(data, handlers)(str(s.seeAllUrl), str(s.seeAllHandle))}
             accent={accent}
           />
           <div className="-mx-4 mt-2 flex gap-3 overflow-x-auto px-4 pb-1">
@@ -686,6 +847,1108 @@ function Tabs({
  * is the merchant's business, not the shopper's, and a grey box saying "banner
  * with no image" on a live home screen is worse than one fewer banner.
  */
+/** mm:ss, counting down. Stops at zero rather than going negative. */
+function useCountdown(minutes: number): string {
+  const total = Math.max(0, Math.trunc(minutes * 60));
+  const [left, setLeft] = useState(total);
+  // Restart whenever the merchant changes the length, so the editor shows the
+  // new duration immediately instead of finishing the old one first.
+  useEffect(() => setLeft(total), [total]);
+  useEffect(() => {
+    if (left <= 0) return;
+    const t = setTimeout(() => setLeft((v) => (v > 0 ? v - 1 : 0)), 1000);
+    return () => clearTimeout(t);
+  }, [left]);
+  const mm = Math.floor(left / 60);
+  const ss = left % 60;
+  return String(mm).padStart(2, "0") + ":" + String(ss).padStart(2, "0");
+}
+
+/**
+ * Who is live now, and the offer that belongs to this shopper alone.
+ *
+ * One block rather than two because it reads as one thing on the screen: the
+ * row draws people in, the offer underneath is what it draws them into. A
+ * merchant who wants only the row turns the offer off, and vice versa.
+ */
+function LiveNow({
+  block,
+  people,
+  data,
+  ar,
+  accent,
+  handlers,
+}: {
+  block: Block;
+  people: Item[];
+  data: HomeData;
+  ar: boolean;
+  accent: string;
+  handlers: HomeHandlers;
+}) {
+  const s = block.settings ?? {};
+  const title = str(s.title);
+  const liveLabel = str(s.liveLabel, ar ? "مباشر" : "LIVE");
+  const showReplays = s.showReplays !== false;
+  const replaysLabel = str(s.replaysLabel, ar ? "المسجّلة" : "Replays");
+  const offerOn = s.offerEnabled !== false;
+  const offerTitle = personalise(str(s.offerTitle), data.shopperName);
+  const offerText = str(s.offerText);
+  const timer = useCountdown(int(s.offerMinutes, 10));
+
+  // An empty colour means "follow the brand", so a store that changes its
+  // accent takes this section with it instead of stranding a hex that somebody
+  // typed once and forgot.
+  const ringColor = str(s.ringColor, accent);
+  const badgeBg = str(s.badgeBg, "#e11d48");
+  const badgeFg = str(s.badgeTextColor, "#ffffff");
+  const offerBg = str(s.offerBg, accent);
+  const offerFg = str(s.offerTextColor, "#ffffff");
+  const timerBg = str(s.timerBg, "rgba(255,255,255,0.22)");
+  const timerFg = str(s.timerTextColor, "#ffffff");
+
+  const size = int(s.avatarSize, 56);
+  // Zero is a real answer here — it means no ring at all — so this one cannot
+  // go through int(), which treats zero as "unset".
+  const rawRing = Number(s.ringWidth);
+  const ringW = Number.isFinite(rawRing) && rawRing >= 0 ? rawRing : 2;
+  const shape = str(s.avatarShape, "circle");
+  const photoRadius = shape === "square" ? 4 : shape === "rounded" ? Math.round(size * 0.28) : 9999;
+  const nameSize = int(s.nameSize, 10);
+  const viewersSize = int(s.viewersSize, 9);
+  const bannerRadius = int(s.bannerRadius, 16);
+  const offerTitleSize = int(s.offerTitleSize, 13);
+  const offerTextSize = int(s.offerTextSize, 11);
+  const cell = Math.max(size + 12, 56);
+
+  const go = opener(data, handlers);
+
+  return (
+    <section>
+      {title && <Heading title={title} ar={ar} accent={accent} />}
+
+      {people.length > 0 && (
+        <div className="-mx-4 mt-2 flex gap-3 overflow-x-auto px-4 pb-1">
+          {people.map((person) => {
+            const borrowed = inherit(person, data);
+            const name = str(person.name, borrowed.title);
+            const viewers = str(person.viewers);
+            return (
+              <button
+                key={person.id}
+                onClick={() => go(str(person.url), str(person.handle))}
+                className="flex shrink-0 flex-col items-center"
+                style={{ width: cell }}
+              >
+                <span className="relative block">
+                  <span
+                    className="block"
+                    style={{
+                      background: ringW > 0 ? ringColor : "transparent",
+                      padding: ringW,
+                      borderRadius: photoRadius + ringW,
+                    }}
+                  >
+                    <Thumb
+                      src={borrowed.image}
+                      className="border-2 border-white"
+                      style={{ width: size, height: size, borderRadius: photoRadius }}
+                    />
+                  </span>
+                  {liveLabel && (
+                    <span
+                      className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap px-1 py-px text-[8px] font-bold uppercase tracking-wide"
+                      style={{
+                        background: badgeBg,
+                        color: badgeFg,
+                        borderRadius: 4,
+                        bottom: -6,
+                      }}
+                    >
+                      {liveLabel}
+                    </span>
+                  )}
+                </span>
+                {name && (
+                  <span
+                    className="mt-2 w-full truncate text-center font-semibold text-slate-800"
+                    style={{ fontSize: nameSize }}
+                  >
+                    {name}
+                  </span>
+                )}
+                {viewers && (
+                  <span
+                    className="w-full truncate text-center text-slate-500"
+                    style={{ fontSize: viewersSize }}
+                  >
+                    {viewers}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+
+          {showReplays && (
+            <button
+              onClick={() => go(str(s.replaysUrl), str(s.replaysHandle))}
+              className="flex shrink-0 flex-col items-center"
+              style={{ width: cell }}
+            >
+              <span
+                className="flex items-center justify-center border border-dashed border-slate-300 bg-slate-50 text-slate-400"
+                style={{ width: size, height: size, borderRadius: photoRadius, fontSize: Math.round(size / 3.5) }}
+              >
+                ▶
+              </span>
+              <span
+                className="mt-2 w-full truncate text-center font-semibold text-slate-500"
+                style={{ fontSize: nameSize }}
+              >
+                {replaysLabel}
+              </span>
+            </button>
+          )}
+        </div>
+      )}
+
+      {offerOn && (offerTitle || offerText) && (
+        <button
+          onClick={() => go(str(s.offerUrl), str(s.offerHandle))}
+          className="mt-3 flex w-full items-center gap-3 px-4 py-3 text-start"
+          style={{ background: offerBg, borderRadius: bannerRadius }}
+        >
+          <span className="min-w-0 flex-1">
+            {offerTitle && (
+              <span
+                className="block truncate font-bold"
+                style={{ color: offerFg, fontSize: offerTitleSize }}
+              >
+                {offerTitle}
+              </span>
+            )}
+            {offerText && (
+              <span
+                className="mt-0.5 block truncate"
+                style={{ color: offerFg, opacity: 0.85, fontSize: offerTextSize }}
+              >
+                {offerText}
+              </span>
+            )}
+          </span>
+          <span
+            className="shrink-0 px-2.5 py-1.5 font-mono font-bold tabular-nums"
+            style={{ background: timerBg, color: timerFg, borderRadius: Math.min(bannerRadius, 10), fontSize: offerTitleSize }}
+          >
+            {timer}
+          </span>
+        </button>
+      )}
+    </section>
+  );
+}
+
+/**
+ * Where a tap goes.
+ *
+ * A typed link wins over a collection: it is the more specific thing to have
+ * filled in. Shared so every section answers the question the same way.
+ */
+function opener(data: HomeData, handlers: HomeHandlers) {
+  return (url: string, handle: string) => {
+    if (url) {
+      if (typeof window !== "undefined") window.open(url, "_blank", "noopener,noreferrer");
+      return;
+    }
+    const target = data.collections.find((c) => c.handle === handle);
+    if (target) handlers.onOpenCollection?.(target.handle, target.title);
+  };
+}
+
+/** hh:mm:ss, counting down, as parts so each can sit in its own box. */
+function useCountdownParts(minutes: number): [string, string, string] {
+  const total = Math.max(0, Math.trunc(minutes * 60));
+  const [left, setLeft] = useState(total);
+  useEffect(() => setLeft(total), [total]);
+  useEffect(() => {
+    if (left <= 0) return;
+    const t = setTimeout(() => setLeft((v) => (v > 0 ? v - 1 : 0)), 1000);
+    return () => clearTimeout(t);
+  }, [left]);
+  const two = (n: number) => String(n).padStart(2, "0");
+  return [two(Math.floor(left / 3600)), two(Math.floor((left % 3600) / 60)), two(left % 60)];
+}
+
+/** The sessions coming up, each with a reminder. */
+function ComingUpLive({
+  block,
+  items,
+  data,
+  ar,
+  accent,
+  handlers,
+}: {
+  block: Block;
+  items: Item[];
+  data: HomeData;
+  ar: boolean;
+  accent: string;
+  handlers: HomeHandlers;
+}) {
+  const s = block.settings ?? {};
+  const go = opener(data, handlers);
+  const radius = int(s.radius, 16);
+  const cardBg = str(s.cardBg, "#ffffff");
+  const remind = str(s.remindLabel, ar ? "ذكّريني" : "Remind me");
+
+  return (
+    <section>
+      {str(s.title) && <Heading title={str(s.title)} ar={ar} accent={accent} />}
+      <div
+        className="mt-2 space-y-3 border border-slate-200 p-3"
+        style={{ background: cardBg, borderRadius: radius }}
+      >
+        {items.map((item) => {
+          const borrowed = inherit(item, data);
+          return (
+            <div key={item.id} className="flex items-center gap-3">
+              <Thumb src={borrowed.image} className="h-12 w-12 shrink-0" style={{ borderRadius: 10 }} />
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[12px] font-bold text-slate-900">
+                  {str(item.title, borrowed.title)}
+                </div>
+                {str(item.when) && (
+                  <div className="truncate text-[11px] text-slate-500">{str(item.when)}</div>
+                )}
+              </div>
+              {remind && (
+                <button
+                  onClick={() => go(str(item.url), str(item.handle))}
+                  className="shrink-0 rounded-full px-3 py-1.5 text-[11px] font-semibold text-white"
+                  style={{ background: accent }}
+                >
+                  {remind}
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+/** Offers on a clock, each showing how much of it has already gone. */
+function CountdownDeals({
+  block,
+  items,
+  data,
+  ar,
+  accent,
+  handlers,
+}: {
+  block: Block;
+  items: Item[];
+  data: HomeData;
+  ar: boolean;
+  accent: string;
+  handlers: HomeHandlers;
+}) {
+  const s = block.settings ?? {};
+  const go = opener(data, handlers);
+  const parts = useCountdownParts(int(s.endsInMinutes, 135));
+  const radius = int(s.radius, 14);
+  const badgeBg = str(s.badgeBg, accent);
+  const showTimer = s.showTimer !== false;
+  const showClaimed = s.showClaimed !== false;
+
+  return (
+    <section>
+      <div className="flex items-end justify-between gap-2">
+        <h3 className="min-w-0 truncate text-sm font-bold text-slate-900">{str(s.title)}</h3>
+        {showTimer && (
+          <span className="flex shrink-0 items-center gap-1">
+            {parts.map((part, i) => (
+              <span
+                key={i}
+                className="rounded px-1.5 py-0.5 font-mono text-[11px] font-bold tabular-nums text-white"
+                style={{ background: accent }}
+              >
+                {part}
+              </span>
+            ))}
+          </span>
+        )}
+      </div>
+
+      <div className="-mx-4 mt-2 flex gap-3 overflow-x-auto px-4 pb-1">
+        {items.map((item) => {
+          const borrowed = inherit(item, data);
+          const claimed = str(item.claimed);
+          const pct = Math.max(0, Math.min(100, parseInt(claimed, 10) || 0));
+          return (
+            <button
+              key={item.id}
+              onClick={() => go(str(item.url), str(item.handle))}
+              className="w-[132px] shrink-0 overflow-hidden border border-slate-200 bg-white text-start"
+              style={{ borderRadius: radius }}
+            >
+              <span className="relative block">
+                <Thumb src={borrowed.image} className="h-[104px] w-full" style={{ borderRadius: 0 }} />
+                {str(item.badge) && (
+                  <span
+                    className="absolute start-1.5 top-1.5 rounded px-1.5 py-0.5 text-[10px] font-bold text-white"
+                    style={{ background: badgeBg }}
+                  >
+                    {str(item.badge)}
+                  </span>
+                )}
+              </span>
+              <span className="block p-2">
+                <span className="flex items-baseline gap-1">
+                  <span className="text-[13px] font-bold" style={{ color: accent }}>
+                    {str(item.price)}
+                  </span>
+                  {str(item.comparePrice) && (
+                    <span className="text-[10px] text-slate-400 line-through">
+                      {str(item.comparePrice)}
+                    </span>
+                  )}
+                </span>
+                {showClaimed && claimed && (
+                  <span className="mt-1.5 block">
+                    <span className="block h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                      <span
+                        className="block h-full rounded-full"
+                        style={{ width: `${pct}%`, background: accent }}
+                      />
+                    </span>
+                    <span className="mt-1 block text-[9px] text-slate-500">{claimed}</span>
+                  </span>
+                )}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+/** Delivery, returns, ways to pay — an icon, two lines, a note on the end. */
+function InfoRows({
+  block,
+  items,
+  data,
+  ar,
+  accent,
+  handlers,
+}: {
+  block: Block;
+  items: Item[];
+  data: HomeData;
+  ar: boolean;
+  accent: string;
+  handlers: HomeHandlers;
+}) {
+  const s = block.settings ?? {};
+  const go = opener(data, handlers);
+  const radius = int(s.radius, 14);
+  const cardBg = str(s.cardBg, "#ffffff");
+
+  return (
+    <section>
+      {str(s.title) && <Heading title={str(s.title)} ar={ar} accent={accent} />}
+      <div className="mt-2 space-y-2">
+        {items.map((item) => (
+          <button
+            key={item.id}
+            onClick={() => go(str(item.url), str(item.handle))}
+            className="flex w-full items-center gap-3 border border-slate-200 px-3 py-2.5 text-start"
+            style={{ background: cardBg, borderRadius: radius }}
+          >
+            {str(item.emoji) && (
+              <span
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-base"
+                style={{ background: `${accent}1f` }}
+              >
+                {str(item.emoji)}
+              </span>
+            )}
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[12px] font-bold text-slate-900">
+                {str(item.title)}
+              </span>
+              {str(item.subtitle) && (
+                <span className="block truncate text-[11px] text-slate-500">{str(item.subtitle)}</span>
+              )}
+            </span>
+            {str(item.note) && (
+              <span className="shrink-0 text-[11px] font-semibold" style={{ color: accent }}>
+                {str(item.note)}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+const nf = (n: number) => new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(n);
+
+/** How far the basket is from free delivery. */
+function ShippingGoal({ block, ar, accent }: { block: Block; ar: boolean; accent: string }) {
+  const s = block.settings ?? {};
+  const pct = Math.max(0, Math.min(100, int(s.percent, 100)));
+  const radius = int(s.radius, 14);
+  return (
+    <section
+      className="border border-slate-200 p-3"
+      style={{ background: str(s.cardBg, "#ffffff"), borderRadius: radius }}
+    >
+      {str(s.title) && (
+        <div className="text-[12px] font-bold text-slate-900">{str(s.title)}</div>
+      )}
+      {str(s.subtitle) && (
+        <div className="mt-0.5 text-[11px] leading-relaxed text-slate-500">{str(s.subtitle)}</div>
+      )}
+      <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-100">
+        <div
+          className="h-full rounded-full"
+          style={{ width: `${pct}%`, background: str(s.barColor, accent) }}
+        />
+      </div>
+      {(str(s.startLabel) || str(s.endLabel)) && (
+        <div className="mt-1 flex items-center justify-between text-[10px] text-slate-500">
+          <span>{str(s.startLabel)}</span>
+          <span>{str(s.endLabel)}</span>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** Instalment and bank offers, each card in its own colour. */
+function PaymentPlans({
+  block,
+  items,
+  data,
+  ar,
+  accent,
+  handlers,
+}: {
+  block: Block;
+  items: Item[];
+  data: HomeData;
+  ar: boolean;
+  accent: string;
+  handlers: HomeHandlers;
+}) {
+  const s = block.settings ?? {};
+  const go = opener(data, handlers);
+  const radius = int(s.radius, 14);
+  return (
+    <section>
+      <div className="flex items-end justify-between gap-2">
+        <div className="min-w-0">
+          {str(s.title) && (
+            <h3 className="truncate text-sm font-bold text-slate-900">{str(s.title)}</h3>
+          )}
+          {str(s.subtitle) && (
+            <p className="truncate text-[11px] text-slate-500">{str(s.subtitle)}</p>
+          )}
+        </div>
+        {str(s.seeAllLabel) && (
+          <button
+            onClick={() => go(str(s.seeAllUrl), str(s.seeAllHandle))}
+            className="shrink-0 text-xs font-semibold"
+            style={{ color: accent }}
+          >
+            {str(s.seeAllLabel)} ›
+          </button>
+        )}
+      </div>
+      <div className="-mx-4 mt-2 flex gap-3 overflow-x-auto px-4 pb-1">
+        {items.map((item) => (
+          <button
+            key={item.id}
+            onClick={() => go(str(item.url), str(item.handle))}
+            className="w-[136px] shrink-0 p-3 text-start"
+            style={{ background: str(item.color, accent), borderRadius: radius }}
+          >
+            {str(item.name) && (
+              <span className="block text-[11px] font-semibold text-white/80">{str(item.name)}</span>
+            )}
+            {str(item.headline) && (
+              <span className="mt-1 block text-[15px] font-bold leading-tight text-white">
+                {str(item.headline)}
+              </span>
+            )}
+            {str(item.note) && (
+              <span className="mt-1 block text-[10px] leading-snug text-white/75">
+                {str(item.note)}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/** Move the slider, see what each provider charges a month. */
+function PriceSlider({ block, items, ar, accent }: { block: Block; items: Item[]; ar: boolean; accent: string }) {
+  const s = block.settings ?? {};
+  const min = int(s.minPrice, 2999);
+  const max = Math.max(min + 1, int(s.maxPrice, 16000));
+  const [price, setPrice] = useState(Math.min(max, Math.max(min, int(s.startPrice, 7750))));
+  // Follow the merchant while they are typing the range, or the handle sits
+  // outside the track they just set.
+  useEffect(() => {
+    setPrice((p) => Math.min(max, Math.max(min, p)));
+  }, [min, max]);
+  const cur = str(s.currency, "EGP");
+  const radius = int(s.radius, 14);
+
+  return (
+    <section>
+      {str(s.title) && <Heading title={str(s.title)} ar={ar} accent={accent} />}
+      {str(s.subtitle) && <p className="text-[11px] text-slate-500">{str(s.subtitle)}</p>}
+      <div
+        className="mt-2 border border-slate-200 p-3"
+        style={{ background: str(s.cardBg, "#ffffff"), borderRadius: radius }}
+      >
+        {str(s.priceLabel) && (
+          <div className="text-[11px] text-slate-500">{str(s.priceLabel)}</div>
+        )}
+        <div className="text-[20px] font-bold" style={{ color: accent }}>
+          {cur} {nf(price)}
+        </div>
+        <input
+          type="range"
+          min={min}
+          max={max}
+          value={price}
+          onChange={(e) => setPrice(Number(e.target.value))}
+          className="mt-2 w-full"
+          style={{ accentColor: accent }}
+        />
+        <div className="flex items-center justify-between text-[10px] text-slate-500">
+          <span>{cur} {nf(min)}</span>
+          <span>{cur} {nf(max)}</span>
+        </div>
+
+        <div className="mt-3 space-y-2">
+          {items.map((item) => {
+            const months = Math.max(1, parseInt(str(item.months), 10) || 1);
+            return (
+              <div
+                key={item.id}
+                className="flex items-center gap-3 rounded-xl border border-slate-200 px-3 py-2"
+              >
+                <span className="w-14 shrink-0 truncate text-[11px] font-semibold text-slate-700">
+                  {str(item.name)}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[13px] font-bold" style={{ color: accent }}>
+                    {cur} {nf(Math.round(price / months))}
+                    <span className="text-[10px] font-medium text-slate-500"> / {ar ? "شهر" : "month"}</span>
+                  </span>
+                  <span className="block text-[10px] text-slate-500">
+                    {months} {ar ? "شهور" : "months"}
+                  </span>
+                </span>
+                {str(item.badge) && (
+                  <span
+                    className="shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold"
+                    style={{
+                      background: `${str(item.color, accent)}1f`,
+                      color: str(item.color, accent),
+                    }}
+                  >
+                    {str(item.badge)}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** Offers the shopper can claim. */
+function OfferCards({
+  block,
+  items,
+  data,
+  ar,
+  accent,
+  handlers,
+}: {
+  block: Block;
+  items: Item[];
+  data: HomeData;
+  ar: boolean;
+  accent: string;
+  handlers: HomeHandlers;
+}) {
+  const s = block.settings ?? {};
+  const go = opener(data, handlers);
+  const radius = int(s.radius, 14);
+  const claim = str(s.claimLabel, ar ? "احصلي عليه" : "Claim");
+  return (
+    <section>
+      {str(s.title) && <Heading title={str(s.title)} ar={ar} accent={accent} />}
+      {str(s.subtitle) && <p className="text-[11px] text-slate-500">{str(s.subtitle)}</p>}
+      <div className="-mx-4 mt-2 flex gap-3 overflow-x-auto px-4 pb-1">
+        {items.map((item) => {
+          const colour = str(item.color, accent);
+          return (
+            <div
+              key={item.id}
+              className="flex w-[136px] shrink-0 flex-col gap-1 border border-dashed p-3"
+              style={{ borderColor: colour, background: `${colour}0f`, borderRadius: radius }}
+            >
+              {str(item.badge) && (
+                <span className="text-[20px] font-bold leading-none" style={{ color: colour }}>
+                  {str(item.badge)}
+                </span>
+              )}
+              {str(item.title) && (
+                <span className="text-[11px] font-bold text-slate-900">{str(item.title)}</span>
+              )}
+              {str(item.subtitle) && (
+                <span className="text-[10px] leading-snug text-slate-500">{str(item.subtitle)}</span>
+              )}
+              {claim && (
+                <button
+                  onClick={() => go(str(item.url), str(item.handle))}
+                  className="mt-1 rounded-lg py-1.5 text-[11px] font-semibold text-white"
+                  style={{ background: colour }}
+                >
+                  {claim}
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+/** A heading with an optional "see all" on the end. */
+function RowHead({
+  title,
+  subtitle,
+  seeAll,
+  onSeeAll,
+  accent,
+}: {
+  title: string;
+  subtitle: string;
+  seeAll: string;
+  onSeeAll: () => void;
+  accent: string;
+}) {
+  if (!title && !subtitle && !seeAll) return null;
+  return (
+    <div className="flex items-end justify-between gap-2">
+      <div className="min-w-0">
+        {title && <h3 className="truncate text-sm font-bold text-slate-900">{title}</h3>}
+        {subtitle && <p className="truncate text-[11px] text-slate-500">{subtitle}</p>}
+      </div>
+      {seeAll && (
+        <button onClick={onSeeAll} className="shrink-0 text-xs font-semibold" style={{ color: accent }}>
+          {seeAll} ›
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Products with the reason each one is being shown. */
+function ProductReasons({
+  block,
+  items,
+  data,
+  ar,
+  accent,
+  handlers,
+}: {
+  block: Block;
+  items: Item[];
+  data: HomeData;
+  ar: boolean;
+  accent: string;
+  handlers: HomeHandlers;
+}) {
+  const s = block.settings ?? {};
+  const go = opener(data, handlers);
+  const radius = int(s.radius, 14);
+  const button = str(s.buttonLabel);
+
+  return (
+    <section>
+      <RowHead
+        title={str(s.title)}
+        subtitle={str(s.subtitle)}
+        seeAll={str(s.seeAllLabel)}
+        onSeeAll={() => go(str(s.seeAllUrl), str(s.seeAllHandle))}
+        accent={accent}
+      />
+      <div className="-mx-4 mt-2 flex gap-3 overflow-x-auto px-4 pb-1">
+        {items.map((item) => {
+          const borrowed = inherit(item, data);
+          return (
+            <div
+              key={item.id}
+              className="flex w-[150px] shrink-0 flex-col overflow-hidden border border-slate-200 bg-white"
+              style={{ borderRadius: radius }}
+            >
+              <button onClick={() => go(str(item.url), str(item.handle))} className="relative block">
+                <Thumb src={borrowed.image} className="h-[120px] w-full" style={{ borderRadius: 0 }} />
+                {str(item.badge) && (
+                  <span
+                    className="absolute end-1.5 top-1.5 rounded px-1.5 py-0.5 text-[10px] font-bold text-white"
+                    style={{ background: accent }}
+                  >
+                    {str(item.badge)}
+                  </span>
+                )}
+              </button>
+              <div className="flex flex-1 flex-col p-2">
+                {str(item.reason) && (
+                  <div className="truncate text-[9px] font-semibold" style={{ color: accent }}>
+                    ◆ {str(item.reason)}
+                  </div>
+                )}
+                <div className="mt-0.5 line-clamp-2 text-[11px] font-medium leading-snug text-slate-900">
+                  {str(item.name, borrowed.title)}
+                </div>
+                <div className="mt-1 flex items-baseline gap-1">
+                  <span className="text-[12px] font-bold" style={{ color: accent }}>
+                    {str(item.price)}
+                  </span>
+                  {str(item.comparePrice) && (
+                    <span className="text-[10px] text-slate-400 line-through">
+                      {str(item.comparePrice)}
+                    </span>
+                  )}
+                </div>
+                {(str(item.rating) || str(item.sold)) && (
+                  <div className="mt-0.5 flex items-center gap-1.5 text-[9px] text-slate-500">
+                    {str(item.rating) && <span>★ {str(item.rating)}</span>}
+                    {str(item.sold) && <span>{str(item.sold)}</span>}
+                  </div>
+                )}
+                {button && (
+                  <button
+                    onClick={() => go(str(item.url), str(item.handle))}
+                    className="mt-2 rounded-lg py-1.5 text-[11px] font-semibold text-white"
+                    style={{ background: accent }}
+                  >
+                    {button}
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+/** Round pictures with a label — Buy it again, or Shop by department. */
+function CircleRow({
+  block,
+  items,
+  data,
+  ar,
+  accent,
+  handlers,
+}: {
+  block: Block;
+  items: Item[];
+  data: HomeData;
+  ar: boolean;
+  accent: string;
+  handlers: HomeHandlers;
+}) {
+  const s = block.settings ?? {};
+  const go = opener(data, handlers);
+  const size = int(s.size, 64);
+  const showLabel = s.showLabel !== false;
+  const showNote = s.showNote !== false;
+  const cell = Math.max(size + 14, 56);
+
+  return (
+    <section>
+      <RowHead
+        title={str(s.title)}
+        subtitle={str(s.subtitle)}
+        seeAll={str(s.seeAllLabel)}
+        onSeeAll={() => go(str(s.seeAllUrl), str(s.seeAllHandle))}
+        accent={accent}
+      />
+      <div className="-mx-4 mt-2 flex gap-3 overflow-x-auto px-4 pb-1">
+        {items.map((item) => {
+          const borrowed = inherit(item, data);
+          return (
+            <button
+              key={item.id}
+              onClick={() => go(str(item.url), str(item.handle))}
+              className="flex shrink-0 flex-col items-center"
+              style={{ width: cell }}
+            >
+              <Thumb
+                src={borrowed.image}
+                className="border border-slate-200"
+                style={{ width: size, height: size, borderRadius: 9999 }}
+              />
+              {showNote && str(item.note) && (
+                <span className="mt-1.5 w-full truncate text-center text-[11px] font-bold" style={{ color: accent }}>
+                  {str(item.note)}
+                </span>
+              )}
+              {showLabel && (
+                <span className="w-full truncate text-center text-[10px] text-slate-500">
+                  {str(item.label, borrowed.title)}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+/** Colour circles, each opening its own collection. */
+function PickColour({
+  block,
+  items,
+  data,
+  ar,
+  accent,
+  handlers,
+}: {
+  block: Block;
+  items: Item[];
+  data: HomeData;
+  ar: boolean;
+  accent: string;
+  handlers: HomeHandlers;
+}) {
+  const s = block.settings ?? {};
+  const go = opener(data, handlers);
+  const size = int(s.size, 44);
+
+  return (
+    <section>
+      {str(s.title) && <Heading title={str(s.title)} ar={ar} accent={accent} />}
+      {str(s.subtitle) && <p className="text-[11px] text-slate-500">{str(s.subtitle)}</p>}
+      <div className="-mx-4 mt-2 flex gap-3 overflow-x-auto px-4 pb-1">
+        {items.map((item) => (
+          <button
+            key={item.id}
+            onClick={() => go(str(item.url), str(item.handle))}
+            className="flex shrink-0 flex-col items-center gap-1"
+            style={{ width: size + 16 }}
+          >
+            <span
+              className="block border border-slate-200"
+              style={{ width: size, height: size, borderRadius: 9999, background: str(item.color, "#e2e8f0") }}
+            />
+            {str(item.label) && (
+              <span className="w-full truncate text-center text-[10px] text-slate-600">
+                {str(item.label)}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/** Saved pieces that have come down in price. */
+function PriceDrop({
+  block,
+  items,
+  data,
+  ar,
+  accent,
+  handlers,
+}: {
+  block: Block;
+  items: Item[];
+  data: HomeData;
+  ar: boolean;
+  accent: string;
+  handlers: HomeHandlers;
+}) {
+  const s = block.settings ?? {};
+  const go = opener(data, handlers);
+  const radius = int(s.radius, 14);
+  const button = str(s.buttonLabel);
+
+  return (
+    <section
+      className="flex items-center gap-3 border border-slate-200 p-3"
+      style={{ background: str(s.cardBg, "#ffffff"), borderRadius: radius }}
+    >
+      {items.length > 0 && (
+        <span className="flex shrink-0 -space-x-2">
+          {items.slice(0, 3).map((item) => (
+            <Thumb
+              key={item.id}
+              src={inherit(item, data).image}
+              className="border-2 border-white"
+              style={{ width: 30, height: 30, borderRadius: 8 }}
+            />
+          ))}
+        </span>
+      )}
+      <span className="min-w-0 flex-1">
+        {str(s.title) && (
+          <span className="block truncate text-[12px] font-bold text-slate-900">{str(s.title)}</span>
+        )}
+        {str(s.subtitle) && (
+          <span className="block truncate text-[11px] text-slate-500">{str(s.subtitle)}</span>
+        )}
+      </span>
+      {button && (
+        <button
+          onClick={() => go(str(s.url), str(s.handle))}
+          className="shrink-0 rounded-full px-3 py-1.5 text-[11px] font-semibold text-white"
+          style={{ background: accent }}
+        >
+          {button}
+        </button>
+      )}
+    </section>
+  );
+}
+
+/** Tags describing the shopper's taste, each opening what matches it. */
+function StyleProfile({
+  block,
+  items,
+  data,
+  ar,
+  accent,
+  handlers,
+}: {
+  block: Block;
+  items: Item[];
+  data: HomeData;
+  ar: boolean;
+  accent: string;
+  handlers: HomeHandlers;
+}) {
+  const s = block.settings ?? {};
+  const go = opener(data, handlers);
+  const radius = int(s.radius, 14);
+  const cardTitle = personalise(str(s.cardTitle), data.shopperName);
+
+  return (
+    <section>
+      {str(s.title) && <Heading title={str(s.title)} ar={ar} accent={accent} />}
+      {str(s.subtitle) && <p className="text-[11px] text-slate-500">{str(s.subtitle)}</p>}
+      <div
+        className="mt-2 border border-slate-200 p-3"
+        style={{ background: str(s.cardBg, "#ffffff"), borderRadius: radius }}
+      >
+        {cardTitle && <div className="text-[12px] font-bold text-slate-900">{cardTitle}</div>}
+        {str(s.cardSubtitle) && (
+          <div className="text-[11px] text-slate-500">{str(s.cardSubtitle)}</div>
+        )}
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {items.map((item) => {
+            const colour = str(item.color);
+            return (
+              <button
+                key={item.id}
+                onClick={() => go(str(item.url), str(item.handle))}
+                className="rounded-full border px-2.5 py-1 text-[11px] font-medium"
+                style={{
+                  borderColor: colour || "#e2e8f0",
+                  color: colour || "#475569",
+                  background: colour ? `${colour}0f` : "#ffffff",
+                }}
+              >
+                {str(item.label)}
+              </button>
+            );
+          })}
+        </div>
+        {str(s.footNote) && (
+          <div className="mt-2 text-[11px] text-slate-500">{str(s.footNote)}</div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/** A solid colour card with a heading, a line and a button. */
+function PromoCard({
+  block,
+  data,
+  ar,
+  accent,
+  handlers,
+}: {
+  block: Block;
+  data: HomeData;
+  ar: boolean;
+  accent: string;
+  handlers: HomeHandlers;
+}) {
+  const s = block.settings ?? {};
+  const go = opener(data, handlers);
+  const radius = int(s.radius, 16);
+  const ink = str(s.textColor, "#ffffff");
+  const button = str(s.buttonLabel);
+
+  return (
+    <section
+      className="overflow-hidden"
+      style={{ background: str(s.bg, accent), borderRadius: radius }}
+    >
+      {str(s.imageUrl) && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={str(s.imageUrl)} alt="" className="h-28 w-full object-cover" />
+      )}
+      <div className="p-4">
+        {str(s.title) && (
+          <div className="text-[15px] font-bold leading-snug" style={{ color: ink }}>
+            {str(s.title)}
+          </div>
+        )}
+        {str(s.body) && (
+          <p className="mt-1 text-[11px] leading-relaxed" style={{ color: ink, opacity: 0.8 }}>
+            {str(s.body)}
+          </p>
+        )}
+        {button && (
+          <button
+            onClick={() => go(str(s.url), str(s.handle))}
+            className="mt-3 rounded-xl px-4 py-2 text-[12px] font-bold"
+            style={{ background: ink, color: str(s.bg, accent) }}
+          >
+            {button}
+          </button>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function Placeholder({ ar, label }: { ar: boolean; label: string }) {
   return (
     <div
@@ -771,6 +2034,37 @@ function isPlaceholder(node: React.ReactElement): boolean {
       return itemsOf(block).filter((t) => str(t.handle)).length === 0;
     case "promo_bar":
       return !str(s.lead) && !str(s.code);
+    case "style_profile":
+      return itemsOf(block).filter((i) => str(i.label)).length === 0 && !str(s.cardTitle);
+    case "promo_card":
+      return !str(s.title) && !str(s.body);
+    case "product_reasons":
+      return itemsOf(block).filter((i) => str(i.name) || str(i.imageUrl)).length === 0;
+    case "circle_row":
+      return itemsOf(block).filter((i) => str(i.imageUrl) || str(i.label) || str(i.handle)).length === 0;
+    case "pick_colour":
+      return itemsOf(block).filter((i) => str(i.color)).length === 0;
+    case "price_drop":
+      return !str(s.title) && !str(s.subtitle);
+    case "shipping_goal":
+      return !str(s.title) && !str(s.subtitle);
+    case "payment_plans":
+      return itemsOf(block).filter((i) => str(i.name) || str(i.headline)).length === 0;
+    case "price_slider":
+      return itemsOf(block).filter((i) => str(i.name) && str(i.months)).length === 0;
+    case "offer_cards":
+      return itemsOf(block).filter((i) => str(i.badge) || str(i.title)).length === 0;
+    case "coming_up_live":
+      return itemsOf(block).filter((i) => str(i.title) || str(i.imageUrl)).length === 0;
+    case "countdown_deals":
+      return itemsOf(block).filter((i) => str(i.price) || str(i.imageUrl)).length === 0;
+    case "info_rows":
+      return itemsOf(block).filter((i) => str(i.title)).length === 0;
+    case "live_now": {
+      const anyone = itemsOf(block).filter((i) => str(i.name) || str(i.imageUrl)).length > 0;
+      const offer = s.offerEnabled !== false && Boolean(str(s.offerTitle) || str(s.offerText));
+      return !anyone && !offer;
+    }
     default:
       return false;
   }
