@@ -25,6 +25,19 @@ function pickSegment(segments: WheelSegment[]): number {
   return segments.length - 1;
 }
 
+/** Rub out whichever tile is under the finger, mouse or touch alike. */
+function rubAt(
+  clientX: number,
+  clientY: number,
+  setRubbed: (fn: (s: Set<number>) => Set<number>) => void,
+) {
+  const el = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
+  const raw = el?.dataset?.tile;
+  if (raw == null) return;
+  const i = Number(raw);
+  setRubbed((s) => (s.has(i) ? s : new Set(s).add(i)));
+}
+
 export function AppNudge({
   campaign,
   ar,
@@ -39,8 +52,15 @@ export function AppNudge({
   const [angle, setAngle] = useState(0);
   const [won, setWon] = useState<WheelSegment | null>(null);
   const [contact, setContact] = useState("");
+  const [rubbed, setRubbed] = useState<Set<number>>(new Set());
+  const [dragging, setDragging] = useState(false);
 
   const wheel = campaign?.style === "wheel" && (campaign.wheelSegments?.length ?? 0) > 1;
+  const scratch = campaign?.style === "scratch";
+  // Eight across, five down. Enough that rubbing feels continuous, few enough
+  // that a finger clears it in a second or two.
+  const TILES = 40;
+  const revealed = !scratch || rubbed.size / TILES >= 0.55;
   const segments = useMemo(() => campaign?.wheelSegments ?? [], [campaign]);
 
   // The dwell trigger is the one the app can honour honestly. Exit intent has
@@ -56,6 +76,21 @@ export function AppNudge({
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaign?.id, done]);
+
+  // The prize is decided the moment the card is drawn. The scratching is
+  // theatre over an outcome that is already fixed — which is also the only
+  // way the odds can be the weights the merchant set.
+  useEffect(() => {
+    if (!open || !scratch || won || segments.length === 0) return;
+    setWon(segments[pickSegment(segments)]);
+  }, [open, scratch, won, segments]);
+
+  // Report the claim once, as the panel comes away.
+  useEffect(() => {
+    if (!scratch || !open || rubbed.size / TILES < 0.55) return;
+    onEvent?.("claimed", { code: won?.code || campaign?.discountCode || undefined });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scratch, open, rubbed.size >= TILES * 0.55]);
 
   if (!campaign || !open) return null;
 
@@ -166,13 +201,51 @@ export function AppNudge({
           </div>
         )}
 
-        {won && (
+        {scratch && (
+          <div
+            className="relative mt-3 h-[104px] w-full select-none overflow-hidden rounded-xl"
+            style={{ background: `${accent}1f`, touchAction: "none" }}
+          >
+            <div
+              className="grid h-full w-full place-items-center px-3 text-center text-[14px] font-bold"
+              style={{ color: accent }}
+            >
+              {won?.label || campaign.discountCode || ""}
+            </div>
+            {!revealed && (
+              <div
+                className="absolute inset-0 grid grid-cols-8 grid-rows-5"
+                onPointerDown={(e) => {
+                  setDragging(true);
+                  rubAt(e.clientX, e.clientY, setRubbed);
+                }}
+                onPointerMove={(e) => dragging && rubAt(e.clientX, e.clientY, setRubbed)}
+                onPointerUp={() => setDragging(false)}
+                onPointerLeave={() => setDragging(false)}
+              >
+                {Array.from({ length: TILES }, (_, i) => (
+                  <span
+                    key={i}
+                    data-tile={i}
+                    className="transition-opacity duration-150"
+                    style={{ background: accent, opacity: rubbed.has(i) ? 0 : 1 }}
+                  />
+                ))}
+                <span className="pointer-events-none absolute inset-0 grid place-items-center text-[12px] font-semibold text-white/90">
+                  {campaign.captureLabel || (ar ? "اخدشي هنا" : "scratch here")}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {won && !scratch && (
           <div className="mt-2 text-center text-[12px] font-bold" style={{ color: accent }}>
             {won.label}
           </div>
         )}
 
-        {code && (!wheel || won) && (
+        {code && (!wheel || won) && revealed && (
           <div
             className="mt-3 rounded-xl border border-dashed py-2 text-center font-mono text-[15px] font-bold"
             style={{ borderColor: accent, color: accent }}
@@ -191,6 +264,7 @@ export function AppNudge({
           />
         )}
 
+        {(!scratch || revealed) && (
         <button
           onClick={wheel && !won ? spin : claim}
           className="mt-3 w-full rounded-xl py-2.5 text-[12px] font-bold text-white"
@@ -200,6 +274,7 @@ export function AppNudge({
             ? campaign.buttonLabel || (ar ? "أديري العجلة" : "Spin")
             : campaign.buttonLabel || (ar ? "خذيه" : "Claim")}
         </button>
+        )}
 
         {campaign.dismissLabel && (
           <button onClick={close} className="mt-1.5 w-full py-1 text-[11px] opacity-60">
