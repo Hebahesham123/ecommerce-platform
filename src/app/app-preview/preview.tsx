@@ -16,6 +16,7 @@ import { Btn, Empty, Field, money, Note, Sheet, Spinner } from "./ui";
 import { Enquiry, Orders, Returns, SignIn } from "./screens";
 import { Shop } from "./shop";
 import { AppNudge } from "@/components/app-nudge";
+import { AppStrip } from "@/components/app-strip";
 import type { NudgeCampaign } from "@/lib/nudge";
 import {
   DEFAULT_SCREENS,
@@ -189,6 +190,16 @@ export function Preview() {
               {ar ? "معاينة التطبيق" : "app preview"}
             </span>
           </div>
+
+          {brand.stripEnabled && (
+            <AppStrip
+              items={brand.strip}
+              accent={accent}
+              onOpen={(item) => {
+                if (item.url) window.open(item.url, "_blank", "noopener,noreferrer");
+              }}
+            />
+          )}
 
           <div className="min-h-0 flex-1 overflow-y-auto">
             {activeTab === "shop" && (

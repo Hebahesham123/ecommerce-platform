@@ -243,6 +243,9 @@ function show(trigger){
       +"input{margin-top:14px;width:100%;border:1px solid rgba(127,127,127,.35);border-radius:12px;padding:13px 14px;font-size:15px;background:transparent;color:currentColor}"
       +"input:focus{outline:none;border-color:"+C.accent+"}"
       +".err{margin-top:8px;font-size:13px;color:#dc2626}"
+      +".scratchbox{position:relative;width:100%;height:104px;margin:14px 0 4px;border-radius:12px;overflow:hidden;background:"+C.accent+"22}"
+      +".scratchprize{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:0 12px;font:700 16px system-ui,-apple-system,Segoe UI,sans-serif;color:"+C.accent+"}"
+      +".scratchcv{position:absolute;inset:0;width:100%;height:100%;touch-action:none;cursor:crosshair}"
       +".wheelbox{position:relative;width:230px;height:230px;margin:16px auto 4px}"
       +".wheel{width:100%;height:100%;border-radius:50%;border:6px solid "+C.accent+";transition:transform 4.2s cubic-bezier(.17,.67,.21,1)}"
       +".pin{position:absolute;top:-4px;left:50%;transform:translateX(-50%);width:0;height:0;border-left:11px solid transparent;border-right:11px solid transparent;border-top:19px solid "+C.accent+"}"
@@ -332,6 +335,59 @@ function show(trigger){
         },4400);
       };
       panel.appendChild(spin);
+    }else if(C.style==="scratch"){
+      /* The prize is decided here, before a single pixel is rubbed away. The
+         scratching is theatre over a settled outcome, which is also the only
+         way the odds can be the weights the merchant set. */
+      var sIdx=(C.segments&&C.segments.length)?pickSegment():-1;
+      var sWon=sIdx>=0?C.segments[sIdx]:null;
+      var sCode=sWon?sWon.code:C.code;
+      var sBox=D.createElement("div");sBox.className="scratchbox";
+      var sPrize=D.createElement("div");sPrize.className="scratchprize";
+      sPrize.textContent=(sWon&&sWon.label)||sCode||"";
+      sBox.appendChild(sPrize);
+      var cv=D.createElement("canvas");cv.className="scratchcv";cv.width=520;cv.height=208;
+      sBox.appendChild(cv);panel.appendChild(sBox);
+      var cx=cv.getContext("2d");
+      cx.fillStyle=C.accent;cx.fillRect(0,0,cv.width,cv.height);
+      cx.fillStyle="rgba(255,255,255,.9)";
+      cx.font="600 26px system-ui,-apple-system,Segoe UI,sans-serif";
+      cx.textAlign="center";cx.textBaseline="middle";
+      cx.fillText(esc(C.captureLabel)||"scratch here",cv.width/2,cv.height/2);
+      cx.globalCompositeOperation="destination-out";
+      var rubbing=false,shown=false;
+      function pt(e){
+        var r=cv.getBoundingClientRect();
+        var t=(e.touches&&e.touches[0])||e;
+        return [(t.clientX-r.left)*(cv.width/r.width),(t.clientY-r.top)*(cv.height/r.height)];
+      }
+      /* Sampled every hundredth pixel: enough to know when half of it is gone,
+         cheap enough to run on every move. */
+      function cleared(){
+        var d=cx.getImageData(0,0,cv.width,cv.height).data,seen=0,off=0,i;
+        for(i=3;i<d.length;i+=400){seen++;if(d[i]===0)off++;}
+        return seen?off/seen:0;
+      }
+      function reveal(){
+        if(shown)return;shown=true;
+        cv.style.transition="opacity .35s";cv.style.opacity="0";
+        setTimeout(function(){if(cv.parentNode)cv.parentNode.removeChild(cv);},380);
+        if(sCode)codePanel(sCode);
+        else{
+          var okS=D.createElement("button");okS.className="btn";okS.textContent=esc(C.button);
+          okS.onclick=function(){close(null);};panel.appendChild(okS);
+        }
+      }
+      function rub(e){
+        if(!rubbing||shown)return;
+        var p=pt(e);
+        cx.beginPath();cx.arc(p[0],p[1],26,0,Math.PI*2);cx.fill();
+        if(cleared()>0.5)reveal();
+        if(e.cancelable)e.preventDefault();
+      }
+      cv.addEventListener("pointerdown",function(e){rubbing=true;rub(e);});
+      cv.addEventListener("pointermove",rub);
+      window.addEventListener("pointerup",function(){rubbing=false;});
     }else if(C.style==="capture"){
       var lbl=D.createElement("p");lbl.className="body";lbl.textContent=esc(C.captureLabel);
       if(C.captureLabel)panel.appendChild(lbl);

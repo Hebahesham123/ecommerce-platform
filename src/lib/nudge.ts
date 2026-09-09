@@ -6,7 +6,7 @@
  * and the renderer can reuse the same shapes without either copying them.
  */
 
-export type NudgeStyle = "card" | "wheel" | "capture";
+export type NudgeStyle = "card" | "wheel" | "capture" | "scratch";
 export type NudgePosition = "center" | "bottom-right" | "bottom-left" | "bottom-bar";
 
 /** Which kind of storefront page a nudge may appear on. */
@@ -81,6 +81,7 @@ export const STYLE_LABELS: Record<NudgeStyle, { ar: string; en: string }> = {
   card: { ar: "بطاقة خصم", en: "Discount card" },
   wheel: { ar: "عجلة الحظ", en: "Spin the wheel" },
   capture: { ar: "بريد أو هاتف أولاً", en: "Email or phone first" },
+  scratch: { ar: "بطاقة خدش", en: "Scratch to reveal" },
 };
 
 export const POSITION_LABELS: Record<NudgePosition, { ar: string; en: string }> = {
@@ -138,7 +139,7 @@ export function mapCampaign(r: Row): NudgeCampaign {
     cooldownHours: Math.max(0, int(r.cooldown_hours, 24)),
     skipIfCartEmpty: Boolean(r.skip_if_cart_empty),
 
-    style: (["card", "wheel", "capture"] as string[]).includes(str(r.style))
+    style: (["card", "wheel", "capture", "scratch"] as string[]).includes(str(r.style))
       ? (str(r.style) as NudgeStyle)
       : "card",
     position: (["center", "bottom-right", "bottom-left", "bottom-bar"] as string[]).includes(
@@ -215,6 +216,10 @@ export function campaignProblems(c: NudgeCampaign): string[] {
   if (!c.pages.length) out.push("no_pages");
   if (c.style === "wheel") {
     if (c.wheelSegments.length < 2) out.push("wheel_needs_segments");
+  } else if (c.style === "scratch") {
+    // A scratch card can hide one fixed code or draw from a pool. With
+    // neither there is nothing under the panel to find.
+    if (!c.discountCode && c.wheelSegments.length < 1) out.push("scratch_needs_prize");
   } else if (!c.discountCode) out.push("no_code");
   return out;
 }

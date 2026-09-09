@@ -239,6 +239,15 @@ function Preview({ c }: { c: NudgeCampaign }) {
           </div>
         )}
 
+        {c.style === "scratch" && (
+          <div
+            className="mx-auto mt-4 grid h-[104px] w-full max-w-[240px] place-items-center rounded-xl text-[13px] font-semibold"
+            style={{ background: `${c.accentColor}2e`, color: c.accentColor }}
+          >
+            {c.buttonLabel || "scratch here"}
+          </div>
+        )}
+
         {c.style === "capture" && (
           <>
             {c.captureLabel && (
@@ -319,6 +328,9 @@ export function NudgeEditor({
     wheel_needs_segments: ar
       ? "العجلة تحتاج قسمين على الأقل."
       : "A wheel needs at least two segments.",
+    scratch_needs_prize: ar
+      ? "بطاقة الخدش تحتاج كود خصم أو جائزة واحدة على الأقل."
+      : "A scratch card needs a discount code, or at least one prize to draw from.",
   };
 
   return (
@@ -511,6 +523,7 @@ export function NudgeEditor({
               { value: "card", label: STYLE_LABELS.card[lang] },
               { value: "wheel", label: STYLE_LABELS.wheel[lang] },
               { value: "capture", label: STYLE_LABELS.capture[lang] },
+              { value: "scratch", label: STYLE_LABELS.scratch[lang] },
             ]}
           />
           <Choice<NudgePosition>
@@ -564,7 +577,7 @@ export function NudgeEditor({
               : "Codes come from your Discounts page, so the popup can never offer one checkout would reject."
           }
         >
-          {c.style === "wheel" ? (
+          {c.style === "wheel" || c.style === "scratch" ? (
             <div className="space-y-2">
               {c.wheelSegments.map((s, i) => (
                 <div key={i} className="flex flex-wrap items-end gap-2">

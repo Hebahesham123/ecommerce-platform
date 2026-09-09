@@ -71,6 +71,15 @@ export const theme = {
     enabled: ${t.announcementEnabled},
     text: ${q(t.announcement)},
   },
+  strip: {
+    enabled: ${t.stripEnabled},
+    items: [${t.strip
+      .map(
+        (i) =>
+          `{ id: ${q(i.id)}, label: ${q(i.label)}, handle: ${q(i.handle)}, url: ${q(i.url)} }`,
+      )
+      .join(", ")}],
+  },
 } as const;
 
 /** Every screen reads these, so a colour change is one edit, not thirty. */
@@ -2531,6 +2540,8 @@ function homeScreenFile(theme: AppTheme): GeneratedFile {
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Linking,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -2566,6 +2577,27 @@ export default function HomeScreen({
         <View style={styles.announcement}>
           <Text style={styles.announcementText}>{theme.announcement.text}</Text>
         </View>
+      ) : null}
+      {theme.strip.enabled && theme.strip.items.length ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.strip}
+          contentContainerStyle={styles.stripRow}
+        >
+          {theme.strip.items.map((item, i) => (
+            <Pressable
+              key={item.id}
+              onPress={() => {
+                if (item.url) Linking.openURL(item.url).catch(() => {});
+                else if (item.handle) onOpenCollection?.(item.handle);
+              }}
+              style={[styles.stripItem, i === 0 ? styles.stripItemOn : null]}
+            >
+              <Text style={[styles.stripText, i === 0 ? styles.stripTextOn : null]}>{item.label}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
       ) : null}
 ${
       search
@@ -2604,6 +2636,12 @@ const styles = StyleSheet.create({
   error: { color: "#e11d48", fontSize: 13 },
   announcement: { backgroundColor: colors.accent, paddingVertical: 6, paddingHorizontal: 12 },
   announcementText: { color: "#fff", fontSize: 11, fontWeight: "600", textAlign: "center" },
+  strip: { flexGrow: 0, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.line },
+  stripRow: { paddingHorizontal: 16, gap: 16 },
+  stripItem: { paddingVertical: 8, borderBottomWidth: 2, borderBottomColor: "transparent" },
+  stripItemOn: { borderBottomColor: colors.accent },
+  stripText: { fontSize: 12, fontWeight: "600", color: colors.inkSoft },
+  stripTextOn: { color: colors.accent },
   searchWrap: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg },
   search: { height: 40, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, paddingHorizontal: 16, fontSize: 14, color: colors.ink },
 });

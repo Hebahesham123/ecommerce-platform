@@ -18,11 +18,13 @@ import {
   IcRedo,
 } from "@/components/icons";
 import { AppHome, type HomeData } from "@/components/app-home";
+import { AppStrip } from "@/components/app-strip";
 import { ColorPicker, ImageUpload } from "@/components/pickers";
 import {
   BLOCK_META,
   ITEM_FIELDS,
   ITEM_SHAPE,
+  itemId,
   itemsOf,
   newBlock,
   normalizeTheme,
@@ -30,6 +32,7 @@ import {
   type Block,
   type BlockType,
   type Item,
+  type StripItem,
 } from "@/lib/app-theme";
 import { componentName } from "@/lib/app-theme-codegen";
 import {
@@ -570,6 +573,90 @@ export function ThemeEditor() {
                   />
                 </Field>
               )}
+
+              <Field label={ar ? "شريط الاختصارات" : "Shortcut strip"} type="checkbox">
+                <Toggle
+                  on={draft.settings.stripEnabled}
+                  onChange={(v) => patchSettings({ stripEnabled: v })}
+                  ar={ar}
+                />
+              </Field>
+              {draft.settings.stripEnabled && (
+                <div className="mt-1 rounded-xl border border-line bg-surface-page p-2">
+                  <div className="px-1 pb-1 text-[11px] font-semibold uppercase tracking-wide text-ink-soft">
+                    {ar ? "الاختصارات" : "Shortcuts"}
+                  </div>
+                  <div className="space-y-2">
+                    {draft.settings.strip.map((item, i) => (
+                      <div key={item.id} className="rounded-lg border border-line bg-surface p-2">
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            value={item.label}
+                            onChange={(e) =>
+                              patchSettings({
+                                strip: draft.settings.strip.map((x, j) =>
+                                  j === i ? { ...x, label: e.target.value } : x,
+                                ),
+                              })
+                            }
+                            placeholder={ar ? "الاسم" : "Label"}
+                            className={`${input} h-8 text-xs`}
+                          />
+                          <button
+                            onClick={() =>
+                              patchSettings({ strip: draft.settings.strip.filter((_, j) => j !== i) })
+                            }
+                            title={ar ? "حذف" : "Remove"}
+                            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-ink-muted hover:bg-surface-hover"
+                          >
+                            <IcTrash className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                        <CollectionSelect
+                          collections={data.collections}
+                          value={item.handle}
+                          onChange={(handle) =>
+                            patchSettings({
+                              strip: draft.settings.strip.map((x, j) =>
+                                j === i ? { ...x, handle } : x,
+                              ),
+                            })
+                          }
+                          anyLabel={ar ? "لا شيء" : "Nothing"}
+                          className={`${input} mt-1.5 h-8 text-xs`}
+                        />
+                        <input
+                          value={item.url}
+                          onChange={(e) =>
+                            patchSettings({
+                              strip: draft.settings.strip.map((x, j) =>
+                                j === i ? { ...x, url: e.target.value } : x,
+                              ),
+                            })
+                          }
+                          placeholder="https://…"
+                          dir="ltr"
+                          className={`${input} mt-1.5 h-8 text-xs`}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() =>
+                      patchSettings({
+                        strip: [
+                          ...draft.settings.strip,
+                          { id: itemId(), label: "", handle: "", url: "" } as StripItem,
+                        ],
+                      })
+                    }
+                    className="mt-2 flex w-full items-center justify-center gap-1 rounded-lg border border-dashed border-line py-1.5 text-[11px] text-ink-muted hover:border-brand-500"
+                  >
+                    <IcPlus className="h-3 w-3" />
+                    {ar ? "اختصار" : "Shortcut"}
+                  </button>
+                </div>
+              )}
             </Group>
 
             <div className="mb-1.5 mt-4 px-1 text-[11px] font-semibold uppercase tracking-wide text-ink-soft">
@@ -728,6 +815,10 @@ export function ThemeEditor() {
                 >
                   {draft.settings.announcement}
                 </div>
+              )}
+
+              {draft.settings.stripEnabled && (
+                <AppStrip items={draft.settings.strip} accent={draft.settings.accent} />
               )}
 
               <div className="flex flex-1 flex-col">
