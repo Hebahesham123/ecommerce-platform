@@ -711,7 +711,13 @@ import { colors, radius, spacing } from "../theme";
 import { SectionHeading } from "./Pieces";
 import type { HomePayload } from "../api";
 
-export type ReviewsSettings = { title?: string; limit?: number };
+export type ReviewsSettings = {
+  title?: string;
+  subtitle?: string;
+  ratingLabel?: string;
+  seeAllLabel?: string;
+  limit?: number;
+};
 
 export function Reviews({
   settings,
@@ -724,7 +730,8 @@ export function Reviews({
   if (!shown.length) return null;
   return (
     <>
-      <SectionHeading title={settings.title || "What customers say"} />
+      <SectionHeading title={settings.ratingLabel || settings.title || "What customers say"} />
+      {settings.subtitle ? <Text style={styles.sub}>{settings.subtitle}</Text> : null}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
         {shown.map((r) => (
           <View key={r.id} style={styles.card}>
@@ -749,6 +756,7 @@ const styles = StyleSheet.create({
   name: { fontSize: 12, fontWeight: "600", color: colors.ink },
   stars: { fontSize: 12, color: "#f59e0b" },
   comment: { marginTop: 4, fontSize: 11, lineHeight: 16, color: colors.inkMuted },
+  sub: { fontSize: 11, color: colors.inkSoft },
 });
 `,
 
@@ -1163,6 +1171,10 @@ function personalise(template: string, name: string | null): string {
   const first = String(name ?? "").trim().split(" ")[0] ?? "";
   if (first) return template.split("{name}").join(first);
   let out = template.split("{name}").join("").trim();
+  // A possessive reads as "'s profile" once the name is gone, so the
+  // apostrophe leaves with it rather than dangling at the front of the line.
+  if (out.startsWith("'s ") || out.startsWith("’s ")) out = out.slice(3).trim();
+  if (out === "'s" || out === "’s") out = "";
   while (out.startsWith(",") || out.startsWith("،")) out = out.slice(1).trim();
   return out ? out[0].toUpperCase() + out.slice(1) : "";
 }
@@ -2285,6 +2297,154 @@ const styles = StyleSheet.create({
 });
 `,
 
+    style_profile: `import React from "react";
+import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { colors, spacing } from "../theme";
+import { SectionHeading } from "./Pieces";
+
+export type Tag = { id: string; label?: string; color?: string; handle?: string; url?: string };
+export type StyleProfileSettings = {
+  title?: string;
+  subtitle?: string;
+  cardTitle?: string;
+  cardSubtitle?: string;
+  footNote?: string;
+  cardBg?: string;
+  radius?: number;
+  items?: Tag[];
+};
+
+/** Put the shopper name in, or take the token out. */
+function personalise(template: string, name: string | null): string {
+  const first = String(name ?? "").trim().split(" ")[0] ?? "";
+  if (first) return template.split("{name}").join(first);
+  let out = template.split("{name}").join("").trim();
+  // A possessive reads as "'s profile" once the name is gone, so the
+  // apostrophe leaves with it rather than dangling at the front of the line.
+  if (out.startsWith("'s ") || out.startsWith("’s ")) out = out.slice(3).trim();
+  if (out === "'s" || out === "’s") out = "";
+  while (out.startsWith(",") || out.startsWith("،")) out = out.slice(1).trim();
+  return out ? out[0].toUpperCase() + out.slice(1) : "";
+}
+
+export function StyleProfile({
+  settings,
+  shopperName,
+  onOpenCollection,
+}: {
+  settings: StyleProfileSettings;
+  shopperName?: string | null;
+  onOpenCollection?: (handle: string) => void;
+}) {
+  const items = (settings.items ?? []).filter((i) => i.label);
+  const cardTitle = personalise(settings.cardTitle ?? "", shopperName ?? null);
+  if (!items.length && !cardTitle) return null;
+  const go = (url?: string, handle?: string) => {
+    if (url) {
+      Linking.openURL(url).catch(() => {});
+      return;
+    }
+    if (handle) onOpenCollection?.(handle);
+  };
+  const r = settings.radius && settings.radius > 0 ? settings.radius : 14;
+
+  return (
+    <>
+      {settings.title ? <SectionHeading title={settings.title} /> : null}
+      {settings.subtitle ? <Text style={styles.subtitle}>{settings.subtitle}</Text> : null}
+      <View style={[styles.card, { backgroundColor: settings.cardBg || colors.surface, borderRadius: r }]}>
+        {cardTitle ? <Text style={styles.cardTitle}>{cardTitle}</Text> : null}
+        {settings.cardSubtitle ? <Text style={styles.cardSubtitle}>{settings.cardSubtitle}</Text> : null}
+        <View style={styles.tags}>
+          {items.map((i) => (
+            <Pressable
+              key={i.id}
+              style={[styles.tag, { borderColor: i.color || colors.line }]}
+              onPress={() => go(i.url, i.handle)}
+            >
+              <Text style={[styles.tagText, { color: i.color || colors.inkMuted }]}>{i.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+        {settings.footNote ? <Text style={styles.foot}>{settings.footNote}</Text> : null}
+      </View>
+    </>
+  );
+}
+
+const styles = StyleSheet.create({
+  subtitle: { fontSize: 11, color: colors.inkSoft },
+  card: { marginTop: spacing.sm, borderWidth: 1, borderColor: colors.line, padding: spacing.md },
+  cardTitle: { fontSize: 12, fontWeight: "700", color: colors.ink },
+  cardSubtitle: { fontSize: 11, color: colors.inkSoft },
+  tags: { marginTop: spacing.sm, flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  tag: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
+  tagText: { fontSize: 11, fontWeight: "500" },
+  foot: { marginTop: spacing.sm, fontSize: 11, color: colors.inkSoft },
+});
+`,
+
+    promo_card: `import React from "react";
+import { Image, Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { colors, spacing } from "../theme";
+
+export type PromoCardSettings = {
+  title?: string;
+  body?: string;
+  buttonLabel?: string;
+  handle?: string;
+  url?: string;
+  imageUrl?: string;
+  bg?: string;
+  textColor?: string;
+  radius?: number;
+};
+
+export function PromoCard({
+  settings,
+  onOpenCollection,
+}: {
+  settings: PromoCardSettings;
+  onOpenCollection?: (handle: string) => void;
+}) {
+  if (!settings.title && !settings.body) return null;
+  const go = () => {
+    if (settings.url) {
+      Linking.openURL(settings.url).catch(() => {});
+      return;
+    }
+    if (settings.handle) onOpenCollection?.(settings.handle);
+  };
+  const r = settings.radius && settings.radius > 0 ? settings.radius : 16;
+  const bg = settings.bg || colors.accent;
+  const ink = settings.textColor || "#ffffff";
+
+  return (
+    <View style={{ backgroundColor: bg, borderRadius: r, overflow: "hidden" }}>
+      {settings.imageUrl ? <Image source={{ uri: settings.imageUrl }} style={styles.photo} /> : null}
+      <View style={styles.body}>
+        {settings.title ? <Text style={[styles.title, { color: ink }]}>{settings.title}</Text> : null}
+        {settings.body ? <Text style={[styles.text, { color: ink }]}>{settings.body}</Text> : null}
+        {settings.buttonLabel ? (
+          <Pressable style={[styles.cta, { backgroundColor: ink }]} onPress={go}>
+            <Text style={[styles.ctaText, { color: bg }]}>{settings.buttonLabel}</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  photo: { width: "100%", height: 112, backgroundColor: colors.page },
+  body: { padding: spacing.lg },
+  title: { fontSize: 15, fontWeight: "700", lineHeight: 20 },
+  text: { marginTop: 4, fontSize: 11, lineHeight: 16, opacity: 0.8 },
+  cta: { marginTop: spacing.md, alignSelf: "flex-start", borderRadius: 12, paddingHorizontal: 16, paddingVertical: 8 },
+  ctaText: { fontSize: 12, fontWeight: "700" },
+});
+`,
+
     text: `import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { colors, radius, spacing } from "../theme";
@@ -2454,6 +2614,8 @@ function renderCall(block: Block, indent: number): string {
     circle_row: ["collections={data.collections}", "onOpenCollection={onOpenCollection}"],
     pick_colour: ["onOpenCollection={onOpenCollection}"],
     price_drop: ["onOpenCollection={onOpenCollection}"],
+    style_profile: ["onOpenCollection={onOpenCollection}"],
+    promo_card: ["onOpenCollection={onOpenCollection}"],
     banner: ["collections={data.collections}", "onOpenCollection={onOpenCollection}"],
     categories: ["collections={data.collections}", "onOpenCollection={onOpenCollection}"],
     new_arrivals: ["products={data.newArrivals}", "onOpenProduct={onOpenProduct}"],
@@ -2594,7 +2756,27 @@ function settingsLiteral(block: Block): string {
     new_arrivals: ["title", "limit"],
     collection_row: ["handle", "title", "limit"],
     collection_grid: ["handle", "title", "limit"],
-    reviews: ["title", "limit"],
+    reviews: ["title", "subtitle", "ratingLabel", "seeAllLabel", "seeAllHandle", "seeAllUrl", "limit"],
+    style_profile: [
+      "title",
+      "subtitle",
+      "cardTitle",
+      "cardSubtitle",
+      "footNote",
+      "cardBg",
+      "radius",
+    ],
+    promo_card: [
+      "title",
+      "body",
+      "buttonLabel",
+      "handle",
+      "url",
+      "imageUrl",
+      "bg",
+      "textColor",
+      "radius",
+    ],
     text: ["heading", "body"],
   };
   const set = block.settings ?? {};
@@ -2668,6 +2850,7 @@ function itemsLiteral(type: BlockType, items: Item[]): string {
     circle_row: ["imageUrl", "label", "note", "handle", "url"],
     pick_colour: ["color", "label", "handle", "url"],
     price_drop: ["imageUrl"],
+    style_profile: ["label", "color", "handle", "url"],
   };
   const keys = fields[type] ?? [];
   const rendered = items.map((item) => {

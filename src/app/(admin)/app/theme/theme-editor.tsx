@@ -1270,6 +1270,111 @@ function BlockGroup({
         </>
       )}
 
+      {block.type === "style_profile" && (
+        <>
+          <Field label={ar ? "العنوان" : "Title"} type="text">
+            <input value={text("title")} onChange={(e) => onPatch({ title: e.target.value })} className={input} />
+          </Field>
+          <Field label={ar ? "الشرح" : "Subtitle"} type="text">
+            <input value={text("subtitle")} onChange={(e) => onPatch({ subtitle: e.target.value })} className={input} />
+          </Field>
+          <Field label={ar ? "عنوان البطاقة" : "Card title"} type="text">
+            <input
+              value={text("cardTitle")}
+              onChange={(e) => onPatch({ cardTitle: e.target.value })}
+              placeholder={ar ? "ملف {name}" : "{name}'s profile"}
+              className={input}
+            />
+            <p className="mt-1 text-[11px] text-ink-soft">
+              {ar
+                ? "‏{name} يُستبدل باسم العميلة، ويُحذف بدون تسجيل دخول."
+                : "{name} becomes the shopper's first name, and drops out when nobody is signed in."}
+            </p>
+          </Field>
+          <Field label={ar ? "تحت العنوان" : "Card subtitle"} type="text">
+            <input value={text("cardSubtitle")} onChange={(e) => onPatch({ cardSubtitle: e.target.value })} className={input} />
+          </Field>
+          <Field label={ar ? "السطر الأخير" : "Foot note"} type="text">
+            <input value={text("footNote")} onChange={(e) => onPatch({ footNote: e.target.value })} className={input} />
+          </Field>
+          <ColorRow label={ar ? "خلفية البطاقة" : "Card background"} value={text("cardBg")} fallback="#ffffff" onChange={(v) => onPatch({ cardBg: v })} input={input} ar={ar} />
+          <Field label={ar ? "استدارة الحواف" : "Corner radius"} type="range">
+            <input type="number" min={0} max={32} value={num("radius", 14)} onChange={(e) => onPatch({ radius: Number(e.target.value) })} className={input} />
+          </Field>
+        </>
+      )}
+
+      {block.type === "promo_card" && (
+        <>
+          <Field label={ar ? "العنوان" : "Title"} type="text">
+            <input value={text("title")} onChange={(e) => onPatch({ title: e.target.value })} className={input} />
+          </Field>
+          <Field label={ar ? "النص" : "Body"} type="richtext">
+            <textarea value={text("body")} onChange={(e) => onPatch({ body: e.target.value })} rows={3} className={`${input} h-auto py-2`} />
+          </Field>
+          <Field label={ar ? "نص الزر" : "Button text"} type="text">
+            <input value={text("buttonLabel")} onChange={(e) => onPatch({ buttonLabel: e.target.value })} className={input} />
+          </Field>
+          <Field label={ar ? "يفتح" : "Opens"} type="collection">
+            <CollectionSelect
+              collections={collections}
+              value={text("handle")}
+              onChange={(handle) => onPatch({ handle })}
+              anyLabel={ar ? "لا شيء" : "Nothing"}
+              className={input}
+            />
+          </Field>
+          <Field label={ar ? "أو رابط" : "Or a link"} type="url">
+            <input value={text("url")} onChange={(e) => onPatch({ url: e.target.value })} placeholder="https://…" className={input} dir="ltr" />
+          </Field>
+          <Field label={ar ? "صورة أعلى البطاقة" : "Picture on top"} type="image_picker">
+            <span className="flex items-center gap-2">
+              <ImageUpload onUploaded={(url) => onPatch({ imageUrl: url })} ar={ar} />
+              <input value={text("imageUrl")} onChange={(e) => onPatch({ imageUrl: e.target.value })} placeholder="https://…" className={input} dir="ltr" />
+            </span>
+          </Field>
+          <ColorRow label={ar ? "لون البطاقة" : "Card colour"} value={text("bg")} fallback={accent} onChange={(v) => onPatch({ bg: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "لون النص" : "Text colour"} value={text("textColor")} fallback="#ffffff" onChange={(v) => onPatch({ textColor: v })} input={input} ar={ar} />
+          <Field label={ar ? "استدارة الحواف" : "Corner radius"} type="range">
+            <input type="number" min={0} max={32} value={num("radius", 16)} onChange={(e) => onPatch({ radius: Number(e.target.value) })} className={input} />
+          </Field>
+        </>
+      )}
+
+      {block.type === "reviews" && (
+        <>
+          <Field label={ar ? "سطر التقييم" : "Rating line"} type="text">
+            <input
+              value={text("ratingLabel")}
+              onChange={(e) => onPatch({ ratingLabel: e.target.value })}
+              placeholder={ar ? "٤٫٩ من ١٦٢٧ مشترية" : "4.9 from 1,627 buyers"}
+              className={input}
+            />
+            <p className="mt-1 text-[11px] text-ink-soft">
+              {ar ? "يحل محل العنوان أعلاه عند كتابته." : "Replaces the title above when set."}
+            </p>
+          </Field>
+          <Field label={ar ? "الشرح" : "Subtitle"} type="text">
+            <input value={text("subtitle")} onChange={(e) => onPatch({ subtitle: e.target.value })} className={input} />
+          </Field>
+          <Field label={ar ? "نص «الكل»" : "See-all text"} type="text">
+            <input value={text("seeAllLabel")} onChange={(e) => onPatch({ seeAllLabel: e.target.value })} className={input} />
+          </Field>
+          <Field label={ar ? "يفتح" : "Opens"} type="collection">
+            <CollectionSelect
+              collections={collections}
+              value={text("seeAllHandle")}
+              onChange={(handle) => onPatch({ seeAllHandle: handle })}
+              anyLabel={ar ? "لا شيء" : "Nothing"}
+              className={input}
+            />
+          </Field>
+          <Field label={ar ? "أو رابط" : "Or a link"} type="url">
+            <input value={text("seeAllUrl")} onChange={(e) => onPatch({ seeAllUrl: e.target.value })} placeholder="https://…" className={input} dir="ltr" />
+          </Field>
+        </>
+      )}
+
       {(block.type === "product_reasons" ||
         block.type === "circle_row" ||
         block.type === "pick_colour" ||

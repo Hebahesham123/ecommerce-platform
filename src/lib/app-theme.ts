@@ -41,6 +41,8 @@ export type BlockType =
   | "circle_row"
   | "pick_colour"
   | "price_drop"
+  | "style_profile"
+  | "promo_card"
   | "reviews"
   | "text";
 
@@ -171,6 +173,11 @@ export const ITEM_SHAPE: Partial<Record<BlockType, { ar: string; en: string; bla
     ar: "صورة",
     en: "Thumbnail",
     blank: () => ({ id: itemId(), imageUrl: "" }),
+  },
+  style_profile: {
+    ar: "وسم",
+    en: "Tag",
+    blank: () => ({ id: itemId(), label: "", color: "", handle: "", url: "" }),
   },
 };
 
@@ -309,6 +316,12 @@ export const ITEM_FIELDS: Partial<Record<BlockType, FieldSpec[]>> = {
     { key: "url", kind: "text", ar: "أو رابط", en: "Or a link" },
   ],
   price_drop: [{ key: "imageUrl", kind: "image", ar: "الصورة", en: "Photo" }],
+  style_profile: [
+    { key: "label", kind: "text", ar: "الوسم", en: "Tag" },
+    { key: "color", kind: "color", ar: "لونه", en: "Its colour" },
+    { key: "handle", kind: "collection", ar: "يفتح", en: "Opens" },
+    { key: "url", kind: "text", ar: "أو رابط", en: "Or a link" },
+  ],
 };
 
 export type Block = {
@@ -641,6 +654,18 @@ export const BLOCK_META: Record<
     hintAr: "بطاقة تقول إن قطعاً محفوظة نزل سعرها، بصور صغيرة وزر",
     hintEn: "A card saying saved pieces have dropped, with thumbnails and a button",
   },
+  style_profile: {
+    ar: "ملف ذوقك",
+    en: "Style profile",
+    hintAr: "وسوم تصف ذوق العميلة، كل وسم يفتح ما يناسبه",
+    hintEn: "Tags describing the shopper's taste, each opening what matches it",
+  },
+  promo_card: {
+    ar: "بطاقة عرض",
+    en: "Promo card",
+    hintAr: "بطاقة بلون واحد بعنوان ونص وزر — مثل «الصندوق الغامض»",
+    hintEn: "A solid colour card with a heading, a line and a button — a Mystery box, say",
+  },
   reviews: {
     ar: "آراء العملاء",
     en: "Customer reviews",
@@ -797,12 +822,41 @@ export function newBlock(type: BlockType): Block {
       radius: 14,
       items: shape ? [shape.blank()] : [],
     },
+    style_profile: {
+      title: "Your style profile",
+      subtitle: "Tap to change what we show you",
+      cardTitle: "{name}'s profile",
+      cardSubtitle: "Built from what you save and buy",
+      footNote: "",
+      cardBg: "",
+      radius: 14,
+      items: shape ? [shape.blank()] : [],
+    },
+    promo_card: {
+      title: "",
+      body: "",
+      buttonLabel: "",
+      handle: "",
+      url: "",
+      imageUrl: "",
+      bg: "",
+      textColor: "#ffffff",
+      radius: 16,
+    },
     banner: { imageUrl: "", handle: "", heading: "", subheading: "" },
     collection_row: { handle: "", title: "", limit: 8 },
     collection_grid: { handle: "", title: "", limit: 6 },
     new_arrivals: { title: "New arrivals", limit: 12 },
     categories: { title: "" },
-    reviews: { title: "What customers say", limit: 6 },
+    reviews: {
+      title: "What customers say",
+      subtitle: "",
+      ratingLabel: "",
+      seeAllLabel: "",
+      seeAllHandle: "",
+      seeAllUrl: "",
+      limit: 6,
+    },
     text: { heading: "", body: "" },
   };
   return { id, type, settings: settings[type] ?? {} };

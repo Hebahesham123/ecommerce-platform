@@ -92,6 +92,10 @@ function personalise(template: string, name?: string | null): string {
   const first = String(name ?? "").trim().split(" ")[0] ?? "";
   if (first) return template.split("{name}").join(first);
   let out = template.split("{name}").join("").trim();
+  // A possessive reads as "'s profile" once the name is gone, so the
+  // apostrophe leaves with it rather than dangling at the front of the line.
+  if (out.startsWith("'s ") || out.startsWith("’s ")) out = out.slice(3).trim();
+  if (out === "'s" || out === "’s") out = "";
   while (out.startsWith(",") || out.startsWith("،")) out = out.slice(1).trim();
   return out ? out[0].toUpperCase() + out.slice(1) : "";
 }
@@ -421,6 +425,23 @@ function BlockView({
       );
     }
 
+    case "style_profile": {
+      const tags = itemsOf(block).filter((i) => str(i.label));
+      if (!tags.length && !str(s.cardTitle)) {
+        return <Placeholder ar={ar} label={ar ? "لا وسوم بعد" : "No tags yet"} />;
+      }
+      return (
+        <StyleProfile block={block} items={tags} data={data} ar={ar} accent={accent} handlers={handlers} />
+      );
+    }
+
+    case "promo_card": {
+      if (!str(s.title) && !str(s.body)) {
+        return <Placeholder ar={ar} label={ar ? "بطاقة بلا نص" : "Card with no wording yet"} />;
+      }
+      return <PromoCard block={block} data={data} ar={ar} accent={accent} handlers={handlers} />;
+    }
+
     case "product_reasons": {
       const picks = itemsOf(block).filter((i) => str(i.name) || str(i.imageUrl));
       if (!picks.length) return <Placeholder ar={ar} label={ar ? "لا مقترحات بعد" : "Nothing suggested yet"} />;
@@ -646,9 +667,11 @@ function BlockView({
       }
       return (
         <section>
-          <Heading
-            title={str(s.title, ar ? "آراء العملاء" : "What customers say")}
-            ar={ar}
+          <RowHead
+            title={str(s.ratingLabel) || str(s.title, ar ? "آراء العملاء" : "What customers say")}
+            subtitle={str(s.subtitle)}
+            seeAll={str(s.seeAllLabel)}
+            onSeeAll={() => opener(data, handlers)(str(s.seeAllUrl), str(s.seeAllHandle))}
             accent={accent}
           />
           <div className="-mx-4 mt-2 flex gap-3 overflow-x-auto px-4 pb-1">
@@ -1812,6 +1835,120 @@ function PriceDrop({
   );
 }
 
+/** Tags describing the shopper's taste, each opening what matches it. */
+function StyleProfile({
+  block,
+  items,
+  data,
+  ar,
+  accent,
+  handlers,
+}: {
+  block: Block;
+  items: Item[];
+  data: HomeData;
+  ar: boolean;
+  accent: string;
+  handlers: HomeHandlers;
+}) {
+  const s = block.settings ?? {};
+  const go = opener(data, handlers);
+  const radius = int(s.radius, 14);
+  const cardTitle = personalise(str(s.cardTitle), data.shopperName);
+
+  return (
+    <section>
+      {str(s.title) && <Heading title={str(s.title)} ar={ar} accent={accent} />}
+      {str(s.subtitle) && <p className="text-[11px] text-slate-500">{str(s.subtitle)}</p>}
+      <div
+        className="mt-2 border border-slate-200 p-3"
+        style={{ background: str(s.cardBg, "#ffffff"), borderRadius: radius }}
+      >
+        {cardTitle && <div className="text-[12px] font-bold text-slate-900">{cardTitle}</div>}
+        {str(s.cardSubtitle) && (
+          <div className="text-[11px] text-slate-500">{str(s.cardSubtitle)}</div>
+        )}
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {items.map((item) => {
+            const colour = str(item.color);
+            return (
+              <button
+                key={item.id}
+                onClick={() => go(str(item.url), str(item.handle))}
+                className="rounded-full border px-2.5 py-1 text-[11px] font-medium"
+                style={{
+                  borderColor: colour || "#e2e8f0",
+                  color: colour || "#475569",
+                  background: colour ? `${colour}0f` : "#ffffff",
+                }}
+              >
+                {str(item.label)}
+              </button>
+            );
+          })}
+        </div>
+        {str(s.footNote) && (
+          <div className="mt-2 text-[11px] text-slate-500">{str(s.footNote)}</div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/** A solid colour card with a heading, a line and a button. */
+function PromoCard({
+  block,
+  data,
+  ar,
+  accent,
+  handlers,
+}: {
+  block: Block;
+  data: HomeData;
+  ar: boolean;
+  accent: string;
+  handlers: HomeHandlers;
+}) {
+  const s = block.settings ?? {};
+  const go = opener(data, handlers);
+  const radius = int(s.radius, 16);
+  const ink = str(s.textColor, "#ffffff");
+  const button = str(s.buttonLabel);
+
+  return (
+    <section
+      className="overflow-hidden"
+      style={{ background: str(s.bg, accent), borderRadius: radius }}
+    >
+      {str(s.imageUrl) && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={str(s.imageUrl)} alt="" className="h-28 w-full object-cover" />
+      )}
+      <div className="p-4">
+        {str(s.title) && (
+          <div className="text-[15px] font-bold leading-snug" style={{ color: ink }}>
+            {str(s.title)}
+          </div>
+        )}
+        {str(s.body) && (
+          <p className="mt-1 text-[11px] leading-relaxed" style={{ color: ink, opacity: 0.8 }}>
+            {str(s.body)}
+          </p>
+        )}
+        {button && (
+          <button
+            onClick={() => go(str(s.url), str(s.handle))}
+            className="mt-3 rounded-xl px-4 py-2 text-[12px] font-bold"
+            style={{ background: ink, color: str(s.bg, accent) }}
+          >
+            {button}
+          </button>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function Placeholder({ ar, label }: { ar: boolean; label: string }) {
   return (
     <div
@@ -1897,6 +2034,10 @@ function isPlaceholder(node: React.ReactElement): boolean {
       return itemsOf(block).filter((t) => str(t.handle)).length === 0;
     case "promo_bar":
       return !str(s.lead) && !str(s.code);
+    case "style_profile":
+      return itemsOf(block).filter((i) => str(i.label)).length === 0 && !str(s.cardTitle);
+    case "promo_card":
+      return !str(s.title) && !str(s.body);
     case "product_reasons":
       return itemsOf(block).filter((i) => str(i.name) || str(i.imageUrl)).length === 0;
     case "circle_row":
