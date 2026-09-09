@@ -331,6 +331,9 @@ export type Block = {
   settings: Record<string, unknown>;
 };
 
+/** One shortcut in the row under the header. */
+export type StripItem = { id: string; label: string; handle: string; url: string };
+
 export type AppSettings = {
   storeName: string;
   logoUrl: string | null;
@@ -343,6 +346,14 @@ export type AppSettings = {
   /** Which navigation menu fills the app's drawer. */
   menuHandle: string;
   showSearch: boolean;
+  /**
+   * The row of shortcuts that sits under the header on every screen.
+   *
+   * Chrome rather than a home block: it stays put while the page scrolls, so
+   * it cannot be one of the sections a merchant drags around.
+   */
+  stripEnabled: boolean;
+  strip: StripItem[];
 };
 
 /**
@@ -490,6 +501,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   announcementEnabled: false,
   menuHandle: "main-menu",
   showSearch: true,
+  stripEnabled: false,
+  strip: [],
 };
 
 /**
@@ -897,6 +910,22 @@ export function normalizeTheme(raw: unknown): AppTheme {
     announcementEnabled: Boolean(s.announcementEnabled),
     menuHandle: str(s.menuHandle, DEFAULT_SETTINGS.menuHandle).slice(0, 60),
     showSearch: s.showSearch !== false,
+    stripEnabled: Boolean(s.stripEnabled),
+    strip: Array.isArray(s.strip)
+      ? (s.strip as unknown[])
+          .map((raw, i) => {
+            const item = (raw ?? {}) as Record<string, unknown>;
+            return {
+              id: str(item.id) || `s-${i}`,
+              label: str(item.label).slice(0, 40),
+              handle: str(item.handle).slice(0, 60),
+              url: str(item.url).slice(0, 300),
+            };
+          })
+          // A shortcut with no wording is a gap in the row, not a shortcut.
+          .filter((item) => item.label)
+          .slice(0, 12)
+      : [],
   };
 
   const raws = Array.isArray(row.blocks) ? row.blocks : null;
