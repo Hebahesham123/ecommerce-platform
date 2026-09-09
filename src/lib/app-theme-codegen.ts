@@ -1943,6 +1943,348 @@ const styles = StyleSheet.create({
 });
 `,
 
+    product_reasons: `import React from "react";
+import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { colors, spacing } from "../theme";
+import { inherit } from "./Pieces";
+import type { HomePayload } from "../api";
+
+export type Suggestion = {
+  id: string;
+  imageUrl?: string;
+  reason?: string;
+  name?: string;
+  price?: string;
+  comparePrice?: string;
+  badge?: string;
+  rating?: string;
+  sold?: string;
+  handle?: string;
+  url?: string;
+};
+export type ProductReasonsSettings = {
+  title?: string;
+  subtitle?: string;
+  seeAllLabel?: string;
+  seeAllHandle?: string;
+  seeAllUrl?: string;
+  buttonLabel?: string;
+  radius?: number;
+  items?: Suggestion[];
+};
+
+export function ProductReasons({
+  settings,
+  collections,
+  onOpenCollection,
+}: {
+  settings: ProductReasonsSettings;
+  collections: HomePayload["collections"];
+  onOpenCollection?: (handle: string) => void;
+}) {
+  const items = (settings.items ?? []).filter((i) => i.name || i.imageUrl);
+  if (!items.length) return null;
+  const go = (url?: string, handle?: string) => {
+    if (url) {
+      Linking.openURL(url).catch(() => {});
+      return;
+    }
+    if (handle) onOpenCollection?.(handle);
+  };
+  const r = settings.radius && settings.radius > 0 ? settings.radius : 14;
+
+  return (
+    <>
+      <View style={styles.head}>
+        <View style={{ flex: 1 }}>
+          {settings.title ? <Text style={styles.title}>{settings.title}</Text> : null}
+          {settings.subtitle ? <Text style={styles.subtitle}>{settings.subtitle}</Text> : null}
+        </View>
+        {settings.seeAllLabel ? (
+          <Pressable onPress={() => go(settings.seeAllUrl, settings.seeAllHandle)}>
+            <Text style={styles.seeAll}>{settings.seeAllLabel}</Text>
+          </Pressable>
+        ) : null}
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+        {items.map((i) => {
+          const borrowed = inherit(i, collections);
+          const photo = i.imageUrl || borrowed.image;
+          return (
+            <View key={i.id} style={[styles.card, { borderRadius: r }]}>
+              <Pressable onPress={() => go(i.url, i.handle)}>
+                {photo ? <Image source={{ uri: photo }} style={styles.photo} /> : <View style={styles.photo} />}
+                {i.badge ? (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>{i.badge}</Text>
+                  </View>
+                ) : null}
+              </Pressable>
+              <View style={styles.body}>
+                {i.reason ? <Text style={styles.reason} numberOfLines={1}>{i.reason}</Text> : null}
+                <Text style={styles.name} numberOfLines={2}>{i.name || borrowed.title}</Text>
+                <View style={styles.priceRow}>
+                  <Text style={styles.price}>{i.price}</Text>
+                  {i.comparePrice ? <Text style={styles.was}>{i.comparePrice}</Text> : null}
+                </View>
+                {i.rating || i.sold ? (
+                  <Text style={styles.meta} numberOfLines={1}>
+                    {(i.rating ? "* " + i.rating + "  " : "") + (i.sold ?? "")}
+                  </Text>
+                ) : null}
+                {settings.buttonLabel ? (
+                  <Pressable style={styles.cta} onPress={() => go(i.url, i.handle)}>
+                    <Text style={styles.ctaText}>{settings.buttonLabel}</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
+          );
+        })}
+      </ScrollView>
+    </>
+  );
+}
+
+const styles = StyleSheet.create({
+  head: { flexDirection: "row", alignItems: "flex-end", gap: spacing.sm },
+  title: { fontSize: 14, fontWeight: "700", color: colors.ink },
+  subtitle: { fontSize: 11, color: colors.inkSoft },
+  seeAll: { fontSize: 12, fontWeight: "600", color: colors.accent },
+  row: { gap: spacing.md, paddingVertical: spacing.sm },
+  card: { width: 150, overflow: "hidden", borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface },
+  photo: { width: "100%", height: 120, backgroundColor: colors.page },
+  badge: { position: "absolute", top: 6, right: 6, borderRadius: 4, backgroundColor: colors.accent, paddingHorizontal: 6, paddingVertical: 2 },
+  badgeText: { fontSize: 10, fontWeight: "700", color: "#fff" },
+  body: { padding: 8 },
+  reason: { fontSize: 9, fontWeight: "600", color: colors.accent },
+  name: { marginTop: 2, fontSize: 11, lineHeight: 15, color: colors.ink },
+  priceRow: { marginTop: 4, flexDirection: "row", alignItems: "baseline", gap: 4 },
+  price: { fontSize: 12, fontWeight: "700", color: colors.accent },
+  was: { fontSize: 10, color: colors.inkSoft, textDecorationLine: "line-through" },
+  meta: { marginTop: 2, fontSize: 9, color: colors.inkSoft },
+  cta: { marginTop: 8, borderRadius: 8, backgroundColor: colors.accent, paddingVertical: 6, alignItems: "center" },
+  ctaText: { fontSize: 11, fontWeight: "600", color: "#fff" },
+});
+`,
+
+    circle_row: `import React from "react";
+import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { colors, spacing } from "../theme";
+import { inherit } from "./Pieces";
+import type { HomePayload } from "../api";
+
+export type Circle = { id: string; imageUrl?: string; label?: string; note?: string; handle?: string; url?: string };
+export type CircleRowSettings = {
+  title?: string;
+  subtitle?: string;
+  seeAllLabel?: string;
+  seeAllHandle?: string;
+  seeAllUrl?: string;
+  size?: number;
+  showLabel?: boolean;
+  showNote?: boolean;
+  items?: Circle[];
+};
+
+export function CircleRow({
+  settings,
+  collections,
+  onOpenCollection,
+}: {
+  settings: CircleRowSettings;
+  collections: HomePayload["collections"];
+  onOpenCollection?: (handle: string) => void;
+}) {
+  const items = (settings.items ?? []).filter((i) => i.imageUrl || i.label || i.handle);
+  if (!items.length) return null;
+  const go = (url?: string, handle?: string) => {
+    if (url) {
+      Linking.openURL(url).catch(() => {});
+      return;
+    }
+    if (handle) onOpenCollection?.(handle);
+  };
+  const size = settings.size && settings.size > 0 ? settings.size : 64;
+  const cell = Math.max(size + 14, 56);
+
+  return (
+    <>
+      <View style={styles.head}>
+        <View style={{ flex: 1 }}>
+          {settings.title ? <Text style={styles.title}>{settings.title}</Text> : null}
+          {settings.subtitle ? <Text style={styles.subtitle}>{settings.subtitle}</Text> : null}
+        </View>
+        {settings.seeAllLabel ? (
+          <Pressable onPress={() => go(settings.seeAllUrl, settings.seeAllHandle)}>
+            <Text style={styles.seeAll}>{settings.seeAllLabel}</Text>
+          </Pressable>
+        ) : null}
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+        {items.map((i) => {
+          const borrowed = inherit(i, collections);
+          const photo = i.imageUrl || borrowed.image;
+          const round = { width: size, height: size, borderRadius: Math.round(size / 2) };
+          return (
+            <Pressable key={i.id} style={[styles.cell, { width: cell }]} onPress={() => go(i.url, i.handle)}>
+              {photo ? (
+                <Image source={{ uri: photo }} style={round} />
+              ) : (
+                <View style={[round, { backgroundColor: colors.page }]} />
+              )}
+              {settings.showNote !== false && i.note ? (
+                <Text style={styles.note} numberOfLines={1}>{i.note}</Text>
+              ) : null}
+              {settings.showLabel !== false ? (
+                <Text style={styles.label} numberOfLines={1}>{i.label || borrowed.title}</Text>
+              ) : null}
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+    </>
+  );
+}
+
+const styles = StyleSheet.create({
+  head: { flexDirection: "row", alignItems: "flex-end", gap: spacing.sm },
+  title: { fontSize: 14, fontWeight: "700", color: colors.ink },
+  subtitle: { fontSize: 11, color: colors.inkSoft },
+  seeAll: { fontSize: 12, fontWeight: "600", color: colors.accent },
+  row: { gap: spacing.md, paddingVertical: spacing.sm },
+  cell: { alignItems: "center" },
+  note: { marginTop: 6, fontSize: 11, fontWeight: "700", color: colors.accent, textAlign: "center" },
+  label: { fontSize: 10, color: colors.inkSoft, textAlign: "center" },
+});
+`,
+
+    pick_colour: `import React from "react";
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { colors, spacing } from "../theme";
+import { SectionHeading } from "./Pieces";
+
+export type Swatch = { id: string; color?: string; label?: string; handle?: string; url?: string };
+export type PickColourSettings = { title?: string; subtitle?: string; size?: number; items?: Swatch[] };
+
+export function PickColour({
+  settings,
+  onOpenCollection,
+}: {
+  settings: PickColourSettings;
+  onOpenCollection?: (handle: string) => void;
+}) {
+  const items = (settings.items ?? []).filter((i) => i.color);
+  if (!items.length) return null;
+  const go = (url?: string, handle?: string) => {
+    if (url) {
+      Linking.openURL(url).catch(() => {});
+      return;
+    }
+    if (handle) onOpenCollection?.(handle);
+  };
+  const size = settings.size && settings.size > 0 ? settings.size : 44;
+
+  return (
+    <>
+      {settings.title ? <SectionHeading title={settings.title} /> : null}
+      {settings.subtitle ? <Text style={styles.subtitle}>{settings.subtitle}</Text> : null}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+        {items.map((i) => (
+          <Pressable key={i.id} style={[styles.cell, { width: size + 16 }]} onPress={() => go(i.url, i.handle)}>
+            <View
+              style={{
+                width: size,
+                height: size,
+                borderRadius: Math.round(size / 2),
+                backgroundColor: i.color,
+                borderWidth: 1,
+                borderColor: colors.line,
+              }}
+            />
+            {i.label ? <Text style={styles.label} numberOfLines={1}>{i.label}</Text> : null}
+          </Pressable>
+        ))}
+      </ScrollView>
+    </>
+  );
+}
+
+const styles = StyleSheet.create({
+  subtitle: { fontSize: 11, color: colors.inkSoft },
+  row: { gap: spacing.md, paddingVertical: spacing.sm },
+  cell: { alignItems: "center", gap: 4 },
+  label: { fontSize: 10, color: colors.inkMuted, textAlign: "center" },
+});
+`,
+
+    price_drop: `import React from "react";
+import { Image, Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { colors, spacing } from "../theme";
+
+export type DropThumb = { id: string; imageUrl?: string };
+export type PriceDropSettings = {
+  title?: string;
+  subtitle?: string;
+  buttonLabel?: string;
+  handle?: string;
+  url?: string;
+  cardBg?: string;
+  radius?: number;
+  items?: DropThumb[];
+};
+
+export function PriceDrop({
+  settings,
+  onOpenCollection,
+}: {
+  settings: PriceDropSettings;
+  onOpenCollection?: (handle: string) => void;
+}) {
+  if (!settings.title && !settings.subtitle) return null;
+  const go = () => {
+    if (settings.url) {
+      Linking.openURL(settings.url).catch(() => {});
+      return;
+    }
+    if (settings.handle) onOpenCollection?.(settings.handle);
+  };
+  const r = settings.radius && settings.radius > 0 ? settings.radius : 14;
+  const thumbs = (settings.items ?? []).filter((i) => i.imageUrl).slice(0, 3);
+
+  return (
+    <View style={[styles.card, { backgroundColor: settings.cardBg || colors.surface, borderRadius: r }]}>
+      {thumbs.length ? (
+        <View style={styles.thumbs}>
+          {thumbs.map((t) => (
+            <Image key={t.id} source={{ uri: t.imageUrl }} style={styles.thumb} />
+          ))}
+        </View>
+      ) : null}
+      <View style={{ flex: 1 }}>
+        {settings.title ? <Text style={styles.title} numberOfLines={1}>{settings.title}</Text> : null}
+        {settings.subtitle ? <Text style={styles.subtitle} numberOfLines={1}>{settings.subtitle}</Text> : null}
+      </View>
+      {settings.buttonLabel ? (
+        <Pressable style={styles.cta} onPress={go}>
+          <Text style={styles.ctaText}>{settings.buttonLabel}</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  card: { flexDirection: "row", alignItems: "center", gap: spacing.md, borderWidth: 1, borderColor: colors.line, padding: spacing.md },
+  thumbs: { flexDirection: "row" },
+  thumb: { width: 30, height: 30, borderRadius: 8, marginRight: -8, borderWidth: 2, borderColor: colors.surface, backgroundColor: colors.page },
+  title: { fontSize: 12, fontWeight: "700", color: colors.ink },
+  subtitle: { fontSize: 11, color: colors.inkSoft },
+  cta: { borderRadius: 999, backgroundColor: colors.accent, paddingHorizontal: 12, paddingVertical: 6 },
+  ctaText: { fontSize: 11, fontWeight: "600", color: "#fff" },
+});
+`,
+
     text: `import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { colors, radius, spacing } from "../theme";
@@ -2108,6 +2450,10 @@ function renderCall(block: Block, indent: number): string {
     payment_plans: ["onOpenCollection={onOpenCollection}"],
     price_slider: [],
     offer_cards: ["onOpenCollection={onOpenCollection}"],
+    product_reasons: ["collections={data.collections}", "onOpenCollection={onOpenCollection}"],
+    circle_row: ["collections={data.collections}", "onOpenCollection={onOpenCollection}"],
+    pick_colour: ["onOpenCollection={onOpenCollection}"],
+    price_drop: ["onOpenCollection={onOpenCollection}"],
     banner: ["collections={data.collections}", "onOpenCollection={onOpenCollection}"],
     categories: ["collections={data.collections}", "onOpenCollection={onOpenCollection}"],
     new_arrivals: ["products={data.newArrivals}", "onOpenProduct={onOpenProduct}"],
@@ -2147,6 +2493,7 @@ const SIZE_KEYS = new Set([
   "minPrice",
   "maxPrice",
   "startPrice",
+  "size",
 ]);
 
 /** A block's settings as a JS object literal, keeping only what it uses. */
@@ -2221,6 +2568,27 @@ function settingsLiteral(block: Block): string {
       "radius",
     ],
     offer_cards: ["title", "subtitle", "claimLabel", "radius"],
+    product_reasons: [
+      "title",
+      "subtitle",
+      "seeAllLabel",
+      "seeAllHandle",
+      "seeAllUrl",
+      "buttonLabel",
+      "radius",
+    ],
+    circle_row: [
+      "title",
+      "subtitle",
+      "seeAllLabel",
+      "seeAllHandle",
+      "seeAllUrl",
+      "size",
+      "showLabel",
+      "showNote",
+    ],
+    pick_colour: ["title", "subtitle", "size"],
+    price_drop: ["title", "subtitle", "buttonLabel", "handle", "url", "cardBg", "radius"],
     banner: ["imageUrl", "heading", "subheading", "handle"],
     categories: ["title"],
     new_arrivals: ["title", "limit"],
@@ -2239,7 +2607,14 @@ function settingsLiteral(block: Block): string {
       // be compared as one.
       if (k === "offerMinutes") return `${k}: ${n(v, 10)}`;
       if (k === "endsInMinutes") return `${k}: ${n(v, 135)}`;
-      if (k === "showReplays" || k === "offerEnabled" || k === "showTimer" || k === "showClaimed") {
+      if (
+        k === "showReplays" ||
+        k === "offerEnabled" ||
+        k === "showTimer" ||
+        k === "showClaimed" ||
+        k === "showLabel" ||
+        k === "showNote"
+      ) {
         return `${k}: ${v === false ? "false" : "true"}`;
       }
       // Sizes are only sent when the merchant actually set one, so the
@@ -2278,6 +2653,21 @@ function itemsLiteral(type: BlockType, items: Item[]): string {
     payment_plans: ["name", "headline", "note", "color", "handle", "url"],
     price_slider: ["name", "months", "badge", "color"],
     offer_cards: ["badge", "title", "subtitle", "color", "handle", "url"],
+    product_reasons: [
+      "imageUrl",
+      "reason",
+      "name",
+      "price",
+      "comparePrice",
+      "badge",
+      "rating",
+      "sold",
+      "handle",
+      "url",
+    ],
+    circle_row: ["imageUrl", "label", "note", "handle", "url"],
+    pick_colour: ["color", "label", "handle", "url"],
+    price_drop: ["imageUrl"],
   };
   const keys = fields[type] ?? [];
   const rendered = items.map((item) => {

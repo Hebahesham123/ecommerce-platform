@@ -1270,6 +1270,105 @@ function BlockGroup({
         </>
       )}
 
+      {(block.type === "product_reasons" ||
+        block.type === "circle_row" ||
+        block.type === "pick_colour" ||
+        block.type === "price_drop") && (
+        <>
+          <Field label={ar ? "العنوان" : "Title"} type="text">
+            <input value={text("title")} onChange={(e) => onPatch({ title: e.target.value })} className={input} />
+          </Field>
+          <Field label={ar ? "الشرح" : "Subtitle"} type="text">
+            <input value={text("subtitle")} onChange={(e) => onPatch({ subtitle: e.target.value })} className={input} />
+          </Field>
+
+          {(block.type === "product_reasons" || block.type === "circle_row") && (
+            <>
+              <Field label={ar ? "نص «الكل»" : "See-all text"} type="text">
+                <input
+                  value={text("seeAllLabel")}
+                  onChange={(e) => onPatch({ seeAllLabel: e.target.value })}
+                  placeholder={ar ? "اتركيه فارغاً بلا زر" : "Leave empty for no link"}
+                  className={input}
+                />
+              </Field>
+              <Field label={ar ? "يفتح" : "Opens"} type="collection">
+                <CollectionSelect
+                  collections={collections}
+                  value={text("seeAllHandle")}
+                  onChange={(handle) => onPatch({ seeAllHandle: handle })}
+                  anyLabel={ar ? "لا شيء" : "Nothing"}
+                  className={input}
+                />
+              </Field>
+              <Field label={ar ? "أو رابط" : "Or a link"} type="url">
+                <input value={text("seeAllUrl")} onChange={(e) => onPatch({ seeAllUrl: e.target.value })} placeholder="https://…" className={input} dir="ltr" />
+              </Field>
+            </>
+          )}
+
+          {block.type === "product_reasons" && (
+            <>
+              <Field label={ar ? "نص الزر" : "Button text"} type="text">
+                <input
+                  value={text("buttonLabel")}
+                  onChange={(e) => onPatch({ buttonLabel: e.target.value })}
+                  placeholder={ar ? "اتركيه فارغاً بلا زر" : "Leave empty for no button"}
+                  className={input}
+                />
+              </Field>
+              <Field label={ar ? "استدارة الحواف" : "Corner radius"} type="range">
+                <input type="number" min={0} max={32} value={num("radius", 14)} onChange={(e) => onPatch({ radius: Number(e.target.value) })} className={input} />
+              </Field>
+            </>
+          )}
+
+          {block.type === "circle_row" && (
+            <>
+              <Field label={ar ? "مقاس الدائرة" : "Circle size"} type="range">
+                <input type="number" min={32} max={120} value={num("size", 64)} onChange={(e) => onPatch({ size: Number(e.target.value) })} className={input} />
+              </Field>
+              <Field label={ar ? "إظهار الاسم" : "Show label"} type="checkbox">
+                <Toggle on={bool("showLabel", true)} onChange={(v) => onPatch({ showLabel: v })} ar={ar} />
+              </Field>
+              <Field label={ar ? "إظهار السطر تحته" : "Show the line under it"} type="checkbox">
+                <Toggle on={bool("showNote", true)} onChange={(v) => onPatch({ showNote: v })} ar={ar} />
+              </Field>
+            </>
+          )}
+
+          {block.type === "pick_colour" && (
+            <Field label={ar ? "مقاس الدائرة" : "Circle size"} type="range">
+              <input type="number" min={24} max={80} value={num("size", 44)} onChange={(e) => onPatch({ size: Number(e.target.value) })} className={input} />
+            </Field>
+          )}
+
+          {block.type === "price_drop" && (
+            <>
+              <Field label={ar ? "نص الزر" : "Button text"} type="text">
+                <input value={text("buttonLabel")} onChange={(e) => onPatch({ buttonLabel: e.target.value })} className={input} />
+              </Field>
+              <Field label={ar ? "يفتح" : "Opens"} type="collection">
+                <CollectionSelect
+                  collections={collections}
+                  value={text("handle")}
+                  onChange={(handle) => onPatch({ handle })}
+                  anyLabel={ar ? "لا شيء" : "Nothing"}
+                  className={input}
+                />
+              </Field>
+              <Field label={ar ? "أو رابط" : "Or a link"} type="url">
+                <input value={text("url")} onChange={(e) => onPatch({ url: e.target.value })} placeholder="https://…" className={input} dir="ltr" />
+              </Field>
+              <ColorRow label={ar ? "خلفية البطاقة" : "Card background"} value={text("cardBg")} fallback="#ffffff" onChange={(v) => onPatch({ cardBg: v })} input={input} ar={ar} />
+              <Field label={ar ? "استدارة الحواف" : "Corner radius"} type="range">
+                <input type="number" min={0} max={32} value={num("radius", 14)} onChange={(e) => onPatch({ radius: Number(e.target.value) })} className={input} />
+              </Field>
+            </>
+          )}
+        </>
+      )}
+
       {block.type === "shipping_goal" && (
         <>
           <Field label={ar ? "العنوان" : "Title"} type="text">

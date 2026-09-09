@@ -37,6 +37,10 @@ export type BlockType =
   | "payment_plans"
   | "price_slider"
   | "offer_cards"
+  | "product_reasons"
+  | "circle_row"
+  | "pick_colour"
+  | "price_drop"
   | "reviews"
   | "text";
 
@@ -135,6 +139,38 @@ export const ITEM_SHAPE: Partial<Record<BlockType, { ar: string; en: string; bla
     ar: "عرض",
     en: "Offer",
     blank: () => ({ id: itemId(), badge: "", title: "", subtitle: "", color: "", handle: "", url: "" }),
+  },
+  product_reasons: {
+    ar: "منتج",
+    en: "Product",
+    blank: () => ({
+      id: itemId(),
+      imageUrl: "",
+      reason: "",
+      name: "",
+      price: "",
+      comparePrice: "",
+      badge: "",
+      rating: "",
+      sold: "",
+      handle: "",
+      url: "",
+    }),
+  },
+  circle_row: {
+    ar: "دائرة",
+    en: "Circle",
+    blank: () => ({ id: itemId(), imageUrl: "", label: "", note: "", handle: "", url: "" }),
+  },
+  pick_colour: {
+    ar: "لون",
+    en: "Colour",
+    blank: () => ({ id: itemId(), color: "", label: "", handle: "", url: "" }),
+  },
+  price_drop: {
+    ar: "صورة",
+    en: "Thumbnail",
+    blank: () => ({ id: itemId(), imageUrl: "" }),
   },
 };
 
@@ -247,6 +283,32 @@ export const ITEM_FIELDS: Partial<Record<BlockType, FieldSpec[]>> = {
     { key: "handle", kind: "collection", ar: "يفتح", en: "Opens" },
     { key: "url", kind: "text", ar: "أو رابط", en: "Or a link" },
   ],
+  product_reasons: [
+    { key: "imageUrl", kind: "image", ar: "الصورة", en: "Photo" },
+    { key: "reason", kind: "text", ar: "سبب الاقتراح", en: "Why this" },
+    { key: "name", kind: "text", ar: "اسم المنتج", en: "Product name" },
+    { key: "price", kind: "text", ar: "السعر", en: "Price" },
+    { key: "comparePrice", kind: "text", ar: "قبل الخصم", en: "Was" },
+    { key: "badge", kind: "text", ar: "الشارة", en: "Badge" },
+    { key: "rating", kind: "text", ar: "التقييم", en: "Rating" },
+    { key: "sold", kind: "text", ar: "عدد المبيعات", en: "Sold" },
+    { key: "handle", kind: "collection", ar: "يفتح", en: "Opens" },
+    { key: "url", kind: "text", ar: "أو رابط", en: "Or a link" },
+  ],
+  circle_row: [
+    { key: "imageUrl", kind: "image", ar: "الصورة", en: "Photo" },
+    { key: "label", kind: "text", ar: "الاسم", en: "Label" },
+    { key: "note", kind: "text", ar: "تحت الاسم", en: "Under the label" },
+    { key: "handle", kind: "collection", ar: "يفتح", en: "Opens" },
+    { key: "url", kind: "text", ar: "أو رابط", en: "Or a link" },
+  ],
+  pick_colour: [
+    { key: "color", kind: "color", ar: "اللون", en: "Colour" },
+    { key: "label", kind: "text", ar: "الاسم", en: "Label" },
+    { key: "handle", kind: "collection", ar: "يفتح", en: "Opens" },
+    { key: "url", kind: "text", ar: "أو رابط", en: "Or a link" },
+  ],
+  price_drop: [{ key: "imageUrl", kind: "image", ar: "الصورة", en: "Photo" }],
 };
 
 export type Block = {
@@ -555,6 +617,30 @@ export const BLOCK_META: Record<
     hintAr: "عروض يمكن للعميل المطالبة بها، كل عرض ببطاقة",
     hintEn: "Offers the shopper can claim, one card each",
   },
+  product_reasons: {
+    ar: "مقترح لك",
+    en: "Because you viewed",
+    hintAr: "منتجات مع سبب اقتراح كل واحد، وسعره وتقييمه وزر إضافة",
+    hintEn: "Products with the reason each is being shown, its price, rating and an add button",
+  },
+  circle_row: {
+    ar: "صف دائري",
+    en: "Circle row",
+    hintAr: "صور دائرية باسم وسطر تحته — «اشتري مرة أخرى» أو «تسوّقي حسب القسم»",
+    hintEn: "Round pictures with a label and a line under it — Buy it again, or Shop by department",
+  },
+  pick_colour: {
+    ar: "اختاري اللون",
+    en: "Pick a colour",
+    hintAr: "دوائر ألوان، كل لون يفتح قسمه",
+    hintEn: "Colour circles, each opening its own collection",
+  },
+  price_drop: {
+    ar: "تنبيه انخفاض السعر",
+    en: "Price drop",
+    hintAr: "بطاقة تقول إن قطعاً محفوظة نزل سعرها، بصور صغيرة وزر",
+    hintEn: "A card saying saved pieces have dropped, with thumbnails and a button",
+  },
   reviews: {
     ar: "آراء العملاء",
     en: "Customer reviews",
@@ -671,6 +757,43 @@ export function newBlock(type: BlockType): Block {
       title: "Offers for you",
       subtitle: "",
       claimLabel: "Claim",
+      radius: 14,
+      items: shape ? [shape.blank()] : [],
+    },
+    product_reasons: {
+      title: "Because you viewed",
+      subtitle: "",
+      seeAllLabel: "See all",
+      seeAllHandle: "",
+      seeAllUrl: "",
+      buttonLabel: "Add to bag",
+      radius: 14,
+      items: shape ? [shape.blank()] : [],
+    },
+    circle_row: {
+      title: "Buy it again",
+      subtitle: "",
+      seeAllLabel: "",
+      seeAllHandle: "",
+      seeAllUrl: "",
+      size: 64,
+      showLabel: true,
+      showNote: true,
+      items: shape ? [shape.blank()] : [],
+    },
+    pick_colour: {
+      title: "Pick your colour",
+      subtitle: "",
+      size: 44,
+      items: shape ? [shape.blank()] : [],
+    },
+    price_drop: {
+      title: "",
+      subtitle: "",
+      buttonLabel: "View",
+      handle: "",
+      url: "",
+      cardBg: "",
       radius: 14,
       items: shape ? [shape.blank()] : [],
     },

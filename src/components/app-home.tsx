@@ -421,6 +421,39 @@ function BlockView({
       );
     }
 
+    case "product_reasons": {
+      const picks = itemsOf(block).filter((i) => str(i.name) || str(i.imageUrl));
+      if (!picks.length) return <Placeholder ar={ar} label={ar ? "لا مقترحات بعد" : "Nothing suggested yet"} />;
+      return (
+        <ProductReasons block={block} items={picks} data={data} ar={ar} accent={accent} handlers={handlers} />
+      );
+    }
+
+    case "circle_row": {
+      const circles = itemsOf(block).filter((i) => str(i.imageUrl) || str(i.label) || str(i.handle));
+      if (!circles.length) return <Placeholder ar={ar} label={ar ? "لا عناصر بعد" : "Nothing here yet"} />;
+      return (
+        <CircleRow block={block} items={circles} data={data} ar={ar} accent={accent} handlers={handlers} />
+      );
+    }
+
+    case "pick_colour": {
+      const colours = itemsOf(block).filter((i) => str(i.color));
+      if (!colours.length) return <Placeholder ar={ar} label={ar ? "لا ألوان بعد" : "No colours yet"} />;
+      return (
+        <PickColour block={block} items={colours} data={data} ar={ar} accent={accent} handlers={handlers} />
+      );
+    }
+
+    case "price_drop": {
+      if (!str(s.title) && !str(s.subtitle)) {
+        return <Placeholder ar={ar} label={ar ? "تنبيه بلا نص" : "Alert with no wording yet"} />;
+      }
+      return (
+        <PriceDrop block={block} items={itemsOf(block)} data={data} ar={ar} accent={accent} handlers={handlers} />
+      );
+    }
+
     case "shipping_goal": {
       if (!str(s.title) && !str(s.subtitle)) {
         return <Placeholder ar={ar} label={ar ? "شريط بلا نص" : "Bar with no wording yet"} />;
@@ -1484,6 +1517,301 @@ function OfferCards({
   );
 }
 
+/** A heading with an optional "see all" on the end. */
+function RowHead({
+  title,
+  subtitle,
+  seeAll,
+  onSeeAll,
+  accent,
+}: {
+  title: string;
+  subtitle: string;
+  seeAll: string;
+  onSeeAll: () => void;
+  accent: string;
+}) {
+  if (!title && !subtitle && !seeAll) return null;
+  return (
+    <div className="flex items-end justify-between gap-2">
+      <div className="min-w-0">
+        {title && <h3 className="truncate text-sm font-bold text-slate-900">{title}</h3>}
+        {subtitle && <p className="truncate text-[11px] text-slate-500">{subtitle}</p>}
+      </div>
+      {seeAll && (
+        <button onClick={onSeeAll} className="shrink-0 text-xs font-semibold" style={{ color: accent }}>
+          {seeAll} ›
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** Products with the reason each one is being shown. */
+function ProductReasons({
+  block,
+  items,
+  data,
+  ar,
+  accent,
+  handlers,
+}: {
+  block: Block;
+  items: Item[];
+  data: HomeData;
+  ar: boolean;
+  accent: string;
+  handlers: HomeHandlers;
+}) {
+  const s = block.settings ?? {};
+  const go = opener(data, handlers);
+  const radius = int(s.radius, 14);
+  const button = str(s.buttonLabel);
+
+  return (
+    <section>
+      <RowHead
+        title={str(s.title)}
+        subtitle={str(s.subtitle)}
+        seeAll={str(s.seeAllLabel)}
+        onSeeAll={() => go(str(s.seeAllUrl), str(s.seeAllHandle))}
+        accent={accent}
+      />
+      <div className="-mx-4 mt-2 flex gap-3 overflow-x-auto px-4 pb-1">
+        {items.map((item) => {
+          const borrowed = inherit(item, data);
+          return (
+            <div
+              key={item.id}
+              className="flex w-[150px] shrink-0 flex-col overflow-hidden border border-slate-200 bg-white"
+              style={{ borderRadius: radius }}
+            >
+              <button onClick={() => go(str(item.url), str(item.handle))} className="relative block">
+                <Thumb src={borrowed.image} className="h-[120px] w-full" style={{ borderRadius: 0 }} />
+                {str(item.badge) && (
+                  <span
+                    className="absolute end-1.5 top-1.5 rounded px-1.5 py-0.5 text-[10px] font-bold text-white"
+                    style={{ background: accent }}
+                  >
+                    {str(item.badge)}
+                  </span>
+                )}
+              </button>
+              <div className="flex flex-1 flex-col p-2">
+                {str(item.reason) && (
+                  <div className="truncate text-[9px] font-semibold" style={{ color: accent }}>
+                    ◆ {str(item.reason)}
+                  </div>
+                )}
+                <div className="mt-0.5 line-clamp-2 text-[11px] font-medium leading-snug text-slate-900">
+                  {str(item.name, borrowed.title)}
+                </div>
+                <div className="mt-1 flex items-baseline gap-1">
+                  <span className="text-[12px] font-bold" style={{ color: accent }}>
+                    {str(item.price)}
+                  </span>
+                  {str(item.comparePrice) && (
+                    <span className="text-[10px] text-slate-400 line-through">
+                      {str(item.comparePrice)}
+                    </span>
+                  )}
+                </div>
+                {(str(item.rating) || str(item.sold)) && (
+                  <div className="mt-0.5 flex items-center gap-1.5 text-[9px] text-slate-500">
+                    {str(item.rating) && <span>★ {str(item.rating)}</span>}
+                    {str(item.sold) && <span>{str(item.sold)}</span>}
+                  </div>
+                )}
+                {button && (
+                  <button
+                    onClick={() => go(str(item.url), str(item.handle))}
+                    className="mt-2 rounded-lg py-1.5 text-[11px] font-semibold text-white"
+                    style={{ background: accent }}
+                  >
+                    {button}
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+/** Round pictures with a label — Buy it again, or Shop by department. */
+function CircleRow({
+  block,
+  items,
+  data,
+  ar,
+  accent,
+  handlers,
+}: {
+  block: Block;
+  items: Item[];
+  data: HomeData;
+  ar: boolean;
+  accent: string;
+  handlers: HomeHandlers;
+}) {
+  const s = block.settings ?? {};
+  const go = opener(data, handlers);
+  const size = int(s.size, 64);
+  const showLabel = s.showLabel !== false;
+  const showNote = s.showNote !== false;
+  const cell = Math.max(size + 14, 56);
+
+  return (
+    <section>
+      <RowHead
+        title={str(s.title)}
+        subtitle={str(s.subtitle)}
+        seeAll={str(s.seeAllLabel)}
+        onSeeAll={() => go(str(s.seeAllUrl), str(s.seeAllHandle))}
+        accent={accent}
+      />
+      <div className="-mx-4 mt-2 flex gap-3 overflow-x-auto px-4 pb-1">
+        {items.map((item) => {
+          const borrowed = inherit(item, data);
+          return (
+            <button
+              key={item.id}
+              onClick={() => go(str(item.url), str(item.handle))}
+              className="flex shrink-0 flex-col items-center"
+              style={{ width: cell }}
+            >
+              <Thumb
+                src={borrowed.image}
+                className="border border-slate-200"
+                style={{ width: size, height: size, borderRadius: 9999 }}
+              />
+              {showNote && str(item.note) && (
+                <span className="mt-1.5 w-full truncate text-center text-[11px] font-bold" style={{ color: accent }}>
+                  {str(item.note)}
+                </span>
+              )}
+              {showLabel && (
+                <span className="w-full truncate text-center text-[10px] text-slate-500">
+                  {str(item.label, borrowed.title)}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+/** Colour circles, each opening its own collection. */
+function PickColour({
+  block,
+  items,
+  data,
+  ar,
+  accent,
+  handlers,
+}: {
+  block: Block;
+  items: Item[];
+  data: HomeData;
+  ar: boolean;
+  accent: string;
+  handlers: HomeHandlers;
+}) {
+  const s = block.settings ?? {};
+  const go = opener(data, handlers);
+  const size = int(s.size, 44);
+
+  return (
+    <section>
+      {str(s.title) && <Heading title={str(s.title)} ar={ar} accent={accent} />}
+      {str(s.subtitle) && <p className="text-[11px] text-slate-500">{str(s.subtitle)}</p>}
+      <div className="-mx-4 mt-2 flex gap-3 overflow-x-auto px-4 pb-1">
+        {items.map((item) => (
+          <button
+            key={item.id}
+            onClick={() => go(str(item.url), str(item.handle))}
+            className="flex shrink-0 flex-col items-center gap-1"
+            style={{ width: size + 16 }}
+          >
+            <span
+              className="block border border-slate-200"
+              style={{ width: size, height: size, borderRadius: 9999, background: str(item.color, "#e2e8f0") }}
+            />
+            {str(item.label) && (
+              <span className="w-full truncate text-center text-[10px] text-slate-600">
+                {str(item.label)}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/** Saved pieces that have come down in price. */
+function PriceDrop({
+  block,
+  items,
+  data,
+  ar,
+  accent,
+  handlers,
+}: {
+  block: Block;
+  items: Item[];
+  data: HomeData;
+  ar: boolean;
+  accent: string;
+  handlers: HomeHandlers;
+}) {
+  const s = block.settings ?? {};
+  const go = opener(data, handlers);
+  const radius = int(s.radius, 14);
+  const button = str(s.buttonLabel);
+
+  return (
+    <section
+      className="flex items-center gap-3 border border-slate-200 p-3"
+      style={{ background: str(s.cardBg, "#ffffff"), borderRadius: radius }}
+    >
+      {items.length > 0 && (
+        <span className="flex shrink-0 -space-x-2">
+          {items.slice(0, 3).map((item) => (
+            <Thumb
+              key={item.id}
+              src={inherit(item, data).image}
+              className="border-2 border-white"
+              style={{ width: 30, height: 30, borderRadius: 8 }}
+            />
+          ))}
+        </span>
+      )}
+      <span className="min-w-0 flex-1">
+        {str(s.title) && (
+          <span className="block truncate text-[12px] font-bold text-slate-900">{str(s.title)}</span>
+        )}
+        {str(s.subtitle) && (
+          <span className="block truncate text-[11px] text-slate-500">{str(s.subtitle)}</span>
+        )}
+      </span>
+      {button && (
+        <button
+          onClick={() => go(str(s.url), str(s.handle))}
+          className="shrink-0 rounded-full px-3 py-1.5 text-[11px] font-semibold text-white"
+          style={{ background: accent }}
+        >
+          {button}
+        </button>
+      )}
+    </section>
+  );
+}
+
 function Placeholder({ ar, label }: { ar: boolean; label: string }) {
   return (
     <div
@@ -1569,6 +1897,14 @@ function isPlaceholder(node: React.ReactElement): boolean {
       return itemsOf(block).filter((t) => str(t.handle)).length === 0;
     case "promo_bar":
       return !str(s.lead) && !str(s.code);
+    case "product_reasons":
+      return itemsOf(block).filter((i) => str(i.name) || str(i.imageUrl)).length === 0;
+    case "circle_row":
+      return itemsOf(block).filter((i) => str(i.imageUrl) || str(i.label) || str(i.handle)).length === 0;
+    case "pick_colour":
+      return itemsOf(block).filter((i) => str(i.color)).length === 0;
+    case "price_drop":
+      return !str(s.title) && !str(s.subtitle);
     case "shipping_goal":
       return !str(s.title) && !str(s.subtitle);
     case "payment_plans":
