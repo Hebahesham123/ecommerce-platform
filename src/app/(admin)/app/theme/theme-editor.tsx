@@ -18,6 +18,7 @@ import {
   IcRedo,
 } from "@/components/icons";
 import { AppHome, type HomeData } from "@/components/app-home";
+import { ColorPicker, ImageUpload } from "@/components/pickers";
 import {
   BLOCK_META,
   ITEM_FIELDS,
@@ -492,45 +493,44 @@ export function ThemeEditor() {
                 />
               </Field>
               <Field label={ar ? "اللون الأساسي" : "Accent colour"} type="color">
-                <span className="flex items-center gap-2">
-                  <input
-                    type="color"
-                    value={draft.settings.accent}
-                    onChange={(e) => patchSettings({ accent: e.target.value })}
-                    className="h-9 w-12 shrink-0 cursor-pointer rounded-lg border border-line bg-surface-page p-1"
-                  />
-                  <input
-                    value={draft.settings.accent}
-                    onChange={(e) => patchSettings({ accent: e.target.value })}
-                    className={`${input} font-mono`}
-                    dir="ltr"
-                  />
-                </span>
+                <ColorPicker
+                  value={draft.settings.accent}
+                  onChange={(v) => patchSettings({ accent: v })}
+                  fallback="#7c3aed"
+                  brand={[draft.settings.accent, draft.settings.background]}
+                  input={input}
+                  ar={ar}
+                />
               </Field>
               <Field label={ar ? "لون الخلفية" : "Background colour"} type="color">
+                <ColorPicker
+                  value={draft.settings.background}
+                  onChange={(v) => patchSettings({ background: v })}
+                  fallback="#f8fafc"
+                  brand={[draft.settings.accent, draft.settings.background]}
+                  input={input}
+                  ar={ar}
+                />
+              </Field>
+              <Field label={ar ? "الشعار" : "Logo"} type="image_picker">
                 <span className="flex items-center gap-2">
+                  {draft.settings.logoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={draft.settings.logoUrl}
+                      alt=""
+                      className="h-9 w-9 shrink-0 rounded-lg border border-line object-contain"
+                    />
+                  ) : null}
+                  <ImageUpload onUploaded={(url) => patchSettings({ logoUrl: url })} ar={ar} />
                   <input
-                    type="color"
-                    value={draft.settings.background}
-                    onChange={(e) => patchSettings({ background: e.target.value })}
-                    className="h-9 w-12 shrink-0 cursor-pointer rounded-lg border border-line bg-surface-page p-1"
-                  />
-                  <input
-                    value={draft.settings.background}
-                    onChange={(e) => patchSettings({ background: e.target.value })}
-                    className={`${input} font-mono`}
+                    value={draft.settings.logoUrl ?? ""}
+                    onChange={(e) => patchSettings({ logoUrl: e.target.value || null })}
+                    placeholder="https://…"
+                    className={input}
                     dir="ltr"
                   />
                 </span>
-              </Field>
-              <Field label={ar ? "الشعار" : "Logo"} type="image_picker">
-                <input
-                  value={draft.settings.logoUrl ?? ""}
-                  onChange={(e) => patchSettings({ logoUrl: e.target.value || null })}
-                  placeholder="https://…"
-                  className={input}
-                  dir="ltr"
-                />
               </Field>
               <Field label={ar ? "قائمة التنقّل" : "Navigation menu"} type="link_list">
                 <select
@@ -1022,32 +1022,17 @@ function ColorRow({
   input: string;
   ar: boolean;
 }) {
-  const hex = /^#[0-9a-f]{6}$/i.test(value) ? value : fallback;
   return (
     <Field label={label} type="color">
-      <div className="flex items-center gap-2">
-        <input
-          type="color"
-          value={hex}
-          onChange={(e) => onChange(e.target.value)}
-          className="h-9 w-10 shrink-0 cursor-pointer rounded-lg border border-line bg-surface p-1"
-        />
-        <input
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={ar ? "لون الهوية" : "Brand colour"}
-          className={`${input} font-mono`}
-          dir="ltr"
-        />
-        {value ? (
-          <button
-            onClick={() => onChange("")}
-            className="shrink-0 rounded-lg px-2 py-1 text-[11px] text-ink-muted hover:bg-surface-hover"
-          >
-            {ar ? "افتراضي" : "Reset"}
-          </button>
-        ) : null}
-      </div>
+      <ColorPicker
+        value={value}
+        onChange={onChange}
+        fallback={fallback}
+        allowEmpty
+        brand={[fallback]}
+        input={input}
+        ar={ar}
+      />
     </Field>
   );
 }
@@ -1708,6 +1693,13 @@ function ItemList({
                                 src={value || inherited}
                                 alt=""
                                 className="h-8 w-8 shrink-0 rounded object-cover"
+                              />
+                            )}
+                            {f.kind === "image" && (
+                              <ImageUpload
+                                onUploaded={(url) => patchItem(item.id, { [f.key]: url })}
+                                ar={ar}
+                                compact
                               />
                             )}
                             <input
