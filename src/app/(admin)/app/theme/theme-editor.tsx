@@ -19,6 +19,7 @@ import {
 } from "@/components/icons";
 import { AppHome, type HomeData } from "@/components/app-home";
 import { AppStrip } from "@/components/app-strip";
+import { AppLive } from "@/components/app-live";
 import { ColorPicker, ImageUpload } from "@/components/pickers";
 import {
   BLOCK_META,
@@ -26,6 +27,7 @@ import {
   ITEM_SHAPE,
   itemId,
   itemsOf,
+  liveSessionsOf,
   newBlock,
   normalizeTheme,
   type AppTheme,
@@ -124,7 +126,7 @@ export function ThemeEditor() {
    * better.
    */
   // Which screen the editor is on. Home is blocks; the rest are settings.
-  const [page, setPage] = useState<ScreenKey | "home">("home");
+  const [page, setPage] = useState<ScreenKey | "home" | "live">("home");
   const [stack, setStack] = useState<Screen[]>([]);
   const screen = stack[stack.length - 1] ?? null;
   const push = useCallback((next: Screen) => setStack((s) => [...s, next]), []);
@@ -673,7 +675,7 @@ export function ThemeEditor() {
               <TabsPanel tabs={draft.tabs} ar={ar} onChange={patchTabs} />
             </Group>
 
-            {page !== "home" && (
+            {page !== "home" && page !== "live" && (
               <>
                 <div className="mb-1.5 mt-4 px-1 text-[11px] font-semibold uppercase tracking-wide text-ink-soft">
                   {SCREEN_LABELS[page][ar ? "ar" : "en"]}
@@ -822,7 +824,13 @@ export function ThemeEditor() {
               )}
 
               <div className="flex flex-1 flex-col">
-              {page === "cart" || page === "checkout" ? (
+              {page === "live" ? (
+                <AppLive
+                  sessions={liveSessionsOf(draft)}
+                  ar={ar}
+                  accent={draft.settings.accent}
+                />
+              ) : page === "cart" || page === "checkout" ? (
                 <Cart
                   ar={ar}
                   cart={cart}

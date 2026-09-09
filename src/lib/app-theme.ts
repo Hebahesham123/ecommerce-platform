@@ -365,14 +365,15 @@ export type AppSettings = {
  * one is a screen the app knows how to draw, and a tab pointing at a screen
  * that does not exist is a tab that crashes.
  */
-export type TabKey = "shop" | "cart" | "orders" | "account";
+export type TabKey = "shop" | "live" | "cart" | "orders" | "account";
 
 export type Tab = { key: TabKey; label: string; visible: boolean };
 
-export const TAB_KEYS: TabKey[] = ["shop", "cart", "orders", "account"];
+export const TAB_KEYS: TabKey[] = ["shop", "live", "cart", "orders", "account"];
 
 export const TAB_DEFAULTS: Record<TabKey, { ar: string; en: string; icon: string }> = {
   shop: { ar: "المتجر", en: "Shop", icon: "◳" },
+  live: { ar: "البث", en: "Live", icon: "◉" },
   cart: { ar: "السلة", en: "Cart", icon: "◔" },
   orders: { ar: "طلباتي", en: "Orders", icon: "◨" },
   account: { ar: "حسابي", en: "Account", icon: "◍" },
@@ -445,6 +446,12 @@ export type AppTheme = {
   screens: ScreenSettings;
 };
 
+/**
+ * Live is off until a merchant turns it on.
+ *
+ * Every other tab is a place the app already has. A Live tab on a shop that
+ * never streams is a tab onto nothing, so it has to be asked for.
+ */
 export const DEFAULT_TABS: Tab[] = TAB_KEYS.map((key) => ({
   key,
   label: "",
@@ -692,6 +699,48 @@ export const BLOCK_META: Record<
     hintEn: "A heading and a short paragraph",
   },
 };
+
+/**
+ * Who is live, and who is coming up, read off the sections that already say so.
+ *
+ * The Live tab could have had its own list of streams, but then a merchant
+ * would keep two of them and they would disagree by the second week. It reads
+ * the Live now and Coming up live sections instead: one place to edit, and a
+ * tab that empties honestly when those sections are removed.
+ */
+export type LiveSession = {
+  id: string;
+  name: string;
+  detail: string;
+  imageUrl: string;
+  url: string;
+  handle: string;
+  live: boolean;
+};
+
+export function liveSessionsOf(theme: AppTheme): LiveSession[] {
+  const out: LiveSession[] = [];
+  for (const block of theme.blocks ?? []) {
+    if (block.type !== "live_now" && block.type !== "coming_up_live") continue;
+    const live = block.type === "live_now";
+    for (const item of itemsOf(block)) {
+      const name = str(item.name) || str(item.title);
+      const imageUrl = str(item.imageUrl);
+      if (!name && !imageUrl) continue;
+      out.push({
+        id: str(item.id),
+        name,
+        detail: str(item.viewers) || str(item.when),
+        imageUrl,
+        url: str(item.url),
+        handle: str(item.handle),
+        live,
+      });
+    }
+  }
+  // On air first, then what is coming.
+  return out.sort((a, b) => Number(b.live) - Number(a.live));
+}
 
 /** A block of this type, with settings that make sense on day one. */
 export function newBlock(type: BlockType): Block {
@@ -958,7 +1007,7 @@ export function normalizeTheme(raw: unknown): AppTheme {
     tabs.push({ key, label: str(tab.label, "").slice(0, 24), visible: tab.visible !== false });
   }
   for (const key of TAB_KEYS) {
-    if (!seen.has(key)) tabs.push({ key, label: "", visible: true });
+    if (!seen.has(key)) tabs.push({ key, label: "", visible: key !== "live" });
   }
   if (!tabs.some((t) => t.visible)) tabs[0].visible = true;
 

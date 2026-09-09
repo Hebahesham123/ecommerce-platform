@@ -1,6 +1,7 @@
 import {
   BLOCK_META,
   itemsOf,
+  liveSessionsOf,
   TAB_DEFAULTS,
   type AppTheme,
   type Block,
@@ -71,6 +72,14 @@ export const theme = {
     enabled: ${t.announcementEnabled},
     text: ${q(t.announcement)},
   },
+  live: [${liveSessionsOf(theme)
+    .map(
+      (s) =>
+        `{ id: ${q(s.id)}, name: ${q(s.name)}, detail: ${q(s.detail)}, imageUrl: ${q(
+          s.imageUrl,
+        )}, url: ${q(s.url)}, handle: ${q(s.handle)}, live: ${s.live} }`,
+    )
+    .join(", ")}],
   strip: {
     enabled: ${t.stripEnabled},
     items: [${t.strip
@@ -2940,6 +2949,84 @@ function itemsLiteral(type: BlockType, items: Item[]): string {
  * the wording and which optional parts appear — so their settings arrive as a
  * constant and the component reads it. Nobody reorders a checkout.
  */
+function liveScreenFile(): GeneratedFile {
+  return {
+    path: "components/LiveScreen.tsx",
+    language: "tsx",
+    contents: `/**
+ * The Live tab. Generated from the dashboard - App - App theme.
+ *
+ * The sessions come from the Live now and Coming up live sections, so there is
+ * one list to keep rather than two that drift apart.
+ */
+import React from "react";
+import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { colors, radius, spacing, theme } from "../theme";
+
+export function LiveScreen({ onOpenCollection }: { onOpenCollection?: (handle: string) => void }) {
+  const sessions = theme.live;
+  if (!sessions.length) {
+    return (
+      <View style={styles.empty}>
+        <Text style={styles.emptyText}>
+          Nothing live yet. Add a Live now or Coming up live section to the home screen.
+        </Text>
+      </View>
+    );
+  }
+  const go = (url: string, handle: string) => {
+    if (url) {
+      Linking.openURL(url).catch(() => {});
+      return;
+    }
+    if (handle) onOpenCollection?.(handle);
+  };
+  return (
+    <ScrollView contentContainerStyle={styles.wrap}>
+      {sessions.map((s) => (
+        <Pressable key={s.id} style={styles.row} onPress={() => go(s.url, s.handle)}>
+          <View>
+            {s.imageUrl ? (
+              <Image source={{ uri: s.imageUrl }} style={styles.thumb} />
+            ) : (
+              <View style={styles.thumb} />
+            )}
+            {s.live ? (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>LIVE</Text>
+              </View>
+            ) : null}
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.name} numberOfLines={1}>{s.name}</Text>
+            {s.detail ? <Text style={styles.detail} numberOfLines={1}>{s.detail}</Text> : null}
+          </View>
+          <View style={styles.cta}>
+            <Text style={styles.ctaText}>{s.live ? "Watch" : "Remind me"}</Text>
+          </View>
+        </Pressable>
+      ))}
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  wrap: { padding: spacing.lg, gap: spacing.md },
+  empty: { padding: 32 },
+  emptyText: { fontSize: 12, lineHeight: 18, color: colors.inkSoft, textAlign: "center" },
+  row: { flexDirection: "row", alignItems: "center", gap: spacing.md, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, padding: spacing.md },
+  thumb: { width: 56, height: 56, borderRadius: 12, backgroundColor: colors.page },
+  badge: { position: "absolute", bottom: -4, alignSelf: "center", borderRadius: 4, backgroundColor: "#e11d48", paddingHorizontal: 5, paddingVertical: 1 },
+  badgeText: { fontSize: 8, fontWeight: "700", color: "#fff" },
+  name: { fontSize: 12, fontWeight: "700", color: colors.ink },
+  detail: { fontSize: 11, color: colors.inkSoft },
+  cta: { borderRadius: 999, backgroundColor: colors.accent, paddingHorizontal: 12, paddingVertical: 6 },
+  ctaText: { fontSize: 11, fontWeight: "600", color: "#fff" },
+});
+`,
+  };
+}
+
 function tabBarFile(theme: AppTheme): GeneratedFile {
   const tabs = theme.tabs
     .filter((t) => t.visible)
@@ -4024,7 +4111,11 @@ import { CartScreen } from "./components/CartScreen";
 import { CheckoutScreen, type Address } from "./components/CheckoutScreen";
 import { AccountScreen, type AccountRow } from "./components/AccountScreen";
 import { OrdersScreen } from "./components/OrdersScreen";
-import { SignInScreen } from "./components/SignInScreen";
+import { SignInScreen } from "./components/SignInScreen";${
+      theme.tabs.some((t) => t.key === "live" && t.visible)
+        ? '\nimport { LiveScreen } from "./components/LiveScreen";'
+        : ""
+    }
 
 /** A screen pushed on top of a tab. Tabs themselves are not pushed. */
 type Screen =
@@ -4194,6 +4285,8 @@ export default function App() {
       onOpenCollection={(handle) => push({ kind: "collection", handle })}
       onOpenProduct={(id) => push({ kind: "product", id })}
     />
+  ) : tab === "live" ? (
+    <LiveScreen onOpenCollection={(handle) => push({ kind: "collection", handle })} />
   ) : tab === "cart" ? (
     <CartScreen
       lines={cart?.lines ?? []}
@@ -4284,6 +4377,7 @@ export function generateApp(theme: AppTheme, baseUrl: string): GeneratedFile[] {
     accountScreenFile(),
     ordersScreenFile(),
     signInScreenFile(),
+    ...(theme.tabs.some((t) => t.key === "live" && t.visible) ? [liveScreenFile()] : []),
     ...used.map(sectionFile).sort((a, b) => a.path.localeCompare(b.path)),
   ];
 }

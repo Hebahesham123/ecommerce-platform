@@ -17,6 +17,8 @@ import { Enquiry, Orders, Returns, SignIn } from "./screens";
 import { Shop } from "./shop";
 import { AppNudge } from "@/components/app-nudge";
 import { AppStrip } from "@/components/app-strip";
+import { AppLive } from "@/components/app-live";
+import { liveSessionsOf } from "@/lib/app-theme";
 import type { NudgeCampaign } from "@/lib/nudge";
 import {
   DEFAULT_SCREENS,
@@ -45,7 +47,7 @@ import {
  * is on screen.
  */
 
-type Tab = "shop" | "cart" | "orders" | "account";
+type Tab = "shop" | "live" | "cart" | "orders" | "account";
 export type CartLine = { itemId: string; quantity: number };
 
 /**
@@ -209,6 +211,16 @@ export function Preview() {
                 onTheme={setTheme}
                 shopperName={shopperName}
                 onLeave={(what) => (what === "cart" ? setTab("cart") : setSheet("enquiry"))}
+              />
+            )}
+            {activeTab === "live" && (
+              <AppLive
+                sessions={theme ? liveSessionsOf(theme) : []}
+                ar={ar}
+                accent={accent}
+                onOpen={(s) => {
+                  if (s.url) window.open(s.url, "_blank", "noopener,noreferrer");
+                }}
               />
             )}
             {activeTab === "cart" && (
