@@ -507,6 +507,22 @@ export function ThemeEditor() {
                   />
                 </span>
               </Field>
+              <Field label={ar ? "لون الخلفية" : "Background colour"} type="color">
+                <span className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={draft.settings.background}
+                    onChange={(e) => patchSettings({ background: e.target.value })}
+                    className="h-9 w-12 shrink-0 cursor-pointer rounded-lg border border-line bg-surface-page p-1"
+                  />
+                  <input
+                    value={draft.settings.background}
+                    onChange={(e) => patchSettings({ background: e.target.value })}
+                    className={`${input} font-mono`}
+                    dir="ltr"
+                  />
+                </span>
+              </Field>
               <Field label={ar ? "الشعار" : "Logo"} type="image_picker">
                 <input
                   value={draft.settings.logoUrl ?? ""}
@@ -681,7 +697,13 @@ export function ThemeEditor() {
             <div
               className={`${
                 device === "mobile" ? "w-[390px]" : "w-full max-w-[900px]"
-              } relative flex min-h-[620px] max-w-full flex-col self-start overflow-hidden rounded-[1.75rem] border-8 border-slate-900 bg-slate-50 shadow-card`}
+              } relative flex min-h-[620px] max-w-full flex-col self-start overflow-hidden rounded-[1.75rem] border-8 border-slate-900 shadow-card`}
+              style={
+                {
+                  background: draft.settings.background,
+                  "--app-page": draft.settings.background,
+                } as React.CSSProperties
+              }
             >
               <div className="flex items-center justify-between bg-slate-900 px-4 pb-2 pt-1.5 text-[11px] font-medium text-white">
                 <span className="flex items-center gap-1.5">
@@ -744,7 +766,7 @@ export function ThemeEditor() {
                   onEnquiry={() => window.open("/app-preview", "_blank")}
                 />
               ) : page !== "home" && !screen ? (
-                <p className="bg-slate-50 px-6 py-16 text-center text-sm leading-relaxed text-slate-400">
+                <p className="bg-[var(--app-page,#f8fafc)] px-6 py-16 text-center text-sm leading-relaxed text-slate-400">
                   {page === "collection"
                     ? ar
                       ? "لا يوجد قسم لعرضه. افتحي أي قسم من الشاشة الرئيسية."
@@ -755,7 +777,7 @@ export function ThemeEditor() {
                 </p>
               ) : screen ? (
                 screen.kind === "orders" ? (
-                  <div className="bg-slate-50 p-4">
+                  <div className="bg-[var(--app-page,#f8fafc)] p-4">
                     <Orders ar={ar} signedIn={Boolean(shopper)} />
                   </div>
                 ) : screen.kind === "collection" ? (
@@ -778,7 +800,7 @@ export function ThemeEditor() {
                   />
                 )
               ) : (
-              <div className="bg-slate-50 p-4">
+              <div className="bg-[var(--app-page,#f8fafc)] p-4">
                 {draft.settings.showSearch && (
                   <input
                     value={query}

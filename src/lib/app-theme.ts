@@ -169,6 +169,8 @@ export type AppSettings = {
   logoUrl: string | null;
   /** The one colour the app is built around: buttons, prices, the active tab. */
   accent: string;
+  /** What every screen sits on, behind the cards. */
+  background: string;
   announcement: string;
   announcementEnabled: boolean;
   /** Which navigation menu fills the app's drawer. */
@@ -313,6 +315,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   storeName: "BeautyBar",
   logoUrl: null,
   accent: "#7c3aed",
+  background: "#f8fafc",
   announcement: "",
   announcementEnabled: false,
   menuHandle: "main-menu",
@@ -488,10 +491,10 @@ export function newBlock(type: BlockType): Block {
 const str = (v: unknown, fallback = ""): string =>
   typeof v === "string" ? v : fallback;
 
-/** A hex colour, or the default. Anything else would reach the app as CSS. */
-function colour(v: unknown): string {
+/** A hex colour, or the given default. Anything else would reach the app as CSS. */
+function colour(v: unknown, fallback: string = DEFAULT_SETTINGS.accent): string {
   const s = String(v ?? "").trim();
-  return /^#[0-9a-f]{6}$/i.test(s) ? s : DEFAULT_SETTINGS.accent;
+  return /^#[0-9a-f]{6}$/i.test(s) ? s : fallback;
 }
 
 /**
@@ -515,6 +518,7 @@ export function normalizeTheme(raw: unknown): AppTheme {
     storeName: str(s.storeName, DEFAULT_SETTINGS.storeName).slice(0, 60),
     logoUrl: str(s.logoUrl) || null,
     accent: colour(s.accent),
+    background: colour(s.background, DEFAULT_SETTINGS.background),
     announcement: str(s.announcement).slice(0, 200),
     announcementEnabled: Boolean(s.announcementEnabled),
     menuHandle: str(s.menuHandle, DEFAULT_SETTINGS.menuHandle).slice(0, 60),

@@ -64,6 +64,7 @@ export const theme = {
   storeName: ${q(t.storeName)},
   logoUrl: ${t.logoUrl ? q(t.logoUrl) : "null"},
   accent: ${q(t.accent)},
+  background: ${q(t.background)},
   menuHandle: ${q(t.menuHandle)},
   showSearch: ${t.showSearch},
   announcement: {
@@ -79,7 +80,8 @@ export const colors = {
   inkMuted: "#475569",
   inkSoft: "#94a3b8",
   surface: "#ffffff",
-  page: "#f8fafc",
+  // What every screen sits on. Set in the dashboard next to the accent.
+  page: theme.background,
   line: "#e2e8f0",
 } as const;
 

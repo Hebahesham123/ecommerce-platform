@@ -136,7 +136,12 @@ export function Preview() {
     <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
       {/* ------------------------------- the phone ------------------------- */}
       <div className="mx-auto w-full max-w-[400px] shrink-0">
-        <div className="relative flex h-[760px] flex-col overflow-hidden rounded-[2rem] border-8 border-slate-900 bg-slate-50 shadow-2xl">
+        <div
+          className="relative flex h-[760px] flex-col overflow-hidden rounded-[2rem] border-8 border-slate-900 shadow-2xl"
+          style={
+            { background: brand.background, "--app-page": brand.background } as React.CSSProperties
+          }
+        >
           {/* status bar — the store's own name and mark, from the theme */}
           <div className="flex items-center justify-between bg-slate-900 px-4 pb-2 pt-1.5 text-[11px] font-medium text-white">
             <span className="flex items-center gap-1.5">
