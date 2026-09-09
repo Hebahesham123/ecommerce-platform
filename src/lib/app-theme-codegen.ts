@@ -1632,6 +1632,317 @@ const styles = StyleSheet.create({
 });
 `,
 
+    shipping_goal: `import React from "react";
+import { StyleSheet, Text, View } from "react-native";
+import { colors, spacing } from "../theme";
+
+export type ShippingGoalSettings = {
+  title?: string;
+  subtitle?: string;
+  startLabel?: string;
+  endLabel?: string;
+  percent?: number;
+  barColor?: string;
+  cardBg?: string;
+  radius?: number;
+};
+
+export function ShippingGoal({ settings }: { settings: ShippingGoalSettings }) {
+  if (!settings.title && !settings.subtitle) return null;
+  const pct = Math.max(0, Math.min(100, typeof settings.percent === "number" ? settings.percent : 100));
+  const r = settings.radius && settings.radius > 0 ? settings.radius : 14;
+  return (
+    <View style={[styles.card, { backgroundColor: settings.cardBg || colors.surface, borderRadius: r }]}>
+      {settings.title ? <Text style={styles.title}>{settings.title}</Text> : null}
+      {settings.subtitle ? <Text style={styles.subtitle}>{settings.subtitle}</Text> : null}
+      <View style={styles.track}>
+        <View style={[styles.fill, { width: pct + "%", backgroundColor: settings.barColor || colors.accent }]} />
+      </View>
+      {settings.startLabel || settings.endLabel ? (
+        <View style={styles.ends}>
+          <Text style={styles.end}>{settings.startLabel}</Text>
+          <Text style={styles.end}>{settings.endLabel}</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  card: { borderWidth: 1, borderColor: colors.line, padding: spacing.md },
+  title: { fontSize: 12, fontWeight: "700", color: colors.ink },
+  subtitle: { marginTop: 2, fontSize: 11, lineHeight: 16, color: colors.inkSoft },
+  track: { marginTop: spacing.sm, height: 8, borderRadius: 4, backgroundColor: colors.page, overflow: "hidden" },
+  fill: { height: 8, borderRadius: 4 },
+  ends: { marginTop: 4, flexDirection: "row", justifyContent: "space-between" },
+  end: { fontSize: 10, color: colors.inkSoft },
+});
+`,
+
+    payment_plans: `import React from "react";
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { colors, spacing } from "../theme";
+
+export type Plan = { id: string; name?: string; headline?: string; note?: string; color?: string; handle?: string; url?: string };
+export type PaymentPlansSettings = {
+  title?: string;
+  subtitle?: string;
+  seeAllLabel?: string;
+  seeAllHandle?: string;
+  seeAllUrl?: string;
+  radius?: number;
+  items?: Plan[];
+};
+
+export function PaymentPlans({
+  settings,
+  onOpenCollection,
+}: {
+  settings: PaymentPlansSettings;
+  onOpenCollection?: (handle: string) => void;
+}) {
+  const items = (settings.items ?? []).filter((i) => i.name || i.headline);
+  if (!items.length) return null;
+  const go = (url?: string, handle?: string) => {
+    if (url) {
+      Linking.openURL(url).catch(() => {});
+      return;
+    }
+    if (handle) onOpenCollection?.(handle);
+  };
+  const r = settings.radius && settings.radius > 0 ? settings.radius : 14;
+
+  return (
+    <>
+      <View style={styles.head}>
+        <View style={{ flex: 1 }}>
+          {settings.title ? <Text style={styles.title}>{settings.title}</Text> : null}
+          {settings.subtitle ? <Text style={styles.subtitle}>{settings.subtitle}</Text> : null}
+        </View>
+        {settings.seeAllLabel ? (
+          <Pressable onPress={() => go(settings.seeAllUrl, settings.seeAllHandle)}>
+            <Text style={styles.seeAll}>{settings.seeAllLabel}</Text>
+          </Pressable>
+        ) : null}
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+        {items.map((i) => (
+          <Pressable
+            key={i.id}
+            style={[styles.card, { backgroundColor: i.color || colors.accent, borderRadius: r }]}
+            onPress={() => go(i.url, i.handle)}
+          >
+            {i.name ? <Text style={styles.name}>{i.name}</Text> : null}
+            {i.headline ? <Text style={styles.headline}>{i.headline}</Text> : null}
+            {i.note ? <Text style={styles.note}>{i.note}</Text> : null}
+          </Pressable>
+        ))}
+      </ScrollView>
+    </>
+  );
+}
+
+const styles = StyleSheet.create({
+  head: { flexDirection: "row", alignItems: "flex-end", gap: spacing.sm },
+  title: { fontSize: 14, fontWeight: "700", color: colors.ink },
+  subtitle: { fontSize: 11, color: colors.inkSoft },
+  seeAll: { fontSize: 12, fontWeight: "600", color: colors.accent },
+  row: { gap: spacing.md, paddingVertical: spacing.sm },
+  card: { width: 136, padding: 12 },
+  name: { fontSize: 11, fontWeight: "600", color: "rgba(255,255,255,0.8)" },
+  headline: { marginTop: 4, fontSize: 15, fontWeight: "700", color: "#fff" },
+  note: { marginTop: 4, fontSize: 10, lineHeight: 14, color: "rgba(255,255,255,0.75)" },
+});
+`,
+
+    price_slider: `import React, { useState } from "react";
+import { StyleSheet, Text, View } from "react-native";
+import { colors, spacing } from "../theme";
+import { SectionHeading } from "./Pieces";
+
+export type InstalmentPlan = { id: string; name?: string; months?: string; badge?: string; color?: string };
+export type PriceSliderSettings = {
+  title?: string;
+  subtitle?: string;
+  priceLabel?: string;
+  currency?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  startPrice?: number;
+  cardBg?: string;
+  radius?: number;
+  items?: InstalmentPlan[];
+};
+
+const nf = (n: number) => {
+  const digits = String(Math.round(n));
+  let out = "";
+  for (let i = 0; i < digits.length; i++) {
+    if (i > 0 && (digits.length - i) % 3 === 0) out += ",";
+    out += digits[i];
+  }
+  return out;
+};
+
+export function PriceSlider({ settings }: { settings: PriceSliderSettings }) {
+  const items = (settings.items ?? []).filter((i) => i.name && i.months);
+  const min = settings.minPrice && settings.minPrice > 0 ? settings.minPrice : 2999;
+  const max = Math.max(min + 1, settings.maxPrice && settings.maxPrice > 0 ? settings.maxPrice : 16000);
+  const start = Math.min(max, Math.max(min, settings.startPrice && settings.startPrice > 0 ? settings.startPrice : 7750));
+  const [price, setPrice] = useState(start);
+  const [width, setWidth] = useState(0);
+  if (!items.length) return null;
+
+  const cur = settings.currency || "EGP";
+  const r = settings.radius && settings.radius > 0 ? settings.radius : 14;
+  const pct = ((price - min) / (max - min)) * 100;
+
+  // Core React Native has no slider, and pulling one in would be a dependency
+  // the merchant's app has not declared. The track is its own responder, so
+  // locationX is already relative to it.
+  const setFromX = (x: number) => {
+    if (width <= 0) return;
+    const ratio = Math.max(0, Math.min(1, x / width));
+    setPrice(Math.round(min + ratio * (max - min)));
+  };
+
+  return (
+    <>
+      {settings.title ? <SectionHeading title={settings.title} /> : null}
+      {settings.subtitle ? <Text style={styles.subtitle}>{settings.subtitle}</Text> : null}
+      <View style={[styles.card, { backgroundColor: settings.cardBg || colors.surface, borderRadius: r }]}>
+        {settings.priceLabel ? <Text style={styles.priceLabel}>{settings.priceLabel}</Text> : null}
+        <Text style={styles.price}>{cur + " " + nf(price)}</Text>
+
+        <View
+          style={styles.track}
+          onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
+          onStartShouldSetResponder={() => true}
+          onMoveShouldSetResponder={() => true}
+          onResponderGrant={(e) => setFromX(e.nativeEvent.locationX)}
+          onResponderMove={(e) => setFromX(e.nativeEvent.locationX)}
+        >
+          <View style={[styles.fill, { width: pct + "%" }]} />
+          <View style={[styles.knob, { left: pct + "%" }]} />
+        </View>
+        <View style={styles.ends}>
+          <Text style={styles.end}>{cur + " " + nf(min)}</Text>
+          <Text style={styles.end}>{cur + " " + nf(max)}</Text>
+        </View>
+
+        <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
+          {items.map((i) => {
+            const months = Math.max(1, parseInt(i.months ?? "", 10) || 1);
+            return (
+              <View key={i.id} style={styles.row}>
+                <Text style={styles.provider}>{i.name}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.monthly}>{cur + " " + nf(price / months) + " / month"}</Text>
+                  <Text style={styles.months}>{months + " months"}</Text>
+                </View>
+                {i.badge ? (
+                  <View style={[styles.badge, { backgroundColor: (i.color || colors.accent) + "1f" }]}>
+                    <Text style={[styles.badgeText, { color: i.color || colors.accent }]}>{i.badge}</Text>
+                  </View>
+                ) : null}
+              </View>
+            );
+          })}
+        </View>
+      </View>
+    </>
+  );
+}
+
+const styles = StyleSheet.create({
+  subtitle: { fontSize: 11, color: colors.inkSoft },
+  card: { marginTop: spacing.sm, borderWidth: 1, borderColor: colors.line, padding: spacing.md },
+  priceLabel: { fontSize: 11, color: colors.inkSoft },
+  price: { fontSize: 20, fontWeight: "700", color: colors.accent },
+  track: { marginTop: spacing.sm, height: 24, justifyContent: "center" },
+  fill: { position: "absolute", height: 6, borderRadius: 3, backgroundColor: colors.accent },
+  knob: { position: "absolute", width: 16, height: 16, borderRadius: 8, marginLeft: -8, backgroundColor: colors.accent },
+  ends: { flexDirection: "row", justifyContent: "space-between" },
+  end: { fontSize: 10, color: colors.inkSoft },
+  row: { flexDirection: "row", alignItems: "center", gap: spacing.md, borderWidth: 1, borderColor: colors.line, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 },
+  provider: { width: 56, fontSize: 11, fontWeight: "600", color: colors.inkMuted },
+  monthly: { fontSize: 13, fontWeight: "700", color: colors.accent },
+  months: { fontSize: 10, color: colors.inkSoft },
+  badge: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
+  badgeText: { fontSize: 9, fontWeight: "600" },
+});
+`,
+
+    offer_cards: `import React from "react";
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { colors, spacing } from "../theme";
+import { SectionHeading } from "./Pieces";
+
+export type Offer = { id: string; badge?: string; title?: string; subtitle?: string; color?: string; handle?: string; url?: string };
+export type OfferCardsSettings = {
+  title?: string;
+  subtitle?: string;
+  claimLabel?: string;
+  radius?: number;
+  items?: Offer[];
+};
+
+export function OfferCards({
+  settings,
+  onOpenCollection,
+}: {
+  settings: OfferCardsSettings;
+  onOpenCollection?: (handle: string) => void;
+}) {
+  const items = (settings.items ?? []).filter((i) => i.badge || i.title);
+  if (!items.length) return null;
+  const go = (url?: string, handle?: string) => {
+    if (url) {
+      Linking.openURL(url).catch(() => {});
+      return;
+    }
+    if (handle) onOpenCollection?.(handle);
+  };
+  const r = settings.radius && settings.radius > 0 ? settings.radius : 14;
+  const claim = settings.claimLabel || "Claim";
+
+  return (
+    <>
+      {settings.title ? <SectionHeading title={settings.title} /> : null}
+      {settings.subtitle ? <Text style={styles.subtitle}>{settings.subtitle}</Text> : null}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+        {items.map((i) => {
+          const colour = i.color || colors.accent;
+          return (
+            <View key={i.id} style={[styles.card, { borderColor: colour, backgroundColor: colour + "0f", borderRadius: r }]}>
+              {i.badge ? <Text style={[styles.badge, { color: colour }]}>{i.badge}</Text> : null}
+              {i.title ? <Text style={styles.title}>{i.title}</Text> : null}
+              {i.subtitle ? <Text style={styles.detail}>{i.subtitle}</Text> : null}
+              {claim ? (
+                <Pressable style={[styles.cta, { backgroundColor: colour }]} onPress={() => go(i.url, i.handle)}>
+                  <Text style={styles.ctaText}>{claim}</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          );
+        })}
+      </ScrollView>
+    </>
+  );
+}
+
+const styles = StyleSheet.create({
+  subtitle: { fontSize: 11, color: colors.inkSoft },
+  row: { gap: spacing.md, paddingVertical: spacing.sm },
+  card: { width: 136, borderWidth: 1, borderStyle: "dashed", padding: 12, gap: 4 },
+  badge: { fontSize: 20, fontWeight: "700" },
+  title: { fontSize: 11, fontWeight: "700", color: colors.ink },
+  detail: { fontSize: 10, lineHeight: 14, color: colors.inkSoft },
+  cta: { marginTop: 4, borderRadius: 8, paddingVertical: 6, alignItems: "center" },
+  ctaText: { fontSize: 11, fontWeight: "600", color: "#fff" },
+});
+`,
+
     text: `import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { colors, radius, spacing } from "../theme";
@@ -1793,6 +2104,10 @@ function renderCall(block: Block, indent: number): string {
     coming_up_live: ["collections={data.collections}", "onOpenCollection={onOpenCollection}"],
     countdown_deals: ["collections={data.collections}", "onOpenCollection={onOpenCollection}"],
     info_rows: ["onOpenCollection={onOpenCollection}"],
+    shipping_goal: [],
+    payment_plans: ["onOpenCollection={onOpenCollection}"],
+    price_slider: [],
+    offer_cards: ["onOpenCollection={onOpenCollection}"],
     banner: ["collections={data.collections}", "onOpenCollection={onOpenCollection}"],
     categories: ["collections={data.collections}", "onOpenCollection={onOpenCollection}"],
     new_arrivals: ["products={data.newArrivals}", "onOpenProduct={onOpenProduct}"],
@@ -1828,6 +2143,10 @@ const SIZE_KEYS = new Set([
   "offerTitleSize",
   "offerTextSize",
   "radius",
+  "percent",
+  "minPrice",
+  "maxPrice",
+  "startPrice",
 ]);
 
 /** A block's settings as a JS object literal, keeping only what it uses. */
@@ -1879,6 +2198,29 @@ function settingsLiteral(block: Block): string {
       "radius",
     ],
     info_rows: ["title", "cardBg", "radius"],
+    shipping_goal: [
+      "title",
+      "subtitle",
+      "startLabel",
+      "endLabel",
+      "percent",
+      "barColor",
+      "cardBg",
+      "radius",
+    ],
+    payment_plans: ["title", "subtitle", "seeAllLabel", "seeAllHandle", "seeAllUrl", "radius"],
+    price_slider: [
+      "title",
+      "subtitle",
+      "priceLabel",
+      "currency",
+      "minPrice",
+      "maxPrice",
+      "startPrice",
+      "cardBg",
+      "radius",
+    ],
+    offer_cards: ["title", "subtitle", "claimLabel", "radius"],
     banner: ["imageUrl", "heading", "subheading", "handle"],
     categories: ["title"],
     new_arrivals: ["title", "limit"],
@@ -1933,6 +2275,9 @@ function itemsLiteral(type: BlockType, items: Item[]): string {
     coming_up_live: ["imageUrl", "title", "when", "handle", "url"],
     countdown_deals: ["imageUrl", "badge", "price", "comparePrice", "claimed", "handle", "url"],
     info_rows: ["emoji", "title", "subtitle", "note", "handle", "url"],
+    payment_plans: ["name", "headline", "note", "color", "handle", "url"],
+    price_slider: ["name", "months", "badge", "color"],
+    offer_cards: ["badge", "title", "subtitle", "color", "handle", "url"],
   };
   const keys = fields[type] ?? [];
   const rendered = items.map((item) => {

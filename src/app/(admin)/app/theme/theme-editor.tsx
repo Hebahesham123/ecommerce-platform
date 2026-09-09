@@ -1270,6 +1270,100 @@ function BlockGroup({
         </>
       )}
 
+      {block.type === "shipping_goal" && (
+        <>
+          <Field label={ar ? "العنوان" : "Title"} type="text">
+            <input value={text("title")} onChange={(e) => onPatch({ title: e.target.value })} className={input} />
+          </Field>
+          <Field label={ar ? "الشرح" : "Subtitle"} type="text">
+            <input value={text("subtitle")} onChange={(e) => onPatch({ subtitle: e.target.value })} className={input} />
+          </Field>
+          <Field label={ar ? "بداية الشريط" : "Start label"} type="text">
+            <input value={text("startLabel")} onChange={(e) => onPatch({ startLabel: e.target.value })} className={input} />
+          </Field>
+          <Field label={ar ? "نهاية الشريط" : "End label"} type="text">
+            <input value={text("endLabel")} onChange={(e) => onPatch({ endLabel: e.target.value })} className={input} />
+          </Field>
+          <Field label={ar ? "نسبة الامتلاء ٪" : "How full (%)"} type="range">
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={Number.isFinite(Number(s.percent)) ? Number(s.percent) : 100}
+              onChange={(e) => onPatch({ percent: Number(e.target.value) })}
+              className={input}
+            />
+          </Field>
+          <ColorRow label={ar ? "لون الشريط" : "Bar colour"} value={text("barColor")} fallback={accent} onChange={(v) => onPatch({ barColor: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "خلفية البطاقة" : "Card background"} value={text("cardBg")} fallback="#ffffff" onChange={(v) => onPatch({ cardBg: v })} input={input} ar={ar} />
+          <Field label={ar ? "استدارة الحواف" : "Corner radius"} type="range">
+            <input type="number" min={0} max={32} value={num("radius", 14)} onChange={(e) => onPatch({ radius: Number(e.target.value) })} className={input} />
+          </Field>
+        </>
+      )}
+
+      {(block.type === "payment_plans" || block.type === "price_slider" || block.type === "offer_cards") && (
+        <>
+          <Field label={ar ? "العنوان" : "Title"} type="text">
+            <input value={text("title")} onChange={(e) => onPatch({ title: e.target.value })} className={input} />
+          </Field>
+          <Field label={ar ? "الشرح" : "Subtitle"} type="text">
+            <input value={text("subtitle")} onChange={(e) => onPatch({ subtitle: e.target.value })} className={input} />
+          </Field>
+
+          {block.type === "payment_plans" && (
+            <>
+              <Field label={ar ? "نص «الكل»" : "See-all text"} type="text">
+                <input value={text("seeAllLabel")} onChange={(e) => onPatch({ seeAllLabel: e.target.value })} className={input} />
+              </Field>
+              <Field label={ar ? "يفتح" : "Opens"} type="collection">
+                <CollectionSelect
+                  collections={collections}
+                  value={text("seeAllHandle")}
+                  onChange={(handle) => onPatch({ seeAllHandle: handle })}
+                  anyLabel={ar ? "لا شيء" : "Nothing"}
+                  className={input}
+                />
+              </Field>
+              <Field label={ar ? "أو رابط" : "Or a link"} type="url">
+                <input value={text("seeAllUrl")} onChange={(e) => onPatch({ seeAllUrl: e.target.value })} placeholder="https://…" className={input} dir="ltr" />
+              </Field>
+            </>
+          )}
+
+          {block.type === "price_slider" && (
+            <>
+              <Field label={ar ? "كلمة السعر" : "Price label"} type="text">
+                <input value={text("priceLabel")} onChange={(e) => onPatch({ priceLabel: e.target.value })} className={input} />
+              </Field>
+              <Field label={ar ? "العملة" : "Currency"} type="text">
+                <input value={text("currency")} onChange={(e) => onPatch({ currency: e.target.value })} placeholder="EGP" className={input} />
+              </Field>
+              <Field label={ar ? "أقل سعر" : "Lowest price"} type="range">
+                <input type="number" min={1} value={num("minPrice", 2999)} onChange={(e) => onPatch({ minPrice: Number(e.target.value) })} className={input} />
+              </Field>
+              <Field label={ar ? "أعلى سعر" : "Highest price"} type="range">
+                <input type="number" min={2} value={num("maxPrice", 16000)} onChange={(e) => onPatch({ maxPrice: Number(e.target.value) })} className={input} />
+              </Field>
+              <Field label={ar ? "السعر عند الفتح" : "Opens at"} type="range">
+                <input type="number" min={1} value={num("startPrice", 7750)} onChange={(e) => onPatch({ startPrice: Number(e.target.value) })} className={input} />
+              </Field>
+              <ColorRow label={ar ? "خلفية البطاقة" : "Card background"} value={text("cardBg")} fallback="#ffffff" onChange={(v) => onPatch({ cardBg: v })} input={input} ar={ar} />
+            </>
+          )}
+
+          {block.type === "offer_cards" && (
+            <Field label={ar ? "نص الزر" : "Button text"} type="text">
+              <input value={text("claimLabel")} onChange={(e) => onPatch({ claimLabel: e.target.value })} className={input} />
+            </Field>
+          )}
+
+          <Field label={ar ? "استدارة الحواف" : "Corner radius"} type="range">
+            <input type="number" min={0} max={32} value={num("radius", 14)} onChange={(e) => onPatch({ radius: Number(e.target.value) })} className={input} />
+          </Field>
+        </>
+      )}
+
       {(block.type === "coming_up_live" ||
         block.type === "countdown_deals" ||
         block.type === "info_rows") && (
@@ -1593,6 +1687,7 @@ function BlockGroup({
           block={block}
           ar={ar}
           collections={collections}
+          accent={accent}
           input={input}
           onPatch={onPatch}
         />
@@ -1633,9 +1728,11 @@ function ItemList({
   block,
   ar,
   collections,
+  accent,
   input,
   onPatch,
 }: {
+  accent: string;
   block: Block;
   ar: boolean;
   collections: { handle: string; title: string; count: number; image: string | null }[];
@@ -1756,7 +1853,17 @@ function ItemList({
                         <span className="text-[11px] font-medium text-ink-muted">
                           {ar ? f.ar : f.en}
                         </span>
-                        {f.kind === "collection" ? (
+                        {f.kind === "color" ? (
+                          <ColorPicker
+                            value={value}
+                            onChange={(v) => patchItem(item.id, { [f.key]: v })}
+                            fallback={accent}
+                            allowEmpty
+                            brand={[accent]}
+                            input={`${input} h-8 text-xs`}
+                            ar={ar}
+                          />
+                        ) : f.kind === "collection" ? (
                           <CollectionSelect
                             collections={collections}
                             value={value}

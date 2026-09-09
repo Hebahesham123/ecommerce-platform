@@ -33,6 +33,10 @@ export type BlockType =
   | "coming_up_live"
   | "countdown_deals"
   | "info_rows"
+  | "shipping_goal"
+  | "payment_plans"
+  | "price_slider"
+  | "offer_cards"
   | "reviews"
   | "text";
 
@@ -117,6 +121,21 @@ export const ITEM_SHAPE: Partial<Record<BlockType, { ar: string; en: string; bla
     en: "Row",
     blank: () => ({ id: itemId(), emoji: "", title: "", subtitle: "", note: "", handle: "", url: "" }),
   },
+  payment_plans: {
+    ar: "طريقة دفع",
+    en: "Plan",
+    blank: () => ({ id: itemId(), name: "", headline: "", note: "", color: "", handle: "", url: "" }),
+  },
+  price_slider: {
+    ar: "خطة تقسيط",
+    en: "Instalment plan",
+    blank: () => ({ id: itemId(), name: "", months: "", badge: "", color: "" }),
+  },
+  offer_cards: {
+    ar: "عرض",
+    en: "Offer",
+    blank: () => ({ id: itemId(), badge: "", title: "", subtitle: "", color: "", handle: "", url: "" }),
+  },
 };
 
 export function itemId(): string {
@@ -124,7 +143,7 @@ export function itemId(): string {
 }
 
 /** What one field of an item is, so the editor knows which control to draw. */
-export type FieldKind = "text" | "image" | "collection" | "emoji";
+export type FieldKind = "text" | "image" | "collection" | "emoji" | "color";
 export type FieldSpec = { key: string; kind: FieldKind; ar: string; en: string };
 
 /**
@@ -203,6 +222,28 @@ export const ITEM_FIELDS: Partial<Record<BlockType, FieldSpec[]>> = {
     { key: "title", kind: "text", ar: "العنوان", en: "Title" },
     { key: "subtitle", kind: "text", ar: "سطر فرعي", en: "Subtitle" },
     { key: "note", kind: "text", ar: "على اليسار", en: "Right note" },
+    { key: "handle", kind: "collection", ar: "يفتح", en: "Opens" },
+    { key: "url", kind: "text", ar: "أو رابط", en: "Or a link" },
+  ],
+  payment_plans: [
+    { key: "name", kind: "text", ar: "الجهة", en: "Provider" },
+    { key: "headline", kind: "text", ar: "العرض", en: "Headline" },
+    { key: "note", kind: "text", ar: "التفاصيل", en: "Detail" },
+    { key: "color", kind: "color", ar: "لون البطاقة", en: "Card colour" },
+    { key: "handle", kind: "collection", ar: "يفتح", en: "Opens" },
+    { key: "url", kind: "text", ar: "أو رابط", en: "Or a link" },
+  ],
+  price_slider: [
+    { key: "name", kind: "text", ar: "الجهة", en: "Provider" },
+    { key: "months", kind: "text", ar: "عدد الشهور", en: "Months" },
+    { key: "badge", kind: "text", ar: "الشارة", en: "Badge" },
+    { key: "color", kind: "color", ar: "لون الشارة", en: "Badge colour" },
+  ],
+  offer_cards: [
+    { key: "badge", kind: "text", ar: "الرقم الكبير", en: "Big number" },
+    { key: "title", kind: "text", ar: "العنوان", en: "Title" },
+    { key: "subtitle", kind: "text", ar: "الشرح", en: "Detail" },
+    { key: "color", kind: "color", ar: "اللون", en: "Colour" },
     { key: "handle", kind: "collection", ar: "يفتح", en: "Opens" },
     { key: "url", kind: "text", ar: "أو رابط", en: "Or a link" },
   ],
@@ -490,6 +531,30 @@ export const BLOCK_META: Record<
     hintAr: "الشحن، الاسترجاع، طرق الدفع — أيقونة وسطران ورقم على اليسار",
     hintEn: "Delivery, returns, ways to pay — an icon, two lines and a note on the end",
   },
+  shipping_goal: {
+    ar: "شريط الشحن المجاني",
+    en: "Free delivery bar",
+    hintAr: "كم تبقّى على الشحن المجاني، كشريط تقدّم",
+    hintEn: "How far the basket is from free delivery, as a progress bar",
+  },
+  payment_plans: {
+    ar: "طرق الدفع",
+    en: "Pay your way",
+    hintAr: "بطاقات التقسيط وعروض البنوك، كل بطاقة بلونها",
+    hintEn: "Instalment and bank offers, each card in its own colour",
+  },
+  price_slider: {
+    ar: "قسّطي أي سعر",
+    en: "Split any price",
+    hintAr: "شريط يحرّكه العميل ليرى القسط الشهري لكل جهة",
+    hintEn: "A slider the shopper moves to see the monthly amount from each provider",
+  },
+  offer_cards: {
+    ar: "عروض لك",
+    en: "Offers for you",
+    hintAr: "عروض يمكن للعميل المطالبة بها، كل عرض ببطاقة",
+    hintEn: "Offers the shopper can claim, one card each",
+  },
   reviews: {
     ar: "آراء العملاء",
     en: "Customer reviews",
@@ -568,6 +633,44 @@ export function newBlock(type: BlockType): Block {
     info_rows: {
       title: "",
       cardBg: "",
+      radius: 14,
+      items: shape ? [shape.blank()] : [],
+    },
+    shipping_goal: {
+      title: "Free delivery unlocked",
+      subtitle: "",
+      startLabel: "EGP 0",
+      endLabel: "EGP 5,000",
+      percent: 100,
+      barColor: "",
+      cardBg: "",
+      radius: 14,
+    },
+    payment_plans: {
+      title: "Pay your way",
+      subtitle: "Instalments and bank offers",
+      seeAllLabel: "All offers",
+      seeAllHandle: "",
+      seeAllUrl: "",
+      radius: 14,
+      items: shape ? [shape.blank()] : [],
+    },
+    price_slider: {
+      title: "Split any price",
+      subtitle: "Move the slider to see the monthly amount",
+      priceLabel: "Piece price",
+      currency: "EGP",
+      minPrice: 2999,
+      maxPrice: 16000,
+      startPrice: 7750,
+      cardBg: "",
+      radius: 14,
+      items: shape ? [shape.blank()] : [],
+    },
+    offer_cards: {
+      title: "Offers for you",
+      subtitle: "",
+      claimLabel: "Claim",
       radius: 14,
       items: shape ? [shape.blank()] : [],
     },

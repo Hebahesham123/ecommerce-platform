@@ -421,6 +421,35 @@ function BlockView({
       );
     }
 
+    case "shipping_goal": {
+      if (!str(s.title) && !str(s.subtitle)) {
+        return <Placeholder ar={ar} label={ar ? "شريط بلا نص" : "Bar with no wording yet"} />;
+      }
+      return <ShippingGoal block={block} ar={ar} accent={accent} />;
+    }
+
+    case "payment_plans": {
+      const plans = itemsOf(block).filter((i) => str(i.name) || str(i.headline));
+      if (!plans.length) return <Placeholder ar={ar} label={ar ? "لا طرق دفع بعد" : "No plans yet"} />;
+      return (
+        <PaymentPlans block={block} items={plans} data={data} ar={ar} accent={accent} handlers={handlers} />
+      );
+    }
+
+    case "price_slider": {
+      const plans = itemsOf(block).filter((i) => str(i.name) && str(i.months));
+      if (!plans.length) return <Placeholder ar={ar} label={ar ? "لا خطط تقسيط بعد" : "No instalment plans yet"} />;
+      return <PriceSlider block={block} items={plans} ar={ar} accent={accent} />;
+    }
+
+    case "offer_cards": {
+      const offers = itemsOf(block).filter((i) => str(i.badge) || str(i.title));
+      if (!offers.length) return <Placeholder ar={ar} label={ar ? "لا عروض بعد" : "No offers yet"} />;
+      return (
+        <OfferCards block={block} items={offers} data={data} ar={ar} accent={accent} handlers={handlers} />
+      );
+    }
+
     case "coming_up_live": {
       const sessions = itemsOf(block).filter((i) => str(i.title) || str(i.imageUrl));
       if (!sessions.length) {
@@ -1210,6 +1239,251 @@ function InfoRows({
   );
 }
 
+const nf = (n: number) => new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(n);
+
+/** How far the basket is from free delivery. */
+function ShippingGoal({ block, ar, accent }: { block: Block; ar: boolean; accent: string }) {
+  const s = block.settings ?? {};
+  const pct = Math.max(0, Math.min(100, int(s.percent, 100)));
+  const radius = int(s.radius, 14);
+  return (
+    <section
+      className="border border-slate-200 p-3"
+      style={{ background: str(s.cardBg, "#ffffff"), borderRadius: radius }}
+    >
+      {str(s.title) && (
+        <div className="text-[12px] font-bold text-slate-900">{str(s.title)}</div>
+      )}
+      {str(s.subtitle) && (
+        <div className="mt-0.5 text-[11px] leading-relaxed text-slate-500">{str(s.subtitle)}</div>
+      )}
+      <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-100">
+        <div
+          className="h-full rounded-full"
+          style={{ width: `${pct}%`, background: str(s.barColor, accent) }}
+        />
+      </div>
+      {(str(s.startLabel) || str(s.endLabel)) && (
+        <div className="mt-1 flex items-center justify-between text-[10px] text-slate-500">
+          <span>{str(s.startLabel)}</span>
+          <span>{str(s.endLabel)}</span>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** Instalment and bank offers, each card in its own colour. */
+function PaymentPlans({
+  block,
+  items,
+  data,
+  ar,
+  accent,
+  handlers,
+}: {
+  block: Block;
+  items: Item[];
+  data: HomeData;
+  ar: boolean;
+  accent: string;
+  handlers: HomeHandlers;
+}) {
+  const s = block.settings ?? {};
+  const go = opener(data, handlers);
+  const radius = int(s.radius, 14);
+  return (
+    <section>
+      <div className="flex items-end justify-between gap-2">
+        <div className="min-w-0">
+          {str(s.title) && (
+            <h3 className="truncate text-sm font-bold text-slate-900">{str(s.title)}</h3>
+          )}
+          {str(s.subtitle) && (
+            <p className="truncate text-[11px] text-slate-500">{str(s.subtitle)}</p>
+          )}
+        </div>
+        {str(s.seeAllLabel) && (
+          <button
+            onClick={() => go(str(s.seeAllUrl), str(s.seeAllHandle))}
+            className="shrink-0 text-xs font-semibold"
+            style={{ color: accent }}
+          >
+            {str(s.seeAllLabel)} ›
+          </button>
+        )}
+      </div>
+      <div className="-mx-4 mt-2 flex gap-3 overflow-x-auto px-4 pb-1">
+        {items.map((item) => (
+          <button
+            key={item.id}
+            onClick={() => go(str(item.url), str(item.handle))}
+            className="w-[136px] shrink-0 p-3 text-start"
+            style={{ background: str(item.color, accent), borderRadius: radius }}
+          >
+            {str(item.name) && (
+              <span className="block text-[11px] font-semibold text-white/80">{str(item.name)}</span>
+            )}
+            {str(item.headline) && (
+              <span className="mt-1 block text-[15px] font-bold leading-tight text-white">
+                {str(item.headline)}
+              </span>
+            )}
+            {str(item.note) && (
+              <span className="mt-1 block text-[10px] leading-snug text-white/75">
+                {str(item.note)}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/** Move the slider, see what each provider charges a month. */
+function PriceSlider({ block, items, ar, accent }: { block: Block; items: Item[]; ar: boolean; accent: string }) {
+  const s = block.settings ?? {};
+  const min = int(s.minPrice, 2999);
+  const max = Math.max(min + 1, int(s.maxPrice, 16000));
+  const [price, setPrice] = useState(Math.min(max, Math.max(min, int(s.startPrice, 7750))));
+  // Follow the merchant while they are typing the range, or the handle sits
+  // outside the track they just set.
+  useEffect(() => {
+    setPrice((p) => Math.min(max, Math.max(min, p)));
+  }, [min, max]);
+  const cur = str(s.currency, "EGP");
+  const radius = int(s.radius, 14);
+
+  return (
+    <section>
+      {str(s.title) && <Heading title={str(s.title)} ar={ar} accent={accent} />}
+      {str(s.subtitle) && <p className="text-[11px] text-slate-500">{str(s.subtitle)}</p>}
+      <div
+        className="mt-2 border border-slate-200 p-3"
+        style={{ background: str(s.cardBg, "#ffffff"), borderRadius: radius }}
+      >
+        {str(s.priceLabel) && (
+          <div className="text-[11px] text-slate-500">{str(s.priceLabel)}</div>
+        )}
+        <div className="text-[20px] font-bold" style={{ color: accent }}>
+          {cur} {nf(price)}
+        </div>
+        <input
+          type="range"
+          min={min}
+          max={max}
+          value={price}
+          onChange={(e) => setPrice(Number(e.target.value))}
+          className="mt-2 w-full"
+          style={{ accentColor: accent }}
+        />
+        <div className="flex items-center justify-between text-[10px] text-slate-500">
+          <span>{cur} {nf(min)}</span>
+          <span>{cur} {nf(max)}</span>
+        </div>
+
+        <div className="mt-3 space-y-2">
+          {items.map((item) => {
+            const months = Math.max(1, parseInt(str(item.months), 10) || 1);
+            return (
+              <div
+                key={item.id}
+                className="flex items-center gap-3 rounded-xl border border-slate-200 px-3 py-2"
+              >
+                <span className="w-14 shrink-0 truncate text-[11px] font-semibold text-slate-700">
+                  {str(item.name)}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[13px] font-bold" style={{ color: accent }}>
+                    {cur} {nf(Math.round(price / months))}
+                    <span className="text-[10px] font-medium text-slate-500"> / {ar ? "شهر" : "month"}</span>
+                  </span>
+                  <span className="block text-[10px] text-slate-500">
+                    {months} {ar ? "شهور" : "months"}
+                  </span>
+                </span>
+                {str(item.badge) && (
+                  <span
+                    className="shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold"
+                    style={{
+                      background: `${str(item.color, accent)}1f`,
+                      color: str(item.color, accent),
+                    }}
+                  >
+                    {str(item.badge)}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** Offers the shopper can claim. */
+function OfferCards({
+  block,
+  items,
+  data,
+  ar,
+  accent,
+  handlers,
+}: {
+  block: Block;
+  items: Item[];
+  data: HomeData;
+  ar: boolean;
+  accent: string;
+  handlers: HomeHandlers;
+}) {
+  const s = block.settings ?? {};
+  const go = opener(data, handlers);
+  const radius = int(s.radius, 14);
+  const claim = str(s.claimLabel, ar ? "احصلي عليه" : "Claim");
+  return (
+    <section>
+      {str(s.title) && <Heading title={str(s.title)} ar={ar} accent={accent} />}
+      {str(s.subtitle) && <p className="text-[11px] text-slate-500">{str(s.subtitle)}</p>}
+      <div className="-mx-4 mt-2 flex gap-3 overflow-x-auto px-4 pb-1">
+        {items.map((item) => {
+          const colour = str(item.color, accent);
+          return (
+            <div
+              key={item.id}
+              className="flex w-[136px] shrink-0 flex-col gap-1 border border-dashed p-3"
+              style={{ borderColor: colour, background: `${colour}0f`, borderRadius: radius }}
+            >
+              {str(item.badge) && (
+                <span className="text-[20px] font-bold leading-none" style={{ color: colour }}>
+                  {str(item.badge)}
+                </span>
+              )}
+              {str(item.title) && (
+                <span className="text-[11px] font-bold text-slate-900">{str(item.title)}</span>
+              )}
+              {str(item.subtitle) && (
+                <span className="text-[10px] leading-snug text-slate-500">{str(item.subtitle)}</span>
+              )}
+              {claim && (
+                <button
+                  onClick={() => go(str(item.url), str(item.handle))}
+                  className="mt-1 rounded-lg py-1.5 text-[11px] font-semibold text-white"
+                  style={{ background: colour }}
+                >
+                  {claim}
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function Placeholder({ ar, label }: { ar: boolean; label: string }) {
   return (
     <div
@@ -1295,6 +1569,14 @@ function isPlaceholder(node: React.ReactElement): boolean {
       return itemsOf(block).filter((t) => str(t.handle)).length === 0;
     case "promo_bar":
       return !str(s.lead) && !str(s.code);
+    case "shipping_goal":
+      return !str(s.title) && !str(s.subtitle);
+    case "payment_plans":
+      return itemsOf(block).filter((i) => str(i.name) || str(i.headline)).length === 0;
+    case "price_slider":
+      return itemsOf(block).filter((i) => str(i.name) && str(i.months)).length === 0;
+    case "offer_cards":
+      return itemsOf(block).filter((i) => str(i.badge) || str(i.title)).length === 0;
     case "coming_up_live":
       return itemsOf(block).filter((i) => str(i.title) || str(i.imageUrl)).length === 0;
     case "countdown_deals":
