@@ -346,6 +346,22 @@ export type AppSettings = {
   /** Which navigation menu fills the app's drawer. */
   menuHandle: string;
   showSearch: boolean;
+
+  /**
+   * The header the app wears on every screen: a wordmark, a search field and
+   * the two icons a shopper reaches for.
+   *
+   * The wordmark is two fields rather than one so the second half can carry
+   * the accent - BEAUTY in ink, BAR in the brand colour - without asking a
+   * merchant to write markup. An uploaded logo wins over both.
+   */
+  logoText: string;
+  logoAccentText: string;
+  searchPlaceholder: string;
+  showWishlist: boolean;
+  showBag: boolean;
+  headerBg: string;
+  headerInk: string;
   /**
    * The row of shortcuts that sits under the header on every screen.
    *
@@ -508,6 +524,13 @@ export const DEFAULT_SETTINGS: AppSettings = {
   announcementEnabled: false,
   menuHandle: "main-menu",
   showSearch: true,
+  logoText: "BEAUTY",
+  logoAccentText: "BAR",
+  searchPlaceholder: "Sahel sandals",
+  showWishlist: true,
+  showBag: true,
+  headerBg: "",
+  headerInk: "",
   stripEnabled: false,
   strip: [],
 };
@@ -959,6 +982,13 @@ export function normalizeTheme(raw: unknown): AppTheme {
     announcementEnabled: Boolean(s.announcementEnabled),
     menuHandle: str(s.menuHandle, DEFAULT_SETTINGS.menuHandle).slice(0, 60),
     showSearch: s.showSearch !== false,
+    logoText: str(s.logoText, DEFAULT_SETTINGS.logoText).slice(0, 24),
+    logoAccentText: str(s.logoAccentText, DEFAULT_SETTINGS.logoAccentText).slice(0, 24),
+    searchPlaceholder: str(s.searchPlaceholder, DEFAULT_SETTINGS.searchPlaceholder).slice(0, 60),
+    showWishlist: s.showWishlist !== false,
+    showBag: s.showBag !== false,
+    headerBg: /^#[0-9a-f]{6}$/i.test(str(s.headerBg)) ? str(s.headerBg) : "",
+    headerInk: /^#[0-9a-f]{6}$/i.test(str(s.headerInk)) ? str(s.headerInk) : "",
     stripEnabled: Boolean(s.stripEnabled),
     strip: Array.isArray(s.strip)
       ? (s.strip as unknown[])

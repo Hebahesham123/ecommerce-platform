@@ -20,6 +20,7 @@ import {
 import { AppHome, type HomeData } from "@/components/app-home";
 import { AppStrip } from "@/components/app-strip";
 import { AppLive } from "@/components/app-live";
+import { AppHeader } from "@/components/app-header";
 import { ColorPicker, ImageUpload } from "@/components/pickers";
 import {
   BLOCK_META,
@@ -537,6 +538,68 @@ export function ThemeEditor() {
                   />
                 </span>
               </Field>
+              <Field label={ar ? "الاسم في الهيدر" : "Wordmark"} type="text">
+                <span className="flex items-center gap-2">
+                  <input
+                    value={draft.settings.logoText}
+                    onChange={(e) => patchSettings({ logoText: e.target.value })}
+                    placeholder="BEAUTY"
+                    className={input}
+                    dir="ltr"
+                  />
+                  <input
+                    value={draft.settings.logoAccentText}
+                    onChange={(e) => patchSettings({ logoAccentText: e.target.value })}
+                    placeholder="BAR"
+                    className={`${input} font-bold`}
+                    style={{ color: draft.settings.accent }}
+                    dir="ltr"
+                  />
+                </span>
+                <p className="mt-1 text-[11px] text-ink-soft">
+                  {ar
+                    ? "الجزء الثاني يأخذ لون الهوية. الشعار المرفوع يحل محلهما."
+                    : "The second half takes the brand colour. An uploaded logo replaces both."}
+                </p>
+              </Field>
+              <Field label={ar ? "نص خانة البحث" : "Search placeholder"} type="text">
+                <input
+                  value={draft.settings.searchPlaceholder}
+                  onChange={(e) => patchSettings({ searchPlaceholder: e.target.value })}
+                  placeholder="Sahel sandals"
+                  className={input}
+                />
+              </Field>
+              <Field label={ar ? "أيقونة المفضّلة" : "Saved icon"} type="checkbox">
+                <Toggle
+                  on={draft.settings.showWishlist}
+                  onChange={(v) => patchSettings({ showWishlist: v })}
+                  ar={ar}
+                />
+              </Field>
+              <Field label={ar ? "أيقونة السلة" : "Bag icon"} type="checkbox">
+                <Toggle
+                  on={draft.settings.showBag}
+                  onChange={(v) => patchSettings({ showBag: v })}
+                  ar={ar}
+                />
+              </Field>
+              <ColorRow
+                label={ar ? "خلفية الهيدر" : "Header background"}
+                value={draft.settings.headerBg}
+                fallback="#ffffff"
+                onChange={(v) => patchSettings({ headerBg: v })}
+                input={input}
+                ar={ar}
+              />
+              <ColorRow
+                label={ar ? "لون نص الهيدر" : "Header text"}
+                value={draft.settings.headerInk}
+                fallback="#191614"
+                onChange={(v) => patchSettings({ headerInk: v })}
+                input={input}
+                ar={ar}
+              />
               <Field label={ar ? "قائمة التنقّل" : "Navigation menu"} type="link_list">
                 <select
                   value={draft.settings.menuHandle}
@@ -819,6 +882,19 @@ export function ThemeEditor() {
                 </div>
               )}
 
+              <AppHeader
+                settings={draft.settings}
+                accent={draft.settings.accent}
+                ar={ar}
+                query={query}
+                onQuery={(v) => {
+                  setQuery(v);
+                  if (v) setPage("home");
+                }}
+                cartCount={cartCount}
+                onBag={() => setPage("cart")}
+              />
+
               {draft.settings.stripEnabled && (
                 <AppStrip items={draft.settings.strip} accent={draft.settings.accent} />
               )}
@@ -900,14 +976,6 @@ export function ThemeEditor() {
                 )
               ) : (
               <div className="bg-[var(--app-page,#f8fafc)] p-4">
-                {draft.settings.showSearch && (
-                  <input
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder={ar ? "ابحثي…" : "Search…"}
-                    className="mb-4 h-10 w-full rounded-full border border-slate-300 bg-white px-4 text-sm text-slate-800 outline-none focus:border-violet-500"
-                  />
-                )}
                 {query.trim() ? (
                   <SearchResults
                     ar={ar}

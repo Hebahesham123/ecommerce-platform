@@ -72,6 +72,15 @@ export const theme = {
     enabled: ${t.announcementEnabled},
     text: ${q(t.announcement)},
   },
+  header: {
+    logoText: ${q(t.logoText)},
+    logoAccentText: ${q(t.logoAccentText)},
+    searchPlaceholder: ${q(t.searchPlaceholder)},
+    showWishlist: ${t.showWishlist},
+    showBag: ${t.showBag},
+    bg: ${q(t.headerBg)},
+    ink: ${q(t.headerInk)},
+  },
   live: [${liveSessionsOf(theme)
     .map(
       (s) =>
@@ -2549,6 +2558,7 @@ function homeScreenFile(theme: AppTheme): GeneratedFile {
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   Linking,
   Pressable,
   ScrollView,
@@ -2610,16 +2620,26 @@ export default function HomeScreen({
       ) : null}
 ${
       search
-        ? `      <View style={styles.searchWrap}>
+        ? `      <View style={[styles.appHeader, theme.header.bg ? { backgroundColor: theme.header.bg } : null]}>
+        {theme.logoUrl ? (
+          <Image source={{ uri: theme.logoUrl }} style={styles.logoImg} />
+        ) : (
+          <Text style={[styles.wordmark, theme.header.ink ? { color: theme.header.ink } : null]}>
+            {theme.header.logoText || theme.storeName}
+            <Text style={styles.wordmarkAccent}>{theme.header.logoAccentText}</Text>
+          </Text>
+        )}
         <TextInput
-          style={styles.search}
+          style={[styles.search, { flex: 1 }]}
           value={query}
           onChangeText={setQuery}
-          placeholder="Search"
+          placeholder={theme.header.searchPlaceholder}
           placeholderTextColor={colors.inkSoft}
           returnKeyType="search"
           clearButtonMode="while-editing"
         />
+        {theme.header.showWishlist ? <Text style={styles.headerIcon}>♡</Text> : null}
+        {theme.header.showBag ? <Text style={styles.headerIcon}>🛍</Text> : null}
       </View>
 
       {query.trim() ? (
@@ -2652,6 +2672,11 @@ const styles = StyleSheet.create({
   stripText: { fontSize: 12, fontWeight: "600", color: colors.inkSoft },
   stripTextOn: { color: colors.accent },
   searchWrap: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg },
+  appHeader: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.line },
+  logoImg: { height: 20, width: 90, resizeMode: "contain" },
+  wordmark: { fontSize: 13, fontWeight: "800", color: colors.ink },
+  wordmarkAccent: { color: colors.accent },
+  headerIcon: { fontSize: 17, color: colors.ink },
   search: { height: 40, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, paddingHorizontal: 16, fontSize: 14, color: colors.ink },
 });
 `,
@@ -4318,14 +4343,16 @@ export default function App() {
   return (
     <SafeAreaView style={styles.app}>
       <StatusBar barStyle="dark-content" />
-      <View style={styles.header}>
-        {stack.length ? (
-          <Pressable style={styles.back} onPress={pop} hitSlop={8}>
-            <Text style={styles.backText}>‹</Text>
-          </Pressable>
-        ) : null}
-        <Text style={styles.heading} numberOfLines={1}>{heading}</Text>
-      </View>
+      {stack.length || tab !== "shop" ? (
+        <View style={styles.header}>
+          {stack.length ? (
+            <Pressable style={styles.back} onPress={pop} hitSlop={8}>
+              <Text style={styles.backText}>‹</Text>
+            </Pressable>
+          ) : null}
+          <Text style={styles.heading} numberOfLines={1}>{heading}</Text>
+        </View>
+      ) : null}
 
       <View style={{ flex: 1 }}>{body}</View>
 

@@ -17,6 +17,7 @@ import { Enquiry, Orders, Returns, SignIn } from "./screens";
 import { Shop } from "./shop";
 import { AppNudge } from "@/components/app-nudge";
 import { AppStrip } from "@/components/app-strip";
+import { AppHeader } from "@/components/app-header";
 import { AppLive } from "@/components/app-live";
 import { liveSessionsOf } from "@/lib/app-theme";
 import type { NudgeCampaign } from "@/lib/nudge";
@@ -141,6 +142,9 @@ export function Preview() {
     });
   }, []);
 
+  // The header owns the search term, because the header does not scroll away.
+  const [query, setQuery] = useState("");
+
   const signedIn = Boolean(phone);
   const count = cart.reduce((s, l) => s + l.quantity, 0);
 
@@ -193,6 +197,19 @@ export function Preview() {
             </span>
           </div>
 
+          <AppHeader
+            settings={brand}
+            accent={accent}
+            ar={ar}
+            query={query}
+            onQuery={(v) => {
+              setQuery(v);
+              if (v) setTab("shop");
+            }}
+            cartCount={count}
+            onBag={() => setTab("cart")}
+          />
+
           {brand.stripEnabled && (
             <AppStrip
               items={brand.strip}
@@ -210,6 +227,8 @@ export function Preview() {
                 onAdd={add}
                 onTheme={setTheme}
                 shopperName={shopperName}
+                query={query}
+                onQuery={setQuery}
                 onLeave={(what) => (what === "cart" ? setTab("cart") : setSheet("enquiry"))}
               />
             )}

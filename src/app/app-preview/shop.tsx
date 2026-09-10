@@ -43,6 +43,8 @@ export function Shop({
   onLeave,
   onTheme,
   shopperName,
+  query,
+  onQuery,
 }: {
   ar: boolean;
   onAdd: (itemId: string) => void;
@@ -52,11 +54,20 @@ export function Shop({
   onTheme?: (theme: Home["theme"]) => void;
   /** Only the live-now offer uses it, and it reads fine without one. */
   shopperName?: string | null;
+  /**
+   * When the app header draws the search field, it owns the term too and the
+   * one in here stands down — two boxes searching the same shop is one box
+   * too many.
+   */
+  query?: string;
+  onQuery?: (v: string) => void;
 }) {
   const [home, setHome] = useState<Home | null>(null);
   const [homeErr, setHomeErr] = useState<string | null>(null);
   const [view, setView] = useState<View>({ kind: "home" });
-  const [q, setQ] = useState("");
+  const [ownQ, setOwnQ] = useState("");
+  const q = query ?? ownQ;
+  const setQ: (v: string) => void = onQuery ?? setOwnQ;
   // Listings hand back cards, so opening one fetches the product it stands
   // for — which is exactly when the shopper wants to know what is left in
   // their size, and exactly when it is worth the round trip.
@@ -161,7 +172,7 @@ export function Shop({
             ☰
           </button>
         )}
-        {home?.theme.settings.showSearch !== false && (
+        {home?.theme.settings.showSearch !== false && !onQuery && (
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
