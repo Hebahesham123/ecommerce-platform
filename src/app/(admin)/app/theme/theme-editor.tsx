@@ -128,6 +128,7 @@ export function ThemeEditor() {
    */
   // Which screen the editor is on. Home is blocks; the rest are settings.
   const [page, setPage] = useState<ScreenKey | "home" | "live">("home");
+  const [stripIndex, setStripIndex] = useState(0);
   const [stack, setStack] = useState<Screen[]>([]);
   const screen = stack[stack.length - 1] ?? null;
   const push = useCallback((next: Screen) => setStack((s) => [...s, next]), []);
@@ -896,7 +897,24 @@ export function ThemeEditor() {
               />
 
               {draft.settings.stripEnabled && (
-                <AppStrip items={draft.settings.strip} accent={draft.settings.accent} />
+                <AppStrip
+                  items={draft.settings.strip}
+                  accent={draft.settings.accent}
+                  activeIndex={stripIndex}
+                  onOpen={(item) => {
+                    if (item.url) {
+                      window.open(item.url, "_blank", "noopener,noreferrer");
+                      return;
+                    }
+                    if (!item.handle) return;
+                    const found = data.collections.find((c) => c.handle === item.handle);
+                    setStripIndex(draft.settings.strip.indexOf(item));
+                    setPage("home");
+                    setStack([
+                      { kind: "collection", handle: item.handle, title: found?.title ?? item.handle },
+                    ]);
+                  }}
+                />
               )}
 
               <div className="flex flex-1 flex-col">

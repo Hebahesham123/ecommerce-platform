@@ -144,6 +144,11 @@ export function Preview() {
 
   // The header owns the search term, because the header does not scroll away.
   const [query, setQuery] = useState("");
+  // What a shortcut chip last asked to open. Shop resolves the title.
+  const [stripOpen, setStripOpen] = useState<{ handle: string; at: number } | null>(null);
+  // Which chip is marked. Now that tapping one goes somewhere, the mark has to
+  // follow the tap rather than sitting on the first chip forever.
+  const [stripIndex, setStripIndex] = useState(0);
 
   const signedIn = Boolean(phone);
   const count = cart.reduce((s, l) => s + l.quantity, 0);
@@ -214,8 +219,19 @@ export function Preview() {
             <AppStrip
               items={brand.strip}
               accent={accent}
+              activeIndex={stripIndex}
               onOpen={(item) => {
-                if (item.url) window.open(item.url, "_blank", "noopener,noreferrer");
+                // A typed link wins over a collection, the same rule the
+                // sections use.
+                if (item.url) {
+                  window.open(item.url, "_blank", "noopener,noreferrer");
+                  return;
+                }
+                if (!item.handle) return;
+                setTab("shop");
+                setQuery("");
+                setStripIndex(brand.strip.indexOf(item));
+                setStripOpen({ handle: item.handle, at: Date.now() });
               }}
             />
           )}
@@ -229,6 +245,7 @@ export function Preview() {
                 shopperName={shopperName}
                 query={query}
                 onQuery={setQuery}
+                openCollection={stripOpen}
                 onLeave={(what) => (what === "cart" ? setTab("cart") : setSheet("enquiry"))}
               />
             )}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   api,
   type Collection,
@@ -45,6 +45,7 @@ export function Shop({
   shopperName,
   query,
   onQuery,
+  openCollection,
 }: {
   ar: boolean;
   onAdd: (itemId: string) => void;
@@ -61,6 +62,13 @@ export function Shop({
    */
   query?: string;
   onQuery?: (v: string) => void;
+  /**
+   * A collection the shell wants opened — the shortcut strip taps this.
+   *
+   * It carries the moment it was asked for rather than only a handle, so
+   * tapping the same chip twice reopens it instead of looking broken.
+   */
+  openCollection?: { handle: string; at: number } | null;
 }) {
   const [home, setHome] = useState<Home | null>(null);
   const [homeErr, setHomeErr] = useState<string | null>(null);
@@ -86,6 +94,18 @@ export function Shop({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(loadHome, [loadHome]);
+
+  // A chip in the header strip asking for a collection. The title is looked up
+  // here because this is where the catalogue already is; an unknown handle
+  // still opens, headed by the handle itself, rather than doing nothing.
+  const lastOpened = useRef(0);
+  useEffect(() => {
+    const req = openCollection;
+    if (!req?.handle || req.at === lastOpened.current) return;
+    lastOpened.current = req.at;
+    const found = home?.collections.find((c) => c.handle === req.handle);
+    setView({ kind: "collection", handle: req.handle, title: found?.title ?? req.handle });
+  }, [openCollection, home]);
 
   // Searching is a view of its own, debounced so a five-letter word is one
   // request rather than five.
