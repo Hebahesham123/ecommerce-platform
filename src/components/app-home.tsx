@@ -405,7 +405,7 @@ function BlockView({
     }
 
     case "live_now": {
-      const people = itemsOf(block).filter((i) => str(i.name) || str(i.imageUrl));
+      const people = itemsOf(block).filter((i) => str(i.name) || str(i.imageUrl) || str(i.handle));
       const offerOn = s.offerEnabled !== false;
       const offerTitle = personalise(str(s.offerTitle), data.shopperName);
       const offerText = str(s.offerText);
@@ -443,7 +443,7 @@ function BlockView({
     }
 
     case "product_reasons": {
-      const picks = itemsOf(block).filter((i) => str(i.name) || str(i.imageUrl));
+      const picks = itemsOf(block).filter((i) => str(i.name) || str(i.imageUrl) || str(i.handle));
       if (!picks.length) return <Placeholder ar={ar} label={ar ? "لا مقترحات بعد" : "Nothing suggested yet"} />;
       return (
         <ProductReasons block={block} items={picks} data={data} ar={ar} accent={accent} handlers={handlers} />
@@ -505,7 +505,7 @@ function BlockView({
     }
 
     case "coming_up_live": {
-      const sessions = itemsOf(block).filter((i) => str(i.title) || str(i.imageUrl));
+      const sessions = itemsOf(block).filter((i) => str(i.title) || str(i.imageUrl) || str(i.handle));
       if (!sessions.length) {
         return <Placeholder ar={ar} label={ar ? "لا مواعيد بعد" : "Nothing scheduled yet"} />;
       }
@@ -515,7 +515,7 @@ function BlockView({
     }
 
     case "countdown_deals": {
-      const deals = itemsOf(block).filter((i) => str(i.price) || str(i.imageUrl));
+      const deals = itemsOf(block).filter((i) => str(i.price) || str(i.imageUrl) || str(i.handle));
       if (!deals.length) return <Placeholder ar={ar} label={ar ? "لا صفقات بعد" : "No deals yet"} />;
       return (
         <CountdownDeals block={block} items={deals} data={data} ar={ar} accent={accent} handlers={handlers} />
@@ -2039,7 +2039,7 @@ function isPlaceholder(node: React.ReactElement): boolean {
     case "promo_card":
       return !str(s.title) && !str(s.body);
     case "product_reasons":
-      return itemsOf(block).filter((i) => str(i.name) || str(i.imageUrl)).length === 0;
+      return itemsOf(block).filter((i) => str(i.name) || str(i.imageUrl) || str(i.handle)).length === 0;
     case "circle_row":
       return itemsOf(block).filter((i) => str(i.imageUrl) || str(i.label) || str(i.handle)).length === 0;
     case "pick_colour":
@@ -2055,13 +2055,13 @@ function isPlaceholder(node: React.ReactElement): boolean {
     case "offer_cards":
       return itemsOf(block).filter((i) => str(i.badge) || str(i.title)).length === 0;
     case "coming_up_live":
-      return itemsOf(block).filter((i) => str(i.title) || str(i.imageUrl)).length === 0;
+      return itemsOf(block).filter((i) => str(i.title) || str(i.imageUrl) || str(i.handle)).length === 0;
     case "countdown_deals":
-      return itemsOf(block).filter((i) => str(i.price) || str(i.imageUrl)).length === 0;
+      return itemsOf(block).filter((i) => str(i.price) || str(i.imageUrl) || str(i.handle)).length === 0;
     case "info_rows":
       return itemsOf(block).filter((i) => str(i.title)).length === 0;
     case "live_now": {
-      const anyone = itemsOf(block).filter((i) => str(i.name) || str(i.imageUrl)).length > 0;
+      const anyone = itemsOf(block).filter((i) => str(i.name) || str(i.imageUrl) || str(i.handle)).length > 0;
       const offer = s.offerEnabled !== false && Boolean(str(s.offerTitle) || str(s.offerText));
       return !anyone && !offer;
     }

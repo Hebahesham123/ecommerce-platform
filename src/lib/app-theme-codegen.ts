@@ -1246,7 +1246,7 @@ export function LiveNow({
   collections: HomePayload["collections"];
   onOpenCollection?: (handle: string) => void;
 }) {
-  const people = (settings.items ?? []).filter((i) => i.name || i.imageUrl);
+  const people = (settings.items ?? []).filter((i) => i.name || i.imageUrl || i.handle);
   const showReplays = settings.showReplays !== false;
   const liveLabel = settings.liveLabel || "LIVE";
 
@@ -1439,7 +1439,7 @@ export function ComingUpLive({
   collections: HomePayload["collections"];
   onOpenCollection?: (handle: string) => void;
 }) {
-  const items = (settings.items ?? []).filter((i) => i.title || i.imageUrl);
+  const items = (settings.items ?? []).filter((i) => i.title || i.imageUrl || i.handle);
   if (!items.length) return null;
 
   /** A typed link wins over a collection: it is the more specific thing to set. */
@@ -1530,7 +1530,7 @@ export function CountdownDeals({
   collections: HomePayload["collections"];
   onOpenCollection?: (handle: string) => void;
 }) {
-  const items = (settings.items ?? []).filter((i) => i.price || i.imageUrl);
+  const items = (settings.items ?? []).filter((i) => i.price || i.imageUrl || i.handle);
   const total = Math.max(0, Math.trunc((settings.endsInMinutes ?? 135) * 60));
   const [left, setLeft] = useState(total);
   useEffect(() => setLeft(total), [total]);
@@ -2050,7 +2050,7 @@ export function ProductReasons({
   collections: HomePayload["collections"];
   onOpenCollection?: (handle: string) => void;
 }) {
-  const items = (settings.items ?? []).filter((i) => i.name || i.imageUrl);
+  const items = (settings.items ?? []).filter((i) => i.name || i.imageUrl || i.handle);
   if (!items.length) return null;
   const go = (url?: string, handle?: string) => {
     if (url) {

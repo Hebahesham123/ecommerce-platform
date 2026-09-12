@@ -1287,6 +1287,26 @@ function BlockGroup({
   const bool = (k: string, d: boolean) => (typeof s[k] === "boolean" ? (s[k] as boolean) : d);
   const chosen = collections.find((c) => c.handle === text("handle"));
 
+  /**
+   * Links in this section pointing at a collection that is not there any more.
+   *
+   * The picker shows an unknown handle as nothing chosen, so a renamed or
+   * deleted collection reads as "no link" while the app still ships the dead
+   * one. Saying so here is the difference between a tap that quietly does
+   * nothing and a line a merchant can act on.
+   */
+  const deadLinks = (() => {
+    const handles: string[] = [];
+    for (const key of ["handle", "seeAllHandle", "replaysHandle", "offerHandle"]) {
+      const v = s[key];
+      if (typeof v === "string" && v) handles.push(v);
+    }
+    for (const item of itemsOf(block)) {
+      if (typeof item.handle === "string" && item.handle) handles.push(item.handle);
+    }
+    return [...new Set(handles)].filter((h) => !collections.some((c) => c.handle === h));
+  })();
+
   return (
     <Group
       id={block.id}
@@ -1329,6 +1349,18 @@ function BlockGroup({
       <p className="pt-2 text-[11px] leading-relaxed text-ink-soft">
         {ar ? meta.hintAr : meta.hintEn}
       </p>
+
+      {deadLinks.length > 0 && (
+        <div className="mt-2 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-2.5">
+          <IcAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+          <div className="text-[11px] leading-relaxed text-amber-900">
+            {ar
+              ? "روابط لا تؤدي إلى شيء — هذه الأقسام غير موجودة: "
+              : "These links go nowhere — no such collection: "}
+            <span className="font-mono">{deadLinks.join(", ")}</span>
+          </div>
+        </div>
+      )}
 
       {block.type === "banner" && (
         <>
