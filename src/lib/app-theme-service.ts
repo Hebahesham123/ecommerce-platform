@@ -16,6 +16,28 @@ import { getCatalog } from "@/lib/storefront-data";
 let cache: { at: number; value: AppTheme } | null = null;
 const CACHE_MS = 60_000;
 
+/**
+ * Everything a theme is, versus what the table had before 0026.
+ *
+ * PostgREST rejects the whole request when it is asked for a column that is
+ * not there, so a store that has not run the migration yet would lose its
+ * theme to a select it cannot satisfy. Both shapes are tried, newest first.
+ */
+const ALL_COLUMNS = "settings,blocks,tabs,screens";
+const PRE_0026_COLUMNS = "settings,blocks";
+
+/** True when the only thing wrong was asking for tabs or screens. */
+function missingColumn(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+  const code = String(error.code ?? "");
+  const message = String(error.message ?? "");
+  return (
+    code === "42703" ||
+    code === "PGRST204" ||
+    /column .* does not exist|could not find the .* column/i.test(message)
+  );
+}
+
 export function invalidateAppTheme() {
   cache = null;
 }
@@ -27,11 +49,19 @@ export async function getAppTheme(): Promise<AppTheme> {
   if (!isSupabaseConfigured()) return normalizeTheme(null);
 
   try {
-    const { data, error } = await getServerSupabase()
+    const db = getServerSupabase();
+    let { data, error } = await db
       .from("app_theme")
-      .select("settings,blocks")
+      .select(ALL_COLUMNS)
       .eq("id", "default")
       .maybeSingle();
+    if (missingColumn(error)) {
+      ({ data, error } = await db
+        .from("app_theme")
+        .select(PRE_0026_COLUMNS)
+        .eq("id", "default")
+        .maybeSingle());
+    }
 
     // A saved theme is the merchant's arrangement and always wins. Once they
     // have pressed Save the website stops being consulted, or an edit on one
@@ -80,17 +110,24 @@ export async function saveAppTheme(
     // today, but a theme that can only be trusted because of who wrote it is
     // one bad call away from reaching an app.
     const clean = normalizeTheme(theme);
-    const { error } = await getServerSupabase()
+    const db = getServerSupabase();
+    const row = {
+      id: "default",
+      settings: clean.settings,
+      blocks: clean.blocks,
+      updated_at: new Date().toISOString(),
+    };
+
+    let { error } = await db
       .from("app_theme")
-      .upsert(
-        {
-          id: "default",
-          settings: clean.settings,
-          blocks: clean.blocks,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "id" },
-      );
+      .upsert({ ...row, tabs: clean.tabs, screens: clean.screens }, { onConflict: "id" });
+    // Before 0026 there is nowhere to put the tab bar or the screen wording.
+    // Saving the rest is far better than refusing to save at all, so the brand
+    // and the blocks still land and the two that cannot be kept are dropped —
+    // the same as before the columns existed.
+    if (missingColumn(error)) {
+      ({ error } = await db.from("app_theme").upsert(row, { onConflict: "id" }));
+    }
     if (error) {
       const missing = /app_theme/i.test(error.message);
       return { ok: false, error: missing ? "migration_missing" : error.message };
