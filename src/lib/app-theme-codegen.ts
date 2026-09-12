@@ -479,7 +479,7 @@ export function ProductTile({
 
 const styles = StyleSheet.create({
   headingRow: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: spacing.sm },
-  heading: { flex: 1, fontSize: 15, fontWeight: "700", color: colors.ink },
+  heading: { flex: 1, fontSize: 17, fontWeight: "700", color: colors.ink },
   seeAll: { fontSize: 12, fontWeight: "600", color: colors.accent },
   tile: { borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, overflow: "hidden" },
   fill: { width: "100%" },
@@ -1260,7 +1260,7 @@ export function LiveNow({
   const timerBg = settings.timerBg || "rgba(255,255,255,0.22)";
   const timerFg = settings.timerTextColor || "#ffffff";
 
-  const size = settings.avatarSize && settings.avatarSize > 0 ? settings.avatarSize : 56;
+  const size = settings.avatarSize && settings.avatarSize > 0 ? settings.avatarSize : 64;
   // Zero is a real answer here — it means no ring at all — so this cannot use
   // the "positive or default" rule the other numbers use.
   const ringW = typeof settings.ringWidth === "number" && settings.ringWidth >= 0 ? settings.ringWidth : 2;
@@ -1607,13 +1607,13 @@ export function CountdownDeals({
 
 const styles = StyleSheet.create({
   head: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: spacing.sm },
-  heading: { flex: 1, fontSize: 14, fontWeight: "700", color: colors.ink },
+  heading: { flex: 1, fontSize: 16, fontWeight: "700", color: colors.ink },
   timer: { flexDirection: "row", gap: 4 },
   tick: { borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
   tickText: { fontSize: 11, fontWeight: "700", color: "#fff" },
   row: { gap: spacing.md, paddingVertical: spacing.sm },
-  card: { width: 132, overflow: "hidden", borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface },
-  photo: { width: "100%", height: 104, backgroundColor: colors.page },
+  card: { width: 158, overflow: "hidden", borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface },
+  photo: { width: "100%", height: 124, backgroundColor: colors.page },
   badge: { position: "absolute", top: 6, left: 6, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
   badgeText: { fontSize: 10, fontWeight: "700", color: "#fff" },
   body: { padding: 8 },
@@ -1812,11 +1812,11 @@ export function PaymentPlans({
 
 const styles = StyleSheet.create({
   head: { flexDirection: "row", alignItems: "flex-end", gap: spacing.sm },
-  title: { fontSize: 14, fontWeight: "700", color: colors.ink },
+  title: { fontSize: 16, fontWeight: "700", color: colors.ink },
   subtitle: { fontSize: 11, color: colors.inkSoft },
   seeAll: { fontSize: 12, fontWeight: "600", color: colors.accent },
   row: { gap: spacing.md, paddingVertical: spacing.sm },
-  card: { width: 136, padding: 12 },
+  card: { width: 152, padding: 12 },
   name: { fontSize: 11, fontWeight: "600", color: "rgba(255,255,255,0.8)" },
   headline: { marginTop: 4, fontSize: 15, fontWeight: "700", color: "#fff" },
   note: { marginTop: 4, fontSize: 10, lineHeight: 14, color: "rgba(255,255,255,0.75)" },
@@ -2002,7 +2002,7 @@ export function OfferCards({
 const styles = StyleSheet.create({
   subtitle: { fontSize: 11, color: colors.inkSoft },
   row: { gap: spacing.md, paddingVertical: spacing.sm },
-  card: { width: 136, borderWidth: 1, borderStyle: "dashed", padding: 12, gap: 4 },
+  card: { width: 152, borderWidth: 1, borderStyle: "dashed", padding: 12, gap: 4 },
   badge: { fontSize: 20, fontWeight: "700" },
   title: { fontSize: 11, fontWeight: "700", color: colors.ink },
   detail: { fontSize: 10, lineHeight: 14, color: colors.inkSoft },
@@ -2116,12 +2116,12 @@ export function ProductReasons({
 
 const styles = StyleSheet.create({
   head: { flexDirection: "row", alignItems: "flex-end", gap: spacing.sm },
-  title: { fontSize: 14, fontWeight: "700", color: colors.ink },
+  title: { fontSize: 16, fontWeight: "700", color: colors.ink },
   subtitle: { fontSize: 11, color: colors.inkSoft },
   seeAll: { fontSize: 12, fontWeight: "600", color: colors.accent },
   row: { gap: spacing.md, paddingVertical: spacing.sm },
-  card: { width: 150, overflow: "hidden", borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface },
-  photo: { width: "100%", height: 120, backgroundColor: colors.page },
+  card: { width: 166, overflow: "hidden", borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface },
+  photo: { width: "100%", height: 136, backgroundColor: colors.page },
   badge: { position: "absolute", top: 6, right: 6, borderRadius: 4, backgroundColor: colors.accent, paddingHorizontal: 6, paddingVertical: 2 },
   badgeText: { fontSize: 10, fontWeight: "700", color: "#fff" },
   body: { padding: 8 },
@@ -2173,7 +2173,7 @@ export function CircleRow({
     }
     if (handle) onOpenCollection?.(handle);
   };
-  const size = settings.size && settings.size > 0 ? settings.size : 64;
+  const size = settings.size && settings.size > 0 ? settings.size : 76;
   const cell = Math.max(size + 14, 56);
 
   return (
@@ -2217,7 +2217,7 @@ export function CircleRow({
 
 const styles = StyleSheet.create({
   head: { flexDirection: "row", alignItems: "flex-end", gap: spacing.sm },
-  title: { fontSize: 14, fontWeight: "700", color: colors.ink },
+  title: { fontSize: 16, fontWeight: "700", color: colors.ink },
   subtitle: { fontSize: 11, color: colors.inkSoft },
   seeAll: { fontSize: 12, fontWeight: "600", color: colors.accent },
   row: { gap: spacing.md, paddingVertical: spacing.sm },
@@ -2542,9 +2542,30 @@ function homeScreenFile(theme: AppTheme): GeneratedFile {
     .join("\n");
   const search = theme.settings.showSearch;
 
+  // A section can carry a line above it and a colour under it. Resolved here,
+  // at generation time, so the screen stays a plain list of sections rather
+  // than every component having to learn about bands.
   const rendered = theme.blocks
-    .map((b, i) => `        <View key=${q(b.id)} style={styles.block}>\n${renderCall(b, 10)}\n        </View>`)
-    .join("\n");
+    .map((b) => {
+      const set = b.settings ?? {};
+      const kicker = s(set.kicker);
+      const band = s(set.band);
+      const washed = band === "tint" || band === "paper";
+      // A band bleeds to the screen edges, so the page padding comes off and
+      // is put back on inside it.
+      const wash =
+        band === "paper" ? `"#ffffff"` : `colors.accent + "12"`;
+      const bandStyle = washed
+        ? `, { marginHorizontal: -spacing.lg, paddingHorizontal: spacing.lg, paddingVertical: 20, backgroundColor: ${wash} }`
+        : band === "divider"
+          ? `, { borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 20 }`
+          : ``
+      const above = kicker
+        ? `\n          <Text style={styles.kicker}>{${q(kicker)}}</Text>`
+        : ``
+      return `        <View key=${q(b.id)} style={[styles.block${bandStyle}]}>${above}\n${renderCall(b, 10)}\n        </View>`;
+    })
+    .join(`\n`);
 
   return {
     path: "HomeScreen.tsx",
@@ -2661,6 +2682,7 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.page },
   content: { padding: spacing.lg, gap: spacing.xl },
   block: {},
+  kicker: { marginBottom: 6, fontSize: 10, fontWeight: "700", letterSpacing: 1.8, color: colors.accent },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl },
   error: { color: "#e11d48", fontSize: 13 },
   announcement: { backgroundColor: colors.accent, paddingVertical: 6, paddingHorizontal: 12 },
@@ -4372,7 +4394,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.line, backgroundColor: colors.surface },
   back: { width: 24 },
   backText: { fontSize: 26, lineHeight: 28, color: colors.ink },
-  heading: { flex: 1, fontSize: 15, fontWeight: "700", color: colors.ink },
+  heading: { flex: 1, fontSize: 17, fontWeight: "700", color: colors.ink },
   notice: { position: "absolute", left: spacing.lg, right: spacing.lg, bottom: 78, borderRadius: 10, backgroundColor: colors.ink, paddingHorizontal: 14, paddingVertical: 10 },
   noticeText: { color: "#fff", fontSize: 12, textAlign: "center" },
   done: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.sm, padding: spacing.xl },

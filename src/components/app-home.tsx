@@ -180,7 +180,7 @@ function Heading({
   if (!title && !onSeeAll) return null;
   return (
     <div className="flex items-end justify-between gap-2">
-      <h3 className="min-w-0 truncate text-sm font-bold text-slate-900">{title}</h3>
+      <h3 className="min-w-0 truncate text-[16px] font-bold tracking-tight text-slate-900">{title}</h3>
       {onSeeAll && (
         <button
           onClick={onSeeAll}
@@ -706,7 +706,7 @@ function BlockView({
       }
       return (
         <section className="rounded-2xl bg-slate-50 p-3.5">
-          {heading && <h3 className="text-sm font-bold text-slate-900">{heading}</h3>}
+          {heading && <h3 className="text-[16px] font-bold tracking-tight text-slate-900">{heading}</h3>}
           {body && <p className="mt-1 text-xs leading-relaxed text-slate-600">{body}</p>}
         </section>
       );
@@ -907,7 +907,7 @@ function LiveNow({
   const timerBg = str(s.timerBg, "rgba(255,255,255,0.22)");
   const timerFg = str(s.timerTextColor, "#ffffff");
 
-  const size = int(s.avatarSize, 56);
+  const size = int(s.avatarSize, 64);
   // Zero is a real answer here — it means no ring at all — so this one cannot
   // go through int(), which treats zero as "unset".
   const rawRing = Number(s.ringWidth);
@@ -1165,7 +1165,7 @@ function CountdownDeals({
   return (
     <section>
       <div className="flex items-end justify-between gap-2">
-        <h3 className="min-w-0 truncate text-sm font-bold text-slate-900">{str(s.title)}</h3>
+        <h3 className="min-w-0 truncate text-[16px] font-bold tracking-tight text-slate-900">{str(s.title)}</h3>
         {showTimer && (
           <span className="flex shrink-0 items-center gap-1">
             {parts.map((part, i) => (
@@ -1190,11 +1190,11 @@ function CountdownDeals({
             <button
               key={item.id}
               onClick={() => go(str(item.url), str(item.handle))}
-              className="w-[132px] shrink-0 overflow-hidden border border-slate-200 bg-white text-start"
+              className="w-[158px] shrink-0 overflow-hidden border border-slate-200 bg-white text-start"
               style={{ borderRadius: radius }}
             >
               <span className="relative block">
-                <Thumb src={borrowed.image} className="h-[104px] w-full" style={{ borderRadius: 0 }} />
+                <Thumb src={borrowed.image} className="h-[124px] w-full" style={{ borderRadius: 0 }} />
                 {str(item.badge) && (
                   <span
                     className="absolute start-1.5 top-1.5 rounded px-1.5 py-0.5 text-[10px] font-bold text-white"
@@ -1353,7 +1353,7 @@ function PaymentPlans({
       <div className="flex items-end justify-between gap-2">
         <div className="min-w-0">
           {str(s.title) && (
-            <h3 className="truncate text-sm font-bold text-slate-900">{str(s.title)}</h3>
+            <h3 className="truncate text-[16px] font-bold tracking-tight text-slate-900">{str(s.title)}</h3>
           )}
           {str(s.subtitle) && (
             <p className="truncate text-[11px] text-slate-500">{str(s.subtitle)}</p>
@@ -1374,7 +1374,7 @@ function PaymentPlans({
           <button
             key={item.id}
             onClick={() => go(str(item.url), str(item.handle))}
-            className="w-[136px] shrink-0 p-3 text-start"
+            className="w-[152px] shrink-0 p-3 text-start"
             style={{ background: str(item.color, accent), borderRadius: radius }}
           >
             {str(item.name) && (
@@ -1509,7 +1509,7 @@ function OfferCards({
           return (
             <div
               key={item.id}
-              className="flex w-[136px] shrink-0 flex-col gap-1 border border-dashed p-3"
+              className="flex w-[152px] shrink-0 flex-col gap-1 border border-dashed p-3"
               style={{ borderColor: colour, background: `${colour}0f`, borderRadius: radius }}
             >
               {str(item.badge) && (
@@ -1558,7 +1558,7 @@ function RowHead({
   return (
     <div className="flex items-end justify-between gap-2">
       <div className="min-w-0">
-        {title && <h3 className="truncate text-sm font-bold text-slate-900">{title}</h3>}
+        {title && <h3 className="truncate text-[16px] font-bold tracking-tight text-slate-900">{title}</h3>}
         {subtitle && <p className="truncate text-[11px] text-slate-500">{subtitle}</p>}
       </div>
       {seeAll && (
@@ -1606,11 +1606,11 @@ function ProductReasons({
           return (
             <div
               key={item.id}
-              className="flex w-[150px] shrink-0 flex-col overflow-hidden border border-slate-200 bg-white"
+              className="flex w-[166px] shrink-0 flex-col overflow-hidden border border-slate-200 bg-white"
               style={{ borderRadius: radius }}
             >
               <button onClick={() => go(str(item.url), str(item.handle))} className="relative block">
-                <Thumb src={borrowed.image} className="h-[120px] w-full" style={{ borderRadius: 0 }} />
+                <Thumb src={borrowed.image} className="h-[136px] w-full" style={{ borderRadius: 0 }} />
                 {str(item.badge) && (
                   <span
                     className="absolute end-1.5 top-1.5 rounded px-1.5 py-0.5 text-[10px] font-bold text-white"
@@ -1681,7 +1681,7 @@ function CircleRow({
 }) {
   const s = block.settings ?? {};
   const go = opener(data, handlers);
-  const size = int(s.size, 64);
+  const size = int(s.size, 76);
   const showLabel = s.showLabel !== false;
   const showNote = s.showNote !== false;
   const cell = Math.max(size + 14, 56);
@@ -1985,13 +1985,72 @@ export function AppHome({
           <BlockView block={block} theme={theme} data={data} ar={ar} handlers={handlers} />
         );
         if (!showPlaceholders && isPlaceholder(rendered)) return null;
-        return <div key={block.id}>{rendered}</div>;
+        return (
+          <SectionBand key={block.id} block={block} accent={theme.settings.accent}>
+            {rendered}
+          </SectionBand>
+        );
       })}
       {blocks.length === 0 && (
         <p className="py-12 text-center text-sm text-slate-400">
           {ar ? "الصفحة الرئيسية فارغة" : "The home screen is empty"}
         </p>
       )}
+    </div>
+  );
+}
+
+/**
+ * The rhythm between one section and the next.
+ *
+ * A page where every section is a heading over a row of same-sized cards on
+ * the same background is legible and completely flat — it reads as a list
+ * rather than something composed. A kicker gives a section a voice, and a band
+ * lets one sit on its own colour so the scroll has somewhere to breathe and
+ * something to land on.
+ *
+ * Both live here rather than in each renderer, so every section — the
+ * twenty-eight that exist and whatever comes next — gets them for nothing.
+ * Only bands that keep dark text readable are offered; inverting the text
+ * inside each section is a different and much larger job.
+ */
+function SectionBand({
+  block,
+  accent,
+  children,
+}: {
+  block: Block;
+  accent: string;
+  children: React.ReactNode;
+}) {
+  const s = block.settings ?? {};
+  const kicker = str(s.kicker);
+  const band = str(s.band);
+  const washed = band === "tint" || band === "paper";
+
+  // A band bleeds to the phone's edges, so the page's own padding is taken off
+  // and put back inside it.
+  const cls = washed
+    ? "-mx-4 px-4 py-5"
+    : band === "divider"
+      ? "border-t border-slate-200 pt-5"
+      : "";
+  const style: React.CSSProperties = washed
+    ? { background: band === "paper" ? "#ffffff" : `${accent}12` }
+    : {};
+
+  if (!kicker && !cls) return <div>{children}</div>;
+  return (
+    <div className={cls} style={style}>
+      {kicker && (
+        <div
+          className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.18em]"
+          style={{ color: accent }}
+        >
+          {kicker}
+        </div>
+      )}
+      {children}
     </div>
   );
 }

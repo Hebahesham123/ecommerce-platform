@@ -1362,6 +1362,29 @@ function BlockGroup({
         </div>
       )}
 
+      {/* Every section gets these two: a line above it, and a colour under it.
+          They are what stop a long page reading as one flat list. */}
+      <Field label={ar ? "سطر علوي" : "Kicker"} type="text">
+        <input
+          value={text("kicker")}
+          onChange={(e) => onPatch({ kicker: e.target.value })}
+          placeholder={ar ? "مثلاً: مختارات الصيف" : "e.g. SUMMER PICKS"}
+          className={input}
+        />
+      </Field>
+      <Field label={ar ? "خلفية القسم" : "Section band"} type="select">
+        <select
+          value={text("band")}
+          onChange={(e) => onPatch({ band: e.target.value })}
+          className={input}
+        >
+          <option value="">{ar ? "بلا" : "None"}</option>
+          <option value="tint">{ar ? "لمسة من لون الهوية" : "Brand tint"}</option>
+          <option value="paper">{ar ? "أبيض" : "White"}</option>
+          <option value="divider">{ar ? "خط فاصل أعلى" : "Hairline above"}</option>
+        </select>
+      </Field>
+
       {block.type === "banner" && (
         <>
           <Field label={ar ? "الصورة" : "Image"} type="image_picker">
