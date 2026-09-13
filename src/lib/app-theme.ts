@@ -43,6 +43,7 @@ export type BlockType =
   | "price_drop"
   | "style_profile"
   | "promo_card"
+  | "showcase"
   | "reviews"
   | "text";
 
@@ -370,6 +371,11 @@ export type AppSettings = {
    */
   stripEnabled: boolean;
   strip: StripItem[];
+  /**
+   * What section titles are set in. "serif" is the face the website already
+   * uses, which is most of why the site reads as more expensive than the app.
+   */
+  titleFont: string;
 };
 
 /**
@@ -533,6 +539,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   headerInk: "",
   stripEnabled: false,
   strip: [],
+  titleFont: "system",
 };
 
 /**
@@ -709,6 +716,12 @@ export const BLOCK_META: Record<
     hintAr: "بطاقة بلون واحد بعنوان ونص وزر — مثل «الصندوق الغامض»",
     hintEn: "A solid colour card with a heading, a line and a button — a Mystery box, say",
   },
+  showcase: {
+    ar: "صورة بعرض الشاشة",
+    en: "Full-bleed image",
+    hintAr: "صورة واحدة من حافة الشاشة إلى حافتها، بعنوان فوقها — لتكسر إيقاع الصفوف",
+    hintEn: "One picture from edge to edge with a line over it — what breaks up a page of rows",
+  },
   reviews: {
     ar: "آراء العملاء",
     en: "Customer reviews",
@@ -818,6 +831,7 @@ export function newBlock(type: BlockType): Block {
       items: shape ? [shape.blank()] : [],
     },
     countdown_deals: {
+      featureFirst: false,
       title: "Deals of the day",
       endsInMinutes: 135,
       showTimer: true,
@@ -871,6 +885,7 @@ export function newBlock(type: BlockType): Block {
       items: shape ? [shape.blank()] : [],
     },
     product_reasons: {
+      featureFirst: false,
       title: "Because you viewed",
       subtitle: "",
       seeAllLabel: "See all",
@@ -916,6 +931,18 @@ export function newBlock(type: BlockType): Block {
       cardBg: "",
       radius: 14,
       items: shape ? [shape.blank()] : [],
+    },
+    showcase: {
+      imageUrl: "",
+      heading: "",
+      subheading: "",
+      buttonLabel: "",
+      handle: "",
+      url: "",
+      height: 360,
+      overlay: 45,
+      textColor: "#ffffff",
+      align: "bottom",
     },
     promo_card: {
       title: "",
@@ -989,6 +1016,7 @@ export function normalizeTheme(raw: unknown): AppTheme {
     showBag: s.showBag !== false,
     headerBg: /^#[0-9a-f]{6}$/i.test(str(s.headerBg)) ? str(s.headerBg) : "",
     headerInk: /^#[0-9a-f]{6}$/i.test(str(s.headerInk)) ? str(s.headerInk) : "",
+    titleFont: str(s.titleFont) === "serif" ? "serif" : "system",
     stripEnabled: Boolean(s.stripEnabled),
     strip: Array.isArray(s.strip)
       ? (s.strip as unknown[])

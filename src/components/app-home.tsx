@@ -425,6 +425,13 @@ function BlockView({
       );
     }
 
+    case "showcase": {
+      if (!str(s.imageUrl) && !str(s.heading) && !str(s.handle)) {
+        return <Placeholder ar={ar} label={ar ? "صورة بلا مصدر" : "No picture chosen yet"} />;
+      }
+      return <Showcase block={block} data={data} ar={ar} accent={accent} handlers={handlers} />;
+    }
+
     case "style_profile": {
       const tags = itemsOf(block).filter((i) => str(i.label));
       if (!tags.length && !str(s.cardTitle)) {
@@ -1161,6 +1168,9 @@ function CountdownDeals({
   const badgeBg = str(s.badgeBg, accent);
   const showTimer = s.showTimer !== false;
   const showClaimed = s.showClaimed !== false;
+  // A row where every card is the same size has no first among equals. Letting
+  // one lead gives the eye somewhere to start.
+  const featureFirst = s.featureFirst === true;
 
   return (
     <section>
@@ -1182,7 +1192,8 @@ function CountdownDeals({
       </div>
 
       <div className="-mx-4 mt-2 flex gap-3 overflow-x-auto px-4 pb-1">
-        {items.map((item) => {
+        {items.map((item, i) => {
+          const lead = featureFirst && i === 0;
           const borrowed = inherit(item, data);
           const claimed = str(item.claimed);
           const pct = Math.max(0, Math.min(100, parseInt(claimed, 10) || 0));
@@ -1190,11 +1201,15 @@ function CountdownDeals({
             <button
               key={item.id}
               onClick={() => go(str(item.url), str(item.handle))}
-              className="w-[158px] shrink-0 overflow-hidden border border-slate-200 bg-white text-start"
-              style={{ borderRadius: radius }}
+              className="shrink-0 overflow-hidden border border-slate-200 bg-white text-start"
+              style={{ borderRadius: radius, width: lead ? 224 : 158 }}
             >
               <span className="relative block">
-                <Thumb src={borrowed.image} className="h-[124px] w-full" style={{ borderRadius: 0 }} />
+                <Thumb
+                  src={borrowed.image}
+                  className="w-full"
+                  style={{ borderRadius: 0, height: lead ? 176 : 124 }}
+                />
                 {str(item.badge) && (
                   <span
                     className="absolute start-1.5 top-1.5 rounded px-1.5 py-0.5 text-[10px] font-bold text-white"
@@ -1590,6 +1605,7 @@ function ProductReasons({
   const go = opener(data, handlers);
   const radius = int(s.radius, 14);
   const button = str(s.buttonLabel);
+  const featureFirst = s.featureFirst === true;
 
   return (
     <section>
@@ -1601,16 +1617,21 @@ function ProductReasons({
         accent={accent}
       />
       <div className="-mx-4 mt-2 flex gap-3 overflow-x-auto px-4 pb-1">
-        {items.map((item) => {
+        {items.map((item, i) => {
+          const lead = featureFirst && i === 0;
           const borrowed = inherit(item, data);
           return (
             <div
               key={item.id}
-              className="flex w-[166px] shrink-0 flex-col overflow-hidden border border-slate-200 bg-white"
-              style={{ borderRadius: radius }}
+              className="flex shrink-0 flex-col overflow-hidden border border-slate-200 bg-white"
+              style={{ borderRadius: radius, width: lead ? 236 : 166 }}
             >
               <button onClick={() => go(str(item.url), str(item.handle))} className="relative block">
-                <Thumb src={borrowed.image} className="h-[136px] w-full" style={{ borderRadius: 0 }} />
+                <Thumb
+                  src={borrowed.image}
+                  className="w-full"
+                  style={{ borderRadius: 0, height: lead ? 196 : 136 }}
+                />
                 {str(item.badge) && (
                   <span
                     className="absolute end-1.5 top-1.5 rounded px-1.5 py-0.5 text-[10px] font-bold text-white"
@@ -1979,7 +2000,7 @@ export function AppHome({
 }) {
   const blocks = theme.blocks ?? [];
   return (
-    <div className="space-y-5">
+    <div className={`space-y-5${theme.settings.titleFont === "serif" ? " app-serif" : ""}`}>
       {blocks.map((block) => {
         const rendered = (
           <BlockView block={block} theme={theme} data={data} ar={ar} handlers={handlers} />
@@ -2014,6 +2035,83 @@ export function AppHome({
  * Only bands that keep dark text readable are offered; inverting the text
  * inside each section is a different and much larger job.
  */
+/**
+ * One picture, edge to edge.
+ *
+ * A page of rows is a page of the same shape repeated; this is the thing that
+ * interrupts it. It bleeds past the screen's padding on purpose, so it reads as
+ * a moment rather than another card, and the wording sits on the image instead
+ * of under it.
+ */
+function Showcase({
+  block,
+  data,
+  ar,
+  accent,
+  handlers,
+}: {
+  block: Block;
+  data: HomeData;
+  ar: boolean;
+  accent: string;
+  handlers: HomeHandlers;
+}) {
+  const s = block.settings ?? {};
+  const go = opener(data, handlers);
+  const height = int(s.height, 360);
+  const overlay = Math.max(0, Math.min(100, int(s.overlay, 45))) / 100;
+  const ink = str(s.textColor, "#ffffff");
+  const centred = str(s.align) === "center";
+  const button = str(s.buttonLabel);
+  // Its own picture, or the one belonging to whatever it opens.
+  const target = data.collections.find((c) => c.handle === str(s.handle));
+  const image = str(s.imageUrl) || target?.image || "";
+
+  return (
+    <section className="relative -mx-4 overflow-hidden" style={{ height }}>
+      {image ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={image} alt="" className="absolute inset-0 h-full w-full object-cover" />
+      ) : (
+        <div className="absolute inset-0 bg-slate-200" />
+      )}
+      <div
+        className="absolute inset-0"
+        style={{
+          background: `linear-gradient(to top, rgba(0,0,0,${overlay}) 0%, rgba(0,0,0,${
+            overlay * 0.35
+          }) 45%, rgba(0,0,0,0) 80%)`,
+        }}
+      />
+      <div
+        className={`relative flex h-full flex-col px-5 pb-7 ${
+          centred ? "items-center justify-center text-center" : "justify-end"
+        }`}
+      >
+        {str(s.heading) && (
+          <div className="app-display text-[26px] font-bold leading-tight" style={{ color: ink }}>
+            {str(s.heading)}
+          </div>
+        )}
+        {str(s.subheading) && (
+          <div className="mt-1 text-[12px] leading-relaxed" style={{ color: ink, opacity: 0.85 }}>
+            {str(s.subheading)}
+          </div>
+        )}
+        {button && (
+          <button
+            onClick={() => go(str(s.url), str(s.handle))}
+            className="mt-3 self-start rounded-full px-4 py-2 text-[12px] font-bold"
+            style={{ background: ink, color: str(s.imageUrl) ? "#191614" : accent, alignSelf: centred ? "center" : undefined }}
+          >
+            {button}
+          </button>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function SectionBand({
   block,
   accent,
@@ -2093,6 +2191,8 @@ function isPlaceholder(node: React.ReactElement): boolean {
       return itemsOf(block).filter((t) => str(t.handle)).length === 0;
     case "promo_bar":
       return !str(s.lead) && !str(s.code);
+    case "showcase":
+      return !str(s.imageUrl) && !str(s.heading) && !str(s.handle);
     case "style_profile":
       return itemsOf(block).filter((i) => str(i.label)).length === 0 && !str(s.cardTitle);
     case "promo_card":

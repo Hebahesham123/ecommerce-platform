@@ -340,3 +340,12 @@ body {
   background: #fff;
   cursor: default;
 }
+
+/* App theme: section titles set in the website's own display face.
+   Every section heading is an h3, so one rule reaches all of them and
+   whatever sections come later. */
+.app-serif h3,
+.app-serif .app-display {
+  font-family: var(--font-display), "Playfair Display", Georgia, "Times New Roman", serif;
+  letter-spacing: -0.01em;
+}

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Tajawal } from "next/font/google";
+import { Tajawal, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import { cookies } from "next/headers";
 import { LangProvider, type Lang } from "@/lib/i18n";
@@ -13,6 +13,21 @@ const tajawal = Tajawal({
   subsets: ["arabic", "latin"],
   weight: ["400", "500", "700", "800"],
   variable: "--font-app",
+  display: "swap",
+});
+
+/**
+ * The display face for app section titles.
+ *
+ * The published website is already set in Playfair, and that is most of why
+ * the site reads as more expensive than the app. Loaded here so the editor's
+ * phone and the preview show the real thing; if Google is unreachable at build
+ * time Next falls back and nothing breaks.
+ */
+const playfair = Playfair_Display({
+  subsets: ["latin"],
+  weight: ["600", "700"],
+  variable: "--font-display",
   display: "swap",
 });
 
@@ -41,7 +56,12 @@ export default async function RootLayout({
   const pixel = await getPixelSnippet();
 
   return (
-    <html lang={lang} dir={dir} className={tajawal.variable} suppressHydrationWarning>
+    <html
+      lang={lang}
+      dir={dir}
+      className={`${tajawal.variable} ${playfair.variable}`}
+      suppressHydrationWarning
+    >
       <head>
         {/* Apply the theme before paint to avoid a flash. Admin defaults to dark
             unless the user picked light; the storefront (/store) stays light. */}

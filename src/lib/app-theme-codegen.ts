@@ -61,8 +61,14 @@ function themeFile(theme: AppTheme): GeneratedFile {
  * Edit it there — anything typed here is replaced on the next change.
  */
 
+import { Platform } from "react-native";
+
 export const theme = {
   storeName: ${q(t.storeName)},
+  /** Section titles. undefined means the platform's own face. */
+  titleFont: ${
+    t.titleFont === "serif" ? 'Platform.OS === "ios" ? "Georgia" : "serif"' : "undefined"
+  },
   logoUrl: ${t.logoUrl ? q(t.logoUrl) : "null"},
   accent: ${q(t.accent)},
   background: ${q(t.background)},
@@ -396,7 +402,7 @@ function piecesFile(): GeneratedFile {
     language: "tsx",
     contents: `import React from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
-import { colors, radius, spacing } from "../theme";
+import { colors, radius, spacing, theme } from "../theme";
 import type { Card, HomePayload } from "../api";
 
 /** The bits every section is made of, so they all look like one app. */
@@ -479,7 +485,7 @@ export function ProductTile({
 
 const styles = StyleSheet.create({
   headingRow: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: spacing.sm },
-  heading: { flex: 1, fontSize: 17, fontWeight: "700", color: colors.ink },
+  heading: { flex: 1, fontSize: 17, fontWeight: "700", color: colors.ink, fontFamily: theme.titleFont },
   seeAll: { fontSize: 12, fontWeight: "600", color: colors.accent },
   tile: { borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, overflow: "hidden" },
   fill: { width: "100%" },
@@ -1495,7 +1501,7 @@ const styles = StyleSheet.create({
 
     countdown_deals: `import React, { useEffect, useState } from "react";
 import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { colors, radius, spacing } from "../theme";
+import { colors, radius, spacing, theme } from "../theme";
 import { inherit } from "./Pieces";
 import type { HomePayload } from "../api";
 
@@ -1569,14 +1575,20 @@ export function CountdownDeals({
       </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-        {items.map((i) => {
+        {items.map((i, idx) => {
+          const lead = settings.featureFirst === true && idx === 0;
           const borrowed = inherit(i, collections);
           const photo = i.imageUrl || borrowed.image;
           const pct = Math.max(0, Math.min(100, parseInt(i.claimed ?? "", 10) || 0));
+          const shot = [styles.photo, { height: lead ? 176 : 124 }];
           return (
-            <Pressable key={i.id} style={[styles.card, { borderRadius: r }]} onPress={() => go(i.url, i.handle)}>
+            <Pressable
+              key={i.id}
+              style={[styles.card, { borderRadius: r, width: lead ? 224 : 158 }]}
+              onPress={() => go(i.url, i.handle)}
+            >
               <View>
-                {photo ? <Image source={{ uri: photo }} style={styles.photo} /> : <View style={styles.photo} />}
+                {photo ? <Image source={{ uri: photo }} style={shot} /> : <View style={shot} />}
                 {i.badge ? (
                   <View style={[styles.badge, { backgroundColor: badgeBg }]}>
                     <Text style={styles.badgeText}>{i.badge}</Text>
@@ -1607,7 +1619,7 @@ export function CountdownDeals({
 
 const styles = StyleSheet.create({
   head: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: spacing.sm },
-  heading: { flex: 1, fontSize: 16, fontWeight: "700", color: colors.ink },
+  heading: { flex: 1, fontSize: 16, fontWeight: "700", color: colors.ink, fontFamily: theme.titleFont },
   timer: { flexDirection: "row", gap: 4 },
   tick: { borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
   tickText: { fontSize: 11, fontWeight: "700", color: "#fff" },
@@ -1749,7 +1761,7 @@ const styles = StyleSheet.create({
 
     payment_plans: `import React from "react";
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { colors, spacing } from "../theme";
+import { colors, spacing, theme } from "../theme";
 
 export type Plan = { id: string; name?: string; headline?: string; note?: string; color?: string; handle?: string; url?: string };
 export type PaymentPlansSettings = {
@@ -1812,7 +1824,7 @@ export function PaymentPlans({
 
 const styles = StyleSheet.create({
   head: { flexDirection: "row", alignItems: "flex-end", gap: spacing.sm },
-  title: { fontSize: 16, fontWeight: "700", color: colors.ink },
+  title: { fontSize: 16, fontWeight: "700", color: colors.ink, fontFamily: theme.titleFont },
   subtitle: { fontSize: 11, color: colors.inkSoft },
   seeAll: { fontSize: 12, fontWeight: "600", color: colors.accent },
   row: { gap: spacing.md, paddingVertical: spacing.sm },
@@ -2013,7 +2025,7 @@ const styles = StyleSheet.create({
 
     product_reasons: `import React from "react";
 import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { colors, spacing } from "../theme";
+import { colors, spacing, theme } from "../theme";
 import { inherit } from "./Pieces";
 import type { HomePayload } from "../api";
 
@@ -2075,13 +2087,15 @@ export function ProductReasons({
         ) : null}
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-        {items.map((i) => {
+        {items.map((i, idx) => {
+          const lead = settings.featureFirst === true && idx === 0;
           const borrowed = inherit(i, collections);
           const photo = i.imageUrl || borrowed.image;
+          const shot = [styles.photo, { height: lead ? 196 : 136 }];
           return (
-            <View key={i.id} style={[styles.card, { borderRadius: r }]}>
+            <View key={i.id} style={[styles.card, { borderRadius: r, width: lead ? 236 : 166 }]}>
               <Pressable onPress={() => go(i.url, i.handle)}>
-                {photo ? <Image source={{ uri: photo }} style={styles.photo} /> : <View style={styles.photo} />}
+                {photo ? <Image source={{ uri: photo }} style={shot} /> : <View style={shot} />}
                 {i.badge ? (
                   <View style={styles.badge}>
                     <Text style={styles.badgeText}>{i.badge}</Text>
@@ -2116,7 +2130,7 @@ export function ProductReasons({
 
 const styles = StyleSheet.create({
   head: { flexDirection: "row", alignItems: "flex-end", gap: spacing.sm },
-  title: { fontSize: 16, fontWeight: "700", color: colors.ink },
+  title: { fontSize: 16, fontWeight: "700", color: colors.ink, fontFamily: theme.titleFont },
   subtitle: { fontSize: 11, color: colors.inkSoft },
   seeAll: { fontSize: 12, fontWeight: "600", color: colors.accent },
   row: { gap: spacing.md, paddingVertical: spacing.sm },
@@ -2138,7 +2152,7 @@ const styles = StyleSheet.create({
 
     circle_row: `import React from "react";
 import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { colors, spacing } from "../theme";
+import { colors, spacing, theme } from "../theme";
 import { inherit } from "./Pieces";
 import type { HomePayload } from "../api";
 
@@ -2217,7 +2231,7 @@ export function CircleRow({
 
 const styles = StyleSheet.create({
   head: { flexDirection: "row", alignItems: "flex-end", gap: spacing.sm },
-  title: { fontSize: 16, fontWeight: "700", color: colors.ink },
+  title: { fontSize: 16, fontWeight: "700", color: colors.ink, fontFamily: theme.titleFont },
   subtitle: { fontSize: 11, color: colors.inkSoft },
   seeAll: { fontSize: 12, fontWeight: "600", color: colors.accent },
   row: { gap: spacing.md, paddingVertical: spacing.sm },
@@ -2501,6 +2515,90 @@ const styles = StyleSheet.create({
 });
 `,
 
+    showcase: `import React from "react";
+import { Image, Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { colors, spacing } from "../theme";
+import type { HomePayload } from "../api";
+
+export type ShowcaseSettings = {
+  imageUrl?: string;
+  heading?: string;
+  subheading?: string;
+  buttonLabel?: string;
+  handle?: string;
+  url?: string;
+  height?: number;
+  overlay?: number;
+  textColor?: string;
+  align?: string;
+};
+
+export function Showcase({
+  settings,
+  collections,
+  onOpenCollection,
+}: {
+  settings: ShowcaseSettings;
+  collections: HomePayload["collections"];
+  onOpenCollection?: (handle: string) => void;
+}) {
+  const target = collections.find((c) => c.handle === settings.handle);
+  const image = settings.imageUrl || (target ? target.image : "");
+  if (!image && !settings.heading) return null;
+
+  const height = settings.height && settings.height > 0 ? settings.height : 360;
+  const overlay = typeof settings.overlay === "number" ? Math.max(0, Math.min(100, settings.overlay)) : 45;
+  const ink = settings.textColor || "#ffffff";
+  const centred = settings.align === "center";
+  const go = () => {
+    if (settings.url) {
+      Linking.openURL(settings.url).catch(() => {});
+      return;
+    }
+    if (settings.handle) onOpenCollection?.(settings.handle);
+  };
+
+  return (
+    <View style={[styles.wrap, { height, marginHorizontal: -spacing.lg }]}>
+      {image ? (
+        <Image source={{ uri: image }} style={styles.image} />
+      ) : (
+        <View style={[styles.image, { backgroundColor: colors.page }]} />
+      )}
+      {/* React Native has no gradient without a library, so the scrim is a
+          plain wash over the lower half - enough to keep the words legible. */}
+      <View style={[styles.scrim, { backgroundColor: "rgba(0,0,0," + overlay / 100 + ")" }]} />
+      <View style={[styles.body, centred ? styles.centred : styles.bottom]}>
+        {settings.heading ? (
+          <Text style={[styles.heading, { color: ink }]}>{settings.heading}</Text>
+        ) : null}
+        {settings.subheading ? (
+          <Text style={[styles.sub, { color: ink }]}>{settings.subheading}</Text>
+        ) : null}
+        {settings.buttonLabel ? (
+          <Pressable style={[styles.cta, { backgroundColor: ink }]} onPress={go}>
+            <Text style={styles.ctaText}>{settings.buttonLabel}</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  wrap: { overflow: "hidden" },
+  image: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, width: "100%", height: "100%" },
+  scrim: { position: "absolute", left: 0, right: 0, bottom: 0, height: "60%" },
+  body: { flex: 1, paddingHorizontal: 20, paddingBottom: 28 },
+  bottom: { justifyContent: "flex-end" },
+  centred: { alignItems: "center", justifyContent: "center" },
+  heading: { fontSize: 26, fontWeight: "700", lineHeight: 30 },
+  sub: { marginTop: 4, fontSize: 12, lineHeight: 18, opacity: 0.85 },
+  cta: { marginTop: 12, alignSelf: "flex-start", borderRadius: 999, paddingHorizontal: 16, paddingVertical: 9 },
+  ctaText: { fontSize: 12, fontWeight: "700", color: "#191614" },
+});
+`,
+
     text: `import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { colors, radius, spacing } from "../theme";
@@ -2737,6 +2835,7 @@ function renderCall(block: Block, indent: number): string {
     circle_row: ["collections={data.collections}", "onOpenCollection={onOpenCollection}"],
     pick_colour: ["onOpenCollection={onOpenCollection}"],
     price_drop: ["onOpenCollection={onOpenCollection}"],
+    showcase: ["collections={data.collections}", "onOpenCollection={onOpenCollection}"],
     style_profile: ["onOpenCollection={onOpenCollection}"],
     promo_card: ["onOpenCollection={onOpenCollection}"],
     banner: ["collections={data.collections}", "onOpenCollection={onOpenCollection}"],
@@ -2779,6 +2878,8 @@ const SIZE_KEYS = new Set([
   "maxPrice",
   "startPrice",
   "size",
+  "height",
+  "overlay",
 ]);
 
 /** A block's settings as a JS object literal, keeping only what it uses. */
@@ -2822,6 +2923,7 @@ function settingsLiteral(block: Block): string {
     ],
     coming_up_live: ["title", "remindLabel", "cardBg", "radius"],
     countdown_deals: [
+      "featureFirst",
       "title",
       "endsInMinutes",
       "showTimer",
@@ -2854,6 +2956,7 @@ function settingsLiteral(block: Block): string {
     ],
     offer_cards: ["title", "subtitle", "claimLabel", "radius"],
     product_reasons: [
+      "featureFirst",
       "title",
       "subtitle",
       "seeAllLabel",
@@ -2874,6 +2977,18 @@ function settingsLiteral(block: Block): string {
     ],
     pick_colour: ["title", "subtitle", "size"],
     price_drop: ["title", "subtitle", "buttonLabel", "handle", "url", "cardBg", "radius"],
+    showcase: [
+      "imageUrl",
+      "heading",
+      "subheading",
+      "buttonLabel",
+      "handle",
+      "url",
+      "height",
+      "overlay",
+      "textColor",
+      "align",
+    ],
     banner: ["imageUrl", "heading", "subheading", "handle"],
     categories: ["title"],
     new_arrivals: ["title", "limit"],
@@ -2918,7 +3033,8 @@ function settingsLiteral(block: Block): string {
         k === "showTimer" ||
         k === "showClaimed" ||
         k === "showLabel" ||
-        k === "showNote"
+        k === "showNote" ||
+        k === "featureFirst"
       ) {
         return `${k}: ${v === false ? "false" : "true"}`;
       }
@@ -3008,7 +3124,7 @@ function liveScreenFile(): GeneratedFile {
  */
 import React from "react";
 import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { colors, radius, spacing, theme } from "../theme";
+import { colors, radius, spacing } from "../theme";
 
 export function LiveScreen({ onOpenCollection }: { onOpenCollection?: (handle: string) => void }) {
   const sessions = theme.live;
@@ -3322,7 +3438,7 @@ function checkoutScreenFile(): GeneratedFile {
  */
 import React, { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { colors, radius, spacing } from "../theme";
+import { colors, radius, spacing, theme } from "../theme";
 import { screens, say } from "../screens";
 
 export type Address = {
@@ -3405,7 +3521,7 @@ function Field({
 
 const styles = StyleSheet.create({
   wrap: { padding: spacing.lg, gap: spacing.md },
-  title: { fontSize: 16, fontWeight: "700", color: colors.ink },
+  title: { fontSize: 16, fontWeight: "700", color: colors.ink, fontFamily: theme.titleFont },
   note: { fontSize: 12, color: colors.inkSoft },
   label: { fontSize: 11, fontWeight: "500", color: colors.inkMuted },
   input: { marginTop: 4, height: 44, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, paddingHorizontal: 12, fontSize: 14, color: colors.ink },
@@ -4045,7 +4161,7 @@ function ordersScreenFile(): GeneratedFile {
     contents: `/** Past orders for the signed-in number. */
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { colors, radius, spacing } from "../theme";
+import { colors, radius, spacing, theme } from "../theme";
 import { fetchOrders, type Order } from "../api";
 import { money } from "./Pieces";
 
@@ -4394,7 +4510,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.line, backgroundColor: colors.surface },
   back: { width: 24 },
   backText: { fontSize: 26, lineHeight: 28, color: colors.ink },
-  heading: { flex: 1, fontSize: 17, fontWeight: "700", color: colors.ink },
+  heading: { flex: 1, fontSize: 17, fontWeight: "700", color: colors.ink, fontFamily: theme.titleFont },
   notice: { position: "absolute", left: spacing.lg, right: spacing.lg, bottom: 78, borderRadius: 10, backgroundColor: colors.ink, paddingHorizontal: 14, paddingVertical: 10 },
   noticeText: { color: "#fff", fontSize: 12, textAlign: "center" },
   done: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.sm, padding: spacing.xl },

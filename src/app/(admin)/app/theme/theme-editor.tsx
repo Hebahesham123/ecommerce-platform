@@ -519,6 +519,21 @@ export function ThemeEditor() {
                   ar={ar}
                 />
               </Field>
+              <Field label={ar ? "خط العناوين" : "Title face"} type="select">
+                <select
+                  value={draft.settings.titleFont}
+                  onChange={(e) => patchSettings({ titleFont: e.target.value })}
+                  className={input}
+                >
+                  <option value="system">{ar ? "الخط العادي" : "System"}</option>
+                  <option value="serif">{ar ? "خط الموقع (Playfair)" : "The website's face (Playfair)"}</option>
+                </select>
+                <p className="mt-1 text-[11px] text-ink-soft">
+                  {ar
+                    ? "نفس خط عناوين الموقع — يجعل التطبيق يبدو بنفس مستواه."
+                    : "The same face the website sets its headings in."}
+                </p>
+              </Field>
               <Field label={ar ? "الشعار" : "Logo"} type="image_picker">
                 <span className="flex items-center gap-2">
                   {draft.settings.logoUrl ? (
@@ -1654,6 +1669,9 @@ function BlockGroup({
 
           {block.type === "product_reasons" && (
             <>
+              <Field label={ar ? "أول بطاقة أكبر" : "First card leads"} type="checkbox">
+                <Toggle on={bool("featureFirst", false)} onChange={(v) => onPatch({ featureFirst: v })} ar={ar} />
+              </Field>
               <Field label={ar ? "نص الزر" : "Button text"} type="text">
                 <input
                   value={text("buttonLabel")}
@@ -1711,6 +1729,76 @@ function BlockGroup({
               </Field>
             </>
           )}
+        </>
+      )}
+
+      {block.type === "showcase" && (
+        <>
+          <Field label={ar ? "الصورة" : "Picture"} type="image_picker">
+            <span className="flex items-center gap-2">
+              {text("imageUrl") ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={text("imageUrl")} alt="" className="h-9 w-12 shrink-0 rounded-lg border border-line object-cover" />
+              ) : null}
+              <ImageUpload onUploaded={(url) => onPatch({ imageUrl: url })} ar={ar} />
+              <input
+                value={text("imageUrl")}
+                onChange={(e) => onPatch({ imageUrl: e.target.value })}
+                placeholder="https://…"
+                className={input}
+                dir="ltr"
+              />
+            </span>
+            <p className="mt-1 text-[11px] text-ink-soft">
+              {ar ? "اتركيها فارغة لتأخذ صورة القسم المرتبط." : "Leave empty to borrow the linked collection's picture."}
+            </p>
+          </Field>
+          <Field label={ar ? "العنوان" : "Heading"} type="text">
+            <input value={text("heading")} onChange={(e) => onPatch({ heading: e.target.value })} className={input} />
+          </Field>
+          <Field label={ar ? "سطر تحته" : "Subheading"} type="text">
+            <input value={text("subheading")} onChange={(e) => onPatch({ subheading: e.target.value })} className={input} />
+          </Field>
+          <Field label={ar ? "نص الزر" : "Button text"} type="text">
+            <input
+              value={text("buttonLabel")}
+              onChange={(e) => onPatch({ buttonLabel: e.target.value })}
+              placeholder={ar ? "اتركيه فارغاً بلا زر" : "Leave empty for no button"}
+              className={input}
+            />
+          </Field>
+          <Field label={ar ? "يفتح" : "Opens"} type="collection">
+            <CollectionSelect
+              collections={collections}
+              value={text("handle")}
+              onChange={(handle) => onPatch({ handle })}
+              anyLabel={ar ? "لا شيء" : "Nothing"}
+              className={input}
+            />
+          </Field>
+          <Field label={ar ? "أو رابط" : "Or a link"} type="url">
+            <input value={text("url")} onChange={(e) => onPatch({ url: e.target.value })} placeholder="https://…" className={input} dir="ltr" />
+          </Field>
+          <Field label={ar ? "الارتفاع" : "Height"} type="range">
+            <input type="number" min={180} max={640} value={num("height", 360)} onChange={(e) => onPatch({ height: Number(e.target.value) })} className={input} />
+          </Field>
+          <Field label={ar ? "تعتيم الصورة ٪" : "Darken the picture (%)"} type="range">
+            <input
+              type="number"
+              min={0}
+              max={90}
+              value={Number.isFinite(Number(s.overlay)) ? Number(s.overlay) : 45}
+              onChange={(e) => onPatch({ overlay: Number(e.target.value) })}
+              className={input}
+            />
+          </Field>
+          <Field label={ar ? "مكان الكلام" : "Where the words sit"} type="select">
+            <select value={text("align") || "bottom"} onChange={(e) => onPatch({ align: e.target.value })} className={input}>
+              <option value="bottom">{ar ? "أسفل" : "Bottom"}</option>
+              <option value="center">{ar ? "المنتصف" : "Centre"}</option>
+            </select>
+          </Field>
+          <ColorRow label={ar ? "لون الكلام" : "Text colour"} value={text("textColor")} fallback="#ffffff" onChange={(v) => onPatch({ textColor: v })} input={input} ar={ar} />
         </>
       )}
 
@@ -1860,6 +1948,9 @@ function BlockGroup({
                 input={input}
                 ar={ar}
               />
+              <Field label={ar ? "أول بطاقة أكبر" : "First card leads"} type="checkbox">
+                <Toggle on={bool("featureFirst", false)} onChange={(v) => onPatch({ featureFirst: v })} ar={ar} />
+              </Field>
             </>
           )}
 
