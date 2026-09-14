@@ -133,6 +133,7 @@ const groups: Group[] = [
       { href: "/loyalty", key: "nav_loyalty", icon: IcSignature },
       { href: "/loyalty/rewards", key: "nav_loyalty_rewards", icon: IcStar },
       { href: "/loyalty/members", key: "nav_loyalty_members", icon: IcCustomers },
+      { href: "/loyalty/theme", key: "nav_loyalty_theme", icon: IcTheme },
     ],
   },
 ];

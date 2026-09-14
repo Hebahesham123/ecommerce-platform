@@ -1,8 +1,18 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { createContext, useContext, useState, useTransition } from "react";
 import { getMyLoyalty, redeemMyReward, openMyVault, getMyLoyaltyHistory } from "../loyalty-actions";
 import type { LoyaltySummary, RewardView, Transaction, VaultView } from "@/lib/loyalty/types";
+import {
+  DEFAULT_LOYALTY_THEME,
+  loyaltyVars,
+  tabLabel,
+  type LoyaltyTheme,
+} from "@/lib/loyalty/theme";
+
+const ThemeContext = createContext<LoyaltyTheme>(DEFAULT_LOYALTY_THEME);
+/** The merchant's wording, wherever in the hub you are. */
+const useWords = () => useContext(ThemeContext).words;
 
 // A self-contained, mobile-shaped preview of the Beauty Bar Society so a
 // customer can see every part of the loyalty system working end to end. Styling
@@ -10,23 +20,28 @@ import type { LoyaltySummary, RewardView, Transaction, VaultView } from "@/lib/l
 // it can be lifted into the real app shell later without depending on it.
 
 const fmt = (n: number) => new Intl.NumberFormat("en-US").format(n);
-const SIG = "✦";
 
 const TABS = [
-  ["overview", "Society"],
-  ["levels", "Levels"],
-  ["vault", "Vault"],
-  ["rewards", "Rewards"],
-  ["privileges", "Privileges"],
-  ["events", "Events"],
-  ["streak", "Streak"],
-  ["activity", "Activity"],
+  "overview",
+  "levels",
+  "vault",
+  "rewards",
+  "privileges",
+  "events",
+  "streak",
+  "activity",
 ] as const;
-type Tab = (typeof TABS)[number][0];
+type Tab = (typeof TABS)[number];
 
 type Toast = { text: string; tone: "ok" | "err" } | null;
 
-export default function SocietyApp({ summary }: { summary: LoyaltySummary }) {
+export default function SocietyApp({
+  summary,
+  theme = DEFAULT_LOYALTY_THEME,
+}: {
+  summary: LoyaltySummary;
+  theme?: LoyaltyTheme;
+}) {
   const [data, setData] = useState<LoyaltySummary>(summary);
   const [tab, setTab] = useState<Tab>("overview");
   const [toast, setToast] = useState<Toast>(null);
@@ -67,39 +82,45 @@ export default function SocietyApp({ summary }: { summary: LoyaltySummary }) {
   }
 
   const p = data.progress;
+  const w = theme.words;
+  const SIG = w.glyph;
 
   return (
-    <div className="min-h-screen bg-[#f4ece1] text-[#4a3524]">
+    <ThemeContext.Provider value={theme}>
+    <div
+      className="min-h-screen bg-[var(--ls-page)] text-[var(--ls-ink)]"
+      style={loyaltyVars(theme) as React.CSSProperties}
+    >
       <div className="mx-auto max-w-md px-4 pb-24 pt-8">
         {/* Brand header */}
         <div className="text-center">
-          <div className="text-xs font-semibold tracking-[0.35em] text-[#8a6e57]">BEAUTY BAR</div>
-          <h1 className="font-serif text-3xl tracking-wide text-[#3b2a1e]">SOCIETY</h1>
-          <p className="mt-1 text-xs text-[#a0876d]">Collect Signatures. Unlock Privileges.</p>
+          <div className="text-xs font-semibold tracking-[0.35em] text-[var(--ls-ink-muted)]">{w.brandLine}</div>
+          <h1 className="font-serif text-3xl tracking-wide text-[var(--ls-ink)]">{w.title}</h1>
+          <p className="mt-1 text-xs text-[var(--ls-ink-soft)]">{w.tagline}</p>
         </div>
 
         {/* Status card */}
-        <div className="mt-6 rounded-3xl bg-[#fffaf3] p-6 shadow-sm ring-1 ring-[#e7d8c4]">
-          <div className="text-[11px] font-semibold tracking-[0.2em] text-[#a0876d]">YOUR STATUS</div>
+        <div className="mt-6 rounded-3xl bg-[var(--ls-card)] p-6 shadow-sm ring-1 ring-[var(--ls-line)]">
+          <div className="text-[11px] font-semibold tracking-[0.2em] text-[var(--ls-ink-soft)]">{w.statusLabel}</div>
           <div className="mt-1 flex items-baseline justify-between">
-            <div className="font-serif text-2xl text-[#3b2a1e]">{p.currentLevelName} {SIG}</div>
+            <div className="font-serif text-2xl text-[var(--ls-ink)]">{p.currentLevelName} {SIG}</div>
           </div>
           <div className="mt-4 flex items-end gap-2">
-            <div className="text-4xl font-bold text-[#3b2a1e]">{fmt(data.user.signatureBalance)}</div>
-            <div className="pb-1 text-sm text-[#8a6e57]">signatures</div>
+            <div className="text-4xl font-bold text-[var(--ls-ink)]">{fmt(data.user.signatureBalance)}</div>
+            <div className="pb-1 text-sm text-[var(--ls-ink-muted)]">{w.pointsWord}</div>
           </div>
 
           {p.nextLevel ? (
             <>
-              <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-[#ece0cf]">
-                <div className="h-full rounded-full bg-gradient-to-r from-[#8a5a2b] to-[#c79a5b]" style={{ width: `${p.percentage}%` }} />
+              <div className="mt-4 h-2 w-full overflow-hidden rounded-full bg-[var(--ls-panel)]">
+                <div className="h-full rounded-full bg-gradient-to-r from-[var(--ls-accent)] to-[var(--ls-accent-to)]" style={{ width: `${p.percentage}%` }} />
               </div>
-              <div className="mt-2 text-xs text-[#8a6e57]">
-                {fmt(p.remaining ?? 0)} signatures until {p.nextLevelName}
+              <div className="mt-2 text-xs text-[var(--ls-ink-muted)]">
+                {fmt(p.remaining ?? 0)} {w.pointsWord} until {p.nextLevelName}
               </div>
             </>
           ) : (
-            <div className="mt-4 text-xs font-medium text-[#8a5a2b]">You&apos;ve reached the highest level. ✦</div>
+            <div className="mt-4 text-xs font-medium text-[var(--ls-accent)]">You&apos;ve reached the highest level. ✦</div>
           )}
 
           <div className="mt-4 grid grid-cols-3 gap-2 text-center">
@@ -117,15 +138,15 @@ export default function SocietyApp({ summary }: { summary: LoyaltySummary }) {
         {/* Tabs */}
         <div className="mt-6 -mx-4 overflow-x-auto px-4">
           <div className="flex gap-2">
-            {TABS.map(([key, label]) => (
+            {TABS.map((key) => (
               <button
                 key={key}
                 onClick={() => setTab(key)}
                 className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-                  tab === key ? "bg-[#8a5a2b] text-white" : "bg-[#fffaf3] text-[#8a6e57] ring-1 ring-[#e7d8c4]"
+                  tab === key ? "bg-[var(--ls-accent)] text-white" : "bg-[var(--ls-card)] text-[var(--ls-ink-muted)] ring-1 ring-[var(--ls-line)]"
                 }`}
               >
-                {label}
+                {tabLabel(theme, key)}
               </button>
             ))}
           </div>
@@ -145,7 +166,7 @@ export default function SocietyApp({ summary }: { summary: LoyaltySummary }) {
 
       {toast && (
         <div className="fixed inset-x-0 bottom-6 z-50 flex justify-center px-4">
-          <div className={`rounded-full px-5 py-3 text-sm font-medium text-white shadow-lg ${toast.tone === "ok" ? "bg-[#3b2a1e]" : "bg-rose-600"}`}>
+          <div className={`rounded-full px-5 py-3 text-sm font-medium text-white shadow-lg ${toast.tone === "ok" ? "bg-[var(--ls-ink)]" : "bg-rose-600"}`}>
             {toast.text}
           </div>
         </div>
@@ -153,15 +174,16 @@ export default function SocietyApp({ summary }: { summary: LoyaltySummary }) {
 
       {reveal && <RevealModal reveal={reveal} onClose={() => setReveal(null)} />}
     </div>
+    </ThemeContext.Provider>
   );
 }
 
 // ---- Building blocks --------------------------------------------------------
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl bg-[#f6ede0] py-2">
-      <div className="text-lg font-bold text-[#3b2a1e]">{value}</div>
-      <div className="text-[10px] uppercase tracking-wide text-[#a0876d]">{label}</div>
+    <div className="rounded-xl bg-[var(--ls-panel)] py-2">
+      <div className="text-lg font-bold text-[var(--ls-ink)]">{value}</div>
+      <div className="text-[10px] uppercase tracking-wide text-[var(--ls-ink-soft)]">{label}</div>
     </div>
   );
 }
@@ -169,7 +191,7 @@ function Metric({ label, value }: { label: string; value: string }) {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <h2 className="mb-3 font-serif text-xl text-[#3b2a1e]">{title}</h2>
+      <h2 className="mb-3 font-serif text-xl text-[var(--ls-ink)]">{title}</h2>
       {children}
     </div>
   );
@@ -178,28 +200,28 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function VaultTeaser({ vault, onOpen, pending }: { vault: VaultView; onOpen: () => void; pending: boolean }) {
   const ready = vault.status === "ready_to_open";
   return (
-    <div className="mt-4 overflow-hidden rounded-3xl bg-gradient-to-br from-[#2b2119] to-[#43301f] p-5 text-[#f0e6d8]">
+    <div className="mt-4 overflow-hidden rounded-3xl bg-gradient-to-br from-[var(--ls-deep)] to-[var(--ls-deep-to)] p-5 text-[var(--ls-on-deep)]">
       <div className="flex items-center justify-between">
         <div>
-          <div className="text-[11px] tracking-[0.2em] text-[#c9b79f]">YOUR VAULT</div>
+          <div className="text-[11px] tracking-[0.2em] text-[var(--ls-on-deep-soft)]">YOUR VAULT</div>
           <div className="mt-0.5 font-serif text-lg">{vault.titleEn}</div>
         </div>
         <div className="text-3xl">{vault.icon ?? "🎁"}</div>
       </div>
       <div className="mt-3 flex items-center gap-2">
         {Array.from({ length: vault.requiredProgress }).map((_, i) => (
-          <span key={i} className={`h-2 flex-1 rounded-full ${i < vault.currentProgress ? "bg-[#e0b877]" : "bg-white/15"}`} />
+          <span key={i} className={`h-2 flex-1 rounded-full ${i < vault.currentProgress ? "bg-[var(--ls-gold)]" : "bg-white/15"}`} />
         ))}
       </div>
-      <div className="mt-2 text-xs text-[#c9b79f]">
+      <div className="mt-2 text-xs text-[var(--ls-on-deep-soft)]">
         {ready ? "Your reward is ready." : `${vault.requiredProgress - vault.currentProgress} more to unlock your reward.`}
       </div>
       {ready ? (
-        <button onClick={onOpen} disabled={pending} className="mt-4 w-full rounded-xl bg-[#e0b877] py-3 text-sm font-semibold text-[#2b2119] disabled:opacity-60">
+        <button onClick={onOpen} disabled={pending} className="mt-4 w-full rounded-xl bg-[var(--ls-gold)] py-3 text-sm font-semibold text-[var(--ls-deep)] disabled:opacity-60">
           {pending ? "Opening…" : "Open the Vault"}
         </button>
       ) : (
-        <div className="mt-4 w-full rounded-xl bg-white/10 py-3 text-center text-sm font-medium text-[#c9b79f]">
+        <div className="mt-4 w-full rounded-xl bg-white/10 py-3 text-center text-sm font-medium text-[var(--ls-on-deep-soft)]">
           {vault.currentProgress} / {vault.requiredProgress}
         </div>
       )}
@@ -217,14 +239,14 @@ function Overview({ data, onGoto }: { data: LoyaltySummary; onGoto: (t: Tab) => 
         ) : (
           <div className="grid grid-cols-3 gap-2">
             {priv.map((p) => (
-              <div key={p.id} className="rounded-2xl bg-[#fffaf3] p-3 text-center ring-1 ring-[#e7d8c4]">
+              <div key={p.id} className="rounded-2xl bg-[var(--ls-card)] p-3 text-center ring-1 ring-[var(--ls-line)]">
                 <div className="text-xl">✧</div>
-                <div className="mt-1 text-[11px] font-medium leading-tight text-[#5b4635]">{p.titleEn}</div>
+                <div className="mt-1 text-[11px] font-medium leading-tight text-[var(--ls-ink-muted)]">{p.titleEn}</div>
               </div>
             ))}
           </div>
         )}
-        <button onClick={() => onGoto("privileges")} className="mt-2 text-xs font-semibold text-[#8a5a2b]">View all privileges →</button>
+        <button onClick={() => onGoto("privileges")} className="mt-2 text-xs font-semibold text-[var(--ls-accent)]">View all privileges →</button>
       </Section>
 
       <Section title="Rewards for you">
@@ -233,19 +255,19 @@ function Overview({ data, onGoto }: { data: LoyaltySummary; onGoto: (t: Tab) => 
             <RewardRow key={r.id} r={r} onRedeem={() => onGoto("rewards")} pending={false} compact />
           ))}
         </div>
-        <button onClick={() => onGoto("rewards")} className="mt-2 text-xs font-semibold text-[#8a5a2b]">See all rewards →</button>
+        <button onClick={() => onGoto("rewards")} className="mt-2 text-xs font-semibold text-[var(--ls-accent)]">See all rewards →</button>
       </Section>
 
       {data.activeEvents.length > 0 && (
         <Section title="Happening now">
           {data.activeEvents.map((e) => (
-            <div key={e.id} className="mb-2 flex items-center gap-3 rounded-2xl bg-[#fffaf3] p-3 ring-1 ring-[#e7d8c4]">
+            <div key={e.id} className="mb-2 flex items-center gap-3 rounded-2xl bg-[var(--ls-card)] p-3 ring-1 ring-[var(--ls-line)]">
               <div className="text-xl">✦</div>
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-semibold text-[#3b2a1e]">{e.titleEn}</div>
-                <div className="truncate text-xs text-[#8a6e57]">{e.descriptionEn}</div>
+                <div className="text-sm font-semibold text-[var(--ls-ink)]">{e.titleEn}</div>
+                <div className="truncate text-xs text-[var(--ls-ink-muted)]">{e.descriptionEn}</div>
               </div>
-              {e.multiplier > 1 && <div className="rounded-full bg-[#8a5a2b] px-2 py-0.5 text-xs font-bold text-white">×{e.multiplier}</div>}
+              {e.multiplier > 1 && <div className="rounded-full bg-[var(--ls-accent)] px-2 py-0.5 text-xs font-bold text-white">×{e.multiplier}</div>}
             </div>
           ))}
         </Section>
@@ -255,6 +277,7 @@ function Overview({ data, onGoto }: { data: LoyaltySummary; onGoto: (t: Tab) => 
 }
 
 function Levels({ data }: { data: LoyaltySummary }) {
+  const w = useWords();
   const cur = data.levels.find((l) => l.key === data.user.currentLevel);
   const curSort = cur?.sort ?? 1;
   return (
@@ -264,16 +287,16 @@ function Levels({ data }: { data: LoyaltySummary }) {
           const reached = l.sort <= curSort;
           const current = l.key === data.user.currentLevel;
           return (
-            <div key={l.key} className={`rounded-2xl p-4 ring-1 ${current ? "bg-gradient-to-br from-[#8a5a2b] to-[#b98a4b] text-white ring-transparent" : reached ? "bg-[#fffaf3] ring-[#e7d8c4]" : "bg-[#f6ede0] ring-[#ece0cf]"}`}>
+            <div key={l.key} className={`rounded-2xl p-4 ring-1 ${current ? "bg-gradient-to-br from-[var(--ls-accent)] to-[var(--ls-accent-to)] text-white ring-transparent" : reached ? "bg-[var(--ls-card)] ring-[var(--ls-line)]" : "bg-[var(--ls-panel)] ring-[var(--ls-line)]"}`}>
               <div className="flex items-center justify-between">
                 <div>
-                  <div className={`text-[11px] tracking-widest ${current ? "text-white/70" : "text-[#a0876d]"}`}>0{l.sort}</div>
-                  <div className={`font-serif text-lg ${current ? "text-white" : "text-[#3b2a1e]"}`}>{l.nameEn}</div>
-                  {l.taglineEn && <div className={`text-xs ${current ? "text-white/80" : "text-[#8a6e57]"}`}>{l.taglineEn}</div>}
+                  <div className={`text-[11px] tracking-widest ${current ? "text-white/70" : "text-[var(--ls-ink-soft)]"}`}>0{l.sort}</div>
+                  <div className={`font-serif text-lg ${current ? "text-white" : "text-[var(--ls-ink)]"}`}>{l.nameEn}</div>
+                  {l.taglineEn && <div className={`text-xs ${current ? "text-white/80" : "text-[var(--ls-ink-muted)]"}`}>{l.taglineEn}</div>}
                 </div>
-                <div className={`text-right ${current ? "text-white" : "text-[#5b4635]"}`}>
+                <div className={`text-right ${current ? "text-white" : "text-[var(--ls-ink-muted)]"}`}>
                   <div className="text-lg font-bold">{fmt(l.threshold)}</div>
-                  <div className="text-[10px] uppercase tracking-wide opacity-70">{reached ? "reached" : "signatures"}</div>
+                  <div className="text-[10px] uppercase tracking-wide opacity-70">{reached ? "reached" : w.pointsWord}</div>
                 </div>
               </div>
             </div>
@@ -289,30 +312,30 @@ function Vaults({ data, onOpen, pending }: { data: LoyaltySummary; onOpen: (v: V
     <Section title="The Vaults">
       <div className="space-y-3">
         {data.vaults.map((v) => (
-          <div key={v.id} className="overflow-hidden rounded-3xl bg-gradient-to-br from-[#2b2119] to-[#43301f] p-5 text-[#f0e6d8]">
+          <div key={v.id} className="overflow-hidden rounded-3xl bg-gradient-to-br from-[var(--ls-deep)] to-[var(--ls-deep-to)] p-5 text-[var(--ls-on-deep)]">
             <div className="flex items-center justify-between">
               <div className="font-serif text-lg">{v.titleEn}</div>
               <div className="text-2xl">{v.icon ?? "🎁"}</div>
             </div>
-            {v.descriptionEn && <div className="mt-0.5 text-xs text-[#c9b79f]">{v.descriptionEn}</div>}
+            {v.descriptionEn && <div className="mt-0.5 text-xs text-[var(--ls-on-deep-soft)]">{v.descriptionEn}</div>}
             {v.locked ? (
-              <div className="mt-4 rounded-xl bg-white/10 py-3 text-center text-sm text-[#c9b79f]">
+              <div className="mt-4 rounded-xl bg-white/10 py-3 text-center text-sm text-[var(--ls-on-deep-soft)]">
                 🔒 Unlocks at {v.levelRequired}
               </div>
             ) : (
               <>
                 <div className="mt-3 flex items-center gap-1.5">
                   {Array.from({ length: v.requiredProgress }).map((_, i) => (
-                    <span key={i} className={`h-1.5 flex-1 rounded-full ${i < v.currentProgress ? "bg-[#e0b877]" : "bg-white/15"}`} />
+                    <span key={i} className={`h-1.5 flex-1 rounded-full ${i < v.currentProgress ? "bg-[var(--ls-gold)]" : "bg-white/15"}`} />
                   ))}
                 </div>
-                <div className="mt-2 text-xs text-[#c9b79f]">{v.currentProgress} / {v.requiredProgress}</div>
+                <div className="mt-2 text-xs text-[var(--ls-on-deep-soft)]">{v.currentProgress} / {v.requiredProgress}</div>
                 {v.status === "ready_to_open" ? (
-                  <button onClick={() => onOpen(v)} disabled={pending} className="mt-3 w-full rounded-xl bg-[#e0b877] py-2.5 text-sm font-semibold text-[#2b2119] disabled:opacity-60">
+                  <button onClick={() => onOpen(v)} disabled={pending} className="mt-3 w-full rounded-xl bg-[var(--ls-gold)] py-2.5 text-sm font-semibold text-[var(--ls-deep)] disabled:opacity-60">
                     {pending ? "Opening…" : "Open now"}
                   </button>
                 ) : v.status === "opened" ? (
-                  <div className="mt-3 w-full rounded-xl bg-white/10 py-2.5 text-center text-sm text-[#c9b79f]">Opened ✓</div>
+                  <div className="mt-3 w-full rounded-xl bg-white/10 py-2.5 text-center text-sm text-[var(--ls-on-deep-soft)]">Opened ✓</div>
                 ) : null}
               </>
             )}
@@ -337,12 +360,12 @@ function Rewards({ data, onRedeem, pending }: { data: LoyaltySummary; onRedeem: 
         <Section title="Claimed">
           <div className="space-y-2">
             {data.myRewards.map((r) => (
-              <div key={r.id} className="flex items-center justify-between rounded-2xl bg-[#fffaf3] p-3 ring-1 ring-[#e7d8c4]">
+              <div key={r.id} className="flex items-center justify-between rounded-2xl bg-[var(--ls-card)] p-3 ring-1 ring-[var(--ls-line)]">
                 <div>
-                  <div className="text-sm font-medium text-[#3b2a1e]">{r.title}</div>
-                  {r.code && <div className="text-xs font-mono text-[#8a5a2b]">{r.code}</div>}
+                  <div className="text-sm font-medium text-[var(--ls-ink)]">{r.title}</div>
+                  {r.code && <div className="text-xs font-mono text-[var(--ls-accent)]">{r.code}</div>}
                 </div>
-                <span className="rounded-full bg-[#f6ede0] px-2.5 py-1 text-[11px] font-medium capitalize text-[#8a6e57]">{r.status}</span>
+                <span className="rounded-full bg-[var(--ls-panel)] px-2.5 py-1 text-[11px] font-medium capitalize text-[var(--ls-ink-muted)]">{r.status}</span>
               </div>
             ))}
           </div>
@@ -353,30 +376,31 @@ function Rewards({ data, onRedeem, pending }: { data: LoyaltySummary; onRedeem: 
 }
 
 function RewardRow({ r, onRedeem, pending, compact }: { r: RewardView; onRedeem: () => void; pending: boolean; compact?: boolean }) {
+  const SIG = useWords().glyph;
   const canRedeem = r.status === "affordable";
   return (
-    <div className="flex items-center gap-3 rounded-2xl bg-[#fffaf3] p-3 ring-1 ring-[#e7d8c4]">
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#f0e2cf] text-lg">
+    <div className="flex items-center gap-3 rounded-2xl bg-[var(--ls-card)] p-3 ring-1 ring-[var(--ls-line)]">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[var(--ls-panel)] text-lg">
         {rewardIcon(r.type)}
       </div>
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-semibold text-[#3b2a1e]">{r.titleEn}</div>
-        <div className="text-xs text-[#8a6e57]">
+        <div className="truncate text-sm font-semibold text-[var(--ls-ink)]">{r.titleEn}</div>
+        <div className="text-xs text-[var(--ls-ink-muted)]">
           {r.signatureCost > 0 ? `${fmt(r.signatureCost)} ${SIG}` : "Level reward"}
           {r.lockedReason === "level" && r.minLevel ? ` · ${r.minLevel}+` : ""}
         </div>
       </div>
       {!compact &&
         (canRedeem ? (
-          <button onClick={onRedeem} disabled={pending} className="rounded-lg bg-[#8a5a2b] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60">
+          <button onClick={onRedeem} disabled={pending} className="rounded-lg bg-[var(--ls-accent)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60">
             {pending ? "…" : "Redeem"}
           </button>
         ) : r.lockedReason === "signatures" ? (
-          <span className="rounded-lg bg-[#f6ede0] px-3 py-1.5 text-xs font-medium text-[#a0876d]">Locked</span>
+          <span className="rounded-lg bg-[var(--ls-panel)] px-3 py-1.5 text-xs font-medium text-[var(--ls-ink-soft)]">Locked</span>
         ) : r.lockedReason === "level" ? (
           <span className="text-lg">🔒</span>
         ) : (
-          <span className="rounded-lg bg-[#f6ede0] px-3 py-1.5 text-xs font-medium text-[#a0876d]">—</span>
+          <span className="rounded-lg bg-[var(--ls-panel)] px-3 py-1.5 text-xs font-medium text-[var(--ls-ink-soft)]">—</span>
         ))}
     </div>
   );
@@ -387,13 +411,13 @@ function Privileges({ data }: { data: LoyaltySummary }) {
     <Section title="Your privileges">
       <div className="space-y-2">
         {data.privileges.map((p) => (
-          <div key={p.id} className={`flex items-center gap-3 rounded-2xl p-3 ring-1 ${p.unlocked ? "bg-[#fffaf3] ring-[#e7d8c4]" : "bg-[#f6ede0] ring-[#ece0cf]"}`}>
+          <div key={p.id} className={`flex items-center gap-3 rounded-2xl p-3 ring-1 ${p.unlocked ? "bg-[var(--ls-card)] ring-[var(--ls-line)]" : "bg-[var(--ls-panel)] ring-[var(--ls-line)]"}`}>
             <div className="text-xl">{p.unlocked ? "✧" : "🔒"}</div>
             <div className="min-w-0 flex-1">
-              <div className="text-sm font-semibold text-[#3b2a1e]">{p.titleEn}</div>
-              {p.descriptionEn && <div className="truncate text-xs text-[#8a6e57]">{p.descriptionEn}</div>}
+              <div className="text-sm font-semibold text-[var(--ls-ink)]">{p.titleEn}</div>
+              {p.descriptionEn && <div className="truncate text-xs text-[var(--ls-ink-muted)]">{p.descriptionEn}</div>}
             </div>
-            {!p.unlocked && <span className="text-[11px] font-medium text-[#a0876d]">{p.levelRequired}+</span>}
+            {!p.unlocked && <span className="text-[11px] font-medium text-[var(--ls-ink-soft)]">{p.levelRequired}+</span>}
           </div>
         ))}
       </div>
@@ -409,13 +433,13 @@ function Events({ data }: { data: LoyaltySummary }) {
       ) : (
         <div className="space-y-2">
           {data.activeEvents.map((e) => (
-            <div key={e.id} className="rounded-2xl bg-[#fffaf3] p-4 ring-1 ring-[#e7d8c4]">
+            <div key={e.id} className="rounded-2xl bg-[var(--ls-card)] p-4 ring-1 ring-[var(--ls-line)]">
               <div className="flex items-center justify-between">
-                <div className="font-serif text-lg text-[#3b2a1e]">{e.titleEn}</div>
-                {e.multiplier > 1 && <span className="rounded-full bg-[#8a5a2b] px-2.5 py-1 text-xs font-bold text-white">×{e.multiplier}</span>}
+                <div className="font-serif text-lg text-[var(--ls-ink)]">{e.titleEn}</div>
+                {e.multiplier > 1 && <span className="rounded-full bg-[var(--ls-accent)] px-2.5 py-1 text-xs font-bold text-white">×{e.multiplier}</span>}
               </div>
-              {e.descriptionEn && <div className="mt-1 text-sm text-[#8a6e57]">{e.descriptionEn}</div>}
-              <div className="mt-2 text-xs text-[#a0876d]">Until {new Date(e.endDate).toLocaleDateString()}</div>
+              {e.descriptionEn && <div className="mt-1 text-sm text-[var(--ls-ink-muted)]">{e.descriptionEn}</div>}
+              <div className="mt-2 text-xs text-[var(--ls-ink-soft)]">Until {new Date(e.endDate).toLocaleDateString()}</div>
             </div>
           ))}
         </div>
@@ -425,35 +449,36 @@ function Events({ data }: { data: LoyaltySummary }) {
 }
 
 function Streak({ data }: { data: LoyaltySummary }) {
+  const SIG = useWords().glyph;
   const s = data.streak;
   return (
     <Section title="Your society streak">
-      <div className="rounded-3xl bg-[#fffaf3] p-5 ring-1 ring-[#e7d8c4]">
+      <div className="rounded-3xl bg-[var(--ls-card)] p-5 ring-1 ring-[var(--ls-line)]">
         <div className="flex items-center justify-between">
           {s.months.map((m) => {
             const label = new Date(m.month + "-01").toLocaleDateString("en-US", { month: "short" }).toUpperCase();
             return (
               <div key={m.month} className="flex flex-col items-center gap-1">
-                <div className={`flex h-9 w-9 items-center justify-center rounded-full text-sm ${m.qualified ? "bg-gradient-to-br from-[#8a5a2b] to-[#c79a5b] text-white" : "bg-[#f0e2cf] text-[#c2ab90]"}`}>
+                <div className={`flex h-9 w-9 items-center justify-center rounded-full text-sm ${m.qualified ? "bg-gradient-to-br from-[var(--ls-accent)] to-[var(--ls-accent-to)] text-white" : "bg-[var(--ls-panel)] text-[var(--ls-ink-soft)]"}`}>
                   {m.qualified ? SIG : "○"}
                 </div>
-                <div className="text-[10px] text-[#a0876d]">{label}</div>
+                <div className="text-[10px] text-[var(--ls-ink-soft)]">{label}</div>
               </div>
             );
           })}
         </div>
-        <div className="mt-4 flex items-center justify-between border-t border-[#efe2d1] pt-4 text-center">
+        <div className="mt-4 flex items-center justify-between border-t border-[var(--ls-line)] pt-4 text-center">
           <div className="flex-1">
-            <div className="text-2xl font-bold text-[#3b2a1e]">{s.currentStreak}</div>
-            <div className="text-[10px] uppercase tracking-wide text-[#a0876d]">Current</div>
+            <div className="text-2xl font-bold text-[var(--ls-ink)]">{s.currentStreak}</div>
+            <div className="text-[10px] uppercase tracking-wide text-[var(--ls-ink-soft)]">Current</div>
           </div>
           <div className="flex-1">
-            <div className="text-2xl font-bold text-[#3b2a1e]">{s.longestStreak}</div>
-            <div className="text-[10px] uppercase tracking-wide text-[#a0876d]">Longest</div>
+            <div className="text-2xl font-bold text-[var(--ls-ink)]">{s.longestStreak}</div>
+            <div className="text-[10px] uppercase tracking-wide text-[var(--ls-ink-soft)]">Longest</div>
           </div>
         </div>
         {s.nextMilestone && (
-          <div className="mt-3 rounded-xl bg-[#f6ede0] p-3 text-center text-sm text-[#5b4635]">
+          <div className="mt-3 rounded-xl bg-[var(--ls-panel)] p-3 text-center text-sm text-[var(--ls-ink-muted)]">
             🔒 {s.nextMilestone.months}-month streak — {s.nextMilestone.titleEn}
           </div>
         )}
@@ -463,6 +488,7 @@ function Streak({ data }: { data: LoyaltySummary }) {
 }
 
 function Activity({ initial }: { initial: Transaction[] }) {
+  const SIG = useWords().glyph;
   const [rows, setRows] = useState<Transaction[]>(initial);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -481,12 +507,12 @@ function Activity({ initial }: { initial: Transaction[] }) {
         {rows.map((t) => {
           const credit = t.direction !== "spend" && t.direction !== "expire";
           return (
-            <div key={t.id} className="flex items-center justify-between rounded-xl bg-[#fffaf3] px-3 py-2.5 ring-1 ring-[#e7d8c4]">
+            <div key={t.id} className="flex items-center justify-between rounded-xl bg-[var(--ls-card)] px-3 py-2.5 ring-1 ring-[var(--ls-line)]">
               <div className="min-w-0">
-                <div className="truncate text-sm text-[#3b2a1e]">{t.description || labelFor(t.sourceType)}</div>
-                <div className="text-[11px] text-[#a0876d]">{new Date(t.createdAt).toLocaleDateString()}</div>
+                <div className="truncate text-sm text-[var(--ls-ink)]">{t.description || labelFor(t.sourceType)}</div>
+                <div className="text-[11px] text-[var(--ls-ink-soft)]">{new Date(t.createdAt).toLocaleDateString()}</div>
               </div>
-              <div className={`text-sm font-bold ${credit ? "text-[#2f7d4f]" : "text-[#b0603a]"}`}>
+              <div className={`text-sm font-bold ${credit ? "text-[var(--ls-success)]" : "text-[var(--ls-accent)]"}`}>
                 {credit ? "+" : "−"}{fmt(t.amount)} {SIG}
               </div>
             </div>
@@ -494,7 +520,7 @@ function Activity({ initial }: { initial: Transaction[] }) {
         })}
       </div>
       {!loaded && (
-        <button onClick={loadAll} disabled={busy} className="mt-3 w-full rounded-xl bg-[#fffaf3] py-2.5 text-sm font-medium text-[#8a5a2b] ring-1 ring-[#e7d8c4]">
+        <button onClick={loadAll} disabled={busy} className="mt-3 w-full rounded-xl bg-[var(--ls-card)] py-2.5 text-sm font-medium text-[var(--ls-accent)] ring-1 ring-[var(--ls-line)]">
           {busy ? "Loading…" : "See full history"}
         </button>
       )}
@@ -506,19 +532,19 @@ function Activity({ initial }: { initial: Transaction[] }) {
 function RevealModal({ reveal, onClose }: { reveal: { title: string; code: string | null; type: string }; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6" onClick={onClose}>
-      <div className="w-full max-w-xs rounded-3xl bg-gradient-to-br from-[#2b2119] to-[#43301f] p-8 text-center text-[#f0e6d8]" onClick={(e) => e.stopPropagation()}>
+      <div className="w-full max-w-xs rounded-3xl bg-gradient-to-br from-[var(--ls-deep)] to-[var(--ls-deep-to)] p-8 text-center text-[var(--ls-on-deep)]" onClick={(e) => e.stopPropagation()}>
         <div className="text-5xl">🎁</div>
-        <div className="mt-4 text-[11px] tracking-[0.2em] text-[#c9b79f]">YOU UNLOCKED</div>
+        <div className="mt-4 text-[11px] tracking-[0.2em] text-[var(--ls-on-deep-soft)]">YOU UNLOCKED</div>
         <div className="mt-1 font-serif text-2xl">{reveal.title}</div>
         {reveal.code && <div className="mt-3 rounded-lg bg-white/10 px-3 py-2 font-mono text-sm">{reveal.code}</div>}
-        <button onClick={onClose} className="mt-6 w-full rounded-xl bg-[#e0b877] py-3 text-sm font-semibold text-[#2b2119]">View reward</button>
+        <button onClick={onClose} className="mt-6 w-full rounded-xl bg-[var(--ls-gold)] py-3 text-sm font-semibold text-[var(--ls-deep)]">View reward</button>
       </div>
     </div>
   );
 }
 
 function Empty({ text }: { text: string }) {
-  return <div className="rounded-2xl bg-[#fffaf3] p-6 text-center text-sm text-[#a0876d] ring-1 ring-[#e7d8c4]">{text}</div>;
+  return <div className="rounded-2xl bg-[var(--ls-card)] p-6 text-center text-sm text-[var(--ls-ink-soft)] ring-1 ring-[var(--ls-line)]">{text}</div>;
 }
 
 // ---- helpers ----------------------------------------------------------------

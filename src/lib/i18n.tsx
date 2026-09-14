@@ -57,6 +57,7 @@ const dict = {
   nav_loyalty: { ar: "بيوتي بار سوسايتي", en: "Beauty Bar Society" },
   nav_loyalty_rewards: { ar: "المكافآت", en: "Rewards" },
   nav_loyalty_members: { ar: "الأعضاء", en: "Members" },
+  nav_loyalty_theme: { ar: "المظهر", en: "Theme" },
 
   // Overview KPIs
   kpi_revenue: { ar: "الإيرادات", en: "Revenue" },
