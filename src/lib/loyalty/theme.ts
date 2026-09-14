@@ -46,6 +46,17 @@ export type LoyaltyTheme = {
   };
   /** The row of tabs across the hub. An empty label keeps the built-in word. */
   tabLabels: Record<TabKey, string>;
+  /**
+   * The wording inside each section: its headings, the line shown when it has
+   * nothing to show, and the words on its buttons.
+   *
+   * Keyed by section, then by field, with an empty string meaning the page
+   * keeps the word it ships with. What the fields are, and what those
+   * built-in words say, is SECTION_FIELDS below - one table, read by the
+   * editor to draw the controls and by the page to render, so a field can
+   * never exist in one and not the other.
+   */
+  sections: Record<string, Record<string, string>>;
 };
 
 export type TabKey =
@@ -79,6 +90,120 @@ export const TAB_FALLBACK: Record<TabKey, string> = {
   events: "Events",
   streak: "Streak",
   activity: "Activity",
+};
+
+/** A section of the hub, plus the row of things every section shares. */
+export type SectionScope = TabKey | "shared";
+
+export type SectionFieldSpec = {
+  scope: SectionScope;
+  key: string;
+  en: string;
+  ar: string;
+  /** What the page shows when the merchant has not set one. */
+  fallback: string;
+};
+
+/**
+ * Every word on the Society that is not a shopper's own data.
+ *
+ * The fallbacks are exactly the strings that were written into the markup, so
+ * a store that never opens the editor reads the same as it did before any of
+ * this existed.
+ */
+export const SECTION_FIELDS: SectionFieldSpec[] = [
+  // ---- the parts every section sits under
+  { scope: "shared", key: "balanceLabel", en: "Balance", ar: "الرصيد", fallback: "Balance" },
+  { scope: "shared", key: "lifetimeLabel", en: "Lifetime", ar: "الإجمالي", fallback: "Lifetime" },
+  { scope: "shared", key: "streakLabel", en: "Streak", ar: "التتابع", fallback: "Streak" },
+  {
+    scope: "shared",
+    key: "topLevelText",
+    en: "At the highest level",
+    ar: "عند أعلى مستوى",
+    fallback: "You've reached the highest level.",
+  },
+  { scope: "shared", key: "revealKicker", en: "Reward reveal kicker", ar: "عنوان الجائزة", fallback: "YOU UNLOCKED" },
+  { scope: "shared", key: "revealCta", en: "Reward reveal button", ar: "زر الجائزة", fallback: "View reward" },
+
+  // ---- overview
+  { scope: "overview", key: "privilegesTitle", en: "Privileges heading", ar: "عنوان المزايا", fallback: "Your privileges" },
+  {
+    scope: "overview",
+    key: "privilegesEmpty",
+    en: "Privileges, when there are none",
+    ar: "نص المزايا الفارغة",
+    fallback: "Reach The Curated to unlock your first privilege.",
+  },
+  { scope: "overview", key: "privilegesLink", en: "Privileges link", ar: "رابط المزايا", fallback: "View all privileges →" },
+  { scope: "overview", key: "rewardsTitle", en: "Rewards heading", ar: "عنوان المكافآت", fallback: "Rewards for you" },
+  { scope: "overview", key: "rewardsLink", en: "Rewards link", ar: "رابط المكافآت", fallback: "See all rewards →" },
+  { scope: "overview", key: "eventsTitle", en: "Events heading", ar: "عنوان الفعاليات", fallback: "Happening now" },
+
+  // ---- levels
+  { scope: "levels", key: "title", en: "Heading", ar: "العنوان", fallback: "The Levels" },
+  { scope: "levels", key: "reachedLabel", en: "Reached", ar: "تم الوصول", fallback: "reached" },
+
+  // ---- vault
+  { scope: "vault", key: "title", en: "Heading", ar: "العنوان", fallback: "The Vaults" },
+  { scope: "vault", key: "readyText", en: "Ready to open", ar: "جاهز للفتح", fallback: "Your reward is ready." },
+  { scope: "vault", key: "openCta", en: "Open button", ar: "زر الفتح", fallback: "Open the Vault" },
+  { scope: "vault", key: "openNowCta", en: "Open button, in the list", ar: "زر الفتح بالقائمة", fallback: "Open now" },
+  { scope: "vault", key: "openingLabel", en: "While opening", ar: "أثناء الفتح", fallback: "Opening…" },
+  { scope: "vault", key: "openedLabel", en: "Already opened", ar: "تم فتحه", fallback: "Opened ✓" },
+  { scope: "vault", key: "lockedPrefix", en: "Locked line", ar: "سطر القفل", fallback: "🔒 Unlocks at" },
+
+  // ---- rewards
+  { scope: "rewards", key: "title", en: "Heading", ar: "العنوان", fallback: "Your rewards" },
+  { scope: "rewards", key: "claimedTitle", en: "Claimed heading", ar: "عنوان المستلمة", fallback: "Claimed" },
+  { scope: "rewards", key: "redeemCta", en: "Redeem button", ar: "زر الاستبدال", fallback: "Redeem" },
+  { scope: "rewards", key: "lockedLabel", en: "Locked label", ar: "كلمة المقفل", fallback: "Locked" },
+  { scope: "rewards", key: "levelRewardLabel", en: "Level reward", ar: "مكافأة مستوى", fallback: "Level reward" },
+
+  // ---- privileges
+  { scope: "privileges", key: "title", en: "Heading", ar: "العنوان", fallback: "Your privileges" },
+
+  // ---- events
+  { scope: "events", key: "title", en: "Heading", ar: "العنوان", fallback: "Society events" },
+  {
+    scope: "events",
+    key: "empty",
+    en: "When there are none",
+    ar: "نص الفراغ",
+    fallback: "No events right now — check back soon.",
+  },
+
+  // ---- streak
+  { scope: "streak", key: "title", en: "Heading", ar: "العنوان", fallback: "Your society streak" },
+  { scope: "streak", key: "currentLabel", en: "Current", ar: "الحالي", fallback: "Current" },
+  { scope: "streak", key: "longestLabel", en: "Longest", ar: "الأطول", fallback: "Longest" },
+
+  // ---- activity
+  { scope: "activity", key: "title", en: "Heading", ar: "العنوان", fallback: "Your activity" },
+  {
+    scope: "activity",
+    key: "empty",
+    en: "When there is none",
+    ar: "نص الفراغ",
+    fallback: "No signatures yet — place an order to start earning.",
+  },
+  { scope: "activity", key: "moreCta", en: "Full history button", ar: "زر السجل", fallback: "See full history" },
+  { scope: "activity", key: "loadingLabel", en: "While loading", ar: "أثناء التحميل", fallback: "Loading…" },
+];
+
+/** The sections in the order the editor lists them. */
+export const SECTION_SCOPES: SectionScope[] = ["shared", ...TAB_KEYS];
+
+export const SCOPE_LABELS: Record<SectionScope, { en: string; ar: string }> = {
+  shared: { en: "Shared across the hub", ar: "مشترك في كل الصفحة" },
+  overview: { en: "Society", ar: "الرئيسية" },
+  levels: { en: "Levels", ar: "المستويات" },
+  vault: { en: "Vault", ar: "الخزنة" },
+  rewards: { en: "Rewards", ar: "المكافآت" },
+  privileges: { en: "Privileges", ar: "المزايا" },
+  events: { en: "Events", ar: "الفعاليات" },
+  streak: { en: "Streak", ar: "التتابع" },
+  activity: { en: "Activity", ar: "النشاط" },
 };
 
 /**
@@ -154,6 +279,7 @@ export const DEFAULT_LOYALTY_THEME: LoyaltyTheme = {
     glyph: "✦",
     cardKicker: "YOUR SOCIETY",
   },
+  sections: {},
   tabLabels: {
     overview: "",
     levels: "",
@@ -200,8 +326,18 @@ export function normalizeLoyaltyTheme(raw: unknown): LoyaltyTheme {
     tabLabels[key] = label;
   }
 
+  const sections: Record<string, Record<string, string>> = {};
+  const rawSections = (row.sections ?? {}) as Record<string, unknown>;
+  for (const f of SECTION_FIELDS) {
+    const scope = (rawSections[f.scope] ?? {}) as Record<string, unknown>;
+    const value = typeof scope[f.key] === "string" ? (scope[f.key] as string).trim().slice(0, 160) : "";
+    if (!sections[f.scope]) sections[f.scope] = {};
+    sections[f.scope][f.key] = value;
+  }
+
   return {
     colours,
+    sections,
     words: {
       brandLine: str(w.brandLine, d.words.brandLine, 40),
       title: str(w.title, d.words.title, 40),
@@ -236,6 +372,22 @@ export function loyaltyVars(theme: LoyaltyTheme): Record<string, string> {
     "--ls-on-deep-soft": theme.colours.onDeepSoft,
     "--ls-success": theme.colours.success,
   };
+}
+
+/**
+ * A section's word: the merchant's, or the one the page ships with.
+ *
+ * Unknown keys fall back to an empty string rather than throwing, so a page
+ * that asks for a field nobody has added yet renders blank instead of white.
+ */
+export function sectionText(
+  theme: LoyaltyTheme,
+  scope: SectionScope,
+  key: string,
+): string {
+  const set = theme.sections?.[scope]?.[key];
+  if (set) return set;
+  return SECTION_FIELDS.find((f) => f.scope === scope && f.key === key)?.fallback ?? "";
 }
 
 /** The tab's word: the merchant's, or the one the app ships with. */

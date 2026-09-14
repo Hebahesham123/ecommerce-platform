@@ -6,13 +6,27 @@ import type { LoyaltySummary, RewardView, Transaction, VaultView } from "@/lib/l
 import {
   DEFAULT_LOYALTY_THEME,
   loyaltyVars,
+  sectionText,
   tabLabel,
   type LoyaltyTheme,
+  type SectionScope,
 } from "@/lib/loyalty/theme";
 
 const ThemeContext = createContext<LoyaltyTheme>(DEFAULT_LOYALTY_THEME);
 /** The merchant's wording, wherever in the hub you are. */
 const useWords = () => useContext(ThemeContext).words;
+
+/**
+ * One section's wording.
+ *
+ * Returns a reader rather than an object so a component names the field it
+ * wants at the point it draws it - t("title") reads as the heading, and a
+ * field nobody has set falls back to the word the page shipped with.
+ */
+function useText(scope: SectionScope) {
+  const theme = useContext(ThemeContext);
+  return (key: string) => sectionText(theme, scope, key);
+}
 
 // A self-contained, mobile-shaped preview of the Beauty Bar Society so a
 // customer can see every part of the loyalty system working end to end. Styling
@@ -84,6 +98,7 @@ export default function SocietyApp({
   const p = data.progress;
   const w = theme.words;
   const SIG = w.glyph;
+  const shared = (key: string) => sectionText(theme, "shared", key);
 
   return (
     <ThemeContext.Provider value={theme}>
@@ -120,13 +135,13 @@ export default function SocietyApp({
               </div>
             </>
           ) : (
-            <div className="mt-4 text-xs font-medium text-[var(--ls-accent)]">You&apos;ve reached the highest level. ✦</div>
+            <div className="mt-4 text-xs font-medium text-[var(--ls-accent)]">{shared("topLevelText")} {SIG}</div>
           )}
 
           <div className="mt-4 grid grid-cols-3 gap-2 text-center">
-            <Metric label="Balance" value={`${fmt(data.user.signatureBalance)}`} />
-            <Metric label="Lifetime" value={`${fmt(data.user.lifetimeEarned)}`} />
-            <Metric label="Streak" value={`${data.streak.currentStreak}`} />
+            <Metric label={shared("balanceLabel")} value={`${fmt(data.user.signatureBalance)}`} />
+            <Metric label={shared("lifetimeLabel")} value={`${fmt(data.user.lifetimeEarned)}`} />
+            <Metric label={shared("streakLabel")} value={`${data.streak.currentStreak}`} />
           </div>
         </div>
 
@@ -198,6 +213,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 function VaultTeaser({ vault, onOpen, pending }: { vault: VaultView; onOpen: () => void; pending: boolean }) {
+  const t = useText("vault");
   const ready = vault.status === "ready_to_open";
   return (
     <div className="mt-4 overflow-hidden rounded-3xl bg-gradient-to-br from-[var(--ls-deep)] to-[var(--ls-deep-to)] p-5 text-[var(--ls-on-deep)]">
@@ -214,11 +230,11 @@ function VaultTeaser({ vault, onOpen, pending }: { vault: VaultView; onOpen: () 
         ))}
       </div>
       <div className="mt-2 text-xs text-[var(--ls-on-deep-soft)]">
-        {ready ? "Your reward is ready." : `${vault.requiredProgress - vault.currentProgress} more to unlock your reward.`}
+        {ready ? t("readyText") : `${vault.requiredProgress - vault.currentProgress} more to unlock your reward.`}
       </div>
       {ready ? (
         <button onClick={onOpen} disabled={pending} className="mt-4 w-full rounded-xl bg-[var(--ls-gold)] py-3 text-sm font-semibold text-[var(--ls-deep)] disabled:opacity-60">
-          {pending ? "Opening…" : "Open the Vault"}
+          {pending ? t("openingLabel") : t("openCta")}
         </button>
       ) : (
         <div className="mt-4 w-full rounded-xl bg-white/10 py-3 text-center text-sm font-medium text-[var(--ls-on-deep-soft)]">
@@ -230,12 +246,13 @@ function VaultTeaser({ vault, onOpen, pending }: { vault: VaultView; onOpen: () 
 }
 
 function Overview({ data, onGoto }: { data: LoyaltySummary; onGoto: (t: Tab) => void }) {
+  const t = useText("overview");
   const priv = data.privileges.filter((x) => x.unlocked).slice(0, 3);
   return (
     <div className="space-y-5">
-      <Section title="Your privileges">
+      <Section title={t("privilegesTitle")}>
         {priv.length === 0 ? (
-          <Empty text="Reach The Curated to unlock your first privilege." />
+          <Empty text={t("privilegesEmpty")} />
         ) : (
           <div className="grid grid-cols-3 gap-2">
             {priv.map((p) => (
@@ -246,20 +263,20 @@ function Overview({ data, onGoto }: { data: LoyaltySummary; onGoto: (t: Tab) => 
             ))}
           </div>
         )}
-        <button onClick={() => onGoto("privileges")} className="mt-2 text-xs font-semibold text-[var(--ls-accent)]">View all privileges →</button>
+        <button onClick={() => onGoto("privileges")} className="mt-2 text-xs font-semibold text-[var(--ls-accent)]">{t("privilegesLink")}</button>
       </Section>
 
-      <Section title="Rewards for you">
+      <Section title={t("rewardsTitle")}>
         <div className="space-y-2">
           {data.availableRewards.slice(0, 3).map((r) => (
             <RewardRow key={r.id} r={r} onRedeem={() => onGoto("rewards")} pending={false} compact />
           ))}
         </div>
-        <button onClick={() => onGoto("rewards")} className="mt-2 text-xs font-semibold text-[var(--ls-accent)]">See all rewards →</button>
+        <button onClick={() => onGoto("rewards")} className="mt-2 text-xs font-semibold text-[var(--ls-accent)]">{t("rewardsLink")}</button>
       </Section>
 
       {data.activeEvents.length > 0 && (
-        <Section title="Happening now">
+        <Section title={t("eventsTitle")}>
           {data.activeEvents.map((e) => (
             <div key={e.id} className="mb-2 flex items-center gap-3 rounded-2xl bg-[var(--ls-card)] p-3 ring-1 ring-[var(--ls-line)]">
               <div className="text-xl">✦</div>
@@ -278,10 +295,11 @@ function Overview({ data, onGoto }: { data: LoyaltySummary; onGoto: (t: Tab) => 
 
 function Levels({ data }: { data: LoyaltySummary }) {
   const w = useWords();
+  const t = useText("levels");
   const cur = data.levels.find((l) => l.key === data.user.currentLevel);
   const curSort = cur?.sort ?? 1;
   return (
-    <Section title="The Levels">
+    <Section title={t("title")}>
       <div className="space-y-2">
         {data.levels.map((l) => {
           const reached = l.sort <= curSort;
@@ -296,7 +314,7 @@ function Levels({ data }: { data: LoyaltySummary }) {
                 </div>
                 <div className={`text-right ${current ? "text-white" : "text-[var(--ls-ink-muted)]"}`}>
                   <div className="text-lg font-bold">{fmt(l.threshold)}</div>
-                  <div className="text-[10px] uppercase tracking-wide opacity-70">{reached ? "reached" : w.pointsWord}</div>
+                  <div className="text-[10px] uppercase tracking-wide opacity-70">{reached ? t("reachedLabel") : w.pointsWord}</div>
                 </div>
               </div>
             </div>
@@ -308,8 +326,9 @@ function Levels({ data }: { data: LoyaltySummary }) {
 }
 
 function Vaults({ data, onOpen, pending }: { data: LoyaltySummary; onOpen: (v: VaultView) => void; pending: boolean }) {
+  const t = useText("vault");
   return (
-    <Section title="The Vaults">
+    <Section title={t("title")}>
       <div className="space-y-3">
         {data.vaults.map((v) => (
           <div key={v.id} className="overflow-hidden rounded-3xl bg-gradient-to-br from-[var(--ls-deep)] to-[var(--ls-deep-to)] p-5 text-[var(--ls-on-deep)]">
@@ -320,7 +339,7 @@ function Vaults({ data, onOpen, pending }: { data: LoyaltySummary; onOpen: (v: V
             {v.descriptionEn && <div className="mt-0.5 text-xs text-[var(--ls-on-deep-soft)]">{v.descriptionEn}</div>}
             {v.locked ? (
               <div className="mt-4 rounded-xl bg-white/10 py-3 text-center text-sm text-[var(--ls-on-deep-soft)]">
-                🔒 Unlocks at {v.levelRequired}
+                {t("lockedPrefix")} {v.levelRequired}
               </div>
             ) : (
               <>
@@ -332,10 +351,10 @@ function Vaults({ data, onOpen, pending }: { data: LoyaltySummary; onOpen: (v: V
                 <div className="mt-2 text-xs text-[var(--ls-on-deep-soft)]">{v.currentProgress} / {v.requiredProgress}</div>
                 {v.status === "ready_to_open" ? (
                   <button onClick={() => onOpen(v)} disabled={pending} className="mt-3 w-full rounded-xl bg-[var(--ls-gold)] py-2.5 text-sm font-semibold text-[var(--ls-deep)] disabled:opacity-60">
-                    {pending ? "Opening…" : "Open now"}
+                    {pending ? t("openingLabel") : t("openNowCta")}
                   </button>
                 ) : v.status === "opened" ? (
-                  <div className="mt-3 w-full rounded-xl bg-white/10 py-2.5 text-center text-sm text-[var(--ls-on-deep-soft)]">Opened ✓</div>
+                  <div className="mt-3 w-full rounded-xl bg-white/10 py-2.5 text-center text-sm text-[var(--ls-on-deep-soft)]">{t("openedLabel")}</div>
                 ) : null}
               </>
             )}
@@ -347,9 +366,10 @@ function Vaults({ data, onOpen, pending }: { data: LoyaltySummary; onOpen: (v: V
 }
 
 function Rewards({ data, onRedeem, pending }: { data: LoyaltySummary; onRedeem: (r: RewardView) => void; pending: boolean }) {
+  const t = useText("rewards");
   return (
     <div className="space-y-5">
-      <Section title="Your rewards">
+      <Section title={t("title")}>
         <div className="space-y-2">
           {data.availableRewards.map((r) => (
             <RewardRow key={r.id} r={r} onRedeem={() => onRedeem(r)} pending={pending} />
@@ -357,7 +377,7 @@ function Rewards({ data, onRedeem, pending }: { data: LoyaltySummary; onRedeem: 
         </div>
       </Section>
       {data.myRewards.length > 0 && (
-        <Section title="Claimed">
+        <Section title={t("claimedTitle")}>
           <div className="space-y-2">
             {data.myRewards.map((r) => (
               <div key={r.id} className="flex items-center justify-between rounded-2xl bg-[var(--ls-card)] p-3 ring-1 ring-[var(--ls-line)]">
@@ -377,6 +397,7 @@ function Rewards({ data, onRedeem, pending }: { data: LoyaltySummary; onRedeem: 
 
 function RewardRow({ r, onRedeem, pending, compact }: { r: RewardView; onRedeem: () => void; pending: boolean; compact?: boolean }) {
   const SIG = useWords().glyph;
+  const t = useText("rewards");
   const canRedeem = r.status === "affordable";
   return (
     <div className="flex items-center gap-3 rounded-2xl bg-[var(--ls-card)] p-3 ring-1 ring-[var(--ls-line)]">
@@ -386,17 +407,17 @@ function RewardRow({ r, onRedeem, pending, compact }: { r: RewardView; onRedeem:
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-semibold text-[var(--ls-ink)]">{r.titleEn}</div>
         <div className="text-xs text-[var(--ls-ink-muted)]">
-          {r.signatureCost > 0 ? `${fmt(r.signatureCost)} ${SIG}` : "Level reward"}
+          {r.signatureCost > 0 ? `${fmt(r.signatureCost)} ${SIG}` : t("levelRewardLabel")}
           {r.lockedReason === "level" && r.minLevel ? ` · ${r.minLevel}+` : ""}
         </div>
       </div>
       {!compact &&
         (canRedeem ? (
           <button onClick={onRedeem} disabled={pending} className="rounded-lg bg-[var(--ls-accent)] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60">
-            {pending ? "…" : "Redeem"}
+            {pending ? "…" : t("redeemCta")}
           </button>
         ) : r.lockedReason === "signatures" ? (
-          <span className="rounded-lg bg-[var(--ls-panel)] px-3 py-1.5 text-xs font-medium text-[var(--ls-ink-soft)]">Locked</span>
+          <span className="rounded-lg bg-[var(--ls-panel)] px-3 py-1.5 text-xs font-medium text-[var(--ls-ink-soft)]">{t("lockedLabel")}</span>
         ) : r.lockedReason === "level" ? (
           <span className="text-lg">🔒</span>
         ) : (
@@ -407,8 +428,9 @@ function RewardRow({ r, onRedeem, pending, compact }: { r: RewardView; onRedeem:
 }
 
 function Privileges({ data }: { data: LoyaltySummary }) {
+  const t = useText("privileges");
   return (
-    <Section title="Your privileges">
+    <Section title={t("title")}>
       <div className="space-y-2">
         {data.privileges.map((p) => (
           <div key={p.id} className={`flex items-center gap-3 rounded-2xl p-3 ring-1 ${p.unlocked ? "bg-[var(--ls-card)] ring-[var(--ls-line)]" : "bg-[var(--ls-panel)] ring-[var(--ls-line)]"}`}>
@@ -426,10 +448,11 @@ function Privileges({ data }: { data: LoyaltySummary }) {
 }
 
 function Events({ data }: { data: LoyaltySummary }) {
+  const t = useText("events");
   return (
-    <Section title="Society events">
+    <Section title={t("title")}>
       {data.activeEvents.length === 0 ? (
-        <Empty text="No events right now — check back soon." />
+        <Empty text={t("empty")} />
       ) : (
         <div className="space-y-2">
           {data.activeEvents.map((e) => (
@@ -450,9 +473,10 @@ function Events({ data }: { data: LoyaltySummary }) {
 
 function Streak({ data }: { data: LoyaltySummary }) {
   const SIG = useWords().glyph;
+  const t = useText("streak");
   const s = data.streak;
   return (
-    <Section title="Your society streak">
+    <Section title={t("title")}>
       <div className="rounded-3xl bg-[var(--ls-card)] p-5 ring-1 ring-[var(--ls-line)]">
         <div className="flex items-center justify-between">
           {s.months.map((m) => {
@@ -470,11 +494,11 @@ function Streak({ data }: { data: LoyaltySummary }) {
         <div className="mt-4 flex items-center justify-between border-t border-[var(--ls-line)] pt-4 text-center">
           <div className="flex-1">
             <div className="text-2xl font-bold text-[var(--ls-ink)]">{s.currentStreak}</div>
-            <div className="text-[10px] uppercase tracking-wide text-[var(--ls-ink-soft)]">Current</div>
+            <div className="text-[10px] uppercase tracking-wide text-[var(--ls-ink-soft)]">{t("currentLabel")}</div>
           </div>
           <div className="flex-1">
             <div className="text-2xl font-bold text-[var(--ls-ink)]">{s.longestStreak}</div>
-            <div className="text-[10px] uppercase tracking-wide text-[var(--ls-ink-soft)]">Longest</div>
+            <div className="text-[10px] uppercase tracking-wide text-[var(--ls-ink-soft)]">{t("longestLabel")}</div>
           </div>
         </div>
         {s.nextMilestone && (
@@ -489,6 +513,7 @@ function Streak({ data }: { data: LoyaltySummary }) {
 
 function Activity({ initial }: { initial: Transaction[] }) {
   const SIG = useWords().glyph;
+  const t = useText("activity");
   const [rows, setRows] = useState<Transaction[]>(initial);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -502,7 +527,7 @@ function Activity({ initial }: { initial: Transaction[] }) {
     }
   }
   return (
-    <Section title="Your activity">
+    <Section title={t("title")}>
       <div className="space-y-1.5">
         {rows.map((t) => {
           const credit = t.direction !== "spend" && t.direction !== "expire";
@@ -521,23 +546,24 @@ function Activity({ initial }: { initial: Transaction[] }) {
       </div>
       {!loaded && (
         <button onClick={loadAll} disabled={busy} className="mt-3 w-full rounded-xl bg-[var(--ls-card)] py-2.5 text-sm font-medium text-[var(--ls-accent)] ring-1 ring-[var(--ls-line)]">
-          {busy ? "Loading…" : "See full history"}
+          {busy ? t("loadingLabel") : t("moreCta")}
         </button>
       )}
-      {rows.length === 0 && <Empty text="No signatures yet — place an order to start earning." />}
+      {rows.length === 0 && <Empty text={t("empty")} />}
     </Section>
   );
 }
 
 function RevealModal({ reveal, onClose }: { reveal: { title: string; code: string | null; type: string }; onClose: () => void }) {
+  const t = useText("shared");
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6" onClick={onClose}>
       <div className="w-full max-w-xs rounded-3xl bg-gradient-to-br from-[var(--ls-deep)] to-[var(--ls-deep-to)] p-8 text-center text-[var(--ls-on-deep)]" onClick={(e) => e.stopPropagation()}>
         <div className="text-5xl">🎁</div>
-        <div className="mt-4 text-[11px] tracking-[0.2em] text-[var(--ls-on-deep-soft)]">YOU UNLOCKED</div>
+        <div className="mt-4 text-[11px] tracking-[0.2em] text-[var(--ls-on-deep-soft)]">{t("revealKicker")}</div>
         <div className="mt-1 font-serif text-2xl">{reveal.title}</div>
         {reveal.code && <div className="mt-3 rounded-lg bg-white/10 px-3 py-2 font-mono text-sm">{reveal.code}</div>}
-        <button onClick={onClose} className="mt-6 w-full rounded-xl bg-[var(--ls-gold)] py-3 text-sm font-semibold text-[var(--ls-deep)]">View reward</button>
+        <button onClick={onClose} className="mt-6 w-full rounded-xl bg-[var(--ls-gold)] py-3 text-sm font-semibold text-[var(--ls-deep)]">{t("revealCta")}</button>
       </div>
     </div>
   );

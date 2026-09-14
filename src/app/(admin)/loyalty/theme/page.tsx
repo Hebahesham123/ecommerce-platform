@@ -10,11 +10,15 @@ import {
   COLOUR_FIELDS,
   DEFAULT_LOYALTY_THEME,
   GROUP_LABELS,
+  SCOPE_LABELS,
+  SECTION_FIELDS,
+  SECTION_SCOPES,
   TAB_FALLBACK,
   TAB_KEYS,
   loyaltyVars,
   tabLabel,
   type LoyaltyTheme,
+  type SectionScope,
 } from "@/lib/loyalty/theme";
 import { loadLoyaltyTheme, storeLoyaltyTheme } from "../theme-actions";
 
@@ -30,6 +34,7 @@ export default function LoyaltyThemePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
+  const [openScope, setOpenScope] = useState<SectionScope | null>(null);
 
   const dirty = useMemo(
     () => JSON.stringify(draft) !== JSON.stringify(saved),
@@ -67,6 +72,11 @@ export default function LoyaltyThemePage() {
     setDraft((d) => ({ ...d, colours: { ...d.colours, [key]: v } }));
   const setWord = (key: keyof LoyaltyTheme["words"], v: string) =>
     setDraft((d) => ({ ...d, words: { ...d.words, [key]: v } }));
+  const setSection = (scope: SectionScope, key: string, v: string) =>
+    setDraft((d) => ({
+      ...d,
+      sections: { ...d.sections, [scope]: { ...(d.sections?.[scope] ?? {}), [key]: v } },
+    }));
 
   const groups = [...new Set(COLOUR_FIELDS.map((f) => f.group))];
 
@@ -258,6 +268,56 @@ export default function LoyaltyThemePage() {
                 ))}
               </div>
             </Card>
+
+            <div className="pt-1 text-[11px] font-semibold uppercase tracking-wide text-ink-soft">
+              {ar ? "كلمات الأقسام" : "Section wording"}
+            </div>
+            <p className="-mt-2 text-[11px] text-ink-soft">
+              {ar
+                ? "كل عنوان وزر ونص فارغ داخل صفحات الجمعية. اتركي الخانة فارغة لتبقى الكلمة الأصلية."
+                : "Every heading, button and empty-state line inside the Society. Leave one blank to keep the built-in word."}
+            </p>
+
+            {SECTION_SCOPES.map((scope) => {
+              const fields = SECTION_FIELDS.filter((f) => f.scope === scope);
+              if (!fields.length) return null;
+              const changed = fields.filter((f) => draft.sections?.[scope]?.[f.key]).length;
+              return (
+                <Card key={scope} className="overflow-hidden p-0">
+                  <button
+                    onClick={() => setOpenScope((o) => (o === scope ? null : scope))}
+                    className="flex w-full items-center justify-between gap-2 px-4 py-3 text-start hover:bg-surface-hover"
+                  >
+                    <span className="text-sm font-medium text-ink">
+                      {ar ? SCOPE_LABELS[scope].ar : SCOPE_LABELS[scope].en}
+                    </span>
+                    <span className="flex items-center gap-2 text-[11px] text-ink-soft">
+                      {changed > 0 && (
+                        <span className="rounded-full bg-brand-50 px-2 py-0.5 font-medium text-brand-700">
+                          {changed} {ar ? "مُعدّلة" : "changed"}
+                        </span>
+                      )}
+                      {fields.length}
+                      <span className="text-ink-muted">{openScope === scope ? "\u2212" : "+"}</span>
+                    </span>
+                  </button>
+                  {openScope === scope && (
+                    <div className="grid gap-3 border-t border-line p-4 sm:grid-cols-2">
+                      {fields.map((f) => (
+                        <Word
+                          key={f.key}
+                          label={ar ? f.ar : f.en}
+                          value={draft.sections?.[scope]?.[f.key] ?? ""}
+                          onChange={(v) => setSection(scope, f.key, v)}
+                          placeholder={f.fallback}
+                          wide={f.fallback.length > 28}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </Card>
+              );
+            })}
           </div>
 
           {/* -------------------------------------------------- the preview -- */}
@@ -276,17 +336,25 @@ function Word({
   onChange,
   note,
   wide,
+  placeholder,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   note?: string;
   wide?: boolean;
+  /** The word the page uses when this is left empty. */
+  placeholder?: string;
 }) {
   return (
     <label className={wide ? "sm:col-span-2" : undefined}>
       <span className="mb-1 block text-xs text-ink-muted">{label}</span>
-      <input value={value} onChange={(e) => onChange(e.target.value)} className={input} />
+      <input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className={input}
+      />
       {note && <span className="mt-1 block text-[11px] text-ink-soft">{note}</span>}
     </label>
   );
