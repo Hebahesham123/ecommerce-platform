@@ -13,15 +13,20 @@ import {
   SCOPE_LABELS,
   SECTION_FIELDS,
   SECTION_SCOPES,
+  OVERVIEW_KEYS,
+  OVERVIEW_LABELS,
   sectionText,
   TAB_FALLBACK,
   TAB_KEYS,
   loyaltyVars,
   tabLabel,
   type LoyaltyTheme,
+  type OverviewKey,
   type SectionScope,
 } from "@/lib/loyalty/theme";
 import { loadLoyaltyTheme, storeLoyaltyTheme } from "../theme-actions";
+import SocietyApp from "@/app/store/society/society-app";
+import { SAMPLE_SUMMARY } from "@/lib/loyalty/sample";
 
 const input =
   "h-9 w-full rounded-xl border border-line bg-surface-page px-3 text-sm text-ink outline-none transition focus:border-brand-600";
@@ -90,6 +95,27 @@ export default function LoyaltyThemePage() {
     setDraft((d) => ({ ...d, colours: { ...d.colours, [key]: v } }));
   const setWord = (key: keyof LoyaltyTheme["words"], v: string) =>
     setDraft((d) => ({ ...d, words: { ...d.words, [key]: v } }));
+  const setDesign = <K extends keyof LoyaltyTheme["design"]>(
+    key: K,
+    v: LoyaltyTheme["design"][K],
+  ) => setDraft((d) => ({ ...d, design: { ...d.design, [key]: v } }));
+
+  /** Move a section of the overview up or down the screen. */
+  const moveOverview = (i: number, by: 1 | -1) =>
+    setDraft((d) => {
+      const j = i + by;
+      if (j < 0 || j >= d.overview.length) return d;
+      const next = [...d.overview];
+      [next[i], next[j]] = [next[j], next[i]];
+      return { ...d, overview: next };
+    });
+
+  const toggleOverview = (key: OverviewKey) =>
+    setDraft((d) => ({
+      ...d,
+      overview: d.overview.map((o) => (o.key === key ? { ...o, visible: !o.visible } : o)),
+    }));
+
   const setSection = (scope: SectionScope, key: string, v: string) =>
     setDraft((d) => ({
       ...d,
@@ -287,6 +313,132 @@ export default function LoyaltyThemePage() {
               </div>
             </Card>
 
+            <Card className="p-4">
+              <div className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-ink-soft">
+                {ar ? "الشكل" : "Shape & type"}
+              </div>
+              <div className="space-y-3">
+                <Choice
+                  label={ar ? "خط العناوين" : "Heading face"}
+                  value={draft.design.headingFont}
+                  onChange={(v) => setDesign("headingFont", v)}
+                  options={[
+                    { value: "serif", label: ar ? "خط التصميم" : "The design\u2019s serif" },
+                    { value: "system", label: ar ? "خط الجهاز" : "The phone\u2019s own" },
+                  ]}
+                />
+                <Choice
+                  label={ar ? "اتجاه الصفحة" : "Reading direction"}
+                  value={draft.design.direction}
+                  onChange={(v) => setDesign("direction", v)}
+                  options={[
+                    { value: "ltr", label: ar ? "من اليسار" : "Left to right" },
+                    { value: "rtl", label: ar ? "من اليمين" : "Right to left" },
+                  ]}
+                />
+                <Toggle
+                  label={ar ? "عناوين بحروف كبيرة" : "Headings in capitals"}
+                  on={draft.design.headingUppercase}
+                  onChange={(v) => setDesign("headingUppercase", v)}
+                />
+                <Slider
+                  label={ar ? "استدارة البطاقات" : "Card corners"}
+                  value={draft.design.radius}
+                  onChange={(v) => setDesign("radius", v)}
+                  min={0}
+                  max={40}
+                />
+                <Slider
+                  label={ar ? "استدارة الأزرار" : "Button corners"}
+                  value={draft.design.buttonRadius}
+                  onChange={(v) => setDesign("buttonRadius", v)}
+                  min={0}
+                  max={40}
+                />
+                <Slider
+                  label={ar ? "أعمدة المزايا" : "Privileges per row"}
+                  value={draft.design.privilegeColumns}
+                  onChange={(v) => setDesign("privilegeColumns", v)}
+                  min={2}
+                  max={4}
+                  unit=""
+                />
+                <Toggle
+                  label={ar ? "أرقام المستويات" : "Numerals on the level cards"}
+                  on={draft.design.levelNumerals}
+                  onChange={(v) => setDesign("levelNumerals", v)}
+                />
+                <Toggle
+                  label={ar ? "تدرّج المستويات" : "Levels deepen as they rise"}
+                  on={draft.design.levelGradient}
+                  onChange={(v) => setDesign("levelGradient", v)}
+                />
+                <Toggle
+                  label={ar ? "صور المكافآت" : "A picture beside each reward"}
+                  on={draft.design.rewardThumbs}
+                  onChange={(v) => setDesign("rewardThumbs", v)}
+                />
+                <Word
+                  label={ar ? "صورة خلفية الخزنة" : "Vault header picture"}
+                  value={draft.design.vaultHeroImage}
+                  onChange={(v) => setDesign("vaultHeroImage", v)}
+                  placeholder="https://…"
+                  note={
+                    ar
+                      ? "اتركيها فارغة لتبقى الخلفية الداكنة."
+                      : "Leave it empty and the dark panel stays as it is."
+                  }
+                  wide
+                />
+              </div>
+            </Card>
+
+            <Card className="p-4">
+              <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-ink-soft">
+                {ar ? "ترتيب الشاشة الأولى" : "The first screen\u2019s order"}
+              </div>
+              <p className="mb-3 text-[11px] text-ink-soft">
+                {ar
+                  ? "ما يقابله العميل أولاً، بالترتيب."
+                  : "What a shopper meets first, in order."}
+              </p>
+              <ul className="space-y-1">
+                {draft.overview.map((o, i) => (
+                  <li key={o.key} className="flex items-center gap-1.5 rounded-xl border border-line bg-surface-page p-2">
+                    <span className="flex-1 text-xs text-ink">
+                      {ar ? OVERVIEW_LABELS[o.key].ar : OVERVIEW_LABELS[o.key].en}
+                    </span>
+                    <button
+                      onClick={() => moveOverview(i, -1)}
+                      disabled={i === 0}
+                      className="btn-ghost h-7 w-7 shrink-0 p-0 disabled:opacity-30"
+                      aria-label={ar ? "لأعلى" : "Move up"}
+                    >
+                      ↑
+                    </button>
+                    <button
+                      onClick={() => moveOverview(i, 1)}
+                      disabled={i === draft.overview.length - 1}
+                      className="btn-ghost h-7 w-7 shrink-0 p-0 disabled:opacity-30"
+                      aria-label={ar ? "لأسفل" : "Move down"}
+                    >
+                      ↓
+                    </button>
+                    <button
+                      onClick={() => toggleOverview(o.key)}
+                      className={`shrink-0 rounded-lg px-2 py-1 text-[10px] font-semibold transition ${
+                        o.visible
+                          ? "bg-emerald-50 text-emerald-700"
+                          : "bg-slate-100 text-ink-soft"
+                      }`}
+                    >
+                      {o.visible ? (ar ? "ظاهر" : "shown") : ar ? "مخفي" : "hidden"}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+
             <div className="pt-1 text-[11px] font-semibold uppercase tracking-wide text-ink-soft">
               {ar ? "كلمات الأقسام" : "Section wording"}
             </div>
@@ -348,6 +500,103 @@ export default function LoyaltyThemePage() {
   );
 }
 
+/** A choice between a few named options. */
+function Choice({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string }[];
+}) {
+  return (
+    <label className="flex items-center gap-3">
+      <span className="w-44 shrink-0 text-xs text-ink-muted">{label}</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={`${input} h-8 flex-1 text-xs`}
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+/** On or off. */
+function Toggle({
+  label,
+  on,
+  onChange,
+}: {
+  label: string;
+  on: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="w-44 shrink-0 text-xs text-ink-muted">{label}</span>
+      <button
+        onClick={() => onChange(!on)}
+        className={`h-6 w-11 shrink-0 rounded-full p-0.5 transition ${
+          on ? "bg-emerald-500" : "bg-slate-300"
+        }`}
+        role="switch"
+        aria-checked={on}
+        aria-label={label}
+      >
+        <span
+          className={`block h-5 w-5 rounded-full bg-white transition ${
+            on ? "translate-x-5" : ""
+          }`}
+        />
+      </button>
+    </div>
+  );
+}
+
+/** A number, dragged, with what it is beside it. */
+function Slider({
+  label,
+  value,
+  onChange,
+  min,
+  max,
+  unit = "px",
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  min: number;
+  max: number;
+  unit?: string;
+}) {
+  return (
+    <label className="flex items-center gap-3">
+      <span className="w-44 shrink-0 text-xs text-ink-muted">{label}</span>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-line accent-[rgb(139,92,246)]"
+      />
+      <span className="w-10 shrink-0 text-end text-[11px] tabular-nums text-ink-muted">
+        {value}
+        {unit}
+      </span>
+    </label>
+  );
+}
+
 function Word({
   label,
   value,
@@ -402,8 +651,21 @@ function Preview({
   const fields = SECTION_FIELDS.filter((f) => f.scope === shownScope);
   return (
     <Card className="overflow-hidden p-0">
-      <div className="border-b border-line px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-ink-soft">
-        {ar ? "معاينة" : "Preview"}
+      <div className="flex items-center justify-between border-b border-line px-4 py-2">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-ink-soft">
+          {ar ? "معاينة" : "Preview"}
+        </span>
+        <span className="text-[10px] text-ink-soft">
+          {ar
+            ? "عميلة تجريبية — لا شيء هنا حقيقي"
+            : "A shopper who does not exist"}
+        </span>
+      </div>
+      <div className="max-h-[78vh] overflow-y-auto">
+        <SocietyApp summary={SAMPLE_SUMMARY} theme={theme} preview />
+      </div>
+      <div className="border-t border-line px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-ink-soft">
+        {ar ? "الأجزاء" : "Pieces"}
       </div>
       <div
         className="space-y-4 p-4"

@@ -57,6 +57,65 @@ export type LoyaltyTheme = {
    * never exist in one and not the other.
    */
   sections: Record<string, Record<string, string>>;
+  /**
+   * The shape of the thing, rather than its colour or its wording: what the
+   * corners do, which face the headings are set in, whether a level card
+   * carries its numeral. The design these screens are built to has answers
+   * for all of them; these are those answers, and the merchant's if they
+   * decide otherwise.
+   */
+  design: {
+    /** "serif" is the display face the design uses for every heading. */
+    headingFont: string;
+    /** Corner radius, in pixels, for cards and panels. */
+    radius: number;
+    /** Corner radius for buttons. The design squares them off. */
+    buttonRadius: number;
+    /** The 01..05 numerals down the side of the level cards. */
+    levelNumerals: boolean;
+    /** Level cards deepen as the levels rise, the way the design does. */
+    levelGradient: boolean;
+    /** How many privileges sit in a row on the overview. */
+    privilegeColumns: number;
+    /** A picture beside each reward. */
+    rewardThumbs: boolean;
+    /** The picture behind the vault's header. */
+    vaultHeroImage: string;
+    /** Headings in capitals with the letters spaced, as in the design. */
+    headingUppercase: boolean;
+    /**
+     * Which way the hub reads.
+     *
+     * It has to be its own answer rather than inherited: the dashboard is
+     * right-to-left, and the hub rendered inside it turned "340 / 500" into
+     * "500 / 340" and filled the level marks from the wrong end. The design
+     * is left-to-right, so that is the default, and a merchant writing the
+     * whole thing in Arabic can say so.
+     */
+    direction: string;
+  };
+  /**
+   * The overview's sections, in order, and whether each is shown.
+   *
+   * The same idea as the app theme's home screen: the merchant arranges what
+   * a shopper meets first. Unknown keys are dropped and missing ones appended
+   * on the way in, so a stored order can never hide a section that exists or
+   * name one that does not.
+   */
+  overview: { key: OverviewKey; visible: boolean }[];
+};
+
+/** The sections the overview can show, in the order the design has them. */
+export type OverviewKey = "status" | "vault" | "privileges" | "rewards" | "events";
+
+export const OVERVIEW_KEYS: OverviewKey[] = ["status", "vault", "privileges", "rewards", "events"];
+
+export const OVERVIEW_LABELS: Record<OverviewKey, { en: string; ar: string }> = {
+  status: { en: "Status card", ar: "بطاقة الحالة" },
+  vault: { en: "Vault teaser", ar: "تشويق الخزنة" },
+  privileges: { en: "Privileges", ar: "المزايا" },
+  rewards: { en: "Rewards", ar: "المكافآت" },
+  events: { en: "Events", ar: "الفعاليات" },
 };
 
 export type TabKey =
@@ -125,6 +184,7 @@ export const SECTION_FIELDS: SectionFieldSpec[] = [
   },
   { scope: "shared", key: "revealKicker", en: "Reward reveal kicker", ar: "عنوان الجائزة", fallback: "YOU UNLOCKED" },
   { scope: "shared", key: "revealCta", en: "Reward reveal button", ar: "زر الجائزة", fallback: "View reward" },
+  { scope: "shared", key: "viewLevelsCta", en: "Levels button", ar: "زر المستويات", fallback: "VIEW LEVELS" },
 
   // ---- overview
   { scope: "overview", key: "privilegesTitle", en: "Privileges heading", ar: "عنوان المزايا", fallback: "Your privileges" },
@@ -152,6 +212,9 @@ export const SECTION_FIELDS: SectionFieldSpec[] = [
   { scope: "vault", key: "openingLabel", en: "While opening", ar: "أثناء الفتح", fallback: "Opening…" },
   { scope: "vault", key: "openedLabel", en: "Already opened", ar: "تم فتحه", fallback: "Opened ✓" },
   { scope: "vault", key: "lockedPrefix", en: "Locked line", ar: "سطر القفل", fallback: "🔒 Unlocks at" },
+  { scope: "vault", key: "subtitle", en: "Subtitle", ar: "الوصف", fallback: "Your personal space for exclusive rewards." },
+  { scope: "vault", key: "collectionsTitle", en: "Collections heading", ar: "عنوان المجموعات", fallback: "VAULT COLLECTIONS" },
+  { scope: "vault", key: "remainingText", en: "How many more are needed", ar: "كم تبقّى", fallback: "more Signatures to unlock your reward." },
 
   // ---- rewards
   { scope: "rewards", key: "title", en: "Heading", ar: "العنوان", fallback: "Your rewards" },
@@ -159,9 +222,13 @@ export const SECTION_FIELDS: SectionFieldSpec[] = [
   { scope: "rewards", key: "redeemCta", en: "Redeem button", ar: "زر الاستبدال", fallback: "Redeem" },
   { scope: "rewards", key: "lockedLabel", en: "Locked label", ar: "كلمة المقفل", fallback: "Locked" },
   { scope: "rewards", key: "levelRewardLabel", en: "Level reward", ar: "مكافأة مستوى", fallback: "Level reward" },
+  { scope: "rewards", key: "filterAvailable", en: "Filter: available", ar: "متاح الآن", fallback: "AVAILABLE NOW" },
+  { scope: "rewards", key: "filterLocked", en: "Filter: locked", ar: "مقفل", fallback: "LOCKED" },
+  { scope: "rewards", key: "filterAll", en: "Filter: everything", ar: "الكل", fallback: "ALL" },
 
   // ---- privileges
   { scope: "privileges", key: "title", en: "Heading", ar: "العنوان", fallback: "Your privileges" },
+  { scope: "privileges", key: "lockedNote", en: "Locked note", ar: "ملاحظة القفل", fallback: "Reach {level} to unlock." },
 
   // ---- events
   { scope: "events", key: "title", en: "Heading", ar: "العنوان", fallback: "Society events" },
@@ -172,11 +239,15 @@ export const SECTION_FIELDS: SectionFieldSpec[] = [
     ar: "نص الفراغ",
     fallback: "No events right now — check back soon.",
   },
+  { scope: "events", key: "subtitle", en: "Subtitle", ar: "الوصف", fallback: "Exclusive moments, just for you." },
 
   // ---- streak
   { scope: "streak", key: "title", en: "Heading", ar: "العنوان", fallback: "Your society streak" },
   { scope: "streak", key: "currentLabel", en: "Current", ar: "الحالي", fallback: "Current" },
   { scope: "streak", key: "longestLabel", en: "Longest", ar: "الأطول", fallback: "Longest" },
+  { scope: "streak", key: "subtitle", en: "Subtitle", ar: "الوصف", fallback: "Keep the momentum going." },
+  { scope: "streak", key: "milestoneKicker", en: "Next milestone kicker", ar: "عنوان الهدف", fallback: "NEXT MILESTONE" },
+  { scope: "streak", key: "monthsWord", en: "The word for months", ar: "كلمة الأشهر", fallback: "MONTH STREAK" },
 
   // ---- activity
   { scope: "activity", key: "title", en: "Heading", ar: "العنوان", fallback: "Your activity" },
@@ -280,6 +351,19 @@ export const DEFAULT_LOYALTY_THEME: LoyaltyTheme = {
     cardKicker: "YOUR SOCIETY",
   },
   sections: {},
+  design: {
+    headingFont: "serif",
+    radius: 18,
+    buttonRadius: 8,
+    levelNumerals: true,
+    levelGradient: true,
+    privilegeColumns: 3,
+    rewardThumbs: true,
+    vaultHeroImage: "",
+    headingUppercase: true,
+    direction: "ltr",
+  },
+  overview: OVERVIEW_KEYS.map((key) => ({ key, visible: true })),
   tabLabels: {
     overview: "",
     levels: "",
@@ -311,14 +395,14 @@ const colour = (v: unknown, fallback: string): string => {
  * somebody typed, and the page has no way to tell the difference.
  */
 export function normalizeLoyaltyTheme(raw: unknown): LoyaltyTheme {
-  const d = DEFAULT_LOYALTY_THEME;
+  const defaults = DEFAULT_LOYALTY_THEME;
   const row = (raw ?? {}) as Record<string, unknown>;
   const c = (row.colours ?? {}) as Record<string, unknown>;
   const w = (row.words ?? {}) as Record<string, unknown>;
   const t = (row.tabLabels ?? {}) as Record<string, unknown>;
 
   const colours = {} as Record<ColourRole, string>;
-  for (const f of COLOUR_FIELDS) colours[f.key] = colour(c[f.key], d.colours[f.key]);
+  for (const f of COLOUR_FIELDS) colours[f.key] = colour(c[f.key], defaults.colours[f.key]);
 
   const tabLabels = {} as Record<TabKey, string>;
   for (const key of TAB_KEYS) {
@@ -335,19 +419,52 @@ export function normalizeLoyaltyTheme(raw: unknown): LoyaltyTheme {
     sections[f.scope][f.key] = value;
   }
 
+  const d = (row.design ?? {}) as Record<string, unknown>;
+  const flag = (v: unknown, fallback: boolean) => (typeof v === "boolean" ? v : fallback);
+  const size = (v: unknown, fallback: number, min: number, max: number) => {
+    const n = Math.round(Number(v));
+    return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
+  };
+
+  // The merchant's order, over the keys that exist, and never short: a stored
+  // list from an older build would otherwise hide whatever was added since.
+  const seen = new Set<OverviewKey>();
+  const overview: { key: OverviewKey; visible: boolean }[] = [];
+  for (const raw of Array.isArray(row.overview) ? (row.overview as unknown[]) : []) {
+    const item = (raw ?? {}) as Record<string, unknown>;
+    const key = String(item.key) as OverviewKey;
+    if (!OVERVIEW_KEYS.includes(key) || seen.has(key)) continue;
+    seen.add(key);
+    overview.push({ key, visible: item.visible !== false });
+  }
+  for (const key of OVERVIEW_KEYS) if (!seen.has(key)) overview.push({ key, visible: true });
+
   return {
     colours,
     sections,
+    design: {
+      headingFont: str(d.headingFont, defaults.design.headingFont, 24) === "system" ? "system" : "serif",
+      radius: size(d.radius, defaults.design.radius, 0, 40),
+      buttonRadius: size(d.buttonRadius, defaults.design.buttonRadius, 0, 40),
+      levelNumerals: flag(d.levelNumerals, defaults.design.levelNumerals),
+      levelGradient: flag(d.levelGradient, defaults.design.levelGradient),
+      privilegeColumns: size(d.privilegeColumns, defaults.design.privilegeColumns, 2, 4),
+      rewardThumbs: flag(d.rewardThumbs, defaults.design.rewardThumbs),
+      vaultHeroImage: /^https?:\/\//i.test(String(d.vaultHeroImage ?? "")) ? String(d.vaultHeroImage) : "",
+      headingUppercase: flag(d.headingUppercase, defaults.design.headingUppercase),
+      direction: str(d.direction, defaults.design.direction, 4) === "rtl" ? "rtl" : "ltr",
+    },
+    overview,
     words: {
-      brandLine: str(w.brandLine, d.words.brandLine, 40),
-      title: str(w.title, d.words.title, 40),
-      tagline: str(w.tagline, d.words.tagline, 120),
-      statusLabel: str(w.statusLabel, d.words.statusLabel, 40),
-      pointsWord: str(w.pointsWord, d.words.pointsWord, 24),
+      brandLine: str(w.brandLine, defaults.words.brandLine, 40),
+      title: str(w.title, defaults.words.title, 40),
+      tagline: str(w.tagline, defaults.words.tagline, 120),
+      statusLabel: str(w.statusLabel, defaults.words.statusLabel, 40),
+      pointsWord: str(w.pointsWord, defaults.words.pointsWord, 24),
       // One character reads best, but an emoji is two code units, so this
       // counts characters rather than slicing bytes off the middle of one.
-      glyph: [...str(w.glyph, d.words.glyph, 8)].slice(0, 2).join(""),
-      cardKicker: str(w.cardKicker, d.words.cardKicker, 40),
+      glyph: [...str(w.glyph, defaults.words.glyph, 8)].slice(0, 2).join(""),
+      cardKicker: str(w.cardKicker, defaults.words.cardKicker, 40),
     },
     tabLabels,
   };
@@ -371,8 +488,21 @@ export function loyaltyVars(theme: LoyaltyTheme): Record<string, string> {
     "--ls-on-deep": theme.colours.onDeep,
     "--ls-on-deep-soft": theme.colours.onDeepSoft,
     "--ls-success": theme.colours.success,
+    // The shape of things, so a card and a button can read their corners from
+    // the same place the colours come from.
+    "--ls-radius": theme.design.radius + "px",
+    "--ls-button-radius": theme.design.buttonRadius + "px",
   };
 }
+
+/**
+ * The display face for headings.
+ *
+ * The design sets every heading in a serif; "system" hands the page back to
+ * whatever the shopper's phone uses, for a merchant who wants plainer.
+ */
+export const headingClass = (theme: LoyaltyTheme): string =>
+  theme.design.headingFont === "serif" ? "font-serif" : "font-sans";
 
 /**
  * A section's word: the merchant's, or the one the page ships with.
