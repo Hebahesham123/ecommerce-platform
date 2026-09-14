@@ -52,6 +52,12 @@ const dict = {
   group_store: { ar: "المتجر", en: "Store" },
   group_engage: { ar: "التواصل", en: "Engage" },
 
+  // Beauty Bar Society (loyalty)
+  group_loyalty: { ar: "الولاء", en: "Loyalty" },
+  nav_loyalty: { ar: "بيوتي بار سوسايتي", en: "Beauty Bar Society" },
+  nav_loyalty_rewards: { ar: "المكافآت", en: "Rewards" },
+  nav_loyalty_members: { ar: "الأعضاء", en: "Members" },
+
   // Overview KPIs
   kpi_revenue: { ar: "الإيرادات", en: "Revenue" },
   kpi_orders: { ar: "الطلبات", en: "Orders" },

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getAccount } from "../auth-actions";
 import LogoutButton from "./logout-button";
+import SocietyCard from "@/components/loyalty/society-card";
 
 // The session lives in a cookie, so this page can never be static.
 export const dynamic = "force-dynamic";
@@ -28,6 +29,11 @@ export default async function AccountPage() {
           <p className="mt-1 text-sm text-ink-muted" dir="ltr">{account.phone}</p>
         </div>
         <LogoutButton />
+      </div>
+
+      {/* Beauty Bar Society — loyalty summary, links into the full hub. */}
+      <div className="mt-8">
+        <SocietyCard />
       </div>
 
       <section className="mt-8">

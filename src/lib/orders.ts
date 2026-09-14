@@ -9,6 +9,7 @@ import {
   type DiscountLine,
 } from "@/lib/discount-engine";
 import { recordNudgeConversion } from "@/lib/nudge-service";
+import { awardOrderSignatures } from "@/lib/loyalty/earn";
 import { sendOrderPurchase } from "@/lib/meta-purchase";
 import type { Channel } from "@/lib/channel";
 import { repriceLines } from "@/lib/cart-pricing";
@@ -353,6 +354,11 @@ export async function placeOrderCore(
     }
 
     await fireOrderRelay(supabase, orderNumber, payload, ph, relayEmail, total, opts.channel);
+
+    // Beauty Bar Society: award signatures for the order (idempotent by order
+    // number), advance the vault and count the streak month. Never fails a
+    // placed order — awardOrderSignatures catches its own errors.
+    await awardOrderSignatures(ph, { orderNumber, total }).catch(() => {});
 
     return { ok: true, data: { orderNumber } };
   } catch (e) {

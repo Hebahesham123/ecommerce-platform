@@ -31,6 +31,7 @@ import {
   IcMobile,
   IcCode,
   IcEye,
+  IcSignature,
 } from "./icons";
 import type { ComponentType, SVGProps } from "react";
 
@@ -122,6 +123,16 @@ const groups: Group[] = [
       { href: "/email", key: "nav_email", icon: IcMail },
       { href: "/reviews", key: "nav_reviews", icon: IcStar },
       { href: "/requests", key: "nav_requests", icon: IcClipboard },
+    ],
+  },
+  // Beauty Bar Society — the loyalty program. Sits after Engage, as requested.
+  {
+    id: "loyalty",
+    label: "group_loyalty",
+    items: [
+      { href: "/loyalty", key: "nav_loyalty", icon: IcSignature },
+      { href: "/loyalty/rewards", key: "nav_loyalty_rewards", icon: IcStar },
+      { href: "/loyalty/members", key: "nav_loyalty_members", icon: IcCustomers },
     ],
   },
 ];

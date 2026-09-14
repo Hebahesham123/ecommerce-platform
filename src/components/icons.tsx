@@ -173,6 +173,13 @@ export const IcUpload = (p: P) => (
     <path d="M5 16v3a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3" />
   </svg>
 );
+/** The Society "signature" mark (a four-point sparkle, ✦). */
+export const IcSignature = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M12 3c.5 3.6 1.9 5 5.5 5.5-3.6.5-5 1.9-5.5 5.5-.5-3.6-1.9-5-5.5-5.5C10.1 8 11.5 6.6 12 3Z" />
+    <path d="M18.5 14c.25 1.6.9 2.25 2.5 2.5-1.6.25-2.25.9-2.5 2.5-.25-1.6-.9-2.25-2.5-2.5 1.6-.25 2.25-.9 2.5-2.5Z" />
+  </svg>
+);
 export const IcImage = (p: P) => (
   <svg {...base(p)}>
     <rect x="3" y="4" width="18" height="16" rx="2" />
