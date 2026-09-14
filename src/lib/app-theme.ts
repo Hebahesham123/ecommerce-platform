@@ -186,8 +186,15 @@ export function itemId(): string {
   return `i-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
-/** What one field of an item is, so the editor knows which control to draw. */
-export type FieldKind = "text" | "image" | "collection" | "emoji" | "color";
+/**
+ * What one field of an item is, so the editor knows which control to draw.
+ *
+ * "link" and "collection" look alike and are not: a link is where tapping the
+ * item takes the shopper, and can be a collection, a product, a screen or a
+ * web address. A "collection" is which collection the item is *made of* - the
+ * tab strip reads its products - and only a collection will do.
+ */
+export type FieldKind = "text" | "image" | "link" | "collection" | "emoji" | "color";
 export type FieldSpec = { key: string; kind: FieldKind; ar: string; en: string };
 
 /**
@@ -203,10 +210,10 @@ export const ITEM_FIELDS: Partial<Record<BlockType, FieldSpec[]>> = {
     { key: "kicker", kind: "text", ar: "سطر علوي", en: "Kicker" },
     { key: "heading", kind: "text", ar: "العنوان", en: "Heading" },
     { key: "subheading", kind: "text", ar: "سطر فرعي", en: "Subheading" },
-    { key: "handle", kind: "collection", ar: "يفتح", en: "Opens" },
+    { key: "handle", kind: "link", ar: "يفتح", en: "Opens" },
   ],
   categories: [
-    { key: "handle", kind: "collection", ar: "القسم", en: "Collection" },
+    { key: "handle", kind: "link", ar: "يفتح", en: "Opens" },
     { key: "label", kind: "text", ar: "الاسم", en: "Label" },
     { key: "emoji", kind: "emoji", ar: "أيقونة", en: "Emoji" },
   ],
@@ -219,19 +226,19 @@ export const ITEM_FIELDS: Partial<Record<BlockType, FieldSpec[]>> = {
     { key: "imageUrl", kind: "image", ar: "الصورة", en: "Image" },
     { key: "title", kind: "text", ar: "العنوان", en: "Title" },
     { key: "subtitle", kind: "text", ar: "سطر فرعي", en: "Subtitle" },
-    { key: "handle", kind: "collection", ar: "يفتح", en: "Opens" },
+    { key: "handle", kind: "link", ar: "يفتح", en: "Opens" },
   ],
   tiers: [
     { key: "prefix", kind: "text", ar: "قبل السعر", en: "Prefix" },
     { key: "amount", kind: "text", ar: "السعر", en: "Amount" },
     { key: "label", kind: "text", ar: "الوصف", en: "Label" },
-    { key: "handle", kind: "collection", ar: "يفتح", en: "Opens" },
+    { key: "handle", kind: "link", ar: "يفتح", en: "Opens" },
   ],
   split: [
     { key: "imageUrl", kind: "image", ar: "الصورة", en: "Image" },
     { key: "label", kind: "text", ar: "العنوان", en: "Label" },
     { key: "buttonLabel", kind: "text", ar: "نص الزر", en: "Button text" },
-    { key: "handle", kind: "collection", ar: "يفتح", en: "Opens" },
+    { key: "handle", kind: "link", ar: "يفتح", en: "Opens" },
   ],
   trust_badges: [
     { key: "emoji", kind: "emoji", ar: "أيقونة", en: "Emoji" },
@@ -242,15 +249,13 @@ export const ITEM_FIELDS: Partial<Record<BlockType, FieldSpec[]>> = {
     { key: "imageUrl", kind: "image", ar: "الصورة", en: "Photo" },
     { key: "name", kind: "text", ar: "الاسم", en: "Name" },
     { key: "viewers", kind: "text", ar: "المشاهدون", en: "Viewers" },
-    { key: "handle", kind: "collection", ar: "يفتح", en: "Opens" },
-    { key: "url", kind: "text", ar: "أو رابط", en: "Or a link" },
+    { key: "handle", kind: "link", ar: "يفتح", en: "Opens" },
   ],
   coming_up_live: [
     { key: "imageUrl", kind: "image", ar: "الصورة", en: "Photo" },
     { key: "title", kind: "text", ar: "العنوان", en: "Title" },
     { key: "when", kind: "text", ar: "الموعد", en: "When" },
-    { key: "handle", kind: "collection", ar: "يفتح", en: "Opens" },
-    { key: "url", kind: "text", ar: "أو رابط", en: "Or a link" },
+    { key: "handle", kind: "link", ar: "يفتح", en: "Opens" },
   ],
   countdown_deals: [
     { key: "imageUrl", kind: "image", ar: "الصورة", en: "Photo" },
@@ -258,24 +263,21 @@ export const ITEM_FIELDS: Partial<Record<BlockType, FieldSpec[]>> = {
     { key: "price", kind: "text", ar: "السعر", en: "Price" },
     { key: "comparePrice", kind: "text", ar: "قبل الخصم", en: "Was" },
     { key: "claimed", kind: "text", ar: "نسبة المباع", en: "Claimed" },
-    { key: "handle", kind: "collection", ar: "يفتح", en: "Opens" },
-    { key: "url", kind: "text", ar: "أو رابط", en: "Or a link" },
+    { key: "handle", kind: "link", ar: "يفتح", en: "Opens" },
   ],
   info_rows: [
     { key: "emoji", kind: "emoji", ar: "أيقونة", en: "Icon" },
     { key: "title", kind: "text", ar: "العنوان", en: "Title" },
     { key: "subtitle", kind: "text", ar: "سطر فرعي", en: "Subtitle" },
     { key: "note", kind: "text", ar: "على اليسار", en: "Right note" },
-    { key: "handle", kind: "collection", ar: "يفتح", en: "Opens" },
-    { key: "url", kind: "text", ar: "أو رابط", en: "Or a link" },
+    { key: "handle", kind: "link", ar: "يفتح", en: "Opens" },
   ],
   payment_plans: [
     { key: "name", kind: "text", ar: "الجهة", en: "Provider" },
     { key: "headline", kind: "text", ar: "العرض", en: "Headline" },
     { key: "note", kind: "text", ar: "التفاصيل", en: "Detail" },
     { key: "color", kind: "color", ar: "لون البطاقة", en: "Card colour" },
-    { key: "handle", kind: "collection", ar: "يفتح", en: "Opens" },
-    { key: "url", kind: "text", ar: "أو رابط", en: "Or a link" },
+    { key: "handle", kind: "link", ar: "يفتح", en: "Opens" },
   ],
   price_slider: [
     { key: "name", kind: "text", ar: "الجهة", en: "Provider" },
@@ -288,8 +290,7 @@ export const ITEM_FIELDS: Partial<Record<BlockType, FieldSpec[]>> = {
     { key: "title", kind: "text", ar: "العنوان", en: "Title" },
     { key: "subtitle", kind: "text", ar: "الشرح", en: "Detail" },
     { key: "color", kind: "color", ar: "اللون", en: "Colour" },
-    { key: "handle", kind: "collection", ar: "يفتح", en: "Opens" },
-    { key: "url", kind: "text", ar: "أو رابط", en: "Or a link" },
+    { key: "handle", kind: "link", ar: "يفتح", en: "Opens" },
   ],
   product_reasons: [
     { key: "imageUrl", kind: "image", ar: "الصورة", en: "Photo" },
@@ -300,28 +301,24 @@ export const ITEM_FIELDS: Partial<Record<BlockType, FieldSpec[]>> = {
     { key: "badge", kind: "text", ar: "الشارة", en: "Badge" },
     { key: "rating", kind: "text", ar: "التقييم", en: "Rating" },
     { key: "sold", kind: "text", ar: "عدد المبيعات", en: "Sold" },
-    { key: "handle", kind: "collection", ar: "يفتح", en: "Opens" },
-    { key: "url", kind: "text", ar: "أو رابط", en: "Or a link" },
+    { key: "handle", kind: "link", ar: "يفتح", en: "Opens" },
   ],
   circle_row: [
     { key: "imageUrl", kind: "image", ar: "الصورة", en: "Photo" },
     { key: "label", kind: "text", ar: "الاسم", en: "Label" },
     { key: "note", kind: "text", ar: "تحت الاسم", en: "Under the label" },
-    { key: "handle", kind: "collection", ar: "يفتح", en: "Opens" },
-    { key: "url", kind: "text", ar: "أو رابط", en: "Or a link" },
+    { key: "handle", kind: "link", ar: "يفتح", en: "Opens" },
   ],
   pick_colour: [
     { key: "color", kind: "color", ar: "اللون", en: "Colour" },
     { key: "label", kind: "text", ar: "الاسم", en: "Label" },
-    { key: "handle", kind: "collection", ar: "يفتح", en: "Opens" },
-    { key: "url", kind: "text", ar: "أو رابط", en: "Or a link" },
+    { key: "handle", kind: "link", ar: "يفتح", en: "Opens" },
   ],
   price_drop: [{ key: "imageUrl", kind: "image", ar: "الصورة", en: "Photo" }],
   style_profile: [
     { key: "label", kind: "text", ar: "الوسم", en: "Tag" },
     { key: "color", kind: "color", ar: "لونه", en: "Its colour" },
-    { key: "handle", kind: "collection", ar: "يفتح", en: "Opens" },
-    { key: "url", kind: "text", ar: "أو رابط", en: "Or a link" },
+    { key: "handle", kind: "link", ar: "يفتح", en: "Opens" },
   ],
 };
 
@@ -333,7 +330,15 @@ export type Block = {
 };
 
 /** One shortcut in the row under the header. */
-export type StripItem = { id: string; label: string; handle: string; url: string };
+export type StripItem = {
+  id: string;
+  label: string;
+  /** Exactly one of these four is set: where the chip goes. */
+  handle: string;
+  url: string;
+  productId: string;
+  screen: string;
+};
 
 export type AppSettings = {
   storeName: string;
@@ -376,6 +381,19 @@ export type AppSettings = {
    * uses, which is most of why the site reads as more expensive than the app.
    */
   titleFont: string;
+  /**
+   * How much air the home screen leaves, in pixels.
+   *
+   * `sectionGap` is the space between one section and the next, and the
+   * padding inside a banded section. `itemGap` is the space between the cards,
+   * chips and tiles within a section - it scales the whole set rather than
+   * flattening them, so a row of chips stays tighter than a row of cards.
+   *
+   * A phone screen is small and scrolling is the cost of every pixel of air,
+   * so the defaults are tighter than a desktop page would use.
+   */
+  sectionGap: number;
+  itemGap: number;
 };
 
 /**
@@ -540,6 +558,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   stripEnabled: false,
   strip: [],
   titleFont: "system",
+  sectionGap: 12,
+  itemGap: 8,
 };
 
 /**
@@ -751,6 +771,8 @@ export type LiveSession = {
   imageUrl: string;
   url: string;
   handle: string;
+  productId: string;
+  screen: string;
   live: boolean;
 };
 
@@ -770,6 +792,8 @@ export function liveSessionsOf(theme: AppTheme): LiveSession[] {
         imageUrl,
         url: str(item.url),
         handle: str(item.handle),
+        productId: str(item.productId),
+        screen: str(item.screen),
         live,
       });
     }
@@ -977,6 +1001,12 @@ export function newBlock(type: BlockType): Block {
 const str = (v: unknown, fallback = ""): string =>
   typeof v === "string" ? v : fallback;
 
+/** A whole number of pixels inside the range a phone can actually use. */
+function size(v: unknown, fallback: number, min: number, max: number): number {
+  const n = Math.round(Number(v));
+  return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
+}
+
 /** A hex colour, or the given default. Anything else would reach the app as CSS. */
 function colour(v: unknown, fallback: string = DEFAULT_SETTINGS.accent): string {
   const s = String(v ?? "").trim();
@@ -1017,6 +1047,8 @@ export function normalizeTheme(raw: unknown): AppTheme {
     headerBg: /^#[0-9a-f]{6}$/i.test(str(s.headerBg)) ? str(s.headerBg) : "",
     headerInk: /^#[0-9a-f]{6}$/i.test(str(s.headerInk)) ? str(s.headerInk) : "",
     titleFont: str(s.titleFont) === "serif" ? "serif" : "system",
+    sectionGap: size(s.sectionGap, 12, 0, 40),
+    itemGap: size(s.itemGap, 8, 0, 24),
     stripEnabled: Boolean(s.stripEnabled),
     strip: Array.isArray(s.strip)
       ? (s.strip as unknown[])
@@ -1027,6 +1059,8 @@ export function normalizeTheme(raw: unknown): AppTheme {
               label: str(item.label).slice(0, 40),
               handle: str(item.handle).slice(0, 60),
               url: str(item.url).slice(0, 300),
+              productId: str(item.productId).slice(0, 60),
+              screen: str(item.screen).slice(0, 40),
             };
           })
           // A shortcut with no wording is a gap in the row, not a shortcut.

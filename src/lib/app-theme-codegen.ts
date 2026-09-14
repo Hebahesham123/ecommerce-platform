@@ -63,6 +63,29 @@ function themeFile(theme: AppTheme): GeneratedFile {
 
 import { Platform } from "react-native";
 
+/** One session on the Live tab, gathered from the home screen's live sections. */
+export type LiveSession = {
+  id: string;
+  name: string;
+  detail: string;
+  imageUrl: string;
+  url: string;
+  handle: string;
+  productId: string;
+  screen: string;
+  live: boolean;
+};
+
+/** One chip in the shortcut strip under the header. */
+export type StripShortcut = {
+  id: string;
+  label: string;
+  handle: string;
+  url: string;
+  productId: string;
+  screen: string;
+};
+
 export const theme = {
   storeName: ${q(t.storeName)},
   /** Section titles. undefined means the platform's own face. */
@@ -92,17 +115,21 @@ export const theme = {
       (s) =>
         `{ id: ${q(s.id)}, name: ${q(s.name)}, detail: ${q(s.detail)}, imageUrl: ${q(
           s.imageUrl,
-        )}, url: ${q(s.url)}, handle: ${q(s.handle)}, live: ${s.live} }`,
+        )}, url: ${q(s.url)}, handle: ${q(s.handle)}, productId: ${q(
+          s.productId,
+        )}, screen: ${q(s.screen)}, live: ${s.live} }`,
     )
-    .join(", ")}],
+    .join(", ")}] as LiveSession[],
   strip: {
     enabled: ${t.stripEnabled},
     items: [${t.strip
       .map(
         (i) =>
-          `{ id: ${q(i.id)}, label: ${q(i.label)}, handle: ${q(i.handle)}, url: ${q(i.url)} }`,
+          `{ id: ${q(i.id)}, label: ${q(i.label)}, handle: ${q(i.handle)}, url: ${q(
+            i.url,
+          )}, productId: ${q(i.productId)}, screen: ${q(i.screen)} }`,
       )
-      .join(", ")}],
+      .join(", ")}] as StripShortcut[],
   },
 } as const;
 
@@ -119,6 +146,21 @@ export const colors = {
 } as const;
 
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 } as const;
+
+/**
+ * How much air the home screen leaves. Set in the dashboard, App - App theme.
+ *
+ * "section" is the space between one section and the next, and the padding
+ * inside a banded one. "item" is the space between cards; "itemTight" is the
+ * same number scaled down for chips and small tiles, which read better
+ * closer together than cards do - so one control moves the whole set without
+ * flattening the rhythm between them.
+ */
+export const gap = {
+  section: ${t.sectionGap},
+  item: ${t.itemGap},
+  itemTight: ${Math.max(2, Math.round(t.itemGap * 0.67))},
+} as const;
 export const radius = { sm: 8, md: 12, lg: 16, pill: 999 } as const;
 `,
   };
@@ -401,11 +443,48 @@ function piecesFile(): GeneratedFile {
     path: "components/Pieces.tsx",
     language: "tsx",
     contents: `import React from "react";
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import { colors, radius, spacing, theme } from "../theme";
 import type { Card, HomePayload } from "../api";
 
 /** The bits every section is made of, so they all look like one app. */
+
+/**
+ * Where the merchant pointed something. They choose one of five things in
+ * the dashboard's link picker - nothing, a collection, a product, a screen
+ * in the app, or a web address - and it arrives here as one of these set.
+ */
+export type LinkTo = {
+  handle?: string;
+  url?: string;
+  productId?: string;
+  screen?: string;
+};
+
+/** Who knows how to get there. Every section that links takes these three. */
+export type LinkHandlers = {
+  onOpenCollection?: (handle: string) => void;
+  onOpenProduct?: (id: string) => void;
+  onOpenScreen?: (screen: string) => void;
+};
+
+/**
+ * Follow one link.
+ *
+ * Only one of the four is ever set, because picking a kind clears the other
+ * three. They are still checked most-specific first, so a section saved
+ * before the picker existed - which can carry both a collection and a typed
+ * address - behaves exactly the way it did then.
+ */
+export function openLink(to: LinkTo, h: LinkHandlers) {
+  if (to.url) {
+    Linking.openURL(to.url).catch(() => {});
+    return;
+  }
+  if (to.productId) return h.onOpenProduct?.(to.productId);
+  if (to.screen) return h.onOpenScreen?.(to.screen);
+  if (to.handle) return h.onOpenCollection?.(to.handle);
+}
 
 export function SectionHeading({
   title,
@@ -515,31 +594,39 @@ function sectionFile(type: BlockType): GeneratedFile {
     banner: `import React from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { colors, radius } from "../theme";
+import { openLink } from "./Pieces";
 import type { HomePayload } from "../api";
 
 export type BannerSettings = {
   imageUrl?: string;
   heading?: string;
   subheading?: string;
-  /** Collection handle to open when tapped. */
+  /** Where tapping it goes: a collection, a product, a screen or an address. */
   handle?: string;
+  url?: string;
+  productId?: string;
+  screen?: string;
 };
 
 export function Banner({
   settings,
   collections,
   onOpenCollection,
+  onOpenProduct,
+  onOpenScreen,
 }: {
   settings: BannerSettings;
   collections: HomePayload["collections"];
   onOpenCollection?: (handle: string) => void;
+  onOpenProduct?: (id: string) => void;
+  onOpenScreen?: (screen: string) => void;
 }) {
   const { heading, subheading, handle } = settings;
   const imageUrl =
     settings.imageUrl || collections.find((c) => c.handle === handle)?.image || undefined;
   if (!imageUrl && !heading) return null;
   return (
-    <Pressable onPress={() => handle && onOpenCollection?.(handle)} style={styles.wrap}>
+    <Pressable onPress={() => openLink(settings, { onOpenCollection, onOpenProduct, onOpenScreen })} style={styles.wrap}>
       {imageUrl ? <Image source={{ uri: imageUrl }} style={styles.image} /> : null}
       {heading || subheading ? (
         <View style={styles.overlay}>
@@ -564,31 +651,43 @@ const styles = StyleSheet.create({
 
     categories: `import React from "react";
 import { Image, Pressable, ScrollView, StyleSheet, Text } from "react-native";
-import { colors, radius, spacing } from "../theme";
-import { inherit, SectionHeading } from "./Pieces";
+import { colors, gap, radius, spacing } from "../theme";
+import { SectionHeading, inherit, openLink, type LinkTo } from "./Pieces";
 import type { HomePayload } from "../api";
 
-export type Category = { id: string; handle?: string; label?: string; emoji?: string };
+export type Category = { id: string; label?: string; emoji?: string } & LinkTo;
 export type CategoriesSettings = { title?: string; items?: Category[] };
 
 export function Categories({
   settings,
   collections,
   onOpenCollection,
+  onOpenProduct,
+  onOpenScreen,
 }: {
   settings: CategoriesSettings;
   collections: HomePayload["collections"];
   onOpenCollection?: (handle: string) => void;
+  onOpenProduct?: (id: string) => void;
+  onOpenScreen?: (screen: string) => void;
 }) {
   // The merchant's own picks when they made some; otherwise every collection,
   // which is what a store that has not curated this wants anyway.
-  const picked = (settings.items ?? []).filter((i) => i.handle);
+  const picked = (settings.items ?? []).filter(
+    (i) => i.handle || i.productId || i.screen || i.url,
+  );
   const chips = picked.length
     ? picked.map((i) => {
         const { image, title } = inherit(i, collections);
-        return { handle: i.handle!, title, image, emoji: i.emoji };
+        return { key: i.id, to: i as LinkTo, title, image, emoji: i.emoji };
       })
-    : collections.map((c) => ({ handle: c.handle, title: c.title, image: c.image ?? undefined, emoji: undefined }));
+    : collections.map((c) => ({
+        key: c.handle,
+        to: { handle: c.handle } as LinkTo,
+        title: c.title,
+        image: c.image ?? undefined,
+        emoji: undefined,
+      }));
   if (!chips.length) return null;
 
   return (
@@ -596,7 +695,7 @@ export function Categories({
       <SectionHeading title={settings.title ?? ""} />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
         {chips.map((c) => (
-          <Pressable key={c.handle} style={styles.chip} onPress={() => onOpenCollection?.(c.handle)}>
+          <Pressable key={c.key} style={styles.chip} onPress={() => openLink(c.to, { onOpenCollection, onOpenProduct, onOpenScreen })}>
             {c.image ? (
               <Image source={{ uri: c.image }} style={styles.chipImage} />
             ) : c.emoji ? (
@@ -611,7 +710,7 @@ export function Categories({
 }
 
 const styles = StyleSheet.create({
-  row: { gap: spacing.sm, paddingVertical: spacing.sm },
+  row: { gap: gap.itemTight, paddingVertical: spacing.sm },
   chip: { flexDirection: "row", alignItems: "center", gap: 6, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, paddingStart: 6, paddingEnd: 12, paddingVertical: 4 },
   chipImage: { width: 24, height: 24, borderRadius: 12, backgroundColor: colors.page },
   chipEmoji: { fontSize: 14 },
@@ -621,7 +720,7 @@ const styles = StyleSheet.create({
 
     new_arrivals: `import React from "react";
 import { ScrollView, StyleSheet } from "react-native";
-import { spacing } from "../theme";
+import { gap, spacing } from "../theme";
 import { ProductTile, SectionHeading } from "./Pieces";
 import type { Card } from "../api";
 
@@ -648,12 +747,12 @@ export function NewArrivals({
   );
 }
 
-const styles = StyleSheet.create({ row: { gap: spacing.md, paddingVertical: spacing.sm } });
+const styles = StyleSheet.create({ row: { gap: gap.item, paddingVertical: spacing.sm } });
 `,
 
     collection_row: `import React from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
-import { spacing } from "../theme";
+import { gap, spacing } from "../theme";
 import { ProductTile, SectionHeading } from "./Pieces";
 import type { HomePayload } from "../api";
 
@@ -707,12 +806,12 @@ export function CollectionRow({
   );
 }
 
-const styles = StyleSheet.create({ row: { gap: spacing.md, paddingVertical: spacing.sm } });
+const styles = StyleSheet.create({ row: { gap: gap.item, paddingVertical: spacing.sm } });
 `,
 
     collection_grid: `import React from "react";
 import { StyleSheet, View } from "react-native";
-import { spacing } from "../theme";
+import { gap, spacing } from "../theme";
 import { ProductTile, SectionHeading } from "./Pieces";
 import type { HomePayload } from "../api";
 
@@ -763,13 +862,13 @@ export function CollectionGrid({
 }
 
 const styles = StyleSheet.create({
-  grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", gap: spacing.md, paddingVertical: spacing.sm },
+  grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", gap: gap.item, paddingVertical: spacing.sm },
 });
 `,
 
     reviews: `import React from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
-import { colors, radius, spacing } from "../theme";
+import { colors, gap, radius, spacing } from "../theme";
 import { SectionHeading } from "./Pieces";
 import type { HomePayload } from "../api";
 
@@ -812,7 +911,7 @@ export function Reviews({
 }
 
 const styles = StyleSheet.create({
-  row: { gap: spacing.md, paddingVertical: spacing.sm },
+  row: { gap: gap.item, paddingVertical: spacing.sm },
   card: { width: 224, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, padding: spacing.md },
   head: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   name: { fontSize: 12, fontWeight: "600", color: colors.ink },
@@ -825,6 +924,7 @@ const styles = StyleSheet.create({
     hero: `import React, { useState } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { colors, radius } from "../theme";
+import { openLink } from "./Pieces";
 import type { HomePayload } from "../api";
 
 export type Slide = {
@@ -833,8 +933,11 @@ export type Slide = {
   kicker?: string;
   heading?: string;
   subheading?: string;
-  /** Collection handle to open when tapped. */
+  /** Where tapping it goes: a collection, a product, a screen or an address. */
   handle?: string;
+  url?: string;
+  productId?: string;
+  screen?: string;
 };
 export type HeroSettings = { items?: Slide[] };
 
@@ -842,10 +945,14 @@ export function Hero({
   settings,
   collections,
   onOpenCollection,
+  onOpenProduct,
+  onOpenScreen,
 }: {
   settings: HeroSettings;
   collections: HomePayload["collections"];
   onOpenCollection?: (handle: string) => void;
+  onOpenProduct?: (id: string) => void;
+  onOpenScreen?: (screen: string) => void;
 }) {
   const slides = settings.items ?? [];
   const [at, setAt] = useState(0);
@@ -858,7 +965,7 @@ export function Hero({
   return (
     <View>
       <Pressable
-        onPress={() => slide.handle && onOpenCollection?.(slide.handle)}
+        onPress={() => openLink(slide, { onOpenCollection, onOpenProduct, onOpenScreen })}
         style={styles.wrap}
       >
         {image ? <Image source={{ uri: image }} style={styles.image} /> : null}
@@ -931,7 +1038,7 @@ const styles = StyleSheet.create({
 
     collection_tabs: `import React, { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { colors, radius, spacing } from "../theme";
+import { colors, gap, radius, spacing } from "../theme";
 import { ProductTile, SectionHeading } from "./Pieces";
 import type { HomePayload } from "../api";
 
@@ -986,7 +1093,7 @@ export function CollectionTabs({
 const styles = StyleSheet.create({
   kicker: { fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: colors.inkSoft },
   tabs: { gap: 6, paddingVertical: spacing.sm },
-  row: { gap: spacing.md, paddingVertical: spacing.sm },
+  row: { gap: gap.item, paddingVertical: spacing.sm },
   tab: { borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 6 },
   tabOn: { backgroundColor: colors.accent },
   tabOff: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line },
@@ -997,21 +1104,25 @@ const styles = StyleSheet.create({
 
     cards: `import React from "react";
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { colors, radius, spacing } from "../theme";
-import { inherit, SectionHeading } from "./Pieces";
+import { colors, gap, radius, spacing } from "../theme";
+import { SectionHeading, inherit, openLink, type LinkTo } from "./Pieces";
 import type { HomePayload } from "../api";
 
-export type ImageCard = { id: string; imageUrl?: string; title?: string; subtitle?: string; handle?: string };
+export type ImageCard = { id: string; imageUrl?: string; title?: string; subtitle?: string } & LinkTo;
 export type CardsSettings = { kicker?: string; title?: string; items?: ImageCard[] };
 
 export function Cards({
   settings,
   collections,
   onOpenCollection,
+  onOpenProduct,
+  onOpenScreen,
 }: {
   settings: CardsSettings;
   collections: HomePayload["collections"];
   onOpenCollection?: (handle: string) => void;
+  onOpenProduct?: (id: string) => void;
+  onOpenScreen?: (screen: string) => void;
 }) {
   const cards = settings.items ?? [];
   if (!cards.length) return null;
@@ -1022,7 +1133,7 @@ export function Cards({
         {cards.map((c) => {
           const { image, title } = inherit(c, collections);
           return (
-            <Pressable key={c.id} style={styles.card} onPress={() => c.handle && onOpenCollection?.(c.handle)}>
+            <Pressable key={c.id} style={styles.card} onPress={() => openLink(c, { onOpenCollection, onOpenProduct, onOpenScreen })}>
               {image ? (
                 <Image source={{ uri: image }} style={styles.image} />
               ) : (
@@ -1041,7 +1152,7 @@ export function Cards({
 }
 
 const styles = StyleSheet.create({
-  row: { gap: spacing.md, paddingVertical: spacing.sm },
+  row: { gap: gap.item, paddingVertical: spacing.sm },
   card: { width: 144, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, overflow: "hidden" },
   image: { width: 144, height: 180, backgroundColor: colors.page },
   title: { fontSize: 12, fontWeight: "600", color: colors.ink },
@@ -1051,18 +1162,22 @@ const styles = StyleSheet.create({
 
     tiers: `import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { colors, radius, spacing } from "../theme";
-import { SectionHeading } from "./Pieces";
+import { colors, gap, radius, spacing } from "../theme";
+import { SectionHeading, openLink, type LinkTo } from "./Pieces";
 
-export type Tier = { id: string; prefix?: string; amount?: string; label?: string; handle?: string };
+export type Tier = { id: string; prefix?: string; amount?: string; label?: string } & LinkTo;
 export type TiersSettings = { title?: string; items?: Tier[] };
 
 export function Tiers({
   settings,
   onOpenCollection,
+  onOpenProduct,
+  onOpenScreen,
 }: {
   settings: TiersSettings;
   onOpenCollection?: (handle: string) => void;
+  onOpenProduct?: (id: string) => void;
+  onOpenScreen?: (screen: string) => void;
 }) {
   const tiers = settings.items ?? [];
   if (!tiers.length) return null;
@@ -1071,7 +1186,7 @@ export function Tiers({
       <SectionHeading title={settings.title ?? ""} />
       <View style={styles.grid}>
         {tiers.map((t) => (
-          <Pressable key={t.id} style={styles.card} onPress={() => t.handle && onOpenCollection?.(t.handle)}>
+          <Pressable key={t.id} style={styles.card} onPress={() => openLink(t, { onOpenCollection, onOpenProduct, onOpenScreen })}>
             {t.prefix ? <Text style={styles.prefix}>{t.prefix}</Text> : null}
             <Text style={styles.amount}>{t.amount}</Text>
             <Text style={styles.label} numberOfLines={1}>{t.label}</Text>
@@ -1083,7 +1198,7 @@ export function Tiers({
 }
 
 const styles = StyleSheet.create({
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, paddingVertical: spacing.sm },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: gap.itemTight, paddingVertical: spacing.sm },
   card: { flexGrow: 1, flexBasis: "46%", borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, padding: spacing.md },
   prefix: { fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: colors.inkSoft },
   amount: { fontSize: 15, fontWeight: "700", color: colors.accent },
@@ -1093,21 +1208,25 @@ const styles = StyleSheet.create({
 
     split: `import React from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
-import { colors, radius, spacing } from "../theme";
-import { inherit, SectionHeading } from "./Pieces";
+import { colors, gap, radius, spacing } from "../theme";
+import { SectionHeading, inherit, openLink, type LinkTo } from "./Pieces";
 import type { HomePayload } from "../api";
 
-export type Panel = { id: string; imageUrl?: string; label?: string; buttonLabel?: string; handle?: string };
+export type Panel = { id: string; imageUrl?: string; label?: string; buttonLabel?: string } & LinkTo;
 export type SplitSettings = { title?: string; items?: Panel[] };
 
 export function Split({
   settings,
   collections,
   onOpenCollection,
+  onOpenProduct,
+  onOpenScreen,
 }: {
   settings: SplitSettings;
   collections: HomePayload["collections"];
   onOpenCollection?: (handle: string) => void;
+  onOpenProduct?: (id: string) => void;
+  onOpenScreen?: (screen: string) => void;
 }) {
   const panels = (settings.items ?? []).slice(0, 2);
   if (!panels.length) return null;
@@ -1118,7 +1237,7 @@ export function Split({
         {panels.map((p) => {
           const { image, title } = inherit(p, collections);
           return (
-            <Pressable key={p.id} style={styles.panel} onPress={() => p.handle && onOpenCollection?.(p.handle)}>
+            <Pressable key={p.id} style={styles.panel} onPress={() => openLink(p, { onOpenCollection, onOpenProduct, onOpenScreen })}>
               {image ? (
                 <Image source={{ uri: image }} style={styles.image} />
               ) : (
@@ -1137,7 +1256,7 @@ export function Split({
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: "row", gap: spacing.sm, paddingVertical: spacing.sm },
+  row: { flexDirection: "row", gap: gap.itemTight, paddingVertical: spacing.sm },
   panel: { flex: 1, height: 220, borderRadius: radius.lg, overflow: "hidden", backgroundColor: colors.page },
   image: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, width: "100%", height: "100%" },
   caption: { position: "absolute", right: 0, bottom: 0, left: 0, padding: 10, backgroundColor: "rgba(0,0,0,0.35)" },
@@ -1148,7 +1267,7 @@ const styles = StyleSheet.create({
 
     trust_badges: `import React from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
-import { colors, radius, spacing } from "../theme";
+import { colors, gap, radius, spacing } from "../theme";
 
 export type Badge = { id: string; emoji?: string; title?: string; subtitle?: string };
 export type TrustBadgesSettings = { items?: Badge[] };
@@ -1170,7 +1289,7 @@ export function TrustBadges({ settings }: { settings: TrustBadgesSettings }) {
 }
 
 const styles = StyleSheet.create({
-  row: { gap: spacing.sm, paddingVertical: spacing.sm },
+  row: { gap: gap.itemTight, paddingVertical: spacing.sm },
   card: { width: 112, alignItems: "center", borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, padding: 10 },
   emoji: { fontSize: 18 },
   title: { marginTop: 4, fontSize: 11, fontWeight: "600", color: colors.ink },
@@ -1179,9 +1298,9 @@ const styles = StyleSheet.create({
 `,
 
     live_now: `import React, { useEffect, useState } from "react";
-import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { colors, radius, spacing } from "../theme";
-import { inherit, SectionHeading } from "./Pieces";
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { colors, gap, radius, spacing } from "../theme";
+import { SectionHeading, inherit, openLink, type LinkTo } from "./Pieces";
 import { fetchAccount, type HomePayload } from "../api";
 
 export type LivePerson = {
@@ -1190,6 +1309,8 @@ export type LivePerson = {
   name?: string;
   viewers?: string;
   handle?: string;
+  productId?: string;
+  screen?: string;
   url?: string;
 };
 
@@ -1199,12 +1320,16 @@ export type LiveNowSettings = {
   showReplays?: boolean;
   replaysLabel?: string;
   replaysHandle?: string;
+  replaysProductId?: string;
+  replaysScreen?: string;
   replaysUrl?: string;
   offerEnabled?: boolean;
   offerTitle?: string;
   offerText?: string;
   offerMinutes?: number;
   offerHandle?: string;
+  offerProductId?: string;
+  offerScreen?: string;
   offerUrl?: string;
   avatarShape?: string;
   avatarSize?: number;
@@ -1215,6 +1340,10 @@ export type LiveNowSettings = {
   nameSize?: number;
   viewersSize?: number;
   bannerRadius?: number;
+  /** The gap between the row of circles and the banner. */
+  offerGap?: number;
+  /** How tall the banner is. Zero follows its wording. */
+  offerHeight?: number;
   offerBg?: string;
   offerTextColor?: string;
   offerTitleSize?: number;
@@ -1247,10 +1376,14 @@ export function LiveNow({
   settings,
   collections,
   onOpenCollection,
+  onOpenProduct,
+  onOpenScreen,
 }: {
   settings: LiveNowSettings;
   collections: HomePayload["collections"];
   onOpenCollection?: (handle: string) => void;
+  onOpenProduct?: (id: string) => void;
+  onOpenScreen?: (screen: string) => void;
 }) {
   const people = (settings.items ?? []).filter((i) => i.name || i.imageUrl || i.handle);
   const showReplays = settings.showReplays !== false;
@@ -1275,6 +1408,8 @@ export function LiveNow({
   const nameSize = settings.nameSize && settings.nameSize > 0 ? settings.nameSize : 10;
   const viewersSize = settings.viewersSize && settings.viewersSize > 0 ? settings.viewersSize : 9;
   const bannerRadius = settings.bannerRadius && settings.bannerRadius > 0 ? settings.bannerRadius : radius.lg;
+  const offerGap = typeof settings.offerGap === "number" && settings.offerGap >= 0 ? settings.offerGap : spacing.md;
+  const offerHeight = typeof settings.offerHeight === "number" && settings.offerHeight > 0 ? settings.offerHeight : undefined;
   const offerTitleSize = settings.offerTitleSize && settings.offerTitleSize > 0 ? settings.offerTitleSize : 13;
   const offerTextSize = settings.offerTextSize && settings.offerTextSize > 0 ? settings.offerTextSize : 11;
   const cell = Math.max(size + 12, 56);
@@ -1309,13 +1444,7 @@ export function LiveNow({
   if (!people.length && !hasOffer) return null;
 
   /** A typed link wins over a collection: it is the more specific thing to set. */
-  const go = (url?: string, handle?: string) => {
-    if (url) {
-      Linking.openURL(url).catch(() => {});
-      return;
-    }
-    if (handle) onOpenCollection?.(handle);
-  };
+  const go = (to: LinkTo) => openLink(to, { onOpenCollection, onOpenProduct, onOpenScreen });
 
   return (
     <>
@@ -1327,7 +1456,7 @@ export function LiveNow({
             const borrowed = inherit(p, collections);
             const photo = p.imageUrl || borrowed.image;
             return (
-              <Pressable key={p.id} style={[styles.person, { width: cell }]} onPress={() => go(p.url, p.handle)}>
+              <Pressable key={p.id} style={[styles.person, { width: cell }]} onPress={() => go(p)}>
                 <View
                   style={{
                     backgroundColor: ringW > 0 ? ringColor : "transparent",
@@ -1363,7 +1492,7 @@ export function LiveNow({
           {showReplays ? (
             <Pressable
               style={[styles.person, { width: cell }]}
-              onPress={() => go(settings.replaysUrl, settings.replaysHandle)}
+              onPress={() => go({ url: settings.replaysUrl, handle: settings.replaysHandle, productId: settings.replaysProductId, screen: settings.replaysScreen })}
             >
               <View style={[styles.replays, { width: size, height: size, borderRadius: photoRadius }]}>
                 <Text style={[styles.replaysIcon, { fontSize: Math.round(size / 3.5) }]}>▶</Text>
@@ -1378,8 +1507,8 @@ export function LiveNow({
 
       {hasOffer ? (
         <Pressable
-          style={[styles.offer, { backgroundColor: offerBg, borderRadius: bannerRadius }]}
-          onPress={() => go(settings.offerUrl, settings.offerHandle)}
+          style={[styles.offer, { backgroundColor: offerBg, borderRadius: bannerRadius, marginTop: offerGap, minHeight: offerHeight }]}
+          onPress={() => go({ url: settings.offerUrl, handle: settings.offerHandle, productId: settings.offerProductId, screen: settings.offerScreen })}
         >
           <View style={{ flex: 1 }}>
             {offerTitle ? (
@@ -1405,7 +1534,7 @@ export function LiveNow({
 }
 
 const styles = StyleSheet.create({
-  row: { gap: spacing.md, paddingVertical: spacing.sm },
+  row: { gap: gap.item, paddingVertical: spacing.sm },
   person: { alignItems: "center" },
   badge: { marginTop: -9, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 },
   badgeText: { fontSize: 8, fontWeight: "700", letterSpacing: 0.5 },
@@ -1413,7 +1542,7 @@ const styles = StyleSheet.create({
   viewers: { color: colors.inkSoft, textAlign: "center" },
   replays: { alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.line, backgroundColor: colors.page },
   replaysIcon: { color: colors.inkSoft },
-  offer: { marginTop: spacing.md, flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingHorizontal: 14, paddingVertical: 12 },
+  offer: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingHorizontal: 14, paddingVertical: 12 },
   offerTitle: { fontWeight: "700" },
   offerText: { marginTop: 2, opacity: 0.85 },
   timer: { paddingHorizontal: 10, paddingVertical: 6 },
@@ -1422,9 +1551,9 @@ const styles = StyleSheet.create({
 `,
 
     coming_up_live: `import React from "react";
-import { Image, Linking, Pressable, StyleSheet, Text, View } from "react-native";
-import { colors, radius, spacing } from "../theme";
-import { inherit, SectionHeading } from "./Pieces";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { colors, gap, radius, spacing } from "../theme";
+import { SectionHeading, inherit, openLink, type LinkTo } from "./Pieces";
 import type { HomePayload } from "../api";
 
 export type Session = { id: string; imageUrl?: string; title?: string; when?: string; handle?: string; url?: string };
@@ -1440,22 +1569,20 @@ export function ComingUpLive({
   settings,
   collections,
   onOpenCollection,
+  onOpenProduct,
+  onOpenScreen,
 }: {
   settings: ComingUpLiveSettings;
   collections: HomePayload["collections"];
   onOpenCollection?: (handle: string) => void;
+  onOpenProduct?: (id: string) => void;
+  onOpenScreen?: (screen: string) => void;
 }) {
   const items = (settings.items ?? []).filter((i) => i.title || i.imageUrl || i.handle);
   if (!items.length) return null;
 
   /** A typed link wins over a collection: it is the more specific thing to set. */
-  const go = (url?: string, handle?: string) => {
-    if (url) {
-      Linking.openURL(url).catch(() => {});
-      return;
-    }
-    if (handle) onOpenCollection?.(handle);
-  };
+  const go = (to: LinkTo) => openLink(to, { onOpenCollection, onOpenProduct, onOpenScreen });
 
   const r = settings.radius && settings.radius > 0 ? settings.radius : radius.lg;
   const bg = settings.cardBg || colors.surface;
@@ -1476,7 +1603,7 @@ export function ComingUpLive({
                 {i.when ? <Text style={styles.when} numberOfLines={1}>{i.when}</Text> : null}
               </View>
               {remind ? (
-                <Pressable style={styles.remind} onPress={() => go(i.url, i.handle)}>
+                <Pressable style={styles.remind} onPress={() => go(i)}>
                   <Text style={styles.remindText}>{remind}</Text>
                 </Pressable>
               ) : null}
@@ -1490,7 +1617,7 @@ export function ComingUpLive({
 
 const styles = StyleSheet.create({
   card: { marginTop: spacing.sm, borderWidth: 1, borderColor: colors.line, padding: spacing.md, gap: spacing.md },
-  row: { flexDirection: "row", alignItems: "center", gap: spacing.md },
+  row: { flexDirection: "row", alignItems: "center", gap: gap.item },
   thumb: { width: 48, height: 48, borderRadius: 10, backgroundColor: colors.page },
   title: { fontSize: 12, fontWeight: "700", color: colors.ink },
   when: { fontSize: 11, color: colors.inkSoft },
@@ -1500,9 +1627,9 @@ const styles = StyleSheet.create({
 `,
 
     countdown_deals: `import React, { useEffect, useState } from "react";
-import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { colors, radius, spacing, theme } from "../theme";
-import { inherit } from "./Pieces";
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { colors, gap, radius, spacing, theme } from "../theme";
+import { inherit, openLink, type LinkTo } from "./Pieces";
 import type { HomePayload } from "../api";
 
 export type Deal = {
@@ -1513,9 +1640,13 @@ export type Deal = {
   comparePrice?: string;
   claimed?: string;
   handle?: string;
+  productId?: string;
+  screen?: string;
   url?: string;
 };
 export type CountdownDealsSettings = {
+  /** Whether the first item is shown big, above the rest. */
+  featureFirst?: boolean;
   title?: string;
   endsInMinutes?: number;
   showTimer?: boolean;
@@ -1531,10 +1662,14 @@ export function CountdownDeals({
   settings,
   collections,
   onOpenCollection,
+  onOpenProduct,
+  onOpenScreen,
 }: {
   settings: CountdownDealsSettings;
   collections: HomePayload["collections"];
   onOpenCollection?: (handle: string) => void;
+  onOpenProduct?: (id: string) => void;
+  onOpenScreen?: (screen: string) => void;
 }) {
   const items = (settings.items ?? []).filter((i) => i.price || i.imageUrl || i.handle);
   const total = Math.max(0, Math.trunc((settings.endsInMinutes ?? 135) * 60));
@@ -1547,13 +1682,7 @@ export function CountdownDeals({
   }, [left]);
   if (!items.length) return null;
 
-  const go = (url?: string, handle?: string) => {
-    if (url) {
-      Linking.openURL(url).catch(() => {});
-      return;
-    }
-    if (handle) onOpenCollection?.(handle);
-  };
+  const go = (to: LinkTo) => openLink(to, { onOpenCollection, onOpenProduct, onOpenScreen });
 
   const r = settings.radius && settings.radius > 0 ? settings.radius : 14;
   const badgeBg = settings.badgeBg || colors.accent;
@@ -1585,7 +1714,7 @@ export function CountdownDeals({
             <Pressable
               key={i.id}
               style={[styles.card, { borderRadius: r, width: lead ? 224 : 158 }]}
-              onPress={() => go(i.url, i.handle)}
+              onPress={() => go(i)}
             >
               <View>
                 {photo ? <Image source={{ uri: photo }} style={shot} /> : <View style={shot} />}
@@ -1623,7 +1752,7 @@ const styles = StyleSheet.create({
   timer: { flexDirection: "row", gap: 4 },
   tick: { borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
   tickText: { fontSize: 11, fontWeight: "700", color: "#fff" },
-  row: { gap: spacing.md, paddingVertical: spacing.sm },
+  row: { gap: gap.item, paddingVertical: spacing.sm },
   card: { width: 158, overflow: "hidden", borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface },
   photo: { width: "100%", height: 124, backgroundColor: colors.page },
   badge: { position: "absolute", top: 6, left: 6, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
@@ -1639,9 +1768,9 @@ const styles = StyleSheet.create({
 `,
 
     info_rows: `import React from "react";
-import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
-import { colors, radius, spacing } from "../theme";
-import { SectionHeading } from "./Pieces";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { colors, gap, radius, spacing } from "../theme";
+import { SectionHeading, openLink, type LinkTo } from "./Pieces";
 
 export type InfoRow = {
   id: string;
@@ -1650,6 +1779,8 @@ export type InfoRow = {
   subtitle?: string;
   note?: string;
   handle?: string;
+  productId?: string;
+  screen?: string;
   url?: string;
 };
 export type InfoRowsSettings = { title?: string; cardBg?: string; radius?: number; items?: InfoRow[] };
@@ -1657,20 +1788,18 @@ export type InfoRowsSettings = { title?: string; cardBg?: string; radius?: numbe
 export function InfoRows({
   settings,
   onOpenCollection,
+  onOpenProduct,
+  onOpenScreen,
 }: {
   settings: InfoRowsSettings;
   onOpenCollection?: (handle: string) => void;
+  onOpenProduct?: (id: string) => void;
+  onOpenScreen?: (screen: string) => void;
 }) {
   const items = (settings.items ?? []).filter((i) => i.title);
   if (!items.length) return null;
 
-  const go = (url?: string, handle?: string) => {
-    if (url) {
-      Linking.openURL(url).catch(() => {});
-      return;
-    }
-    if (handle) onOpenCollection?.(handle);
-  };
+  const go = (to: LinkTo) => openLink(to, { onOpenCollection, onOpenProduct, onOpenScreen });
 
   const r = settings.radius && settings.radius > 0 ? settings.radius : 14;
   const bg = settings.cardBg || colors.surface;
@@ -1678,12 +1807,12 @@ export function InfoRows({
   return (
     <>
       {settings.title ? <SectionHeading title={settings.title} /> : null}
-      <View style={{ marginTop: spacing.sm, gap: spacing.sm }}>
+      <View style={{ marginTop: spacing.sm, gap: gap.itemTight }}>
         {items.map((i) => (
           <Pressable
             key={i.id}
             style={[styles.row, { backgroundColor: bg, borderRadius: r }]}
-            onPress={() => go(i.url, i.handle)}
+            onPress={() => go(i)}
           >
             {i.emoji ? (
               <View style={styles.icon}>
@@ -1703,7 +1832,7 @@ export function InfoRows({
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: "row", alignItems: "center", gap: spacing.md, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 12, paddingVertical: 10 },
+  row: { flexDirection: "row", alignItems: "center", gap: gap.item, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 12, paddingVertical: 10 },
   icon: { width: 32, height: 32, borderRadius: radius.sm, alignItems: "center", justifyContent: "center", backgroundColor: colors.page },
   iconText: { fontSize: 16 },
   title: { fontSize: 12, fontWeight: "700", color: colors.ink },
@@ -1760,8 +1889,9 @@ const styles = StyleSheet.create({
 `,
 
     payment_plans: `import React from "react";
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { colors, spacing, theme } from "../theme";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { colors, gap, spacing, theme } from "../theme";
+import { openLink, type LinkTo } from "./Pieces";
 
 export type Plan = { id: string; name?: string; headline?: string; note?: string; color?: string; handle?: string; url?: string };
 export type PaymentPlansSettings = {
@@ -1769,6 +1899,8 @@ export type PaymentPlansSettings = {
   subtitle?: string;
   seeAllLabel?: string;
   seeAllHandle?: string;
+  seeAllProductId?: string;
+  seeAllScreen?: string;
   seeAllUrl?: string;
   radius?: number;
   items?: Plan[];
@@ -1777,19 +1909,17 @@ export type PaymentPlansSettings = {
 export function PaymentPlans({
   settings,
   onOpenCollection,
+  onOpenProduct,
+  onOpenScreen,
 }: {
   settings: PaymentPlansSettings;
   onOpenCollection?: (handle: string) => void;
+  onOpenProduct?: (id: string) => void;
+  onOpenScreen?: (screen: string) => void;
 }) {
   const items = (settings.items ?? []).filter((i) => i.name || i.headline);
   if (!items.length) return null;
-  const go = (url?: string, handle?: string) => {
-    if (url) {
-      Linking.openURL(url).catch(() => {});
-      return;
-    }
-    if (handle) onOpenCollection?.(handle);
-  };
+  const go = (to: LinkTo) => openLink(to, { onOpenCollection, onOpenProduct, onOpenScreen });
   const r = settings.radius && settings.radius > 0 ? settings.radius : 14;
 
   return (
@@ -1800,7 +1930,7 @@ export function PaymentPlans({
           {settings.subtitle ? <Text style={styles.subtitle}>{settings.subtitle}</Text> : null}
         </View>
         {settings.seeAllLabel ? (
-          <Pressable onPress={() => go(settings.seeAllUrl, settings.seeAllHandle)}>
+          <Pressable onPress={() => go({ url: settings.seeAllUrl, handle: settings.seeAllHandle, productId: settings.seeAllProductId, screen: settings.seeAllScreen })}>
             <Text style={styles.seeAll}>{settings.seeAllLabel}</Text>
           </Pressable>
         ) : null}
@@ -1810,7 +1940,7 @@ export function PaymentPlans({
           <Pressable
             key={i.id}
             style={[styles.card, { backgroundColor: i.color || colors.accent, borderRadius: r }]}
-            onPress={() => go(i.url, i.handle)}
+            onPress={() => go(i)}
           >
             {i.name ? <Text style={styles.name}>{i.name}</Text> : null}
             {i.headline ? <Text style={styles.headline}>{i.headline}</Text> : null}
@@ -1827,7 +1957,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 16, fontWeight: "700", color: colors.ink, fontFamily: theme.titleFont },
   subtitle: { fontSize: 11, color: colors.inkSoft },
   seeAll: { fontSize: 12, fontWeight: "600", color: colors.accent },
-  row: { gap: spacing.md, paddingVertical: spacing.sm },
+  row: { gap: gap.item, paddingVertical: spacing.sm },
   card: { width: 152, padding: 12 },
   name: { fontSize: 11, fontWeight: "600", color: "rgba(255,255,255,0.8)" },
   headline: { marginTop: 4, fontSize: 15, fontWeight: "700", color: "#fff" },
@@ -1837,7 +1967,7 @@ const styles = StyleSheet.create({
 
     price_slider: `import React, { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { colors, spacing } from "../theme";
+import { colors, gap, spacing } from "../theme";
 import { SectionHeading } from "./Pieces";
 
 export type InstalmentPlan = { id: string; name?: string; months?: string; badge?: string; color?: string };
@@ -1944,7 +2074,7 @@ const styles = StyleSheet.create({
   knob: { position: "absolute", width: 16, height: 16, borderRadius: 8, marginLeft: -8, backgroundColor: colors.accent },
   ends: { flexDirection: "row", justifyContent: "space-between" },
   end: { fontSize: 10, color: colors.inkSoft },
-  row: { flexDirection: "row", alignItems: "center", gap: spacing.md, borderWidth: 1, borderColor: colors.line, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 },
+  row: { flexDirection: "row", alignItems: "center", gap: gap.item, borderWidth: 1, borderColor: colors.line, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 },
   provider: { width: 56, fontSize: 11, fontWeight: "600", color: colors.inkMuted },
   monthly: { fontSize: 13, fontWeight: "700", color: colors.accent },
   months: { fontSize: 10, color: colors.inkSoft },
@@ -1954,9 +2084,9 @@ const styles = StyleSheet.create({
 `,
 
     offer_cards: `import React from "react";
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { colors, spacing } from "../theme";
-import { SectionHeading } from "./Pieces";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { colors, gap, spacing } from "../theme";
+import { SectionHeading, openLink, type LinkTo } from "./Pieces";
 
 export type Offer = { id: string; badge?: string; title?: string; subtitle?: string; color?: string; handle?: string; url?: string };
 export type OfferCardsSettings = {
@@ -1970,19 +2100,17 @@ export type OfferCardsSettings = {
 export function OfferCards({
   settings,
   onOpenCollection,
+  onOpenProduct,
+  onOpenScreen,
 }: {
   settings: OfferCardsSettings;
   onOpenCollection?: (handle: string) => void;
+  onOpenProduct?: (id: string) => void;
+  onOpenScreen?: (screen: string) => void;
 }) {
   const items = (settings.items ?? []).filter((i) => i.badge || i.title);
   if (!items.length) return null;
-  const go = (url?: string, handle?: string) => {
-    if (url) {
-      Linking.openURL(url).catch(() => {});
-      return;
-    }
-    if (handle) onOpenCollection?.(handle);
-  };
+  const go = (to: LinkTo) => openLink(to, { onOpenCollection, onOpenProduct, onOpenScreen });
   const r = settings.radius && settings.radius > 0 ? settings.radius : 14;
   const claim = settings.claimLabel || "Claim";
 
@@ -1999,7 +2127,7 @@ export function OfferCards({
               {i.title ? <Text style={styles.title}>{i.title}</Text> : null}
               {i.subtitle ? <Text style={styles.detail}>{i.subtitle}</Text> : null}
               {claim ? (
-                <Pressable style={[styles.cta, { backgroundColor: colour }]} onPress={() => go(i.url, i.handle)}>
+                <Pressable style={[styles.cta, { backgroundColor: colour }]} onPress={() => go(i)}>
                   <Text style={styles.ctaText}>{claim}</Text>
                 </Pressable>
               ) : null}
@@ -2013,7 +2141,7 @@ export function OfferCards({
 
 const styles = StyleSheet.create({
   subtitle: { fontSize: 11, color: colors.inkSoft },
-  row: { gap: spacing.md, paddingVertical: spacing.sm },
+  row: { gap: gap.item, paddingVertical: spacing.sm },
   card: { width: 152, borderWidth: 1, borderStyle: "dashed", padding: 12, gap: 4 },
   badge: { fontSize: 20, fontWeight: "700" },
   title: { fontSize: 11, fontWeight: "700", color: colors.ink },
@@ -2024,9 +2152,9 @@ const styles = StyleSheet.create({
 `,
 
     product_reasons: `import React from "react";
-import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { colors, spacing, theme } from "../theme";
-import { inherit } from "./Pieces";
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { colors, gap, spacing, theme } from "../theme";
+import { inherit, openLink, type LinkTo } from "./Pieces";
 import type { HomePayload } from "../api";
 
 export type Suggestion = {
@@ -2040,13 +2168,19 @@ export type Suggestion = {
   rating?: string;
   sold?: string;
   handle?: string;
+  productId?: string;
+  screen?: string;
   url?: string;
 };
 export type ProductReasonsSettings = {
+  /** Whether the first item is shown big, above the rest. */
+  featureFirst?: boolean;
   title?: string;
   subtitle?: string;
   seeAllLabel?: string;
   seeAllHandle?: string;
+  seeAllProductId?: string;
+  seeAllScreen?: string;
   seeAllUrl?: string;
   buttonLabel?: string;
   radius?: number;
@@ -2057,20 +2191,18 @@ export function ProductReasons({
   settings,
   collections,
   onOpenCollection,
+  onOpenProduct,
+  onOpenScreen,
 }: {
   settings: ProductReasonsSettings;
   collections: HomePayload["collections"];
   onOpenCollection?: (handle: string) => void;
+  onOpenProduct?: (id: string) => void;
+  onOpenScreen?: (screen: string) => void;
 }) {
   const items = (settings.items ?? []).filter((i) => i.name || i.imageUrl || i.handle);
   if (!items.length) return null;
-  const go = (url?: string, handle?: string) => {
-    if (url) {
-      Linking.openURL(url).catch(() => {});
-      return;
-    }
-    if (handle) onOpenCollection?.(handle);
-  };
+  const go = (to: LinkTo) => openLink(to, { onOpenCollection, onOpenProduct, onOpenScreen });
   const r = settings.radius && settings.radius > 0 ? settings.radius : 14;
 
   return (
@@ -2081,7 +2213,7 @@ export function ProductReasons({
           {settings.subtitle ? <Text style={styles.subtitle}>{settings.subtitle}</Text> : null}
         </View>
         {settings.seeAllLabel ? (
-          <Pressable onPress={() => go(settings.seeAllUrl, settings.seeAllHandle)}>
+          <Pressable onPress={() => go({ url: settings.seeAllUrl, handle: settings.seeAllHandle, productId: settings.seeAllProductId, screen: settings.seeAllScreen })}>
             <Text style={styles.seeAll}>{settings.seeAllLabel}</Text>
           </Pressable>
         ) : null}
@@ -2094,7 +2226,7 @@ export function ProductReasons({
           const shot = [styles.photo, { height: lead ? 196 : 136 }];
           return (
             <View key={i.id} style={[styles.card, { borderRadius: r, width: lead ? 236 : 166 }]}>
-              <Pressable onPress={() => go(i.url, i.handle)}>
+              <Pressable onPress={() => go(i)}>
                 {photo ? <Image source={{ uri: photo }} style={shot} /> : <View style={shot} />}
                 {i.badge ? (
                   <View style={styles.badge}>
@@ -2115,7 +2247,7 @@ export function ProductReasons({
                   </Text>
                 ) : null}
                 {settings.buttonLabel ? (
-                  <Pressable style={styles.cta} onPress={() => go(i.url, i.handle)}>
+                  <Pressable style={styles.cta} onPress={() => go(i)}>
                     <Text style={styles.ctaText}>{settings.buttonLabel}</Text>
                   </Pressable>
                 ) : null}
@@ -2133,7 +2265,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 16, fontWeight: "700", color: colors.ink, fontFamily: theme.titleFont },
   subtitle: { fontSize: 11, color: colors.inkSoft },
   seeAll: { fontSize: 12, fontWeight: "600", color: colors.accent },
-  row: { gap: spacing.md, paddingVertical: spacing.sm },
+  row: { gap: gap.item, paddingVertical: spacing.sm },
   card: { width: 166, overflow: "hidden", borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface },
   photo: { width: "100%", height: 136, backgroundColor: colors.page },
   badge: { position: "absolute", top: 6, right: 6, borderRadius: 4, backgroundColor: colors.accent, paddingHorizontal: 6, paddingVertical: 2 },
@@ -2151,9 +2283,9 @@ const styles = StyleSheet.create({
 `,
 
     circle_row: `import React from "react";
-import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { colors, spacing, theme } from "../theme";
-import { inherit } from "./Pieces";
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { colors, gap, spacing, theme } from "../theme";
+import { inherit, openLink, type LinkTo } from "./Pieces";
 import type { HomePayload } from "../api";
 
 export type Circle = { id: string; imageUrl?: string; label?: string; note?: string; handle?: string; url?: string };
@@ -2162,6 +2294,8 @@ export type CircleRowSettings = {
   subtitle?: string;
   seeAllLabel?: string;
   seeAllHandle?: string;
+  seeAllProductId?: string;
+  seeAllScreen?: string;
   seeAllUrl?: string;
   size?: number;
   showLabel?: boolean;
@@ -2173,20 +2307,18 @@ export function CircleRow({
   settings,
   collections,
   onOpenCollection,
+  onOpenProduct,
+  onOpenScreen,
 }: {
   settings: CircleRowSettings;
   collections: HomePayload["collections"];
   onOpenCollection?: (handle: string) => void;
+  onOpenProduct?: (id: string) => void;
+  onOpenScreen?: (screen: string) => void;
 }) {
   const items = (settings.items ?? []).filter((i) => i.imageUrl || i.label || i.handle);
   if (!items.length) return null;
-  const go = (url?: string, handle?: string) => {
-    if (url) {
-      Linking.openURL(url).catch(() => {});
-      return;
-    }
-    if (handle) onOpenCollection?.(handle);
-  };
+  const go = (to: LinkTo) => openLink(to, { onOpenCollection, onOpenProduct, onOpenScreen });
   const size = settings.size && settings.size > 0 ? settings.size : 76;
   const cell = Math.max(size + 14, 56);
 
@@ -2198,7 +2330,7 @@ export function CircleRow({
           {settings.subtitle ? <Text style={styles.subtitle}>{settings.subtitle}</Text> : null}
         </View>
         {settings.seeAllLabel ? (
-          <Pressable onPress={() => go(settings.seeAllUrl, settings.seeAllHandle)}>
+          <Pressable onPress={() => go({ url: settings.seeAllUrl, handle: settings.seeAllHandle, productId: settings.seeAllProductId, screen: settings.seeAllScreen })}>
             <Text style={styles.seeAll}>{settings.seeAllLabel}</Text>
           </Pressable>
         ) : null}
@@ -2209,7 +2341,7 @@ export function CircleRow({
           const photo = i.imageUrl || borrowed.image;
           const round = { width: size, height: size, borderRadius: Math.round(size / 2) };
           return (
-            <Pressable key={i.id} style={[styles.cell, { width: cell }]} onPress={() => go(i.url, i.handle)}>
+            <Pressable key={i.id} style={[styles.cell, { width: cell }]} onPress={() => go(i)}>
               {photo ? (
                 <Image source={{ uri: photo }} style={round} />
               ) : (
@@ -2234,7 +2366,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 16, fontWeight: "700", color: colors.ink, fontFamily: theme.titleFont },
   subtitle: { fontSize: 11, color: colors.inkSoft },
   seeAll: { fontSize: 12, fontWeight: "600", color: colors.accent },
-  row: { gap: spacing.md, paddingVertical: spacing.sm },
+  row: { gap: gap.item, paddingVertical: spacing.sm },
   cell: { alignItems: "center" },
   note: { marginTop: 6, fontSize: 11, fontWeight: "700", color: colors.accent, textAlign: "center" },
   label: { fontSize: 10, color: colors.inkSoft, textAlign: "center" },
@@ -2242,9 +2374,9 @@ const styles = StyleSheet.create({
 `,
 
     pick_colour: `import React from "react";
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { colors, spacing } from "../theme";
-import { SectionHeading } from "./Pieces";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { colors, gap, spacing } from "../theme";
+import { SectionHeading, openLink, type LinkTo } from "./Pieces";
 
 export type Swatch = { id: string; color?: string; label?: string; handle?: string; url?: string };
 export type PickColourSettings = { title?: string; subtitle?: string; size?: number; items?: Swatch[] };
@@ -2252,19 +2384,17 @@ export type PickColourSettings = { title?: string; subtitle?: string; size?: num
 export function PickColour({
   settings,
   onOpenCollection,
+  onOpenProduct,
+  onOpenScreen,
 }: {
   settings: PickColourSettings;
   onOpenCollection?: (handle: string) => void;
+  onOpenProduct?: (id: string) => void;
+  onOpenScreen?: (screen: string) => void;
 }) {
   const items = (settings.items ?? []).filter((i) => i.color);
   if (!items.length) return null;
-  const go = (url?: string, handle?: string) => {
-    if (url) {
-      Linking.openURL(url).catch(() => {});
-      return;
-    }
-    if (handle) onOpenCollection?.(handle);
-  };
+  const go = (to: LinkTo) => openLink(to, { onOpenCollection, onOpenProduct, onOpenScreen });
   const size = settings.size && settings.size > 0 ? settings.size : 44;
 
   return (
@@ -2273,7 +2403,7 @@ export function PickColour({
       {settings.subtitle ? <Text style={styles.subtitle}>{settings.subtitle}</Text> : null}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
         {items.map((i) => (
-          <Pressable key={i.id} style={[styles.cell, { width: size + 16 }]} onPress={() => go(i.url, i.handle)}>
+          <Pressable key={i.id} style={[styles.cell, { width: size + 16 }]} onPress={() => go(i)}>
             <View
               style={{
                 width: size,
@@ -2294,15 +2424,16 @@ export function PickColour({
 
 const styles = StyleSheet.create({
   subtitle: { fontSize: 11, color: colors.inkSoft },
-  row: { gap: spacing.md, paddingVertical: spacing.sm },
+  row: { gap: gap.item, paddingVertical: spacing.sm },
   cell: { alignItems: "center", gap: 4 },
   label: { fontSize: 10, color: colors.inkMuted, textAlign: "center" },
 });
 `,
 
     price_drop: `import React from "react";
-import { Image, Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { colors, spacing } from "../theme";
+import { openLink } from "./Pieces";
 
 export type DropThumb = { id: string; imageUrl?: string };
 export type PriceDropSettings = {
@@ -2310,6 +2441,8 @@ export type PriceDropSettings = {
   subtitle?: string;
   buttonLabel?: string;
   handle?: string;
+  productId?: string;
+  screen?: string;
   url?: string;
   cardBg?: string;
   radius?: number;
@@ -2319,18 +2452,16 @@ export type PriceDropSettings = {
 export function PriceDrop({
   settings,
   onOpenCollection,
+  onOpenProduct,
+  onOpenScreen,
 }: {
   settings: PriceDropSettings;
   onOpenCollection?: (handle: string) => void;
+  onOpenProduct?: (id: string) => void;
+  onOpenScreen?: (screen: string) => void;
 }) {
   if (!settings.title && !settings.subtitle) return null;
-  const go = () => {
-    if (settings.url) {
-      Linking.openURL(settings.url).catch(() => {});
-      return;
-    }
-    if (settings.handle) onOpenCollection?.(settings.handle);
-  };
+  const go = () => openLink(settings, { onOpenCollection, onOpenProduct, onOpenScreen });
   const r = settings.radius && settings.radius > 0 ? settings.radius : 14;
   const thumbs = (settings.items ?? []).filter((i) => i.imageUrl).slice(0, 3);
 
@@ -2368,9 +2499,9 @@ const styles = StyleSheet.create({
 `,
 
     style_profile: `import React from "react";
-import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { colors, spacing } from "../theme";
-import { SectionHeading } from "./Pieces";
+import { SectionHeading, openLink, type LinkTo } from "./Pieces";
 
 export type Tag = { id: string; label?: string; color?: string; handle?: string; url?: string };
 export type StyleProfileSettings = {
@@ -2401,21 +2532,19 @@ export function StyleProfile({
   settings,
   shopperName,
   onOpenCollection,
+  onOpenProduct,
+  onOpenScreen,
 }: {
   settings: StyleProfileSettings;
   shopperName?: string | null;
   onOpenCollection?: (handle: string) => void;
+  onOpenProduct?: (id: string) => void;
+  onOpenScreen?: (screen: string) => void;
 }) {
   const items = (settings.items ?? []).filter((i) => i.label);
   const cardTitle = personalise(settings.cardTitle ?? "", shopperName ?? null);
   if (!items.length && !cardTitle) return null;
-  const go = (url?: string, handle?: string) => {
-    if (url) {
-      Linking.openURL(url).catch(() => {});
-      return;
-    }
-    if (handle) onOpenCollection?.(handle);
-  };
+  const go = (to: LinkTo) => openLink(to, { onOpenCollection, onOpenProduct, onOpenScreen });
   const r = settings.radius && settings.radius > 0 ? settings.radius : 14;
 
   return (
@@ -2430,7 +2559,7 @@ export function StyleProfile({
             <Pressable
               key={i.id}
               style={[styles.tag, { borderColor: i.color || colors.line }]}
-              onPress={() => go(i.url, i.handle)}
+              onPress={() => go(i)}
             >
               <Text style={[styles.tagText, { color: i.color || colors.inkMuted }]}>{i.label}</Text>
             </Pressable>
@@ -2455,14 +2584,17 @@ const styles = StyleSheet.create({
 `,
 
     promo_card: `import React from "react";
-import { Image, Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { colors, spacing } from "../theme";
+import { openLink } from "./Pieces";
 
 export type PromoCardSettings = {
   title?: string;
   body?: string;
   buttonLabel?: string;
   handle?: string;
+  productId?: string;
+  screen?: string;
   url?: string;
   imageUrl?: string;
   bg?: string;
@@ -2473,18 +2605,16 @@ export type PromoCardSettings = {
 export function PromoCard({
   settings,
   onOpenCollection,
+  onOpenProduct,
+  onOpenScreen,
 }: {
   settings: PromoCardSettings;
   onOpenCollection?: (handle: string) => void;
+  onOpenProduct?: (id: string) => void;
+  onOpenScreen?: (screen: string) => void;
 }) {
   if (!settings.title && !settings.body) return null;
-  const go = () => {
-    if (settings.url) {
-      Linking.openURL(settings.url).catch(() => {});
-      return;
-    }
-    if (settings.handle) onOpenCollection?.(settings.handle);
-  };
+  const go = () => openLink(settings, { onOpenCollection, onOpenProduct, onOpenScreen });
   const r = settings.radius && settings.radius > 0 ? settings.radius : 16;
   const bg = settings.bg || colors.accent;
   const ink = settings.textColor || "#ffffff";
@@ -2516,8 +2646,9 @@ const styles = StyleSheet.create({
 `,
 
     showcase: `import React from "react";
-import { Image, Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { colors, spacing } from "../theme";
+import { openLink } from "./Pieces";
 import type { HomePayload } from "../api";
 
 export type ShowcaseSettings = {
@@ -2526,6 +2657,8 @@ export type ShowcaseSettings = {
   subheading?: string;
   buttonLabel?: string;
   handle?: string;
+  productId?: string;
+  screen?: string;
   url?: string;
   height?: number;
   overlay?: number;
@@ -2537,10 +2670,14 @@ export function Showcase({
   settings,
   collections,
   onOpenCollection,
+  onOpenProduct,
+  onOpenScreen,
 }: {
   settings: ShowcaseSettings;
   collections: HomePayload["collections"];
   onOpenCollection?: (handle: string) => void;
+  onOpenProduct?: (id: string) => void;
+  onOpenScreen?: (screen: string) => void;
 }) {
   const target = collections.find((c) => c.handle === settings.handle);
   const image = settings.imageUrl || (target ? target.image : "");
@@ -2550,13 +2687,7 @@ export function Showcase({
   const overlay = typeof settings.overlay === "number" ? Math.max(0, Math.min(100, settings.overlay)) : 45;
   const ink = settings.textColor || "#ffffff";
   const centred = settings.align === "center";
-  const go = () => {
-    if (settings.url) {
-      Linking.openURL(settings.url).catch(() => {});
-      return;
-    }
-    if (settings.handle) onOpenCollection?.(settings.handle);
-  };
+  const go = () => openLink(settings, { onOpenCollection, onOpenProduct, onOpenScreen });
 
   return (
     <View style={[styles.wrap, { height, marginHorizontal: -spacing.lg }]}>
@@ -2601,7 +2732,7 @@ const styles = StyleSheet.create({
 
     text: `import React from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { colors, radius, spacing } from "../theme";
+import { colors, gap, radius, spacing } from "../theme";
 
 export type TextBlockSettings = { heading?: string; body?: string };
 
@@ -2654,9 +2785,9 @@ function homeScreenFile(theme: AppTheme): GeneratedFile {
       const wash =
         band === "paper" ? `"#ffffff"` : `colors.accent + "12"`;
       const bandStyle = washed
-        ? `, { marginHorizontal: -spacing.lg, paddingHorizontal: spacing.lg, paddingVertical: 20, backgroundColor: ${wash} }`
+        ? `, { marginHorizontal: -spacing.lg, paddingHorizontal: spacing.lg, paddingVertical: gap.section, backgroundColor: ${wash} }`
         : band === "divider"
-          ? `, { borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 20 }`
+          ? `, { borderTopWidth: 1, borderTopColor: colors.line, paddingTop: gap.section }`
           : ``
       const above = kicker
         ? `\n          <Text style={styles.kicker}>{${q(kicker)}}</Text>`
@@ -2678,7 +2809,6 @@ import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Image,
-  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -2686,16 +2816,19 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { colors, radius, spacing, theme } from "./theme";
+import { colors, gap, radius, spacing, theme } from "./theme";
 import { fetchHome, type HomePayload } from "./api";
+import { openLink } from "./components/Pieces";
 ${search ? 'import { SearchResults } from "./components/SearchResults";\n' : ""}${imports}
 
 export default function HomeScreen({
   onOpenCollection,
   onOpenProduct,
+  onOpenScreen,
 }: {
   onOpenCollection?: (handle: string) => void;
   onOpenProduct?: (id: string) => void;
+  onOpenScreen?: (screen: string) => void;
 }) {
   const [data, setData] = useState<HomePayload | null>(null);
   const [error, setError] = useState<string | null>(null);${
@@ -2726,10 +2859,7 @@ export default function HomeScreen({
           {theme.strip.items.map((item, i) => (
             <Pressable
               key={item.id}
-              onPress={() => {
-                if (item.url) Linking.openURL(item.url).catch(() => {});
-                else if (item.handle) onOpenCollection?.(item.handle);
-              }}
+              onPress={() => openLink(item, { onOpenCollection, onOpenProduct, onOpenScreen })}
               style={[styles.stripItem, i === 0 ? styles.stripItemOn : null]}
             >
               <Text style={[styles.stripText, i === 0 ? styles.stripTextOn : null]}>{item.label}</Text>
@@ -2778,7 +2908,7 @@ ${rendered}
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.page },
-  content: { padding: spacing.lg, gap: spacing.xl },
+  content: { padding: spacing.lg, gap: gap.section },
   block: {},
   kicker: { marginBottom: 6, fontSize: 10, fontWeight: "700", letterSpacing: 1.8, color: colors.accent },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl },
@@ -2812,47 +2942,33 @@ function renderCall(block: Block, indent: number): string {
   const pad = " ".repeat(indent);
   const name = exportName(block.type);
   const extras: Record<BlockType, string[]> = {
-    hero: ["collections={data.collections}", "onOpenCollection={onOpenCollection}"],
+    hero: ["collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     promo_bar: [],
-    collection_tabs: [
-      "rows={data.rows}",
-      "onOpenCollection={onOpenCollection}",
-      "onOpenProduct={onOpenProduct}",
-    ],
-    cards: ["collections={data.collections}", "onOpenCollection={onOpenCollection}"],
-    tiers: ["onOpenCollection={onOpenCollection}"],
-    split: ["collections={data.collections}", "onOpenCollection={onOpenCollection}"],
+    collection_tabs: ["rows={data.rows}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}"],
+    cards: ["collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
+    tiers: ["onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
+    split: ["collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     trust_badges: [],
-    live_now: ["collections={data.collections}", "onOpenCollection={onOpenCollection}"],
-    coming_up_live: ["collections={data.collections}", "onOpenCollection={onOpenCollection}"],
-    countdown_deals: ["collections={data.collections}", "onOpenCollection={onOpenCollection}"],
-    info_rows: ["onOpenCollection={onOpenCollection}"],
+    live_now: ["collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
+    coming_up_live: ["collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
+    countdown_deals: ["collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
+    info_rows: ["onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     shipping_goal: [],
-    payment_plans: ["onOpenCollection={onOpenCollection}"],
+    payment_plans: ["onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     price_slider: [],
-    offer_cards: ["onOpenCollection={onOpenCollection}"],
-    product_reasons: ["collections={data.collections}", "onOpenCollection={onOpenCollection}"],
-    circle_row: ["collections={data.collections}", "onOpenCollection={onOpenCollection}"],
-    pick_colour: ["onOpenCollection={onOpenCollection}"],
-    price_drop: ["onOpenCollection={onOpenCollection}"],
-    showcase: ["collections={data.collections}", "onOpenCollection={onOpenCollection}"],
-    style_profile: ["onOpenCollection={onOpenCollection}"],
-    promo_card: ["onOpenCollection={onOpenCollection}"],
-    banner: ["collections={data.collections}", "onOpenCollection={onOpenCollection}"],
-    categories: ["collections={data.collections}", "onOpenCollection={onOpenCollection}"],
+    offer_cards: ["onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
+    product_reasons: ["collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
+    circle_row: ["collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
+    pick_colour: ["onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
+    price_drop: ["onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
+    showcase: ["collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
+    style_profile: ["onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
+    promo_card: ["onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
+    banner: ["collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
+    categories: ["collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     new_arrivals: ["products={data.newArrivals}", "onOpenProduct={onOpenProduct}"],
-    collection_row: [
-      "collections={data.collections}",
-      "rows={data.rows}",
-      "onOpenCollection={onOpenCollection}",
-      "onOpenProduct={onOpenProduct}",
-    ],
-    collection_grid: [
-      "collections={data.collections}",
-      "rows={data.rows}",
-      "onOpenCollection={onOpenCollection}",
-      "onOpenProduct={onOpenProduct}",
-    ],
+    collection_row: ["collections={data.collections}", "rows={data.rows}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}"],
+    collection_grid: ["collections={data.collections}", "rows={data.rows}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}"],
     reviews: ["reviews={data.reviews}"],
     text: [],
   };
@@ -2870,6 +2986,8 @@ const SIZE_KEYS = new Set([
   "nameSize",
   "viewersSize",
   "bannerRadius",
+  "offerGap",
+  "offerHeight",
   "offerTitleSize",
   "offerTextSize",
   "radius",
@@ -2914,12 +3032,18 @@ function settingsLiteral(block: Block): string {
       "nameSize",
       "viewersSize",
       "bannerRadius",
+      "offerGap",
+      "offerHeight",
       "offerBg",
       "offerTextColor",
       "offerTitleSize",
       "offerTextSize",
       "timerBg",
       "timerTextColor",
+      "replaysProductId",
+      "replaysScreen",
+      "offerProductId",
+      "offerScreen",
     ],
     coming_up_live: ["title", "remindLabel", "cardBg", "radius"],
     countdown_deals: [
@@ -2942,7 +3066,16 @@ function settingsLiteral(block: Block): string {
       "cardBg",
       "radius",
     ],
-    payment_plans: ["title", "subtitle", "seeAllLabel", "seeAllHandle", "seeAllUrl", "radius"],
+    payment_plans: [
+      "title",
+      "subtitle",
+      "seeAllLabel",
+      "seeAllHandle",
+      "seeAllUrl",
+      "radius",
+      "seeAllProductId",
+      "seeAllScreen",
+    ],
     price_slider: [
       "title",
       "subtitle",
@@ -2964,6 +3097,8 @@ function settingsLiteral(block: Block): string {
       "seeAllUrl",
       "buttonLabel",
       "radius",
+      "seeAllProductId",
+      "seeAllScreen",
     ],
     circle_row: [
       "title",
@@ -2974,9 +3109,21 @@ function settingsLiteral(block: Block): string {
       "size",
       "showLabel",
       "showNote",
+      "seeAllProductId",
+      "seeAllScreen",
     ],
     pick_colour: ["title", "subtitle", "size"],
-    price_drop: ["title", "subtitle", "buttonLabel", "handle", "url", "cardBg", "radius"],
+    price_drop: [
+      "title",
+      "subtitle",
+      "buttonLabel",
+      "handle",
+      "url",
+      "cardBg",
+      "radius",
+      "productId",
+      "screen",
+    ],
     showcase: [
       "imageUrl",
       "heading",
@@ -2988,13 +3135,25 @@ function settingsLiteral(block: Block): string {
       "overlay",
       "textColor",
       "align",
+      "productId",
+      "screen",
     ],
-    banner: ["imageUrl", "heading", "subheading", "handle"],
+    banner: ["imageUrl", "heading", "subheading", "handle", "url", "productId", "screen"],
     categories: ["title"],
     new_arrivals: ["title", "limit"],
     collection_row: ["handle", "title", "limit"],
     collection_grid: ["handle", "title", "limit"],
-    reviews: ["title", "subtitle", "ratingLabel", "seeAllLabel", "seeAllHandle", "seeAllUrl", "limit"],
+    reviews: [
+      "title",
+      "subtitle",
+      "ratingLabel",
+      "seeAllLabel",
+      "seeAllHandle",
+      "seeAllUrl",
+      "limit",
+      "seeAllProductId",
+      "seeAllScreen",
+    ],
     style_profile: [
       "title",
       "subtitle",
@@ -3014,6 +3173,8 @@ function settingsLiteral(block: Block): string {
       "bg",
       "textColor",
       "radius",
+      "productId",
+      "screen",
     ],
     text: ["heading", "body"],
   };
@@ -3060,20 +3221,30 @@ function settingsLiteral(block: Block): string {
 /** Only the fields a given block type's items actually carry. */
 function itemsLiteral(type: BlockType, items: Item[]): string {
   const fields: Partial<Record<BlockType, string[]>> = {
-    hero: ["imageUrl", "kicker", "heading", "subheading", "handle"],
-    categories: ["handle", "label", "emoji", "imageUrl"],
+    hero: ["imageUrl", "kicker", "heading", "subheading", "handle", "url", "productId", "screen"],
+    categories: ["handle", "label", "emoji", "imageUrl", "url", "productId", "screen"],
     collection_tabs: ["handle", "label", "emoji"],
-    cards: ["imageUrl", "title", "subtitle", "handle"],
-    tiers: ["prefix", "amount", "label", "handle"],
-    split: ["imageUrl", "label", "buttonLabel", "handle"],
+    cards: ["imageUrl", "title", "subtitle", "handle", "url", "productId", "screen"],
+    tiers: ["prefix", "amount", "label", "handle", "url", "productId", "screen"],
+    split: ["imageUrl", "label", "buttonLabel", "handle", "url", "productId", "screen"],
     trust_badges: ["emoji", "title", "subtitle"],
-    live_now: ["imageUrl", "name", "viewers", "handle", "url"],
-    coming_up_live: ["imageUrl", "title", "when", "handle", "url"],
-    countdown_deals: ["imageUrl", "badge", "price", "comparePrice", "claimed", "handle", "url"],
-    info_rows: ["emoji", "title", "subtitle", "note", "handle", "url"],
-    payment_plans: ["name", "headline", "note", "color", "handle", "url"],
+    live_now: ["imageUrl", "name", "viewers", "handle", "url", "productId", "screen"],
+    coming_up_live: ["imageUrl", "title", "when", "handle", "url", "productId", "screen"],
+    countdown_deals: [
+      "imageUrl",
+      "badge",
+      "price",
+      "comparePrice",
+      "claimed",
+      "handle",
+      "url",
+      "productId",
+      "screen",
+    ],
+    info_rows: ["emoji", "title", "subtitle", "note", "handle", "url", "productId", "screen"],
+    payment_plans: ["name", "headline", "note", "color", "handle", "url", "productId", "screen"],
     price_slider: ["name", "months", "badge", "color"],
-    offer_cards: ["badge", "title", "subtitle", "color", "handle", "url"],
+    offer_cards: ["badge", "title", "subtitle", "color", "handle", "url", "productId", "screen"],
     product_reasons: [
       "imageUrl",
       "reason",
@@ -3085,11 +3256,13 @@ function itemsLiteral(type: BlockType, items: Item[]): string {
       "sold",
       "handle",
       "url",
+      "productId",
+      "screen",
     ],
-    circle_row: ["imageUrl", "label", "note", "handle", "url"],
-    pick_colour: ["color", "label", "handle", "url"],
+    circle_row: ["imageUrl", "label", "note", "handle", "url", "productId", "screen"],
+    pick_colour: ["color", "label", "handle", "url", "productId", "screen"],
     price_drop: ["imageUrl"],
-    style_profile: ["label", "color", "handle", "url"],
+    style_profile: ["label", "color", "handle", "url", "productId", "screen"],
   };
   const keys = fields[type] ?? [];
   const rendered = items.map((item) => {
@@ -3123,10 +3296,19 @@ function liveScreenFile(): GeneratedFile {
  * one list to keep rather than two that drift apart.
  */
 import React from "react";
-import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { colors, radius, spacing } from "../theme";
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { colors, radius, spacing, theme } from "../theme";
+import { openLink, type LinkTo } from "./Pieces";
 
-export function LiveScreen({ onOpenCollection }: { onOpenCollection?: (handle: string) => void }) {
+export function LiveScreen({
+  onOpenCollection,
+  onOpenProduct,
+  onOpenScreen,
+}: {
+  onOpenCollection?: (handle: string) => void;
+  onOpenProduct?: (id: string) => void;
+  onOpenScreen?: (screen: string) => void;
+}) {
   const sessions = theme.live;
   if (!sessions.length) {
     return (
@@ -3137,17 +3319,11 @@ export function LiveScreen({ onOpenCollection }: { onOpenCollection?: (handle: s
       </View>
     );
   }
-  const go = (url: string, handle: string) => {
-    if (url) {
-      Linking.openURL(url).catch(() => {});
-      return;
-    }
-    if (handle) onOpenCollection?.(handle);
-  };
+  const go = (to: LinkTo) => openLink(to, { onOpenCollection, onOpenProduct, onOpenScreen });
   return (
     <ScrollView contentContainerStyle={styles.wrap}>
       {sessions.map((s) => (
-        <Pressable key={s.id} style={styles.row} onPress={() => go(s.url, s.handle)}>
+        <Pressable key={s.id} style={styles.row} onPress={() => go(s)}>
           <View>
             {s.imageUrl ? (
               <Image source={{ uri: s.imageUrl }} style={styles.thumb} />
@@ -3209,7 +3385,7 @@ import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { colors, radius } from "../theme";
 
-export type TabKey = "shop" | "cart" | "orders" | "account";
+export type TabKey = "shop" | "live" | "cart" | "orders" | "account";
 
 /** Order, wording and which appear are the merchant's; the keys are not. */
 export const TABS: { key: TabKey; label: string; icon: string }[] = [
@@ -4240,6 +4416,9 @@ const styles = StyleSheet.create({
 // ------------------------------------------------------- the app itself --
 function appFile(theme: AppTheme): GeneratedFile {
   const first = (theme.tabs.find((t) => t.visible) ?? theme.tabs[0]).key;
+  // The Live tab's screen is only generated when the merchant shows the tab, so
+  // nothing above may name it otherwise.
+  const live = theme.tabs.some((t) => t.key === "live" && t.visible);
   return {
     path: "App.tsx",
     language: "tsx",
@@ -4425,6 +4604,27 @@ export default function App() {
     setTab(k);
   };
 
+  /**
+   * A link that points at a whole screen. Home and search are both the shop
+   * tab - the search field lives in its header - and the rest are tabs of
+   * their own, so this is the tab bar answering a tap somewhere else.
+   */
+  const goScreen = (screen: string) => {
+    if (screen === "home" || screen === "search") return goTab("shop");
+    if (screen === "cart" || screen === "orders" || screen === "account"${
+      live ? ' || screen === "live"' : ""
+    }) {
+      return goTab(screen);
+    }
+    // Reviews, Happy customers and Requests are pages of the shop that this
+    // build has no screen for. Say so rather than doing nothing at all.
+    setNotice(
+      screen === "reviews"
+        ? "Reviews are on the home screen."
+        : "Coming soon in the app.",
+    );
+  };
+
   const body = top ? (
     top.kind === "collection" ? (
       <CollectionScreen handle={top.handle} onOpenProduct={(id) => push({ kind: "product", id })} />
@@ -4447,10 +4647,13 @@ export default function App() {
     <HomeScreen
       onOpenCollection={(handle) => push({ kind: "collection", handle })}
       onOpenProduct={(id) => push({ kind: "product", id })}
+      onOpenScreen={goScreen}
     />
-  ) : tab === "live" ? (
-    <LiveScreen onOpenCollection={(handle) => push({ kind: "collection", handle })} />
-  ) : tab === "cart" ? (
+  )${
+    live
+      ? ' : tab === "live" ? (\n    <LiveScreen onOpenCollection={(handle) => push({ kind: "collection", handle })} onOpenProduct={(id) => push({ kind: "product", id })} onOpenScreen={goScreen} />\n  )'
+      : ""
+  } : tab === "cart" ? (
     <CartScreen
       lines={cart?.lines ?? []}
       subtotal={cart?.subtotal ?? 0}

@@ -149,6 +149,41 @@ export function Preview() {
   // Which chip is marked. Now that tapping one goes somewhere, the mark has to
   // follow the tap rather than sitting on the first chip forever.
   const [stripIndex, setStripIndex] = useState(0);
+  // A product a link asked to open, carried with the moment it was asked
+  // for so tapping the same link twice reopens it.
+  const [openProduct, setOpenProduct] = useState<{ id: string; at: number } | null>(null);
+  const [openPage, setOpenPage] = useState<{ handle: string; at: number } | null>(null);
+
+  // Where a link goes. The five kinds a merchant can pick in the link
+  // picker all land here, so a banner, a chip and a card behave alike.
+  const openScreen = (screen: string) => {
+    if (screen === "home" || screen === "search") {
+      setTab("shop");
+      setStripOpen(null);
+      if (screen === "home") setQuery("");
+      return;
+    }
+    if (screen === "cart" || screen === "orders" || screen === "account" || screen === "live") {
+      setTab(screen);
+      return;
+    }
+    // The rest are this shop's own pages, which the shop tab draws.
+    setTab("shop");
+    setQuery("");
+    setOpenPage({ handle: screen, at: Date.now() });
+  };
+
+  const openCollectionLink = (handle: string) => {
+    setTab("shop");
+    setQuery("");
+    setStripOpen({ handle, at: Date.now() });
+  };
+
+  const openProductLink = (id: string) => {
+    setTab("shop");
+    setQuery("");
+    setOpenProduct({ id, at: Date.now() });
+  };
 
   const signedIn = Boolean(phone);
   const count = cart.reduce((s, l) => s + l.quantity, 0);
@@ -221,17 +256,16 @@ export function Preview() {
               accent={accent}
               activeIndex={stripIndex}
               onOpen={(item) => {
-                // A typed link wins over a collection, the same rule the
-                // sections use.
+                // The same order of precedence the sections use, so a chip
+                // and a banner pointing at the same thing behave alike.
                 if (item.url) {
                   window.open(item.url, "_blank", "noopener,noreferrer");
                   return;
                 }
-                if (!item.handle) return;
-                setTab("shop");
-                setQuery("");
                 setStripIndex(brand.strip.indexOf(item));
-                setStripOpen({ handle: item.handle, at: Date.now() });
+                if (item.productId) return openProductLink(item.productId);
+                if (item.screen) return openScreen(item.screen);
+                if (item.handle) openCollectionLink(item.handle);
               }}
             />
           )}
@@ -246,6 +280,9 @@ export function Preview() {
                 query={query}
                 onQuery={setQuery}
                 openCollection={stripOpen}
+                openProduct={openProduct}
+                openPage={openPage}
+                onScreen={openScreen}
                 onLeave={(what) => (what === "cart" ? setTab("cart") : setSheet("enquiry"))}
               />
             )}
@@ -255,7 +292,10 @@ export function Preview() {
                 ar={ar}
                 accent={accent}
                 onOpen={(s) => {
-                  if (s.url) window.open(s.url, "_blank", "noopener,noreferrer");
+                  if (s.url) return window.open(s.url, "_blank", "noopener,noreferrer");
+                  if (s.productId) return openProductLink(s.productId);
+                  if (s.screen) return openScreen(s.screen);
+                  if (s.handle) openCollectionLink(s.handle);
                 }}
               />
             )}

@@ -56,6 +56,8 @@ export type HomeData = {
 export type HomeHandlers = {
   onOpenCollection?: (handle: string, title: string) => void;
   onOpenProduct?: (id: string) => void;
+  /** A place in the app itself: home, search, cart, orders, account. */
+  onOpenScreen?: (screen: string) => void;
 };
 
 const money = (v: number | null, ar: boolean) =>
@@ -69,6 +71,18 @@ const str = (v: unknown, fallback = "") => (typeof v === "string" && v ? v : fal
 const int = (v: unknown, fallback: number) => {
   const n = Number(v);
   return Number.isFinite(n) && n > 0 ? Math.trunc(n) : fallback;
+};
+
+/**
+ * A number of pixels where zero means zero.
+ *
+ * int() reads zero as "unset" so a merchant cannot accidentally collapse a
+ * size to nothing. For a gap or a height, zero is exactly what somebody may
+ * mean, so these read it literally.
+ */
+const px = (v: unknown, fallback: number) => {
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 ? Math.trunc(n) : fallback;
 };
 
 /**
@@ -258,7 +272,7 @@ function BlockView({
       return (
         <section>
           {title && <Heading title={title} ar={ar} accent={accent} />}
-          <div className="-mx-4 mt-2 flex gap-2 overflow-x-auto px-4 pb-1">
+          <div className="-mx-4 mt-2 flex overflow-x-auto px-4 pb-1" style={{ gap: "calc(var(--app-item-gap, 8px) * 0.67)" }}>
             {chips.map((c) => (
               <button
                 key={c.handle}
@@ -289,7 +303,7 @@ function BlockView({
             ar={ar}
             accent={accent}
           />
-          <div className="-mx-4 mt-2 flex gap-3 overflow-x-auto px-4 pb-1">
+          <div className="-mx-4 mt-2 flex overflow-x-auto px-4 pb-1" style={{ gap: "var(--app-item-gap, 8px)" }}>
             {cards.map((c) => (
               <Tile key={c.id} card={c} ar={ar} accent={accent} wide onOpen={handlers.onOpenProduct} />
             ))}
@@ -339,7 +353,7 @@ function BlockView({
                   accent={accent}
                 />
                 {grid ? (
-                  <div className="mt-2 grid grid-cols-2 gap-3">
+                  <div className="mt-2 grid grid-cols-2" style={{ gap: "var(--app-item-gap, 8px)" }}>
                     {cards.map((card) => (
                       <Tile
                         key={card.id}
@@ -351,7 +365,7 @@ function BlockView({
                     ))}
                   </div>
                 ) : (
-                  <div className="-mx-4 mt-2 flex gap-3 overflow-x-auto px-4 pb-1">
+                  <div className="-mx-4 mt-2 flex overflow-x-auto px-4 pb-1" style={{ gap: "var(--app-item-gap, 8px)" }}>
                     {cards.map((card) => (
                       <Tile
                         key={card.id}
@@ -558,7 +572,7 @@ function BlockView({
       return (
         <section>
           <Heading title={str(s.title)} ar={ar} accent={accent} />
-          <div className="-mx-4 mt-2 flex gap-3 overflow-x-auto px-4 pb-1">
+          <div className="-mx-4 mt-2 flex overflow-x-auto px-4 pb-1" style={{ gap: "var(--app-item-gap, 8px)" }}>
             {cards.map((c) => {
               const { image, title } = inherit(c, data);
               return (
@@ -588,7 +602,7 @@ function BlockView({
       return (
         <section>
           <Heading title={str(s.title)} ar={ar} accent={accent} />
-          <div className="mt-2 grid grid-cols-2 gap-2">
+          <div className="mt-2 grid grid-cols-2" style={{ gap: "calc(var(--app-item-gap, 8px) * 0.67)" }}>
             {tiers.map((t) => (
               <button
                 key={t.id}
@@ -617,7 +631,7 @@ function BlockView({
       return (
         <section>
           <Heading title={str(s.title)} ar={ar} accent={accent} />
-          <div className="mt-2 grid grid-cols-2 gap-2">
+          <div className="mt-2 grid grid-cols-2" style={{ gap: "calc(var(--app-item-gap, 8px) * 0.67)" }}>
             {panels.map((p) => {
               const { image, title } = inherit(p, data);
               return (
@@ -645,7 +659,7 @@ function BlockView({
       const badges = itemsOf(block);
       if (!badges.length) return <Placeholder ar={ar} label={ar ? "لا توجد شارات" : "No badges yet"} />;
       return (
-        <div className="-mx-4 flex gap-2 overflow-x-auto px-4">
+        <div className="-mx-4 flex overflow-x-auto px-4" style={{ gap: "calc(var(--app-item-gap, 8px) * 0.67)" }}>
           {badges.map((b) => (
             <div
               key={b.id}
@@ -678,10 +692,10 @@ function BlockView({
             title={str(s.ratingLabel) || str(s.title, ar ? "آراء العملاء" : "What customers say")}
             subtitle={str(s.subtitle)}
             seeAll={str(s.seeAllLabel)}
-            onSeeAll={() => opener(data, handlers)(str(s.seeAllUrl), str(s.seeAllHandle))}
+            onSeeAll={() => opener(data, handlers)(s, "seeAll")}
             accent={accent}
           />
-          <div className="-mx-4 mt-2 flex gap-3 overflow-x-auto px-4 pb-1">
+          <div className="-mx-4 mt-2 flex overflow-x-auto px-4 pb-1" style={{ gap: "var(--app-item-gap, 8px)" }}>
             {shown.map((r) => (
               <div
                 key={r.id}
@@ -816,7 +830,7 @@ function Tabs({
         ar={ar}
         accent={accent}
       />
-      <div className="-mx-4 mt-2 flex gap-1.5 overflow-x-auto px-4 pb-1">
+      <div className="-mx-4 mt-2 flex overflow-x-auto px-4 pb-1" style={{ gap: "calc(var(--app-item-gap, 8px) * 0.5)" }}>
         {tabs.map((t, i) => (
           <button
             key={t.id}
@@ -833,7 +847,7 @@ function Tabs({
         ))}
       </div>
       {products.length ? (
-        <div className="-mx-4 mt-2 flex gap-3 overflow-x-auto px-4 pb-1">
+        <div className="-mx-4 mt-2 flex overflow-x-auto px-4 pb-1" style={{ gap: "var(--app-item-gap, 8px)" }}>
           {products.map((p) => (
             <Tile key={p.id} card={p} ar={ar} accent={accent} wide onOpen={handlers.onOpenProduct} />
           ))}
@@ -924,6 +938,12 @@ function LiveNow({
   const nameSize = int(s.nameSize, 10);
   const viewersSize = int(s.viewersSize, 9);
   const bannerRadius = int(s.bannerRadius, 16);
+  // The gap above the banner and the banner's own height. Zero is a real
+  // answer for both - "right under the circles", and "however tall its
+  // wording makes it" - so neither can go through int(), which reads zero
+  // as unset.
+  const offerGap = px(s.offerGap, 12);
+  const offerHeight = px(s.offerHeight, 0);
   const offerTitleSize = int(s.offerTitleSize, 13);
   const offerTextSize = int(s.offerTextSize, 11);
   const cell = Math.max(size + 12, 56);
@@ -935,7 +955,7 @@ function LiveNow({
       {title && <Heading title={title} ar={ar} accent={accent} />}
 
       {people.length > 0 && (
-        <div className="-mx-4 mt-2 flex gap-3 overflow-x-auto px-4 pb-1">
+        <div className="-mx-4 mt-2 flex overflow-x-auto px-4 pb-1" style={{ gap: "var(--app-item-gap, 8px)" }}>
           {people.map((person) => {
             const borrowed = inherit(person, data);
             const name = str(person.name, borrowed.title);
@@ -943,7 +963,7 @@ function LiveNow({
             return (
               <button
                 key={person.id}
-                onClick={() => go(str(person.url), str(person.handle))}
+                onClick={() => go(person)}
                 className="flex shrink-0 flex-col items-center"
                 style={{ width: cell }}
               >
@@ -998,7 +1018,7 @@ function LiveNow({
 
           {showReplays && (
             <button
-              onClick={() => go(str(s.replaysUrl), str(s.replaysHandle))}
+              onClick={() => go(s, "replays")}
               className="flex shrink-0 flex-col items-center"
               style={{ width: cell }}
             >
@@ -1021,9 +1041,14 @@ function LiveNow({
 
       {offerOn && (offerTitle || offerText) && (
         <button
-          onClick={() => go(str(s.offerUrl), str(s.offerHandle))}
-          className="mt-3 flex w-full items-center gap-3 px-4 py-3 text-start"
-          style={{ background: offerBg, borderRadius: bannerRadius }}
+          onClick={() => go(s, "offer")}
+          className="flex w-full items-center gap-3 px-4 py-3 text-start"
+          style={{
+            background: offerBg,
+            borderRadius: bannerRadius,
+            marginTop: offerGap,
+            minHeight: offerHeight || undefined,
+          }}
         >
           <span className="min-w-0 flex-1">
             {offerTitle && (
@@ -1058,17 +1083,34 @@ function LiveNow({
 /**
  * Where a tap goes.
  *
- * A typed link wins over a collection: it is the more specific thing to have
- * filled in. Shared so every section answers the question the same way.
+ * A link is four optional fields sitting on a section's settings or on one of
+ * its items, and they are read in order of how specific they are: a typed web
+ * address, then a product, then a place in the app, then a collection. One
+ * rule, so every section in the editor offers the same choices and every tap
+ * behaves the same way.
+ *
+ * `prefix` is for the second link a section sometimes has — a "see all" beside
+ * its title reads seeAllUrl, seeAllProductId and so on.
  */
 function opener(data: HomeData, handlers: HomeHandlers) {
-  return (url: string, handle: string) => {
+  return (from: Record<string, unknown>, prefix?: string) => {
+    const key = (name: string) =>
+      prefix ? prefix + name.charAt(0).toUpperCase() + name.slice(1) : name;
+    const url = str(from[key("url")]);
     if (url) {
       if (typeof window !== "undefined") window.open(url, "_blank", "noopener,noreferrer");
       return;
     }
+    const productId = str(from[key("productId")]);
+    if (productId) return handlers.onOpenProduct?.(productId);
+    const screen = str(from[key("screen")]);
+    if (screen) return handlers.onOpenScreen?.(screen);
+    const handle = str(from[key("handle")]);
+    if (!handle) return;
+    // A collection that has since been renamed still opens, headed by its
+    // handle, rather than the tap doing nothing at all.
     const target = data.collections.find((c) => c.handle === handle);
-    if (target) handlers.onOpenCollection?.(target.handle, target.title);
+    handlers.onOpenCollection?.(handle, target?.title ?? handle);
   };
 }
 
@@ -1112,8 +1154,8 @@ function ComingUpLive({
     <section>
       {str(s.title) && <Heading title={str(s.title)} ar={ar} accent={accent} />}
       <div
-        className="mt-2 space-y-3 border border-slate-200 p-3"
-        style={{ background: cardBg, borderRadius: radius }}
+        className="mt-2 flex flex-col border border-slate-200 p-3"
+        style={{ background: cardBg, borderRadius: radius, gap: "var(--app-item-gap, 8px)" }}
       >
         {items.map((item) => {
           const borrowed = inherit(item, data);
@@ -1130,7 +1172,7 @@ function ComingUpLive({
               </div>
               {remind && (
                 <button
-                  onClick={() => go(str(item.url), str(item.handle))}
+                  onClick={() => go(item)}
                   className="shrink-0 rounded-full px-3 py-1.5 text-[11px] font-semibold text-white"
                   style={{ background: accent }}
                 >
@@ -1191,7 +1233,7 @@ function CountdownDeals({
         )}
       </div>
 
-      <div className="-mx-4 mt-2 flex gap-3 overflow-x-auto px-4 pb-1">
+      <div className="-mx-4 mt-2 flex overflow-x-auto px-4 pb-1" style={{ gap: "var(--app-item-gap, 8px)" }}>
         {items.map((item, i) => {
           const lead = featureFirst && i === 0;
           const borrowed = inherit(item, data);
@@ -1200,7 +1242,7 @@ function CountdownDeals({
           return (
             <button
               key={item.id}
-              onClick={() => go(str(item.url), str(item.handle))}
+              onClick={() => go(item)}
               className="shrink-0 overflow-hidden border border-slate-200 bg-white text-start"
               style={{ borderRadius: radius, width: lead ? 224 : 158 }}
             >
@@ -1274,11 +1316,11 @@ function InfoRows({
   return (
     <section>
       {str(s.title) && <Heading title={str(s.title)} ar={ar} accent={accent} />}
-      <div className="mt-2 space-y-2">
+      <div className="mt-2 flex flex-col" style={{ gap: "calc(var(--app-item-gap, 8px) * 0.67)" }}>
         {items.map((item) => (
           <button
             key={item.id}
-            onClick={() => go(str(item.url), str(item.handle))}
+            onClick={() => go(item)}
             className="flex w-full items-center gap-3 border border-slate-200 px-3 py-2.5 text-start"
             style={{ background: cardBg, borderRadius: radius }}
           >
@@ -1376,7 +1418,7 @@ function PaymentPlans({
         </div>
         {str(s.seeAllLabel) && (
           <button
-            onClick={() => go(str(s.seeAllUrl), str(s.seeAllHandle))}
+            onClick={() => go(s, "seeAll")}
             className="shrink-0 text-xs font-semibold"
             style={{ color: accent }}
           >
@@ -1384,11 +1426,11 @@ function PaymentPlans({
           </button>
         )}
       </div>
-      <div className="-mx-4 mt-2 flex gap-3 overflow-x-auto px-4 pb-1">
+      <div className="-mx-4 mt-2 flex overflow-x-auto px-4 pb-1" style={{ gap: "var(--app-item-gap, 8px)" }}>
         {items.map((item) => (
           <button
             key={item.id}
-            onClick={() => go(str(item.url), str(item.handle))}
+            onClick={() => go(item)}
             className="w-[152px] shrink-0 p-3 text-start"
             style={{ background: str(item.color, accent), borderRadius: radius }}
           >
@@ -1454,7 +1496,7 @@ function PriceSlider({ block, items, ar, accent }: { block: Block; items: Item[]
           <span>{cur} {nf(max)}</span>
         </div>
 
-        <div className="mt-3 space-y-2">
+        <div className="mt-3 flex flex-col" style={{ gap: "calc(var(--app-item-gap, 8px) * 0.67)" }}>
           {items.map((item) => {
             const months = Math.max(1, parseInt(str(item.months), 10) || 1);
             return (
@@ -1518,7 +1560,7 @@ function OfferCards({
     <section>
       {str(s.title) && <Heading title={str(s.title)} ar={ar} accent={accent} />}
       {str(s.subtitle) && <p className="text-[11px] text-slate-500">{str(s.subtitle)}</p>}
-      <div className="-mx-4 mt-2 flex gap-3 overflow-x-auto px-4 pb-1">
+      <div className="-mx-4 mt-2 flex overflow-x-auto px-4 pb-1" style={{ gap: "var(--app-item-gap, 8px)" }}>
         {items.map((item) => {
           const colour = str(item.color, accent);
           return (
@@ -1540,7 +1582,7 @@ function OfferCards({
               )}
               {claim && (
                 <button
-                  onClick={() => go(str(item.url), str(item.handle))}
+                  onClick={() => go(item)}
                   className="mt-1 rounded-lg py-1.5 text-[11px] font-semibold text-white"
                   style={{ background: colour }}
                 >
@@ -1613,10 +1655,10 @@ function ProductReasons({
         title={str(s.title)}
         subtitle={str(s.subtitle)}
         seeAll={str(s.seeAllLabel)}
-        onSeeAll={() => go(str(s.seeAllUrl), str(s.seeAllHandle))}
+        onSeeAll={() => go(s, "seeAll")}
         accent={accent}
       />
-      <div className="-mx-4 mt-2 flex gap-3 overflow-x-auto px-4 pb-1">
+      <div className="-mx-4 mt-2 flex overflow-x-auto px-4 pb-1" style={{ gap: "var(--app-item-gap, 8px)" }}>
         {items.map((item, i) => {
           const lead = featureFirst && i === 0;
           const borrowed = inherit(item, data);
@@ -1626,7 +1668,7 @@ function ProductReasons({
               className="flex shrink-0 flex-col overflow-hidden border border-slate-200 bg-white"
               style={{ borderRadius: radius, width: lead ? 236 : 166 }}
             >
-              <button onClick={() => go(str(item.url), str(item.handle))} className="relative block">
+              <button onClick={() => go(item)} className="relative block">
                 <Thumb
                   src={borrowed.image}
                   className="w-full"
@@ -1668,7 +1710,7 @@ function ProductReasons({
                 )}
                 {button && (
                   <button
-                    onClick={() => go(str(item.url), str(item.handle))}
+                    onClick={() => go(item)}
                     className="mt-2 rounded-lg py-1.5 text-[11px] font-semibold text-white"
                     style={{ background: accent }}
                   >
@@ -1713,16 +1755,16 @@ function CircleRow({
         title={str(s.title)}
         subtitle={str(s.subtitle)}
         seeAll={str(s.seeAllLabel)}
-        onSeeAll={() => go(str(s.seeAllUrl), str(s.seeAllHandle))}
+        onSeeAll={() => go(s, "seeAll")}
         accent={accent}
       />
-      <div className="-mx-4 mt-2 flex gap-3 overflow-x-auto px-4 pb-1">
+      <div className="-mx-4 mt-2 flex overflow-x-auto px-4 pb-1" style={{ gap: "var(--app-item-gap, 8px)" }}>
         {items.map((item) => {
           const borrowed = inherit(item, data);
           return (
             <button
               key={item.id}
-              onClick={() => go(str(item.url), str(item.handle))}
+              onClick={() => go(item)}
               className="flex shrink-0 flex-col items-center"
               style={{ width: cell }}
             >
@@ -1773,11 +1815,11 @@ function PickColour({
     <section>
       {str(s.title) && <Heading title={str(s.title)} ar={ar} accent={accent} />}
       {str(s.subtitle) && <p className="text-[11px] text-slate-500">{str(s.subtitle)}</p>}
-      <div className="-mx-4 mt-2 flex gap-3 overflow-x-auto px-4 pb-1">
+      <div className="-mx-4 mt-2 flex overflow-x-auto px-4 pb-1" style={{ gap: "var(--app-item-gap, 8px)" }}>
         {items.map((item) => (
           <button
             key={item.id}
-            onClick={() => go(str(item.url), str(item.handle))}
+            onClick={() => go(item)}
             className="flex shrink-0 flex-col items-center gap-1"
             style={{ width: size + 16 }}
           >
@@ -1845,7 +1887,7 @@ function PriceDrop({
       </span>
       {button && (
         <button
-          onClick={() => go(str(s.url), str(s.handle))}
+          onClick={() => go(s)}
           className="shrink-0 rounded-full px-3 py-1.5 text-[11px] font-semibold text-white"
           style={{ background: accent }}
         >
@@ -1895,7 +1937,7 @@ function StyleProfile({
             return (
               <button
                 key={item.id}
-                onClick={() => go(str(item.url), str(item.handle))}
+                onClick={() => go(item)}
                 className="rounded-full border px-2.5 py-1 text-[11px] font-medium"
                 style={{
                   borderColor: colour || "#e2e8f0",
@@ -1958,7 +2000,7 @@ function PromoCard({
         )}
         {button && (
           <button
-            onClick={() => go(str(s.url), str(s.handle))}
+            onClick={() => go(s)}
             className="mt-3 rounded-xl px-4 py-2 text-[12px] font-bold"
             style={{ background: ink, color: str(s.bg, accent) }}
           >
@@ -2000,7 +2042,16 @@ export function AppHome({
 }) {
   const blocks = theme.blocks ?? [];
   return (
-    <div className={`space-y-5${theme.settings.titleFont === "serif" ? " app-serif" : ""}`}>
+    <div
+      className={`flex flex-col${theme.settings.titleFont === "serif" ? " app-serif" : ""}`}
+      style={
+        {
+          gap: `${theme.settings.sectionGap}px`,
+          "--app-section-gap": `${theme.settings.sectionGap}px`,
+          "--app-item-gap": `${theme.settings.itemGap}px`,
+        } as React.CSSProperties
+      }
+    >
       {blocks.map((block) => {
         const rendered = (
           <BlockView block={block} theme={theme} data={data} ar={ar} handlers={handlers} />
@@ -2100,7 +2151,7 @@ function Showcase({
         )}
         {button && (
           <button
-            onClick={() => go(str(s.url), str(s.handle))}
+            onClick={() => go(s)}
             className="mt-3 self-start rounded-full px-4 py-2 text-[12px] font-bold"
             style={{ background: ink, color: str(s.imageUrl) ? "#191614" : accent, alignSelf: centred ? "center" : undefined }}
           >
@@ -2129,15 +2180,20 @@ function SectionBand({
   // A band bleeds to the phone's edges, so the page's own padding is taken off
   // and put back inside it.
   const cls = washed
-    ? "-mx-4 px-4 py-5"
+    ? "-mx-4 px-4"
     : band === "divider"
-      ? "border-t border-slate-200 pt-5"
+      ? "border-t border-slate-200"
       : "";
+  const pad = washed
+    ? { paddingTop: "var(--app-section-gap, 12px)", paddingBottom: "var(--app-section-gap, 12px)" }
+    : band === "divider"
+      ? { paddingTop: "var(--app-section-gap, 12px)" }
+      : {};
   const style: React.CSSProperties = washed
-    ? { background: band === "paper" ? "#ffffff" : `${accent}12` }
-    : {};
+    ? { background: band === "paper" ? "#ffffff" : `${accent}12`, ...pad }
+    : pad;
 
-  if (!kicker && !cls) return <div>{children}</div>;
+  if (!kicker && !cls && band !== "divider") return <div>{children}</div>;
   return (
     <div className={cls} style={style}>
       {kicker && (

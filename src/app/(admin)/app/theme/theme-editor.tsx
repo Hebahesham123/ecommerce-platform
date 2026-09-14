@@ -21,7 +21,7 @@ import { AppHome, type HomeData } from "@/components/app-home";
 import { AppStrip } from "@/components/app-strip";
 import { AppLive } from "@/components/app-live";
 import { AppHeader } from "@/components/app-header";
-import { ColorPicker, ImageUpload } from "@/components/pickers";
+import { ColorPicker, ImageUpload, LinkPicker } from "@/components/pickers";
 import {
   BLOCK_META,
   ITEM_FIELDS,
@@ -132,6 +132,32 @@ export function ThemeEditor() {
   const [stack, setStack] = useState<Screen[]>([]);
   const screen = stack[stack.length - 1] ?? null;
   const push = useCallback((next: Screen) => setStack((s) => [...s, next]), []);
+  // A link can point at a whole screen rather than at something in the shop.
+  // The phone shows it the same way pressing that tab would.
+  const showScreen = useCallback(
+    (screen: string) => {
+      setStack([]);
+      if (screen === "orders") return setStack([{ kind: "orders" }]);
+      if (screen === "cart" || screen === "account" || screen === "live") {
+        return setPage(screen);
+      }
+      // Reviews, Happy customers and Requests are real pages in the app, but
+      // this phone only draws the screens the editor designs. Say where the
+      // link goes rather than quietly showing home instead.
+      const pages: Record<string, string> = { reviews: ar ? "آراء العملاء" : "Reviews", "happy-customers": ar ? "عملاء سعداء" : "Happy customers", requests: ar ? "الطلبات والمرتجعات" : "Requests & returns" };
+      if (pages[screen]) {
+        setMsg({
+          tone: "ok",
+          text: ar
+            ? `هذا الرابط يفتح صفحة «${pages[screen]}» داخل التطبيق.`
+            : `This link opens the ${pages[screen]} page in the app.`,
+        });
+        return setPage("home");
+      }
+      setPage("home");
+    },
+    [ar],
+  );
   const pop = useCallback(() => setStack((s) => s.slice(0, -1)), []);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
@@ -534,6 +560,26 @@ export function ThemeEditor() {
                     : "The same face the website sets its headings in."}
                 </p>
               </Field>
+
+              <SpaceRow
+                label={ar ? "المسافة بين الأقسام" : "Space between sections"}
+                value={draft.settings.sectionGap}
+                onChange={(v) => patchSettings({ sectionGap: v })}
+                min={0}
+                max={40}
+              />
+              <SpaceRow
+                label={ar ? "المسافة بين العناصر" : "Space between items"}
+                value={draft.settings.itemGap}
+                onChange={(v) => patchSettings({ itemGap: v })}
+                min={0}
+                max={24}
+                note={
+                  ar
+                    ? "يصغّر كل المسافات داخل الأقسام معاً، فتبقى الشرائط أضيق من البطاقات."
+                    : "Tightens every gap inside a section together, so chips stay tighter than cards."
+                }
+              />
               <Field label={ar ? "الشعار" : "Logo"} type="image_picker">
                 <span className="flex items-center gap-2">
                   {draft.settings.logoUrl ? (
@@ -693,32 +739,29 @@ export function ThemeEditor() {
                             <IcTrash className="h-3.5 w-3.5" />
                           </button>
                         </div>
-                        <CollectionSelect
-                          collections={data.collections}
-                          value={item.handle}
-                          onChange={(handle) =>
-                            patchSettings({
-                              strip: draft.settings.strip.map((x, j) =>
-                                j === i ? { ...x, handle } : x,
-                              ),
-                            })
-                          }
-                          anyLabel={ar ? "لا شيء" : "Nothing"}
-                          className={`${input} mt-1.5 h-8 text-xs`}
-                        />
-                        <input
-                          value={item.url}
-                          onChange={(e) =>
-                            patchSettings({
-                              strip: draft.settings.strip.map((x, j) =>
-                                j === i ? { ...x, url: e.target.value } : x,
-                              ),
-                            })
-                          }
-                          placeholder="https://…"
-                          dir="ltr"
-                          className={`${input} mt-1.5 h-8 text-xs`}
-                        />
+                        <div className="mt-1.5">
+                          <LinkPicker
+                            value={item}
+                            onChange={(link) =>
+                              patchSettings({
+                                strip: draft.settings.strip.map((x, j) =>
+                                  j === i
+                                    ? {
+                                        ...x,
+                                        handle: link.handle ?? "",
+                                        url: link.url ?? "",
+                                        productId: link.productId ?? "",
+                                        screen: link.screen ?? "",
+                                      }
+                                    : x,
+                                ),
+                              })
+                            }
+                            collections={data.collections}
+                            input={`${input} h-8 text-xs`}
+                            ar={ar}
+                          />
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -727,7 +770,7 @@ export function ThemeEditor() {
                       patchSettings({
                         strip: [
                           ...draft.settings.strip,
-                          { id: itemId(), label: "", handle: "", url: "" } as StripItem,
+                          { id: itemId(), label: "", handle: "", url: "", productId: "", screen: "" } as StripItem,
                         ],
                       })
                     }
@@ -938,6 +981,12 @@ export function ThemeEditor() {
                   sessions={liveSessionsOf(draft)}
                   ar={ar}
                   accent={draft.settings.accent}
+                  onOpen={(s) => {
+                    if (s.url) return window.open(s.url, "_blank", "noopener,noreferrer");
+                    if (s.productId) return push({ kind: "product", id: s.productId });
+                    if (s.screen) return showScreen(s.screen);
+                    if (s.handle) push({ kind: "collection", handle: s.handle, title: s.name });
+                  }}
                 />
               ) : page === "cart" || page === "checkout" ? (
                 <Cart
@@ -1017,7 +1066,13 @@ export function ThemeEditor() {
                     onOpenProduct={(id) => push({ kind: "product", id })}
                   />
                 ) : home ? (
-                  <div className="space-y-5">
+                  // Each block is its own AppHome here, so the space between
+                  // them is this list's, not the renderer's - and the slider
+                  // has to move it or it appears to do nothing in the editor.
+                  <div
+                    className="flex flex-col"
+                    style={{ gap: `${draft.settings.sectionGap}px` }}
+                  >
                     {draft.blocks.map((block) => (
                       <div
                         key={block.id}
@@ -1038,6 +1093,7 @@ export function ThemeEditor() {
                             onOpenCollection: (handle, title) =>
                               push({ kind: "collection", handle, title }),
                             onOpenProduct: (id) => push({ kind: "product", id }),
+                            onOpenScreen: showScreen,
                           }}
                           showPlaceholders
                         />
@@ -1299,6 +1355,12 @@ function BlockGroup({
   const s = block.settings ?? {};
   const text = (k: string) => (typeof s[k] === "string" ? (s[k] as string) : "");
   const num = (k: string, d: number) => (Number(s[k]) > 0 ? Number(s[k]) : d);
+  const num0 = (k: string, d: number) => {
+    const raw = s[k];
+    if (raw === undefined || raw === null || raw === "") return d;
+    const n = Number(raw);
+    return Number.isFinite(n) && n >= 0 ? n : d;
+  };
   const bool = (k: string, d: boolean) => (typeof s[k] === "boolean" ? (s[k] as boolean) : d);
   const chosen = collections.find((c) => c.handle === text("handle"));
 
@@ -1425,13 +1487,25 @@ function BlockGroup({
               className={input}
             />
           </Field>
-          <Field label={ar ? "يفتح" : "Opens"} type="collection">
-            <CollectionSelect
+          <Field label={ar ? "يفتح" : "Opens"} type="link">
+            <LinkPicker
+              value={{
+                handle: text("handle"),
+                url: text("url"),
+                productId: text("productId"),
+                screen: text("screen"),
+              }}
+              onChange={(next) =>
+                onPatch({
+                  handle: next.handle ?? "",
+                  url: next.url ?? "",
+                  productId: next.productId ?? "",
+                  screen: next.screen ?? "",
+                })
+              }
               collections={collections}
-              value={text("handle")}
-              onChange={(handle) => onPatch({ handle })}
-              anyLabel={ar ? "لا شيء" : "Nothing"}
-              className={input}
+              input={input}
+              ar={ar}
             />
           </Field>
         </>
@@ -1570,17 +1644,26 @@ function BlockGroup({
           <Field label={ar ? "نص الزر" : "Button text"} type="text">
             <input value={text("buttonLabel")} onChange={(e) => onPatch({ buttonLabel: e.target.value })} className={input} />
           </Field>
-          <Field label={ar ? "يفتح" : "Opens"} type="collection">
-            <CollectionSelect
+          <Field label={ar ? "يفتح" : "Opens"} type="link">
+            <LinkPicker
+              value={{
+                handle: text("handle"),
+                url: text("url"),
+                productId: text("productId"),
+                screen: text("screen"),
+              }}
+              onChange={(next) =>
+                onPatch({
+                  handle: next.handle ?? "",
+                  url: next.url ?? "",
+                  productId: next.productId ?? "",
+                  screen: next.screen ?? "",
+                })
+              }
               collections={collections}
-              value={text("handle")}
-              onChange={(handle) => onPatch({ handle })}
-              anyLabel={ar ? "لا شيء" : "Nothing"}
-              className={input}
+              input={input}
+              ar={ar}
             />
-          </Field>
-          <Field label={ar ? "أو رابط" : "Or a link"} type="url">
-            <input value={text("url")} onChange={(e) => onPatch({ url: e.target.value })} placeholder="https://…" className={input} dir="ltr" />
           </Field>
           <Field label={ar ? "صورة أعلى البطاقة" : "Picture on top"} type="image_picker">
             <span className="flex items-center gap-2">
@@ -1615,17 +1698,26 @@ function BlockGroup({
           <Field label={ar ? "نص «الكل»" : "See-all text"} type="text">
             <input value={text("seeAllLabel")} onChange={(e) => onPatch({ seeAllLabel: e.target.value })} className={input} />
           </Field>
-          <Field label={ar ? "يفتح" : "Opens"} type="collection">
-            <CollectionSelect
+          <Field label={ar ? "يفتح" : "Opens"} type="link">
+            <LinkPicker
+              value={{
+                handle: text("seeAllHandle"),
+                url: text("seeAllUrl"),
+                productId: text("seeAllProductId"),
+                screen: text("seeAllScreen"),
+              }}
+              onChange={(next) =>
+                onPatch({
+                  seeAllHandle: next.handle ?? "",
+                  seeAllUrl: next.url ?? "",
+                  seeAllProductId: next.productId ?? "",
+                  seeAllScreen: next.screen ?? "",
+                })
+              }
               collections={collections}
-              value={text("seeAllHandle")}
-              onChange={(handle) => onPatch({ seeAllHandle: handle })}
-              anyLabel={ar ? "لا شيء" : "Nothing"}
-              className={input}
+              input={input}
+              ar={ar}
             />
-          </Field>
-          <Field label={ar ? "أو رابط" : "Or a link"} type="url">
-            <input value={text("seeAllUrl")} onChange={(e) => onPatch({ seeAllUrl: e.target.value })} placeholder="https://…" className={input} dir="ltr" />
           </Field>
         </>
       )}
@@ -1652,17 +1744,26 @@ function BlockGroup({
                   className={input}
                 />
               </Field>
-              <Field label={ar ? "يفتح" : "Opens"} type="collection">
-                <CollectionSelect
+              <Field label={ar ? "يفتح" : "Opens"} type="link">
+                <LinkPicker
+                  value={{
+                    handle: text("seeAllHandle"),
+                    url: text("seeAllUrl"),
+                    productId: text("seeAllProductId"),
+                    screen: text("seeAllScreen"),
+                  }}
+                  onChange={(next) =>
+                    onPatch({
+                      seeAllHandle: next.handle ?? "",
+                      seeAllUrl: next.url ?? "",
+                      seeAllProductId: next.productId ?? "",
+                      seeAllScreen: next.screen ?? "",
+                    })
+                  }
                   collections={collections}
-                  value={text("seeAllHandle")}
-                  onChange={(handle) => onPatch({ seeAllHandle: handle })}
-                  anyLabel={ar ? "لا شيء" : "Nothing"}
-                  className={input}
+                  input={input}
+                  ar={ar}
                 />
-              </Field>
-              <Field label={ar ? "أو رابط" : "Or a link"} type="url">
-                <input value={text("seeAllUrl")} onChange={(e) => onPatch({ seeAllUrl: e.target.value })} placeholder="https://…" className={input} dir="ltr" />
               </Field>
             </>
           )}
@@ -1711,17 +1812,26 @@ function BlockGroup({
               <Field label={ar ? "نص الزر" : "Button text"} type="text">
                 <input value={text("buttonLabel")} onChange={(e) => onPatch({ buttonLabel: e.target.value })} className={input} />
               </Field>
-              <Field label={ar ? "يفتح" : "Opens"} type="collection">
-                <CollectionSelect
+              <Field label={ar ? "يفتح" : "Opens"} type="link">
+                <LinkPicker
+                  value={{
+                    handle: text("handle"),
+                    url: text("url"),
+                    productId: text("productId"),
+                    screen: text("screen"),
+                  }}
+                  onChange={(next) =>
+                    onPatch({
+                      handle: next.handle ?? "",
+                      url: next.url ?? "",
+                      productId: next.productId ?? "",
+                      screen: next.screen ?? "",
+                    })
+                  }
                   collections={collections}
-                  value={text("handle")}
-                  onChange={(handle) => onPatch({ handle })}
-                  anyLabel={ar ? "لا شيء" : "Nothing"}
-                  className={input}
+                  input={input}
+                  ar={ar}
                 />
-              </Field>
-              <Field label={ar ? "أو رابط" : "Or a link"} type="url">
-                <input value={text("url")} onChange={(e) => onPatch({ url: e.target.value })} placeholder="https://…" className={input} dir="ltr" />
               </Field>
               <ColorRow label={ar ? "خلفية البطاقة" : "Card background"} value={text("cardBg")} fallback="#ffffff" onChange={(v) => onPatch({ cardBg: v })} input={input} ar={ar} />
               <Field label={ar ? "استدارة الحواف" : "Corner radius"} type="range">
@@ -1767,17 +1877,26 @@ function BlockGroup({
               className={input}
             />
           </Field>
-          <Field label={ar ? "يفتح" : "Opens"} type="collection">
-            <CollectionSelect
+          <Field label={ar ? "يفتح" : "Opens"} type="link">
+            <LinkPicker
+              value={{
+                handle: text("handle"),
+                url: text("url"),
+                productId: text("productId"),
+                screen: text("screen"),
+              }}
+              onChange={(next) =>
+                onPatch({
+                  handle: next.handle ?? "",
+                  url: next.url ?? "",
+                  productId: next.productId ?? "",
+                  screen: next.screen ?? "",
+                })
+              }
               collections={collections}
-              value={text("handle")}
-              onChange={(handle) => onPatch({ handle })}
-              anyLabel={ar ? "لا شيء" : "Nothing"}
-              className={input}
+              input={input}
+              ar={ar}
             />
-          </Field>
-          <Field label={ar ? "أو رابط" : "Or a link"} type="url">
-            <input value={text("url")} onChange={(e) => onPatch({ url: e.target.value })} placeholder="https://…" className={input} dir="ltr" />
           </Field>
           <Field label={ar ? "الارتفاع" : "Height"} type="range">
             <input type="number" min={180} max={640} value={num("height", 360)} onChange={(e) => onPatch({ height: Number(e.target.value) })} className={input} />
@@ -1848,17 +1967,26 @@ function BlockGroup({
               <Field label={ar ? "نص «الكل»" : "See-all text"} type="text">
                 <input value={text("seeAllLabel")} onChange={(e) => onPatch({ seeAllLabel: e.target.value })} className={input} />
               </Field>
-              <Field label={ar ? "يفتح" : "Opens"} type="collection">
-                <CollectionSelect
+              <Field label={ar ? "يفتح" : "Opens"} type="link">
+                <LinkPicker
+                  value={{
+                    handle: text("seeAllHandle"),
+                    url: text("seeAllUrl"),
+                    productId: text("seeAllProductId"),
+                    screen: text("seeAllScreen"),
+                  }}
+                  onChange={(next) =>
+                    onPatch({
+                      seeAllHandle: next.handle ?? "",
+                      seeAllUrl: next.url ?? "",
+                      seeAllProductId: next.productId ?? "",
+                      seeAllScreen: next.screen ?? "",
+                    })
+                  }
                   collections={collections}
-                  value={text("seeAllHandle")}
-                  onChange={(handle) => onPatch({ seeAllHandle: handle })}
-                  anyLabel={ar ? "لا شيء" : "Nothing"}
-                  className={input}
+                  input={input}
+                  ar={ar}
                 />
-              </Field>
-              <Field label={ar ? "أو رابط" : "Or a link"} type="url">
-                <input value={text("seeAllUrl")} onChange={(e) => onPatch({ seeAllUrl: e.target.value })} placeholder="https://…" className={input} dir="ltr" />
               </Field>
             </>
           )}
@@ -2010,22 +2138,25 @@ function BlockGroup({
                   className={input}
                 />
               </Field>
-              <Field label={ar ? "يفتح" : "Opens"} type="collection">
-                <CollectionSelect
+              <Field label={ar ? "يفتح" : "Opens"} type="link">
+                <LinkPicker
+                  value={{
+                    handle: text("replaysHandle"),
+                    url: text("replaysUrl"),
+                    productId: text("replaysProductId"),
+                    screen: text("replaysScreen"),
+                  }}
+                  onChange={(next) =>
+                    onPatch({
+                      replaysHandle: next.handle ?? "",
+                      replaysUrl: next.url ?? "",
+                      replaysProductId: next.productId ?? "",
+                      replaysScreen: next.screen ?? "",
+                    })
+                  }
                   collections={collections}
-                  value={text("replaysHandle")}
-                  onChange={(handle) => onPatch({ replaysHandle: handle })}
-                  anyLabel={ar ? "لا شيء" : "Nothing"}
-                  className={input}
-                />
-              </Field>
-              <Field label={ar ? "أو رابط" : "Or a link"} type="url">
-                <input
-                  value={text("replaysUrl")}
-                  onChange={(e) => onPatch({ replaysUrl: e.target.value })}
-                  placeholder="https://…"
-                  className={input}
-                  dir="ltr"
+                  input={input}
+                  ar={ar}
                 />
               </Field>
             </>
@@ -2067,22 +2198,25 @@ function BlockGroup({
                   className={input}
                 />
               </Field>
-              <Field label={ar ? "يفتح" : "Opens"} type="collection">
-                <CollectionSelect
+              <Field label={ar ? "يفتح" : "Opens"} type="link">
+                <LinkPicker
+                  value={{
+                    handle: text("offerHandle"),
+                    url: text("offerUrl"),
+                    productId: text("offerProductId"),
+                    screen: text("offerScreen"),
+                  }}
+                  onChange={(next) =>
+                    onPatch({
+                      offerHandle: next.handle ?? "",
+                      offerUrl: next.url ?? "",
+                      offerProductId: next.productId ?? "",
+                      offerScreen: next.screen ?? "",
+                    })
+                  }
                   collections={collections}
-                  value={text("offerHandle")}
-                  onChange={(handle) => onPatch({ offerHandle: handle })}
-                  anyLabel={ar ? "لا شيء" : "Nothing"}
-                  className={input}
-                />
-              </Field>
-              <Field label={ar ? "أو رابط" : "Or a link"} type="url">
-                <input
-                  value={text("offerUrl")}
-                  onChange={(e) => onPatch({ offerUrl: e.target.value })}
-                  placeholder="https://…"
-                  className={input}
-                  dir="ltr"
+                  input={input}
+                  ar={ar}
                 />
               </Field>
             </>
@@ -2141,6 +2275,36 @@ function BlockGroup({
               onChange={(e) => onPatch({ viewersSize: Number(e.target.value) })}
               className={input}
             />
+          </Field>
+          <Field label={ar ? "المسافة فوق البانر" : "Space above the banner"} type="range">
+            <input
+              type="number"
+              min={0}
+              max={48}
+              value={num0("offerGap", 12)}
+              onChange={(e) => onPatch({ offerGap: Number(e.target.value) })}
+              className={input}
+            />
+            <p className="mt-1 text-[11px] text-ink-soft">
+              {ar
+                ? "المسافة بين صف الدوائر والبانر."
+                : "The gap between the row of circles and the banner."}
+            </p>
+          </Field>
+          <Field label={ar ? "ارتفاع البانر" : "Banner height"} type="range">
+            <input
+              type="number"
+              min={0}
+              max={160}
+              value={num0("offerHeight", 0)}
+              onChange={(e) => onPatch({ offerHeight: Number(e.target.value) })}
+              className={input}
+            />
+            <p className="mt-1 text-[11px] text-ink-soft">
+              {ar
+                ? "صفر يعني أن ارتفاعه يتبع نصّه."
+                : "Zero means it is as tall as its wording makes it."}
+            </p>
           </Field>
           <Field label={ar ? "استدارة البانر" : "Banner corners"} type="range">
             <input
@@ -2296,7 +2460,7 @@ function ItemList({
       if (f.kind === "image") continue;
       const v = item[f.key];
       if (typeof v === "string" && v) {
-        return f.kind === "collection"
+        return f.kind === "collection" || f.kind === "link"
           ? collections.find((c) => c.handle === v)?.title ?? v
           : v;
       }
@@ -2398,12 +2562,25 @@ function ItemList({
                             input={`${input} h-8 text-xs`}
                             ar={ar}
                           />
+                        ) : f.kind === "link" ? (
+                          <LinkPicker
+                            value={{
+                              handle: typeof item.handle === "string" ? item.handle : "",
+                              url: typeof item.url === "string" ? item.url : "",
+                              productId: typeof item.productId === "string" ? item.productId : "",
+                              screen: typeof item.screen === "string" ? item.screen : "",
+                            }}
+                            onChange={(next) => patchItem(item.id, next)}
+                            collections={collections}
+                            input={`${input} mt-0.5 h-8 text-xs`}
+                            ar={ar}
+                          />
                         ) : f.kind === "collection" ? (
                           <CollectionSelect
                             collections={collections}
-                            value={value}
+                            value={typeof value === "string" ? value : ""}
                             onChange={(handle) => patchItem(item.id, { [f.key]: handle })}
-                            anyLabel={ar ? "لا شيء" : "Nothing"}
+                            anyLabel={ar ? "اختاري قسماً" : "Choose a collection"}
                             className={`${input} mt-0.5 h-8 text-xs`}
                           />
                         ) : (
@@ -2531,6 +2708,47 @@ type Screen =
   // Orders has no settings to design, so it has no pill — but the tab is real
   // and pressing it should show real orders, not nothing.
   | { kind: "orders" };
+
+/**
+ * A number of pixels, dragged.
+ *
+ * The phone beside it redraws as the slider moves, which is the only way to
+ * judge spacing - a number on its own means nothing until you see it.
+ */
+function SpaceRow({
+  label,
+  value,
+  onChange,
+  min,
+  max,
+  note,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  min: number;
+  max: number;
+  note?: string;
+}) {
+  return (
+    <Field label={label} type="range">
+      <span className="flex items-center gap-2">
+        <input
+          type="range"
+          min={min}
+          max={max}
+          value={value}
+          onChange={(e) => onChange(Number(e.target.value))}
+          className="h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-line accent-[rgb(139,92,246)]"
+        />
+        <span className="w-10 shrink-0 text-end text-[11px] tabular-nums text-ink-muted">
+          {value}px
+        </span>
+      </span>
+      {note && <p className="mt-1 text-[11px] text-ink-soft">{note}</p>}
+    </Field>
+  );
+}
 
 /** The bar every screen below home wears. */
 function ScreenBar({

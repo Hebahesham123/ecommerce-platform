@@ -46,6 +46,9 @@ export function Shop({
   query,
   onQuery,
   openCollection,
+  openProduct,
+  openPage,
+  onScreen,
 }: {
   ar: boolean;
   onAdd: (itemId: string) => void;
@@ -69,6 +72,15 @@ export function Shop({
    * tapping the same chip twice reopens it instead of looking broken.
    */
   openCollection?: { handle: string; at: number } | null;
+  /** A product the shell wants opened, carried the same way. */
+  openProduct?: { id: string; at: number } | null;
+  /** One of this shop's pages - reviews, happy customers, requests. */
+  openPage?: { handle: string; at: number } | null;
+  /**
+   * A link that points at a whole screen rather than at something in the
+   * shop. Only the shell knows which tab that is, so it decides.
+   */
+  onScreen?: (screen: string) => void;
 }) {
   const [home, setHome] = useState<Home | null>(null);
   const [homeErr, setHomeErr] = useState<string | null>(null);
@@ -106,6 +118,26 @@ export function Shop({
     const found = home?.collections.find((c) => c.handle === req.handle);
     setView({ kind: "collection", handle: req.handle, title: found?.title ?? req.handle });
   }, [openCollection, home]);
+
+  const lastProduct = useRef(0);
+  useEffect(() => {
+    const req = openProduct;
+    if (!req?.id || req.at === lastProduct.current) return;
+    lastProduct.current = req.at;
+    setOpen(req.id);
+  }, [openProduct]);
+
+  // Pages go through the same door menu items use, so a link to Reviews and
+  // a menu item pointing at Reviews land in exactly the same place.
+  const lastPage = useRef(0);
+  useEffect(() => {
+    const req = openPage;
+    if (!req?.handle || req.at === lastPage.current) return;
+    lastPage.current = req.at;
+    if (req.handle === "requests") return onLeave("requests");
+    if (req.handle === "reviews" || req.handle === "happy-customers") setPage(req.handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openPage]);
 
   // Searching is a view of its own, debounced so a five-letter word is one
   // request rather than five.
@@ -207,7 +239,14 @@ export function Shop({
       ) : !home ? (
         <Spinner />
       ) : view.kind === "home" ? (
-        <HomeView ar={ar} home={home} onOpenCollection={(c) => go({ type: "collection", handle: c.handle })} onOpen={(p) => setOpen(p.id)} />
+        <HomeView
+          ar={ar}
+          home={home}
+          onOpenCollection={(c) => go({ type: "collection", handle: c.handle })}
+          onOpen={(p) => setOpen(p.id)}
+          onScreen={onScreen}
+          shopperName={shopperName}
+        />
       ) : (
         <ListView
           ar={ar}
@@ -269,12 +308,14 @@ function HomeView({
   home,
   onOpenCollection,
   onOpen,
+  onScreen,
   shopperName,
 }: {
   ar: boolean;
   home: Home;
   onOpenCollection: (c: Collection) => void;
   onOpen: (p: ProductCard) => void;
+  onScreen?: (screen: string) => void;
   shopperName?: string | null;
 }) {
   return (
@@ -299,6 +340,7 @@ function HomeView({
               productCount: 0,
             }),
           onOpenProduct: (id) => onOpen({ id } as ProductCard),
+          onOpenScreen: (screen) => onScreen?.(screen),
         }}
       />
     </div>

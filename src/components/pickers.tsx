@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { uploadFile } from "@/app/(admin)/content/files/actions";
 
 /**
@@ -242,5 +242,499 @@ export function ImageUpload({
         }}
       />
     </label>
+  );
+}
+
+/**
+ * Where a tap goes — the whole shop, not just its collections.
+ *
+ * Shaped like the one in Shopify's theme editor, because that is the control
+ * the merchant already knows: a single field showing what is linked, with a
+ * cross to clear it, and a menu of everything in the shop behind it. Choose
+ * "Collections" and the field becomes a list of collections to search; choose
+ * "Products" and it searches products.
+ *
+ * Every link in the theme is the same four fields, and exactly one of them is
+ * set at a time, so choosing a kind clears the others. That is what keeps the
+ * rule the app follows ("web address, then product, then screen, then
+ * collection") from ever being ambiguous.
+ */
+export type LinkValue = {
+  handle?: string;
+  url?: string;
+  productId?: string;
+  screen?: string;
+};
+
+type Collection = { handle: string; title: string; count: number; image: string | null };
+
+/**
+ * Screens of the app a link can point at.
+ *
+ * The first six are the app's own screens. The last three are this shop's
+ * pages — Reviews, Happy customers and Requests — which the app draws as
+ * screens rather than fetching as documents, so they belong in the same list.
+ * There are no blogs or policies to offer: this shop keeps none.
+ */
+const SCREENS = [
+  { key: "home", ar: "الرئيسية", en: "Home" },
+  { key: "search", ar: "البحث", en: "Search" },
+  { key: "cart", ar: "السلة", en: "Cart" },
+  { key: "orders", ar: "الطلبات", en: "Orders" },
+  { key: "account", ar: "الحساب", en: "Account" },
+  { key: "live", ar: "البث", en: "Live" },
+];
+
+const PAGES = [
+  { key: "reviews", ar: "آراء العملاء", en: "Reviews" },
+  { key: "happy-customers", ar: "عملاء سعداء", en: "Happy customers" },
+  { key: "requests", ar: "الطلبات والمرتجعات", en: "Requests & returns" },
+];
+
+/** Every screen key the picker can store, pages included. */
+export const LINK_SCREEN_KEYS = [...SCREENS, ...PAGES].map((s) => s.key);
+
+type Kind = "none" | "collection" | "product" | "page" | "screen" | "url";
+
+function kindOf(v: LinkValue): Kind {
+  if (v.url) return "url";
+  if (v.productId) return "product";
+  if (v.screen) return PAGES.some((p) => p.key === v.screen) ? "page" : "screen";
+  if (v.handle) return "collection";
+  return "none";
+}
+
+// ---------------------------------------------------------------- the icons --
+// Small, flat and monochrome, so a row of them reads as one set rather than as
+// six drawings.
+const ICON = "h-3.5 w-3.5 shrink-0";
+
+function IcTag() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" className={ICON}>
+      <path d="M3 3h6.2L17 10.8 10.8 17 3 9.2V3Z" strokeLinejoin="round" />
+      <circle cx="6.6" cy="6.6" r="1.1" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+function IcBox() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" className={ICON}>
+      <path d="M10 2.6 17 6v8l-7 3.4L3 14V6l7-3.4Z" strokeLinejoin="round" />
+      <path d="M3 6l7 3.4L17 6M10 9.4V17.4" />
+    </svg>
+  );
+}
+
+function IcPage() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" className={ICON}>
+      <path d="M11.5 2.5H5.5v15h9V5.5l-3-3Z" strokeLinejoin="round" />
+      <path d="M11.5 2.5v3h3" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function IcScreen() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" className={ICON}>
+      <rect x="6" y="2.5" width="8" height="15" rx="1.8" />
+      <path d="M8.8 15.2h2.4" />
+    </svg>
+  );
+}
+
+function IcLink() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" className={ICON}>
+      <path d="M8.4 11.6a3 3 0 0 1 0-4.2l2.1-2.1a3 3 0 1 1 4.2 4.2l-1 1" strokeLinecap="round" />
+      <path d="M11.6 8.4a3 3 0 0 1 0 4.2l-2.1 2.1a3 3 0 1 1-4.2-4.2l1-1" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IcX() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-3 w-3">
+      <path d="M6 6l8 8M14 6l-8 8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function IcBack({ ar }: { ar: boolean }) {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      className={`${ICON} ${ar ? "rotate-180" : ""}`}
+    >
+      <path d="M12 4.5 6.5 10l5.5 5.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+const KIND_ICON: Record<Exclude<Kind, "none">, () => React.JSX.Element> = {
+  collection: IcTag,
+  product: IcBox,
+  page: IcPage,
+  screen: IcScreen,
+  url: IcLink,
+};
+
+export function LinkPicker({
+  value,
+  onChange,
+  collections,
+  input,
+  ar,
+}: {
+  value: LinkValue;
+  onChange: (next: LinkValue) => void;
+  collections: Collection[];
+  input: string;
+  ar: boolean;
+}) {
+  // Which panel is showing: the menu of kinds, or one kind's list. null is the
+  // closed state, where only the field is on screen.
+  const [open, setOpen] = useState<"menu" | Kind | null>(null);
+  const [q, setQ] = useState("");
+  const [hits, setHits] = useState<{ id: string; name: string; image: string | null }[]>([]);
+  const [chosen, setChosen] = useState("");
+  const [busy, setBusy] = useState(false);
+  const box = useRef<HTMLDivElement | null>(null);
+
+  const kind = kindOf(value);
+
+  // A stored product is only an id; ask what it is called so the merchant sees
+  // a name rather than a string of characters they cannot check.
+  useEffect(() => {
+    if (!value.productId) return setChosen("");
+    let alive = true;
+    fetch("/api/storefront/products/" + encodeURIComponent(value.productId))
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (alive && j?.ok) setChosen(String(j.data?.name ?? j.data?.title ?? ""));
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [value.productId]);
+
+  // Clicking anywhere else puts the menu away, the way every other menu on the
+  // page behaves. Without it a merchant with two links open sees two lists.
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: MouseEvent) => {
+      if (!box.current?.contains(e.target as Node)) setOpen(null);
+    };
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(null);
+    document.addEventListener("mousedown", away);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("mousedown", away);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [open]);
+
+  // Only one of the four is ever set.
+  const only = (next: LinkValue) => onChange({ handle: "", url: "", productId: "", screen: "", ...next });
+
+  const search = async (term: string) => {
+    setQ(term);
+    if (term.trim().length < 2) return setHits([]);
+    setBusy(true);
+    try {
+      const r = await fetch("/api/storefront/products?limit=8&q=" + encodeURIComponent(term.trim()));
+      const j = await r.json();
+      setHits(
+        j?.ok
+          ? (j.data.products ?? []).map((p: Record<string, unknown>) => ({
+              id: String(p.id),
+              name: String(p.name ?? ""),
+              image: (p.image as string) ?? null,
+            }))
+          : [],
+      );
+    } catch {
+      setHits([]);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** What the closed field reads, so the merchant can check it at a glance. */
+  const label = (): string => {
+    if (value.url) return value.url;
+    if (value.productId) return chosen || (ar ? "منتج" : "Product");
+    if (value.screen) {
+      const found = [...SCREENS, ...PAGES].find((s) => s.key === value.screen);
+      return found ? (ar ? found.ar : found.en) : value.screen;
+    }
+    if (value.handle) {
+      const found = collections.find((c) => c.handle === value.handle);
+      return found ? found.title : value.handle;
+    }
+    return ar ? "لا يفتح شيئاً" : "Opens nothing";
+  };
+
+  const Icon = kind === "none" ? null : KIND_ICON[kind];
+
+  const menu = [
+    { kind: "collection" as const, icon: IcTag, ar: "الأقسام", en: "Collections" },
+    { kind: "product" as const, icon: IcBox, ar: "المنتجات", en: "Products" },
+    { kind: "page" as const, icon: IcPage, ar: "الصفحات", en: "Pages" },
+    { kind: "screen" as const, icon: IcScreen, ar: "شاشات التطبيق", en: "App screens" },
+    { kind: "url" as const, icon: IcLink, ar: "رابط", en: "Web address" },
+  ];
+
+  const row =
+    "flex w-full items-center gap-2 px-2.5 py-1.5 text-start text-[12px] text-ink hover:bg-surface-hover";
+
+  return (
+    <div ref={box} className="relative">
+      {/* The field. Shows what is linked; the cross clears it. */}
+      <div
+        className={`${input} flex cursor-pointer items-center gap-2 ${
+          open ? "ring-2 ring-[rgb(139,92,246)]" : ""
+        }`}
+        onClick={() => setOpen(open ? null : "menu")}
+      >
+        <span className={kind === "none" ? "text-ink-soft" : "text-ink-muted"}>
+          {Icon ? <Icon /> : <IcLink />}
+        </span>
+        <span
+          className={`flex-1 truncate ${kind === "none" ? "text-ink-soft" : ""}`}
+          dir={value.url ? "ltr" : undefined}
+        >
+          {label()}
+        </span>
+        {kind !== "none" && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              only({});
+              setOpen(null);
+            }}
+            title={ar ? "إزالة" : "Clear"}
+            className="grid h-4 w-4 shrink-0 place-items-center rounded-full text-ink-soft hover:bg-surface-hover hover:text-ink"
+          >
+            <IcX />
+          </button>
+        )}
+      </div>
+
+      {open && (
+        <div className="absolute z-30 mt-1 w-full min-w-[220px] overflow-hidden rounded-xl border border-line bg-surface py-1 shadow-lg">
+          {open === "menu" && (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  only({});
+                  setOpen(null);
+                }}
+                className={`${row} text-ink-soft`}
+              >
+                <span className="w-3.5" />
+                {ar ? "لا يفتح شيئاً" : "Opens nothing"}
+              </button>
+              {menu.map((m) => (
+                <button
+                  key={m.kind}
+                  type="button"
+                  onClick={() => {
+                    setQ("");
+                    setHits([]);
+                    setOpen(m.kind);
+                  }}
+                  className={row}
+                >
+                  <span className="text-ink-muted">
+                    <m.icon />
+                  </span>
+                  {ar ? m.ar : m.en}
+                </button>
+              ))}
+            </>
+          )}
+
+          {open !== "menu" && (
+            <>
+              <button
+                type="button"
+                onClick={() => setOpen("menu")}
+                className={`${row} border-b border-line font-medium text-ink-muted`}
+              >
+                <IcBack ar={ar} />
+                {ar
+                  ? menu.find((m) => m.kind === open)?.ar
+                  : menu.find((m) => m.kind === open)?.en}
+              </button>
+
+              {open === "collection" && (
+                <CollectionList
+                  collections={collections}
+                  q={q}
+                  onQ={setQ}
+                  ar={ar}
+                  onPick={(handle) => {
+                    only({ handle });
+                    setOpen(null);
+                  }}
+                />
+              )}
+
+              {open === "product" && (
+                <div className="p-1.5">
+                  <input
+                    autoFocus
+                    value={q}
+                    onChange={(e) => search(e.target.value)}
+                    placeholder={ar ? "ابحثي عن منتج…" : "Search products…"}
+                    className={`${input} h-8 text-xs`}
+                  />
+                  {busy && (
+                    <div className="px-1 py-1.5 text-[11px] text-ink-soft">
+                      {ar ? "جارٍ البحث…" : "Searching…"}
+                    </div>
+                  )}
+                  {!busy && q.trim().length >= 2 && !hits.length && (
+                    <div className="px-1 py-1.5 text-[11px] text-ink-soft">
+                      {ar ? "لا يوجد منتج بهذا الاسم" : "No product by that name"}
+                    </div>
+                  )}
+                  <div className="max-h-56 overflow-y-auto">
+                    {hits.map((h) => (
+                      <button
+                        key={h.id}
+                        type="button"
+                        onClick={() => {
+                          only({ productId: h.id });
+                          setChosen(h.name);
+                          setHits([]);
+                          setQ("");
+                          setOpen(null);
+                        }}
+                        className={row}
+                      >
+                        {h.image ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={h.image} alt="" className="h-6 w-6 shrink-0 rounded object-cover" />
+                        ) : (
+                          <span className="h-6 w-6 shrink-0 rounded bg-surface-page" />
+                        )}
+                        <span className="truncate">{h.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {(open === "page" || open === "screen") && (
+                <div className="max-h-56 overflow-y-auto">
+                  {(open === "page" ? PAGES : SCREENS).map((s) => (
+                    <button
+                      key={s.key}
+                      type="button"
+                      onClick={() => {
+                        only({ screen: s.key });
+                        setOpen(null);
+                      }}
+                      className={row}
+                    >
+                      <span className="text-ink-muted">
+                        {open === "page" ? <IcPage /> : <IcScreen />}
+                      </span>
+                      {ar ? s.ar : s.en}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {open === "url" && (
+                <div className="p-1.5">
+                  <input
+                    autoFocus
+                    defaultValue={value.url ?? ""}
+                    onChange={(e) => only({ url: e.target.value })}
+                    onKeyDown={(e) => e.key === "Enter" && setOpen(null)}
+                    placeholder="https://…"
+                    className={`${input} h-8 text-xs`}
+                    dir="ltr"
+                  />
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** The collection list, with a search box once there are enough to need one. */
+function CollectionList({
+  collections,
+  q,
+  onQ,
+  ar,
+  onPick,
+}: {
+  collections: Collection[];
+  q: string;
+  onQ: (v: string) => void;
+  ar: boolean;
+  onPick: (handle: string) => void;
+}) {
+  const term = q.trim().toLowerCase();
+  const shown = term
+    ? collections.filter((c) => c.title.toLowerCase().includes(term) || c.handle.includes(term))
+    : collections;
+
+  return (
+    <>
+      {collections.length > 8 && (
+        <div className="p-1.5 pb-0">
+          <input
+            autoFocus
+            value={q}
+            onChange={(e) => onQ(e.target.value)}
+            placeholder={ar ? "ابحثي عن قسم…" : "Search collections…"}
+            className="h-8 w-full rounded-lg border border-line bg-surface-page px-2 text-xs outline-none focus:border-[rgb(139,92,246)]"
+          />
+        </div>
+      )}
+      <div className="max-h-56 overflow-y-auto p-1.5">
+        {shown.map((c) => (
+          <button
+            key={c.handle}
+            type="button"
+            onClick={() => onPick(c.handle)}
+            className="flex w-full items-center gap-2 rounded-lg px-1.5 py-1.5 text-start text-[12px] text-ink hover:bg-surface-hover"
+          >
+            {c.image ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={c.image} alt="" className="h-6 w-6 shrink-0 rounded object-cover" />
+            ) : (
+              <span className="grid h-6 w-6 shrink-0 place-items-center rounded bg-surface-page text-ink-soft">
+                <IcTag />
+              </span>
+            )}
+            <span className="flex-1 truncate">{c.title}</span>
+            <span className="shrink-0 text-[10px] text-ink-soft">{c.count}</span>
+          </button>
+        ))}
+        {!shown.length && (
+          <div className="px-1.5 py-1.5 text-[11px] text-ink-soft">
+            {ar ? "لا يوجد قسم بهذا الاسم" : "No collection by that name"}
+          </div>
+        )}
+      </div>
+    </>
   );
 }
