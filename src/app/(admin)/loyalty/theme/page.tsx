@@ -13,6 +13,7 @@ import {
   SCOPE_LABELS,
   SECTION_FIELDS,
   SECTION_SCOPES,
+  sectionText,
   TAB_FALLBACK,
   TAB_KEYS,
   loyaltyVars,
@@ -35,6 +36,23 @@ export default function LoyaltyThemePage() {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ tone: "ok" | "err"; text: string } | null>(null);
   const [openScope, setOpenScope] = useState<SectionScope | null>(null);
+
+  /**
+   * Open a section and put it where the merchant can see it.
+   *
+   * The preview's tabs are the obvious thing to press when you want to change
+   * a section - more obvious than a card further down a long column - so they
+   * press, and this brings the right card up to meet them.
+   */
+  const openSection = (scope: SectionScope) => {
+    setOpenScope(scope);
+    requestAnimationFrame(() => {
+      document.getElementById("ls-scope-" + scope)?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    });
+  };
 
   const dirty = useMemo(
     () => JSON.stringify(draft) !== JSON.stringify(saved),
@@ -283,9 +301,9 @@ export default function LoyaltyThemePage() {
               if (!fields.length) return null;
               const changed = fields.filter((f) => draft.sections?.[scope]?.[f.key]).length;
               return (
-                <Card key={scope} className="overflow-hidden p-0">
+                <Card key={scope} id={"ls-scope-" + scope} className="overflow-hidden p-0">
                   <button
-                    onClick={() => setOpenScope((o) => (o === scope ? null : scope))}
+                    onClick={() => (openScope === scope ? setOpenScope(null) : openSection(scope))}
                     className="flex w-full items-center justify-between gap-2 px-4 py-3 text-start hover:bg-surface-hover"
                   >
                     <span className="text-sm font-medium text-ink">
@@ -322,7 +340,7 @@ export default function LoyaltyThemePage() {
 
           {/* -------------------------------------------------- the preview -- */}
           <div className="w-full shrink-0 lg:sticky lg:top-4 lg:w-[380px]">
-            <Preview theme={draft} ar={ar} />
+            <Preview theme={draft} ar={ar} active={openScope} onPick={openSection} />
           </div>
         </div>
       )}
@@ -368,8 +386,20 @@ function Word({
  * card and a reward row. Every colour in the list on the left paints something
  * in here, so nothing is adjusted blind.
  */
-function Preview({ theme, ar }: { theme: LoyaltyTheme; ar: boolean }) {
+function Preview({
+  theme,
+  ar,
+  active,
+  onPick,
+}: {
+  theme: LoyaltyTheme;
+  ar: boolean;
+  active: SectionScope | null;
+  onPick: (scope: SectionScope) => void;
+}) {
   const w = theme.words;
+  const shownScope: SectionScope = active && active !== "shared" ? active : "overview";
+  const fields = SECTION_FIELDS.filter((f) => f.scope === shownScope);
   return (
     <Card className="overflow-hidden p-0">
       <div className="border-b border-line px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-ink-soft">
@@ -426,18 +456,36 @@ function Preview({ theme, ar }: { theme: LoyaltyTheme; ar: boolean }) {
           <div className="mt-3 text-xs font-semibold text-[var(--ls-gold)]">View Society →</div>
         </div>
 
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          {TAB_KEYS.slice(0, 4).map((key, i) => (
-            <span
+        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+          {TAB_KEYS.map((key) => (
+            <button
               key={key}
-              className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium ${
-                i === 0
+              onClick={() => onPick(key)}
+              title={ar ? "افتحي كلمات هذا القسم" : "Edit this section's wording"}
+              className={`whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition ${
+                key === shownScope
                   ? "bg-[var(--ls-accent)] text-white"
-                  : "bg-[var(--ls-card)] text-[var(--ls-ink-muted)] ring-1 ring-[var(--ls-line)]"
+                  : "bg-[var(--ls-card)] text-[var(--ls-ink-muted)] ring-1 ring-[var(--ls-line)] hover:ring-2"
               }`}
             >
               {tabLabel(theme, key)}
-            </span>
+            </button>
+          ))}
+        </div>
+
+        {/* The chosen section's own words, in the colours they will wear. */}
+        <div className="rounded-2xl bg-[var(--ls-card)] p-3 ring-1 ring-[var(--ls-line)]">
+          {fields.map((f, i) => (
+            <div
+              key={f.key}
+              className={
+                i === 0
+                  ? "font-serif text-lg text-[var(--ls-ink)]"
+                  : "mt-1 text-xs text-[var(--ls-ink-muted)]"
+              }
+            >
+              {sectionText(theme, shownScope, f.key)}
+            </div>
           ))}
         </div>
 

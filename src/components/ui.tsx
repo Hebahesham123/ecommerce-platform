@@ -20,13 +20,16 @@ export function Card({
   children,
   className = "",
   onClick,
+  id,
 }: {
   children: ReactNode;
   className?: string;
   onClick?: () => void;
+  /** So a card can be linked to, or scrolled to from elsewhere on the page. */
+  id?: string;
 }) {
   return (
-    <div className={`card ${className}`} onClick={onClick}>
+    <div id={id} className={`card ${className}`} onClick={onClick}>
       {children}
     </div>
   );
