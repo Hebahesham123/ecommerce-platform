@@ -220,7 +220,8 @@ function widgetPageBody(src: string, title: string): string {
 function navLinksScript(mount: string): string {
   return `<script>(function(){try{
 var M=${JSON.stringify(mount)};
-var LINKS=[['/reviews','Reviews'],['/requests','Requests']];
+var isAr=((document.cookie.match(/(?:^|; )sf_locale=([^;]*)/)||[])[1])==='ar';
+var LINKS=[['/reviews','Reviews'],['/requests','Requests'],['/account',isAr?'\\u062d\\u0633\\u0627\\u0628\\u064a':'My Account']];
 function fill(li,href,label){var a=li.querySelector('a');if(!a)return false;a.setAttribute('href',href);a.removeAttribute('aria-expanded');a.removeAttribute('aria-current');var sp=a.querySelector('span');if(sp){sp.textContent=label;}else{a.textContent=label;}return true;}
 function addTo(list){
   if(!list||list.__bbNav)return;
