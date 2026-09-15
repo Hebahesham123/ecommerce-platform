@@ -537,7 +537,7 @@ function OrderDetail({ orderNumber, ar, money, onBack }: { orderNumber: string; 
               <Card title={ar ? "طريقة الدفع" : "Payment method"}>
                 <div className="text-sm">{o.paymentMethod === "cod" ? (ar ? "الدفع عند الاستلام" : "Cash on delivery") : o.paymentMethod}</div>
               </Card>
-              <a href="/store/returns" target="_top" className={`${btnGhost} block text-center`}>{ar ? "إرجاع أو استبدال" : "Return or exchange"}</a>
+              <a href="/shop/requests" target="_top" className={`${btnGhost} block text-center`}>{ar ? "إرجاع أو استبدال" : "Return or exchange"}</a>
             </div>
           </div>
         </>
@@ -558,7 +558,7 @@ function Returns({ ar }: { ar: boolean }) {
         <div className="py-6 text-center">
           <div className="text-4xl">↩︎</div>
           <p className="mx-auto mt-3 max-w-sm text-sm text-[#7C6450]">{ar ? "ابدئي طلب إرجاع أو استبدال لأي منتج من طلباتك." : "Start a return or exchange for any item from your orders."}</p>
-          <a href="/store/returns" target="_top" className={`${btn} mt-4`}>{ar ? "بدء طلب إرجاع" : "Start a request"}</a>
+          <a href="/shop/requests" target="_top" className={`${btn} mt-4`}>{ar ? "بدء طلب إرجاع" : "Start a request"}</a>
         </div>
       </Card>
     </>
