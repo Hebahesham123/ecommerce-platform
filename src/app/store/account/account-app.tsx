@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useI18n, egp } from "@/lib/i18n";
 import type { Account } from "@/lib/account-service";
@@ -19,24 +20,43 @@ import { logout } from "../auth-actions";
 const SIG = "✦";
 const fmtN = (n: number) => new Intl.NumberFormat("en-US").format(n);
 
-type PageKey =
+export type PageKey =
   | "overview" | "orders" | "returns" | "wishlist"
   | "addresses" | "payment"
   | "vault" | "rewards" | "levels" | "activity"
   | "profile" | "notif";
 
-export default function AccountApp({ account, loyalty: initialLoyalty }: { account: Account; loyalty: LoyaltySummary | null }) {
+/** Each section is its own page. Overview lives at the account root. */
+function hrefFor(p: PageKey): string {
+  return p === "overview" ? "/store/account" : `/store/account/${p}`;
+}
+
+export default function AccountApp({
+  account,
+  loyalty: initialLoyalty,
+  section,
+  orderNumber,
+}: {
+  account: Account;
+  loyalty: LoyaltySummary | null;
+  section: PageKey;
+  orderNumber?: string;
+}) {
   const { lang } = useI18n();
   const ar = lang === "ar";
   const router = useRouter();
   const money = (n: number) => egp(n, lang);
 
   const [loyalty, setLoyalty] = useState<LoyaltySummary | null>(initialLoyalty);
-  const [page, setPage] = useState<PageKey>("overview");
-  const [openOrder, setOpenOrder] = useState<string | null>(null);
+  // The active section IS the URL now, so it comes in as a prop.
+  const page = section;
   const [toast, setToast] = useState<{ text: string; tone: "ok" | "err" } | null>(null);
   const [reveal, setReveal] = useState<{ title: string; code: string | null } | null>(null);
   const [pending, start] = useTransition();
+
+  // Loyalty is re-seeded from the server on navigation; keep it fresh after an
+  // action too (redeem/open) without a full reload.
+  useEffect(() => { setLoyalty(initialLoyalty); }, [initialLoyalty]);
 
   function flash(text: string, tone: "ok" | "err" = "ok") {
     setToast({ text, tone });
@@ -47,10 +67,12 @@ export default function AccountApp({ account, loyalty: initialLoyalty }: { accou
     if (r.ok) setLoyalty(r.data);
   }, []);
 
+  /** Navigate to a section's own page. */
   function go(p: PageKey) {
-    setOpenOrder(null);
-    setPage(p);
-    if (typeof window !== "undefined") window.scrollTo({ top: 0 });
+    router.push(hrefFor(p));
+  }
+  function openOrderNav(num: string) {
+    router.push(`/store/account/orders/${num}`);
   }
 
   function onRedeem(r: RewardView) {
@@ -147,9 +169,9 @@ export default function AccountApp({ account, loyalty: initialLoyalty }: { accou
               {g.items.map(([key, en, arLbl]) => {
                 const on = page === key;
                 return (
-                  <button
+                  <Link
                     key={key}
-                    onClick={() => go(key)}
+                    href={hrefFor(key)}
                     aria-current={on}
                     className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-start text-sm transition-colors ${
                       on ? "bg-gradient-to-br from-[#C08E5C] to-[#7A4B27] text-[#FFF6EA]" : "text-[#7C6450] hover:bg-[#F3E9DC]"
@@ -157,7 +179,7 @@ export default function AccountApp({ account, loyalty: initialLoyalty }: { accou
                   >
                     <span className="flex-1">{ar ? arLbl : en}</span>
                     {navValue[key] ? <span className={`text-[10px] ${on ? "text-[#F1D9BE]" : "text-[#A08972]"}`}>{navValue[key]}</span> : null}
-                  </button>
+                  </Link>
                 );
               })}
             </div>
@@ -175,12 +197,12 @@ export default function AccountApp({ account, loyalty: initialLoyalty }: { accou
 
         {/* Main */}
         <main className="min-w-0">
-          {openOrder ? (
-            <OrderDetail orderNumber={openOrder} ar={ar} money={money} onBack={() => setOpenOrder(null)} />
+          {orderNumber && page === "orders" ? (
+            <OrderDetail orderNumber={orderNumber} ar={ar} money={money} onBack={() => router.push("/store/account/orders")} />
           ) : (
             <>
-              {page === "overview" && <Overview account={account} loyalty={loyalty} ar={ar} money={money} go={go} openOrderFn={setOpenOrder} onOpenVault={onOpenVault} pending={pending} />}
-              {page === "orders" && <Orders account={account} ar={ar} money={money} open={setOpenOrder} />}
+              {page === "overview" && <Overview account={account} loyalty={loyalty} ar={ar} money={money} go={go} openOrderFn={openOrderNav} onOpenVault={onOpenVault} pending={pending} />}
+              {page === "orders" && <Orders account={account} ar={ar} money={money} open={openOrderNav} />}
               {page === "returns" && <Returns ar={ar} />}
               {page === "wishlist" && <Wishlist ar={ar} money={money} />}
               {page === "addresses" && <Addresses account={account} ar={ar} onSaved={() => router.refresh()} />}
