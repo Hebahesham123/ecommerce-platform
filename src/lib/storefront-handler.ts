@@ -217,8 +217,11 @@ function widgetPageBody(src: string, title: string): string {
  *  header and footer. Full width (the account centres itself), auto-sized to its
  *  content so there's no nested scrollbar. Same-origin, so height reading works. */
 function accountFrameBody(src: string): string {
-  return `<iframe id="bb-account-frame" src="${escHtml(src)}" title="Account" style="width:100%;min-height:80vh;border:0;display:block;background:#F2E8DA"></iframe>
-<script>(function(){var f=document.getElementById('bb-account-frame');if(!f)return;function fit(){try{var d=f.contentWindow.document;var h=Math.max(d.body.scrollHeight,d.documentElement.scrollHeight);if(h>0)f.style.height=(h+8)+'px';}catch(e){}}f.addEventListener('load',fit);setInterval(fit,500);})();</script>`;
+  // The account fills the frame with its own beige (min-h-screen inside), so no
+  // white shows below short pages. The fit sets height to the content EXACTLY
+  // (no +N creep, which — against an inner min-h-screen — grows without bound).
+  return `<iframe id="bb-account-frame" src="${escHtml(src)}" title="Account" style="width:100%;min-height:90vh;border:0;display:block;background:#F2E8DA"></iframe>
+<script>(function(){var f=document.getElementById('bb-account-frame');if(!f)return;function fit(){try{var d=f.contentWindow.document;var h=Math.max(d.body.scrollHeight,d.documentElement.scrollHeight);if(h>0)f.style.height=h+'px';}catch(e){}}f.addEventListener('load',fit);setInterval(fit,500);})();</script>`;
 }
 
 /** Best-effort: add Reviews & Requests into the theme's menu by cloning an

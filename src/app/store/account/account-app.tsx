@@ -127,7 +127,7 @@ export default function AccountApp({
   const initials = (account.name || account.phone).trim().slice(0, 2).toUpperCase();
 
   return (
-    <div className="min-h-[600px] bg-[#F2E8DA] text-[#3A291B]" dir={ar ? "rtl" : "ltr"}>
+    <div className="min-h-screen bg-[#F2E8DA] text-[#3A291B]" dir={ar ? "rtl" : "ltr"}>
       <div className="mx-auto grid max-w-[1180px] gap-6 px-4 py-8 lg:grid-cols-[260px_1fr]">
         {/* Sidebar / account menu. On mobile it IS the account home; a section
             page hides it and shows only that section (with a Menu link). */}
