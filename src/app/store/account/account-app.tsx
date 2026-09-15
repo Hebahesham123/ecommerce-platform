@@ -127,7 +127,7 @@ export default function AccountApp({
   const initials = (account.name || account.phone).trim().slice(0, 2).toUpperCase();
 
   return (
-    <div className="min-h-screen bg-[#F2E8DA] text-[#3A291B]" dir={ar ? "rtl" : "ltr"}>
+    <div className="min-h-[600px] bg-[#F2E8DA] text-[#3A291B]" dir={ar ? "rtl" : "ltr"}>
       <div className="mx-auto grid max-w-[1180px] gap-6 px-4 py-8 lg:grid-cols-[260px_1fr]">
         {/* Sidebar / account menu. On mobile it IS the account home; a section
             page hides it and shows only that section (with a Menu link). */}
@@ -188,7 +188,7 @@ export default function AccountApp({
 
           <div className="rounded-2xl border border-[#E4D7C5] bg-[#FBF7F1] p-1.5 shadow-sm">
             <button
-              onClick={() => start(async () => { await logout(); router.push("/shop"); })}
+              onClick={() => start(async () => { await logout(); (window.top ?? window).location.assign("/shop"); })}
               className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-start text-sm text-[#9B4B41] hover:bg-[#F3E9DC]"
             >
               {ar ? "تسجيل الخروج" : "Sign out"}
@@ -383,7 +383,7 @@ function Empty({ text, cta }: { text: string; cta?: { label: string; href: strin
   return (
     <div className="py-8 text-center text-sm text-[#A08972]">
       {text}
-      {cta && <div className="mt-3"><a href={cta.href} className={btn}>{cta.label}</a></div>}
+      {cta && <div className="mt-3"><a href={cta.href} target="_top" className={btn}>{cta.label}</a></div>}
     </div>
   );
 }
@@ -537,7 +537,7 @@ function OrderDetail({ orderNumber, ar, money, onBack }: { orderNumber: string; 
               <Card title={ar ? "طريقة الدفع" : "Payment method"}>
                 <div className="text-sm">{o.paymentMethod === "cod" ? (ar ? "الدفع عند الاستلام" : "Cash on delivery") : o.paymentMethod}</div>
               </Card>
-              <a href="/store/returns" className={`${btnGhost} block text-center`}>{ar ? "إرجاع أو استبدال" : "Return or exchange"}</a>
+              <a href="/store/returns" target="_top" className={`${btnGhost} block text-center`}>{ar ? "إرجاع أو استبدال" : "Return or exchange"}</a>
             </div>
           </div>
         </>
@@ -558,7 +558,7 @@ function Returns({ ar }: { ar: boolean }) {
         <div className="py-6 text-center">
           <div className="text-4xl">↩︎</div>
           <p className="mx-auto mt-3 max-w-sm text-sm text-[#7C6450]">{ar ? "ابدئي طلب إرجاع أو استبدال لأي منتج من طلباتك." : "Start a return or exchange for any item from your orders."}</p>
-          <a href="/store/returns" className={`${btn} mt-4`}>{ar ? "بدء طلب إرجاع" : "Start a request"}</a>
+          <a href="/store/returns" target="_top" className={`${btn} mt-4`}>{ar ? "بدء طلب إرجاع" : "Start a request"}</a>
         </div>
       </Card>
     </>

@@ -38,10 +38,17 @@ export default function StoreLayout({ children }: { children: ReactNode }) {
   // Requests renders bare for a different reason: it is embedded inside the
   // theme's own header and footer, so a second set of chrome here would show
   // the shopper two navigations stacked on top of each other.
+  // These render without the React store chrome because they are shown embedded
+  // inside the theme storefront (which brings its own header/footer): checkout,
+  // requests, happy-customers, and now the account + its auth pages (served at
+  // /shop/account). A second header inside the frame would stack two navs.
   const bare =
     (pathname?.startsWith("/store/checkout") ||
       pathname?.startsWith("/store/requests") ||
-      pathname?.startsWith("/store/happy-customers")) ??
+      pathname?.startsWith("/store/happy-customers") ||
+      pathname?.startsWith("/store/account") ||
+      pathname?.startsWith("/store/login") ||
+      pathname?.startsWith("/store/signup")) ??
     false;
 
   // The storefront is always light (its surfaces aren't dark-themed), even when

@@ -213,6 +213,14 @@ function widgetPageBody(src: string, title: string): string {
 <script>(function(){var f=document.getElementById('bb-widget-frame');if(!f)return;function fit(){try{var d=f.contentWindow.document;var h=Math.max(d.body.scrollHeight,d.documentElement.scrollHeight);if(h>0){f.style.minHeight='0px';f.style.height=(h+24)+'px';}}catch(e){}}f.addEventListener('load',fit);setInterval(fit,700);})();</script>`;
 }
 
+/** The full account app, embedded inside the theme so it wears the theme's own
+ *  header and footer. Full width (the account centres itself), auto-sized to its
+ *  content so there's no nested scrollbar. Same-origin, so height reading works. */
+function accountFrameBody(src: string): string {
+  return `<iframe id="bb-account-frame" src="${escHtml(src)}" title="Account" style="width:100%;min-height:80vh;border:0;display:block;background:#F2E8DA"></iframe>
+<script>(function(){var f=document.getElementById('bb-account-frame');if(!f)return;function fit(){try{var d=f.contentWindow.document;var h=Math.max(d.body.scrollHeight,d.documentElement.scrollHeight);if(h>0)f.style.height=(h+8)+'px';}catch(e){}}f.addEventListener('load',fit);setInterval(fit,500);})();</script>`;
+}
+
 /** Best-effort: add Reviews & Requests into the theme's menu by cloning an
  *  existing menu item so they inherit its styling. Purely additive + idempotent;
  *  if no menu is found it does nothing (the pages still work by direct link, and
@@ -807,12 +815,8 @@ async function storefrontGet(req: Request, config: MountConfig): Promise<Respons
     return html('<div class="predictive-search"></div>', 200, undefined, shared);
   }
 
-  // --- Checkout handoff to the existing COD flow ---------------------------
-  // The theme has no account templates of its own — hand account routes to the
-  // React store, which redirects to login when there's no session.
-  if (path === "/account" || path.startsWith("/account/")) {
-    return redirect("/store/account");
-  }
+  // Account routes are served as a themed page below (the account app embedded
+  // inside the theme's own header/footer), not redirected away.
 
   if (path === "/checkout" || path === "/cart/checkout") {
     // /store/checkout reads the same sf_cart cookie server-side, so we can hand
@@ -860,15 +864,19 @@ async function storefrontGet(req: Request, config: MountConfig): Promise<Respons
     if (stockHandle) await refreshProductStock(mount, stockHandle);
   }
 
-  // Reviews / Requests: our hosted widgets, rendered as real pages inside the
-  // theme (header/footer inherited from the store).
-  const widgetTitle = WIDGET_PAGES[path];
-  const customPage = widgetTitle
-    ? {
-        title: widgetTitle,
-        body: widgetPageBody(widgetSrc(originOf(req), path, mount), widgetTitle),
-      }
-    : undefined;
+  // Pages rendered inside the theme's own header/footer:
+  //  • the account app (so it shares the exact home-page header), and
+  //  • the Reviews / Requests / Happy-customers widgets.
+  let customPage: { title: string; body: string } | undefined;
+  if (path === "/account" || path.startsWith("/account/")) {
+    const inner = `${originOf(req)}/store/account${path.slice("/account".length)}`;
+    customPage = { title: "My Account", body: accountFrameBody(inner) };
+  } else if (WIDGET_PAGES[path]) {
+    customPage = {
+      title: WIDGET_PAGES[path],
+      body: widgetPageBody(widgetSrc(originOf(req), path, mount), WIDGET_PAGES[path]),
+    };
+  }
 
   const res = await renderStorefront({
     themeId,
