@@ -129,8 +129,9 @@ export default function AccountApp({
   return (
     <div className="min-h-screen bg-[#F2E8DA] text-[#3A291B]" dir={ar ? "rtl" : "ltr"}>
       <div className="mx-auto grid max-w-[1180px] gap-6 px-4 py-8 lg:grid-cols-[260px_1fr]">
-        {/* Sidebar */}
-        <aside className="flex flex-col gap-3">
+        {/* Sidebar / account menu. On mobile it IS the account home; a section
+            page hides it and shows only that section (with a Menu link). */}
+        <aside className={`${section === "overview" ? "flex" : "hidden lg:flex"} flex-col gap-3`}>
           <div className="rounded-2xl border border-[#E4D7C5] bg-[#FBF7F1] p-5 text-center shadow-sm">
             <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full border border-[#CDB99F] bg-gradient-to-br from-[#D9BFA2] to-[#A8764A] font-serif text-2xl text-white">
               {initials}
@@ -195,8 +196,15 @@ export default function AccountApp({
           </div>
         </aside>
 
-        {/* Main */}
-        <main className="min-w-0">
+        {/* Main. On mobile the overview panel is the menu's job, so hide it there
+            (the menu is the home); section pages show their content full-width. */}
+        <main className={`min-w-0 ${section === "overview" ? "hidden lg:block" : ""}`}>
+          {/* Mobile: a section page hides the nav, so give a way back to it. */}
+          {section !== "overview" && (
+            <Link href="/store/account" className="mb-4 inline-flex items-center gap-1 text-[11px] uppercase tracking-[0.16em] text-[#A46C3C] lg:hidden">
+              ← {ar ? "القائمة" : "Menu"}
+            </Link>
+          )}
           {orderNumber && page === "orders" ? (
             <OrderDetail orderNumber={orderNumber} ar={ar} money={money} onBack={() => router.push("/store/account/orders")} />
           ) : (
