@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useI18n, egp } from "@/lib/i18n";
 import { CartProvider, useCart } from "./cart";
 import { IcX } from "@/components/icons";
@@ -72,60 +72,107 @@ export default function StoreLayout({ children }: { children: ReactNode }) {
   );
 }
 
+/**
+ * The /store header, dressed to match the theme storefront's home nav: a bronze
+ * announcement strip, a centred serif BEAUTY BAR wordmark, a menu button, and
+ * search / account / cart icons — so moving between /shop and /store doesn't
+ * feel like two different sites.
+ */
 function StoreHeader() {
   const { lang, setLang } = useI18n();
   const ar = lang === "ar";
-  // Switching language here must also switch the theme storefront, or the two
-  // halves of the site would disagree the moment the shopper navigates back.
   const switchLang = () => {
     const next: Lang = ar ? "en" : "ar";
     writeLocaleCookie(next);
     setLang(next);
   };
   const { count, setOpen } = useCart();
+  const [menu, setMenu] = useState(false);
+
+  const links: [string, string, string][] = [
+    ["/shop", "Home", "الرئيسية"],
+    ["/store", "Shop all", "كل المنتجات"],
+    ["/store/account", "My Account", "حسابي"],
+    ["/store/society", "Society", "سوسايتي"],
+  ];
+  const icon = "flex h-9 w-9 items-center justify-center rounded-full text-ink-muted hover:bg-surface-hover";
+
   return (
-    <header className="sticky top-0 z-30 border-b border-line bg-white/90 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3">
-        <Link href={STOREFRONT_HOME} aria-label={ar ? "الصفحة الرئيسية" : "Home"} className="flex items-center gap-2">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-base font-bold text-white">
-            B
-          </span>
-          <span className="text-lg font-extrabold tracking-tight text-ink">BeautyBar</span>
-        </Link>
-        <nav className="ms-4 hidden gap-4 text-sm text-ink-muted sm:flex">
-          <Link href="/store" className="hover:text-ink">{ar ? "كل المنتجات" : "All products"}</Link>
-          {/* /store/account redirects to login when signed out, so the header
-              needs no session of its own. */}
-          <Link href="/store/account" className="hover:text-ink">{ar ? "حسابي" : "Account"}</Link>
-        </nav>
-        <div className="ms-auto flex items-center gap-2">
-          {/* The nav above is hidden below sm, so mobile gets its own account
-              icon — otherwise there is no way in on a phone. */}
-          <Link
-            href="/store/account"
-            aria-label={ar ? "حسابي" : "Account"}
-            className="rounded-lg p-2 text-ink-muted hover:bg-surface-hover sm:hidden"
-          >
-            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="8" r="3.5" />
-              <path d="M4.5 20a7.5 7.5 0 0 1 15 0" />
-            </svg>
-          </Link>
-          <button onClick={switchLang} className="rounded-lg px-2.5 py-1.5 text-sm text-ink-muted hover:bg-surface-hover">
-            {ar ? "EN" : "ع"}
-          </button>
+    <header className="sticky top-0 z-30 bg-white">
+      {/* Announcement strip */}
+      <div className="bg-[#7a4b27] px-3 py-2 text-center text-[11px] tracking-[0.16em] text-[#f1e0cb]">
+        {ar ? "شحن مجاني للطلبات فوق ٢٠٠٠ ج · اجمعي التواقيع، افتحي الامتيازات" : "FREE SHIPPING OVER 2,000 EGP · COLLECT SIGNATURES. UNLOCK PRIVILEGES."}
+      </div>
+
+      <div className="relative border-b border-line">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
+          {/* Menu */}
           <button
-            onClick={() => setOpen(true)}
-            className="relative flex items-center gap-2 rounded-xl border border-line px-3 py-1.5 text-sm font-medium hover:bg-surface-hover"
+            onClick={() => setMenu((m) => !m)}
+            aria-label={ar ? "القائمة" : "Menu"}
+            aria-expanded={menu}
+            className={icon}
           >
-            {ar ? "السلة" : "Cart"}
-            {count > 0 && (
-              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-brand px-1 text-xs font-bold text-white">
-                {count}
-              </span>
-            )}
+            <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+              <path d="M4 7h16M4 12h16M4 17h16" />
+            </svg>
           </button>
+
+          {/* Wordmark */}
+          <Link
+            href={STOREFRONT_HOME}
+            aria-label={ar ? "الصفحة الرئيسية" : "Home"}
+            className="absolute left-1/2 -translate-x-1/2 font-serif text-xl tracking-[0.22em] text-ink"
+          >
+            BEAUTY <span className="italic text-[#a46c3c]">BAR</span>
+          </Link>
+
+          {/* Right icons */}
+          <div className="flex items-center gap-1">
+            <button onClick={switchLang} className="rounded-full px-2 py-1.5 text-sm text-ink-muted hover:bg-surface-hover">
+              {ar ? "EN" : "ع"}
+            </button>
+            <Link href="/shop/search" aria-label={ar ? "بحث" : "Search"} className={icon}>
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+                <circle cx="11" cy="11" r="6.5" /><path d="m16 16 4 4" />
+              </svg>
+            </Link>
+            <Link href="/store/account" aria-label={ar ? "حسابي" : "Account"} className={icon}>
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="8" r="3.5" /><path d="M4.5 20a7.5 7.5 0 0 1 15 0" />
+              </svg>
+            </Link>
+            <button onClick={() => setOpen(true)} aria-label={ar ? "السلة" : "Cart"} className={`relative ${icon}`}>
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M5 8h14l-1 12H6L5 8Z" /><path d="M9 8a3 3 0 0 1 6 0" />
+              </svg>
+              {count > 0 && (
+                <span className="absolute -end-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#2b1b10] px-1 text-[10px] font-bold text-white">
+                  {count}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
+
+        {/* Menu dropdown */}
+        {menu && (
+          <>
+            <div className="fixed inset-0 z-10" onClick={() => setMenu(false)} />
+            <nav className="absolute z-20 mt-1 w-56 rounded-2xl border border-line bg-white p-1.5 shadow-lg ltr:left-3 rtl:right-3">
+              {links.map(([href, en, arLbl]) => (
+                <Link
+                  key={href}
+                  href={href}
+                  onClick={() => setMenu(false)}
+                  className="block rounded-xl px-3 py-2.5 text-sm text-ink hover:bg-surface-hover"
+                >
+                  {ar ? arLbl : en}
+                </Link>
+              ))}
+            </nav>
+          </>
+        )}
       </div>
     </header>
   );
