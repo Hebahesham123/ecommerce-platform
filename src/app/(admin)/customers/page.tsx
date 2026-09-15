@@ -2,9 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useI18n, egp, num } from "@/lib/i18n";
-import { labels, type PayMethod } from "@/lib/data";
+import { labels, type PayMethod, type Lifecycle } from "@/lib/data";
 import { listStoreOrders } from "../../store/actions";
 import { PageHeader } from "@/components/page-header";
+import { LifecycleBadge } from "@/components/status";
 import { Card, Avatar, Badge } from "@/components/ui";
 import {
   KpiRow,
@@ -27,6 +28,10 @@ type Customer = {
   ordersCount: number;
   totalSpent: number;
   lastDate: string;
+  /** Where their most recent order stands. */
+  lastStatus: Lifecycle;
+  /** Orders still in flight — neither completed nor cancelled. */
+  openCount: number;
   method: PayMethod;
   isRepeat: boolean;
 };
@@ -41,16 +46,33 @@ type OrderRow = {
   governorate: string;
   total: number;
   date: string;
+  createdAt: string;
+  lifecycle: Lifecycle;
   method: PayMethod;
 };
 
+/** An order nobody is waiting on any more. Everything else is still in flight. */
+const SETTLED: ReadonlySet<Lifecycle> = new Set<Lifecycle>(["completed", "cancelled"]);
+
 /** Group orders into unique customers (by name + phone + governorate) and
- *  roll up their order count, total spend, most recent order date and the
- *  payment method they use most often. */
+ *  roll up their order count, total spend, most recent order date, the status
+ *  that order is sitting at, how many are still open, and the payment method
+ *  they use most often. */
 function buildCustomers(orders: OrderRow[]): Customer[] {
   const map = new Map<
     string,
-    { name: string; phone: string; governorate: string; orders: number; spent: number; lastDate: string; methods: Record<PayMethod, number> }
+    {
+      name: string;
+      phone: string;
+      governorate: string;
+      orders: number;
+      spent: number;
+      lastDate: string;
+      lastAt: string;
+      lastStatus: Lifecycle;
+      open: number;
+      methods: Record<PayMethod, number>;
+    }
   >();
   for (const o of orders) {
     const key = `${o.customer}|${o.phone}|${o.governorate}`;
@@ -61,11 +83,23 @@ function buildCustomers(orders: OrderRow[]): Customer[] {
       orders: 0,
       spent: 0,
       lastDate: o.date,
+      lastAt: o.createdAt,
+      lastStatus: o.lifecycle,
+      open: 0,
       methods: { cod: 0, card: 0, wallet: 0 },
     };
     c.orders += 1;
     c.spent += o.total;
-    if (o.date > c.lastDate) c.lastDate = o.date;
+    // Status follows the newest order, so it answers "where does this customer
+    // stand right now" rather than whichever row happened to arrive last. The
+    // comparison is on the full timestamp: same-day orders tie on the date
+    // alone, and a tie would leave the status picked by the query's sort.
+    if (o.createdAt > c.lastAt) {
+      c.lastAt = o.createdAt;
+      c.lastDate = o.date;
+      c.lastStatus = o.lifecycle;
+    }
+    if (!SETTLED.has(o.lifecycle)) c.open += 1;
     c.methods[o.method] += 1;
     map.set(key, c);
   }
@@ -81,6 +115,8 @@ function buildCustomers(orders: OrderRow[]): Customer[] {
       ordersCount: c.orders,
       totalSpent: c.spent,
       lastDate: c.lastDate,
+      lastStatus: c.lastStatus,
+      openCount: c.open,
       method,
       isRepeat: c.orders > 1,
     };
@@ -118,6 +154,8 @@ export default function CustomersPage() {
               governorate: o.governorate,
               total: o.total,
               date: o.date,
+              createdAt: o.createdAt,
+              lifecycle: o.lifecycle,
               method: o.method,
             })),
           );
@@ -328,7 +366,7 @@ export default function CustomersPage() {
 
         {/* ---- Table ---- */}
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[840px] text-sm">
+          <table className="w-full min-w-[960px] text-sm">
             <thead>
               <tr className="border-b border-line text-xs text-ink-soft">
                 <th className="px-5 py-3 text-start font-medium">{t("col_customer")}</th>
@@ -339,6 +377,9 @@ export default function CustomersPage() {
                 </th>
                 <th className="px-3 py-3 text-start font-medium">
                   {ar ? "آخر طلب" : "Last order"}
+                </th>
+                <th className="px-3 py-3 text-start font-medium">
+                  {ar ? "حالة الطلب" : "Order status"}
                 </th>
                 <th className="px-3 py-3 text-start font-medium">
                   {ar ? "الشريحة" : "Segment"}
@@ -370,6 +411,20 @@ export default function CustomersPage() {
                     <td className="px-3 py-3.5 font-medium text-ink">{egp(c.totalSpent, lang)}</td>
                     <td className="px-3 py-3.5 text-ink-muted" dir="ltr">
                       {formatDate(c.lastDate)}
+                    </td>
+                    <td className="px-3 py-3.5">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <LifecycleBadge v={c.lastStatus} />
+                        {/* Only worth saying when an earlier order is also still
+                            open — the badge already speaks for the newest one. */}
+                        {c.openCount > 1 && (
+                          <span className="text-xs text-ink-soft">
+                            {ar
+                              ? `+${num(c.openCount - 1, lang)} قيد التنفيذ`
+                              : `+${num(c.openCount - 1, lang)} open`}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-3 py-3.5">
                       <div className="flex flex-wrap items-center gap-1.5">

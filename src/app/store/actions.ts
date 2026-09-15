@@ -466,6 +466,13 @@ export type PlacedOrder = {
   payment: "pending" | "authorized" | "paid" | "refunded";
   fulfillment: "unfulfilled" | "assigned" | "out" | "delivered" | "returned";
   date: string;
+  /**
+   * The full timestamp, where `date` is only the day. Two orders placed on the
+   * same day are indistinguishable by `date`, so anything that has to pick the
+   * latest one — the customers page reads the newest order's status — needs
+   * this rather than a tie it has to break by trusting the query's sort.
+   */
+  createdAt: string;
   itemsCount: number;
   /** Which surface placed it. Every pre-channel order reads as the website. */
   channel: Channel;
@@ -491,6 +498,7 @@ export async function listStoreOrders(): Promise<ActionResult<PlacedOrder[]>> {
       payment: (String(r.payment_status ?? "pending") as PlacedOrder["payment"]),
       fulfillment: (String(r.fulfillment_status ?? "unfulfilled") as PlacedOrder["fulfillment"]),
       date: String(r.created_at ?? "").slice(0, 10),
+      createdAt: String(r.created_at ?? ""),
       itemsCount: Array.isArray(r.store_order_items) ? r.store_order_items.length : 0,
       channel: normalizeChannel(r.channel),
     }));
