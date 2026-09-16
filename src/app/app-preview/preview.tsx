@@ -80,6 +80,25 @@ function visitorId(): string {
   }
 }
 
+/**
+ * The saved list, shared with the web storefront's account page.
+ *
+ * That page reads this exact key and renders straight from it, so entries keep
+ * the name, price and image rather than an id it would have to resolve.
+ */
+export const WISHLIST_KEY = "bb_wishlist";
+export type Wish = { id: string; name: string; price?: number; image?: string };
+
+export function readWishlist(): Wish[] {
+  try {
+    const raw = localStorage.getItem(WISHLIST_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? (parsed as Wish[]).filter((w) => w && typeof w.id === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
 export function readCart(): CartLine[] {
   try {
     const raw = localStorage.getItem(CART_KEY);
@@ -98,6 +117,7 @@ export function Preview() {
   const [phone, setPhone] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [cart, setCart] = useState<CartLine[]>([]);
+  const [wishlist, setWishlist] = useState<Wish[]>([]);
   const [sheet, setSheet] = useState<"signin" | "returns" | "enquiry" | null>(null);
   const log = useApiLog();
   const [showLog, setShowLog] = useState(false);
@@ -113,6 +133,7 @@ export function Preview() {
   useEffect(() => {
     setPhone(getToken() ? getPhone() : null);
     setCart(readCart());
+    setWishlist(readWishlist());
     setReady(true);
   }, []);
 
@@ -124,6 +145,15 @@ export function Preview() {
       /* private browsing */
     }
   }, [cart, ready]);
+
+  useEffect(() => {
+    if (!ready) return;
+    try {
+      localStorage.setItem(WISHLIST_KEY, JSON.stringify(wishlist));
+    } catch {
+      /* private browsing */
+    }
+  }, [wishlist, ready]);
 
   // Only the live-now offer greets the shopper by name, and it reads fine
   // without one, so this is best effort — the shop never waits on it.
@@ -187,6 +217,14 @@ export function Preview() {
 
   const signedIn = Boolean(phone);
   const count = cart.reduce((s, l) => s + l.quantity, 0);
+
+  const toggleWish = useCallback((card: { id: string; name: string; priceMin: number | null; image: string | null }) => {
+    setWishlist((w) =>
+      w.some((x) => x.id === card.id)
+        ? w.filter((x) => x.id !== card.id)
+        : [...w, { id: card.id, name: card.name, price: card.priceMin ?? undefined, image: card.image ?? undefined }],
+    );
+  }, []);
 
   const add = useCallback((itemId: string) => {
     setCart((c) => {
@@ -275,6 +313,8 @@ export function Preview() {
               <Shop
                 ar={ar}
                 onAdd={add}
+                wishlist={wishlist}
+                onToggleWish={toggleWish}
                 onTheme={setTheme}
                 shopperName={shopperName}
                 query={query}

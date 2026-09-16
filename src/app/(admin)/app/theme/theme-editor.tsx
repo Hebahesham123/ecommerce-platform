@@ -1094,6 +1094,13 @@ export function ThemeEditor() {
                               push({ kind: "collection", handle, title }),
                             onOpenProduct: (id) => push({ kind: "product", id }),
                             onOpenScreen: showScreen,
+                            // Drawn, but wired to nothing. This preview earns
+                            // its keep by showing the card the app will show,
+                            // and a card missing its heart and its add button
+                            // is not that card. There is no basket to fill
+                            // here, so the buttons sit there looking right.
+                            onAddToCart: () => {},
+                            onToggleWishlist: () => {},
                           }}
                           showPlaceholders
                         />

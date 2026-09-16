@@ -40,6 +40,8 @@ const SORTS = [
 export function Shop({
   ar,
   onAdd,
+  wishlist,
+  onToggleWish,
   onLeave,
   onTheme,
   shopperName,
@@ -52,6 +54,9 @@ export function Shop({
 }: {
   ar: boolean;
   onAdd: (itemId: string) => void;
+  /** The saved list and its toggle, owned by the shell so every tab agrees. */
+  wishlist?: readonly { id: string }[];
+  onToggleWish?: (card: { id: string; name: string; priceMin: number | null; image: string | null }) => void;
   /** Targets that belong to another tab or another sheet the shell owns. */
   onLeave: (what: "cart" | "requests") => void;
   /** The shell wears the brand too, and /home is where it arrives. */
@@ -246,6 +251,9 @@ export function Shop({
           onOpen={(p) => setOpen(p.id)}
           onScreen={onScreen}
           shopperName={shopperName}
+          onAdd={onAdd}
+          wishlist={wishlist}
+          onToggleWish={onToggleWish}
         />
       ) : (
         <ListView
@@ -310,6 +318,9 @@ function HomeView({
   onOpen,
   onScreen,
   shopperName,
+  onAdd,
+  wishlist,
+  onToggleWish,
 }: {
   ar: boolean;
   home: Home;
@@ -317,6 +328,9 @@ function HomeView({
   onOpen: (p: ProductCard) => void;
   onScreen?: (screen: string) => void;
   shopperName?: string | null;
+  onAdd?: (itemId: string) => void;
+  wishlist?: readonly { id: string }[];
+  onToggleWish?: (card: { id: string; name: string; priceMin: number | null; image: string | null }) => void;
 }) {
   return (
     <div className="mt-3">
@@ -341,6 +355,9 @@ function HomeView({
             }),
           onOpenProduct: (id) => onOpen({ id } as ProductCard),
           onOpenScreen: (screen) => onScreen?.(screen),
+          onAddToCart: onAdd ? (variantId) => onAdd(variantId) : undefined,
+          onToggleWishlist: onToggleWish,
+          wishlist: wishlist?.map((w) => w.id),
         }}
       />
     </div>

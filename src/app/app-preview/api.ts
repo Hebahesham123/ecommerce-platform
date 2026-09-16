@@ -191,6 +191,10 @@ export type ProductCard = {
   priceMax: number | null;
   compareAt: number | null;
   available: number;
+  vendor?: string | null;
+  /** Set only when the product has exactly one variant — see AppProductCard. */
+  variantId?: string | null;
+  variantCount?: number;
 };
 
 export type Collection = {

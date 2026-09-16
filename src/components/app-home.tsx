@@ -23,6 +23,11 @@ export type Card = {
   image: string | null;
   priceMin: number | null;
   compareAt: number | null;
+  /** The brand line above the title, when the store sets one. */
+  vendor?: string | null;
+  /** The only variant, when there is exactly one — see AppProductCard. */
+  variantId?: string | null;
+  variantCount?: number;
 };
 
 export type HomeCollection = {
@@ -58,6 +63,22 @@ export type HomeHandlers = {
   onOpenProduct?: (id: string) => void;
   /** A place in the app itself: home, search, cart, orders, account. */
   onOpenScreen?: (screen: string) => void;
+  /**
+   * Add the single variant of a card to the cart. Only ever called for a
+   * product that has exactly one; the card opens the product instead when
+   * there is a choice to make. Leave it out and the card shows no add button,
+   * which is what the theme editor wants — it is previewing a design, and a
+   * cart it cannot fill is worse than no button at all.
+   */
+  onAddToCart?: (variantId: string, productId: string) => void;
+  /**
+   * Toggle the wishlist. Takes the whole card, not an id: the saved list is
+   * rendered on a screen that never reloads the catalogue, so it has to keep
+   * the name, price and image alongside the id.
+   */
+  onToggleWishlist?: (card: Card) => void;
+  /** Product ids currently on the wishlist, so the heart can draw filled. */
+  wishlist?: readonly string[];
 };
 
 const money = (v: number | null, ar: boolean) =>
@@ -144,39 +165,141 @@ function Thumb({
   );
 }
 
+/**
+ * One product, everywhere a product is drawn.
+ *
+ * Every product block on the home screen renders through here, so the card is
+ * designed once. The parts are in the order a shopper reads them: the photo,
+ * what it saves you, who made it, what it is, what it costs.
+ *
+ * The heart and the add button are drawn only when the surface passed a
+ * handler for them. The theme editor passes neither — it is previewing a
+ * layout, and a button that cannot do its job is worse than no button.
+ */
+/**
+ * The handler bundle every Tile needs, unpacked once.
+ *
+ * Four call sites drawing the same card should not each spell out the same
+ * four props. A surface that passed no cart or wishlist handler gets undefined
+ * through to Tile, which then draws neither button.
+ */
+function tileProps(handlers: HomeHandlers, productId: string) {
+  return {
+    onOpen: handlers.onOpenProduct,
+    onAdd: handlers.onAddToCart,
+    onWish: handlers.onToggleWishlist,
+    wished: handlers.wishlist?.includes(productId) ?? false,
+  };
+}
+
 function Tile({
   card,
   ar,
   accent,
   wide,
   onOpen,
+  onAdd,
+  onWish,
+  wished,
 }: {
   card: Card;
   ar: boolean;
   accent: string;
   wide?: boolean;
   onOpen?: (id: string) => void;
+  onAdd?: (variantId: string, productId: string) => void;
+  onWish?: (card: Card) => void;
+  wished?: boolean;
 }) {
+  const was = card.compareAt;
+  const now = card.priceMin;
+  const onSale = was != null && now != null && was > now;
+  // Rounded, because "-27.5%" reads like a rounding error rather than a deal.
+  const off = onSale ? Math.round(((was - now) / was) * 100) : 0;
+
+  // A product with one variant can go straight in. Anything with a choice --
+  // a size, a colour -- opens instead, because guessing on the shopper's
+  // behalf is how you earn a return.
+  const single = card.variantId != null && (card.variantCount ?? 1) === 1;
+  const canAdd = Boolean(onAdd);
+
   return (
-    <button
-      onClick={() => onOpen?.(card.id)}
-      className={`${wide ? "w-32 shrink-0" : ""} overflow-hidden rounded-2xl border border-slate-200 bg-white text-start`}
+    <div
+      className={`${wide ? "w-40 shrink-0" : ""} relative overflow-hidden rounded-2xl border border-slate-200 bg-white`}
     >
-      <Thumb src={card.image} className="aspect-square rounded-none" />
-      <div className="p-2">
-        <div className="line-clamp-2 text-[11px] leading-snug text-slate-800">{card.name}</div>
-        <div className="mt-1 flex items-baseline gap-1.5">
-          <span className="text-sm font-bold" style={{ color: accent }}>
-            {money(card.priceMin, ar)}
-          </span>
-          {card.compareAt != null && card.priceMin != null && card.compareAt > card.priceMin && (
-            <span className="text-[10px] text-slate-400 line-through">
-              {money(card.compareAt, ar)}
+      <button onClick={() => onOpen?.(card.id)} className="block w-full text-start">
+        <span className="relative block bg-white p-2">
+          <Thumb src={card.image} className="aspect-square rounded-xl" />
+          {off > 0 && (
+            <span
+              className="absolute bottom-1 start-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold text-white shadow-sm"
+              style={{ background: accent }}
+            >
+              −{off}%
             </span>
           )}
-        </div>
-      </div>
-    </button>
+        </span>
+        <span className="block px-2.5 pb-2.5 pt-0.5">
+          {card.vendor && (
+            <span className="block truncate text-[9px] font-bold uppercase tracking-[0.08em] text-slate-900">
+              {card.vendor}
+            </span>
+          )}
+          <span className="mt-0.5 line-clamp-2 block min-h-[2.1em] text-[11px] leading-snug text-slate-500">
+            {card.name}
+          </span>
+          <span className="mt-1 block text-[13px] font-bold" style={{ color: accent }}>
+            {money(now, ar)}
+          </span>
+          {onSale && (
+            <span className="block text-[10px] text-slate-400 line-through">{money(was, ar)}</span>
+          )}
+        </span>
+      </button>
+
+      {onWish && (
+        <button
+          onClick={() => onWish(card)}
+          aria-pressed={wished}
+          aria-label={ar ? "أضيفي إلى المفضلة" : "Add to wishlist"}
+          className="absolute end-2.5 top-2.5 grid h-7 w-7 place-items-center rounded-full bg-white/90 shadow-sm backdrop-blur"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            className="h-3.5 w-3.5"
+            fill={wished ? accent : "none"}
+            stroke={wished ? accent : "#94a3b8"}
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M20.8 5.6a5 5 0 0 0-7.1 0L12 7.3l-1.7-1.7a5 5 0 1 0-7.1 7.1l8.8 8.8 8.8-8.8a5 5 0 0 0 0-7.1Z" />
+          </svg>
+        </button>
+      )}
+
+      {canAdd && (
+        <button
+          onClick={() => (single ? onAdd?.(card.variantId as string, card.id) : onOpen?.(card.id))}
+          aria-label={
+            single ? (ar ? "أضيفي إلى الحقيبة" : "Add to bag") : ar ? "اختاري المقاس" : "Choose a size"
+          }
+          className="absolute bottom-2.5 end-2.5 grid h-7 w-7 place-items-center rounded-full text-white shadow-sm"
+          style={{ background: accent }}
+        >
+          <svg
+            viewBox="0 0 24 24"
+            className="h-3.5 w-3.5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+          >
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -305,7 +428,7 @@ function BlockView({
           />
           <div className="-mx-4 mt-2 flex overflow-x-auto px-4 pb-1" style={{ gap: "var(--app-item-gap, 8px)" }}>
             {cards.map((c) => (
-              <Tile key={c.id} card={c} ar={ar} accent={accent} wide onOpen={handlers.onOpenProduct} />
+              <Tile key={c.id} card={c} ar={ar} accent={accent} wide {...tileProps(handlers, c.id)} />
             ))}
           </div>
         </section>
@@ -360,7 +483,7 @@ function BlockView({
                         card={card}
                         ar={ar}
                         accent={accent}
-                        onOpen={handlers.onOpenProduct}
+                        {...tileProps(handlers, card.id)}
                       />
                     ))}
                   </div>
@@ -373,7 +496,7 @@ function BlockView({
                         ar={ar}
                         accent={accent}
                         wide
-                        onOpen={handlers.onOpenProduct}
+                        {...tileProps(handlers, card.id)}
                       />
                     ))}
                   </div>
@@ -849,7 +972,7 @@ function Tabs({
       {products.length ? (
         <div className="-mx-4 mt-2 flex overflow-x-auto px-4 pb-1" style={{ gap: "var(--app-item-gap, 8px)" }}>
           {products.map((p) => (
-            <Tile key={p.id} card={p} ar={ar} accent={accent} wide onOpen={handlers.onOpenProduct} />
+            <Tile key={p.id} card={p} ar={ar} accent={accent} wide {...tileProps(handlers, p.id)} />
           ))}
         </div>
       ) : (

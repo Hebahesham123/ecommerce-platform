@@ -126,10 +126,20 @@ export type AppProductCard = {
   priceMax: number | null;
   compareAt: number | null;
   available: number;
+  /** The brand line above the title. Empty for stores that do not set one. */
+  vendor: string | null;
+  /**
+   * The only variant, when there is exactly one. A card can then add to the
+   * cart on its own; anything with a choice to make has to open the product,
+   * because picking a size for the shopper is worse than asking.
+   */
+  variantId: string | null;
+  variantCount: number;
 };
 
 export function toCard(p: ProductDrop): AppProductCard {
   const images = Array.isArray(p.images) ? (p.images as unknown[]) : [];
+  const variants = p.variants ?? [];
   return {
     id: String(p.id),
     handle: String(p.handle),
@@ -139,6 +149,9 @@ export function toCard(p: ProductDrop): AppProductCard {
     priceMax: majorOrNull(p.price_max),
     compareAt: majorOrNull(p.compare_at_price),
     available: Number(p.quantity_available ?? 0),
+    vendor: (p.vendor as string) || null,
+    variantId: variants.length === 1 ? String(variants[0].id) : null,
+    variantCount: variants.length,
   };
 }
 
