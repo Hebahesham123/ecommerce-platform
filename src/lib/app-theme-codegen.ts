@@ -1687,16 +1687,24 @@ export function CountdownDeals({
   const r = settings.radius && settings.radius > 0 ? settings.radius : 14;
   const badgeBg = settings.badgeBg || colors.accent;
   const parts = [two(Math.floor(left / 3600)), two(Math.floor((left % 3600) / 60)), two(left % 60)];
+  const units = ["H", "M", "S"];
 
   return (
     <>
       <View style={styles.head}>
         <Text style={styles.heading} numberOfLines={1}>{settings.title ?? ""}</Text>
         {settings.showTimer !== false ? (
-          <View style={styles.timer}>
+          <View style={[styles.timer, { backgroundColor: colors.accent + "14" }]}>
+            <View
+              style={[styles.dot, { backgroundColor: colors.accent, opacity: left % 2 === 0 ? 1 : 0.3 }]}
+            />
             {parts.map((p, i) => (
-              <View key={i} style={[styles.tick, { backgroundColor: colors.accent }]}>
-                <Text style={styles.tickText}>{p}</Text>
+              <View key={i} style={styles.tickWrap}>
+                {i > 0 ? <Text style={[styles.colon, { color: colors.accent }]}>:</Text> : null}
+                <View style={[styles.tick, { backgroundColor: colors.accent }]}>
+                  <Text style={styles.tickText}>{p}</Text>
+                  <Text style={styles.tickUnit}>{units[i]}</Text>
+                </View>
               </View>
             ))}
           </View>
@@ -1747,11 +1755,15 @@ export function CountdownDeals({
 }
 
 const styles = StyleSheet.create({
-  head: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: spacing.sm },
+  head: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm },
   heading: { flex: 1, fontSize: 16, fontWeight: "700", color: colors.ink, fontFamily: theme.titleFont },
-  timer: { flexDirection: "row", gap: 4 },
-  tick: { borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
-  tickText: { fontSize: 11, fontWeight: "700", color: "#fff" },
+  timer: { flexDirection: "row", alignItems: "center", gap: 4, borderRadius: 999, paddingLeft: 6, paddingRight: 8, paddingVertical: 4 },
+  dot: { width: 6, height: 6, borderRadius: 3, marginRight: 2 },
+  tickWrap: { flexDirection: "row", alignItems: "center" },
+  colon: { fontSize: 11, fontWeight: "700", opacity: 0.4, paddingHorizontal: 3, paddingBottom: 4 },
+  tick: { alignItems: "center", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 4 },
+  tickText: { fontSize: 12, fontWeight: "700", color: "#fff" },
+  tickUnit: { fontSize: 7, fontWeight: "600", color: "#fff", opacity: 0.75, marginTop: 2 },
   row: { gap: gap.item, paddingVertical: spacing.sm },
   card: { width: 158, overflow: "hidden", borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface },
   photo: { width: "100%", height: 124, backgroundColor: colors.page },

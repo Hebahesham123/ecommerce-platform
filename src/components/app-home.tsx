@@ -1206,6 +1206,7 @@ function CountdownDeals({
   const s = block.settings ?? {};
   const go = opener(data, handlers);
   const parts = useCountdownParts(int(s.endsInMinutes, 135));
+  const units = ar ? ["س", "د", "ث"] : ["H", "M", "S"];
   const radius = int(s.radius, 14);
   const badgeBg = str(s.badgeBg, accent);
   const showTimer = s.showTimer !== false;
@@ -1216,17 +1217,43 @@ function CountdownDeals({
 
   return (
     <section>
-      <div className="flex items-end justify-between gap-2">
+      <div className="flex items-center justify-between gap-2">
         <h3 className="min-w-0 truncate text-[16px] font-bold tracking-tight text-slate-900">{str(s.title)}</h3>
         {showTimer && (
-          <span className="flex shrink-0 items-center gap-1">
-            {parts.map((part, i) => (
+          // hh:mm:ss on its own is a row of numbers you have to decode. The
+          // units under each box say what they are, and the live dot says the
+          // clock is actually moving rather than a picture of a time.
+          <span
+            dir="ltr"
+            className="flex shrink-0 items-center gap-1 rounded-full py-1 pe-2 ps-1.5"
+            style={{ background: `${accent}14` }}
+          >
+            <span className="relative me-0.5 flex h-1.5 w-1.5 shrink-0">
               <span
-                key={i}
-                className="rounded px-1.5 py-0.5 font-mono text-[11px] font-bold tabular-nums text-white"
+                className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75"
                 style={{ background: accent }}
-              >
-                {part}
+              />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full" style={{ background: accent }} />
+            </span>
+            {parts.map((part, i) => (
+              <span key={i} className="flex items-center">
+                {i > 0 && (
+                  <span
+                    className="px-[3px] pb-1 text-[11px] font-bold leading-none opacity-40"
+                    style={{ color: accent }}
+                  >
+                    :
+                  </span>
+                )}
+                <span
+                  className="flex flex-col items-center rounded-md px-1.5 py-1 leading-none text-white shadow-sm"
+                  style={{ background: accent }}
+                >
+                  <span className="font-mono text-[12px] font-bold tabular-nums">{part}</span>
+                  <span className="mt-[2px] text-[7px] font-semibold uppercase tracking-wide opacity-75">
+                    {units[i]}
+                  </span>
+                </span>
               </span>
             ))}
           </span>
