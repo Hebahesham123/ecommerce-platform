@@ -14,6 +14,7 @@ import {
 import { Btn, Empty, money, Note, Sheet, Spinner } from "./ui";
 import { Reviews } from "./reviews";
 import { AppHome, type HomeData } from "@/components/app-home";
+import { CollectionPage, ProductPage, type ScreenHandlers } from "@/components/app-screens";
 
 /**
  * The shopping half of the preview.
@@ -206,6 +207,23 @@ export function Shop({
     }
   }
 
+  // What the collection and product screens may do: open things, add to the
+  // bag (as many as the shopper chose), buy now, and keep the wishlist.
+  const screenHandlers: ScreenHandlers = {
+    onOpenProduct: (id) => setOpen(id),
+    onOpenScreen: (screen) => onScreen?.(screen),
+    onAdd: (itemId, quantity) => {
+      for (let i = 0; i < quantity; i++) onAdd(itemId);
+    },
+    onBuyNow: (itemId, quantity) => {
+      for (let i = 0; i < quantity; i++) onAdd(itemId);
+      setOpen(null);
+      onLeave("cart");
+    },
+    onToggleWishlist: onToggleWish,
+    wishlist: wishlist?.map((w) => w.id),
+  };
+
   const mainMenu =
     home?.menus.find((m) => m.handle === home.theme.settings.menuHandle) ??
     home?.menus[0] ??
@@ -222,7 +240,8 @@ export function Shop({
         </div>
       )}
       <div className="p-4">
-      <div className="flex items-center gap-2">
+      {/* A collection wears its own banner at the very top. */}
+      <div className={`flex items-center gap-2 ${view.kind === "collection" ? "hidden" : ""}`}>
         {mainMenu && (
           <button
             onClick={() => setMenu(mainMenu)}
@@ -259,6 +278,23 @@ export function Shop({
           wishlist={wishlist}
           onToggleWish={onToggleWish}
         />
+      ) : view.kind === "collection" ? (
+        <div className="-mx-4 -mb-4 -mt-4">
+          <CollectionPage
+            key={view.handle}
+            handle={view.handle}
+            title={view.title}
+            settings={home.theme.screens.collection}
+            ar={ar}
+            handlers={{
+              ...screenHandlers,
+              onBack: () => {
+                setQ("");
+                setView({ kind: "home" });
+              },
+            }}
+          />
+        </div>
       ) : (
         <ListView
           ar={ar}
@@ -299,7 +335,19 @@ export function Shop({
         </Note>
       </Sheet>
 
-      <ProductSheet ar={ar} productId={open} onClose={() => setOpen(null)} onAdd={onAdd} />
+      {/* A product is a screen pushed over everything, as it is in the app. */}
+      {open && home && (
+        <div className="absolute inset-0 z-20 overflow-y-auto bg-white">
+          <ProductPage
+            key={open}
+            id={open}
+            settings={home.theme.screens.product}
+            ar={ar}
+            crumb={view.kind === "collection" ? view.title : undefined}
+            handlers={{ ...screenHandlers, onBack: () => setOpen(null) }}
+          />
+        </div>
+      )}
       </div>
     </div>
   );
@@ -500,79 +548,6 @@ function MenuTree({
         </li>
       ))}
     </ul>
-  );
-}
-
-// --------------------------------------------------------------- product ---
-function ProductSheet({
-  ar,
-  productId,
-  onClose,
-  onAdd,
-}: {
-  ar: boolean;
-  productId: string | null;
-  onClose: () => void;
-  onAdd: (itemId: string) => void;
-}) {
-  const [product, setProduct] = useState<Product | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(() => {
-    setProduct(null);
-    setError(null);
-    if (!productId) return;
-    api.get<Product>(`/products/${encodeURIComponent(productId)}`).then((r) => {
-      if (r.ok) setProduct(r.data);
-      else setError(r.error);
-    });
-  }, [productId]);
-  useEffect(load, [load]);
-
-  return (
-    <Sheet open={Boolean(productId)} onClose={onClose} title={product?.name ?? "…"}>
-      {error ? (
-        <Failed ar={ar} error={error} onRetry={load} />
-      ) : !product ? (
-        <Spinner />
-      ) : (
-      <div className="space-y-3">
-        {product?.image && <Thumb src={product.image} className="h-44 w-full" />}
-        {product?.description && (
-          <p className="line-clamp-4 text-xs leading-relaxed text-slate-600">
-            {product.description.replace(/<[^>]*>/g, " ").trim()}
-          </p>
-        )}
-        <ul className="space-y-2">
-          {(product?.variants ?? []).map((v) => (
-            <li key={v.id} className="flex items-center gap-3 rounded-xl border border-slate-200 p-2.5">
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm text-slate-900">
-                  {v.variantTitle ?? (ar ? "الأساسي" : "Default")}
-                </div>
-                <div className="font-mono text-[10px] text-slate-400" dir="ltr">
-                  {v.id}
-                </div>
-                <div className="text-xs text-slate-500">
-                  {v.price != null ? money(v.price, ar) : "—"} · {ar ? "متاح" : "in stock"}{" "}
-                  {v.available}
-                </div>
-              </div>
-              <Btn
-                onClick={() => {
-                  onAdd(v.id);
-                  onClose();
-                }}
-                disabled={v.available <= 0 || v.price == null}
-              >
-                {ar ? "أضيفي" : "Add"}
-              </Btn>
-            </li>
-          ))}
-        </ul>
-      </div>
-      )}
-    </Sheet>
   );
 }
 

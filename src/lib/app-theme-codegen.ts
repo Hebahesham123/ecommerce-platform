@@ -235,6 +235,10 @@ export type Card = {
   image: string | null;
   priceMin: number | null;
   compareAt: number | null;
+  vendor?: string | null;
+  /** The only variant, when there is exactly one - so a card can add it straight away. */
+  variantId?: string | null;
+  variantCount?: number;
 };
 
 export type HomePayload = {
@@ -312,7 +316,11 @@ export type CollectionPayload = {
   offset: number;
   limit: number;
   sort: Sort;
+  /** The brands in the collection with their counts, and its price span. */
+  facets?: { vendors: { name: string; count: number }[]; priceMin: number; priceMax: number };
 };
+
+export type CollectionFilters = { brands: string[]; min: number; max: number; inStock: boolean; onSale: boolean };
 
 export type PricedLine = {
   itemId: string;
@@ -359,9 +367,24 @@ export type Account = {
 };
 
 /** One collection's products. Sorting and paging happen on the server. */
-export const fetchCollection = (handle: string, sort: Sort = "manual", offset = 0, limit = 24) =>
+export const fetchCollection = (
+  handle: string,
+  sort: Sort = "manual",
+  offset = 0,
+  limit = 24,
+  filters?: CollectionFilters,
+) =>
   api<CollectionPayload>(
-    \`/collections/\${encodeURIComponent(handle)}?sort=\${sort}&offset=\${offset}&limit=\${limit}\`,
+    "/collections/" +
+      encodeURIComponent(handle) +
+      "?sort=" + sort +
+      "&offset=" + offset +
+      "&limit=" + limit +
+      (filters && filters.brands.length ? "&vendor=" + encodeURIComponent(filters.brands.join(",")) : "") +
+      (filters && filters.min > 0 ? "&minPrice=" + filters.min : "") +
+      (filters && filters.max > 0 ? "&maxPrice=" + filters.max : "") +
+      (filters && filters.inStock ? "&inStock=1" : "") +
+      (filters && filters.onSale ? "&onSale=1" : ""),
   );
 
 /** One product, by product handle or by variant id. */
@@ -4806,50 +4829,63 @@ function collectionScreenFile(): GeneratedFile {
     path: "components/CollectionScreen.tsx",
     language: "tsx",
     contents: `/**
- * One collection, as a grid. Columns, sorting and the default order are the
- * merchant's — App → App theme → Collection.
+ * One collection, dressed as Beauty Bar's website: a dark banner with the name
+ * in italic serif, brand chips, a bar with filters and sorting, and cream cards
+ * with caramel prices. Every part is the merchant's - App → App theme →
+ * Collection.
  *
- * Sorting is a request to the shop, not a shuffle of what arrived: sorting
- * twenty-four loaded products by price would put the cheapest of that page
- * first and quietly hide the cheaper ones on page two.
+ * Filtering and sorting are requests to the shop, not a shuffle of what
+ * arrived, so they cover the whole collection and not only the loaded page.
  */
 import React, { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
-import { colors, radius, spacing } from "../theme";
+import { ActivityIndicator, FlatList, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { theme } from "../theme";
 import { screens } from "../screens";
-import { fetchCollection, type Card, type CollectionPayload, type Sort } from "../api";
-import { ProductTile } from "./Pieces";
+import { fetchCollection, type Card, type CollectionFilters, type CollectionPayload, type Sort } from "../api";
+import { money } from "./Pieces";
 
 const SORTS: { key: Sort; label: string }[] = [
   { key: "manual", label: "Featured" },
   { key: "newest", label: "Newest" },
-  { key: "price-ascending", label: "Price ↑" },
-  { key: "price-descending", label: "Price ↓" },
+  { key: "price-ascending", label: "Price: low to high" },
+  { key: "price-descending", label: "Price: high to low" },
   { key: "title-ascending", label: "A–Z" },
 ];
 
-const PAGE = 24;
+const NONE: CollectionFilters = { brands: [], min: 0, max: 0, inStock: false, onSale: false };
+
+const off = (price: number | null, compareAt: number | null) =>
+  price != null && compareAt != null && compareAt > price ? Math.round((1 - price / compareAt) * 100) : 0;
 
 export function CollectionScreen({
   handle,
   onOpenProduct,
+  onAdd,
 }: {
   handle: string;
   onOpenProduct: (id: string) => void;
+  /** A card with a single option adds straight from the grid. */
+  onAdd?: (variantId: string) => void;
 }) {
   const c = screens.collection;
   const [sort, setSort] = useState<Sort>((c.sortDefault as Sort) || "manual");
+  const [filters, setFilters] = useState<CollectionFilters>(NONE);
+  const [draft, setDraft] = useState<CollectionFilters>(NONE);
+  const [panel, setPanel] = useState(false);
+  const [sorting, setSorting] = useState(false);
+  const [single, setSingle] = useState(false);
   const [data, setData] = useState<CollectionPayload | null>(null);
   const [products, setProducts] = useState<Card[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
+  const pageSize = Math.min(Math.max(c.pageSize || 24, 6), 60);
 
   useEffect(() => {
     let live = true;
     setData(null);
     setProducts([]);
     setError(null);
-    fetchCollection(handle, sort, 0, PAGE)
+    fetchCollection(handle, sort, 0, pageSize, filters)
       .then((d) => {
         if (!live) return;
         setData(d);
@@ -4859,84 +4895,306 @@ export function CollectionScreen({
     return () => {
       live = false;
     };
-  }, [handle, sort]);
+  }, [handle, sort, filters, pageSize]);
 
   const more = useCallback(() => {
     if (!data || loadingMore || products.length >= data.total) return;
     setLoadingMore(true);
-    fetchCollection(handle, sort, products.length, PAGE)
-      .then((d) => setProducts((p) => [...p, ...d.products]))
+    fetchCollection(handle, sort, products.length, pageSize, filters)
+      .then((d) => setProducts((p) => [...p, ...d.products.filter((x) => !p.some((y) => y.id === x.id))]))
       .catch(() => {})
       .finally(() => setLoadingMore(false));
-  }, [data, handle, sort, products.length, loadingMore]);
+  }, [data, handle, sort, products.length, loadingMore, pageSize, filters]);
 
   if (error) return <View style={styles.center}><Text style={styles.error}>{error}</Text></View>;
-  if (!data) return <View style={styles.center}><ActivityIndicator color={colors.accent} /></View>;
+  if (!data) return <View style={styles.center}><ActivityIndicator color={c.priceColor || "#b0603e"} /></View>;
 
-  const columns = c.columns === 3 ? 3 : 2;
+  const ink = c.inkColor || "#211a15";
+  const line = c.lineColor || "#eadfd2";
+  const accent = c.priceColor || "#b0603e";
+  const vendors = data.facets ? data.facets.vendors : [];
+  const columns = single ? 1 : c.columns === 3 ? 3 : 2;
+  const active =
+    filters.brands.length + (filters.min > 0 || filters.max > 0 ? 1 : 0) + (filters.inStock ? 1 : 0) + (filters.onSale ? 1 : 0);
+  const subtitle =
+    c.heroSubtitle ||
+    [String(data.collection.productCount || data.total) + "+ pieces", vendors.slice(0, 5).map((v) => v.name).join(" · ")]
+      .filter(Boolean)
+      .join(" · ");
+  const chip = (on: boolean) => [styles.chip, on ? { backgroundColor: ink, borderColor: ink } : { borderColor: line }];
+  const chipText = (on: boolean) => [styles.chipText, { color: on ? "#ffffff" : ink }];
 
-  return (
-    <View style={styles.screen}>
-      <View style={styles.head}>
-        <Text style={styles.title}>{data.collection.title}</Text>
-        <Text style={styles.count}>{data.total} products</Text>
+  const header = (
+    <View>
+      {c.showHero ? (
+        <View style={[styles.hero, { backgroundColor: c.heroTo || "#3d2619" }]}>
+          <View style={[styles.heroShade, { backgroundColor: c.heroFrom || "#1c1410" }]} />
+          {c.heroKicker ? <Text style={[styles.heroKicker, { color: c.heroAccent || "#d08159" }]}>{c.heroKicker.toUpperCase()}</Text> : null}
+          <Text style={styles.heroTitle}>{data.collection.title.toUpperCase()}</Text>
+          {subtitle ? <Text style={styles.heroSub}>{subtitle}</Text> : null}
+        </View>
+      ) : null}
+
+      {c.showBrandChips && vendors.length > 1 ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.brands}>
+          {[{ name: "", count: 0 }, ...vendors.slice(0, 14)].map((v) => {
+            const on = v.name ? filters.brands.length === 1 && filters.brands[0] === v.name : filters.brands.length === 0;
+            return (
+              <Pressable key={v.name || "all"} style={chip(on)} onPress={() => setFilters({ ...filters, brands: v.name ? [v.name] : [] })}>
+                <Text style={chipText(on)}>{v.name ? v.name.toUpperCase() : "ALL"}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      ) : null}
+
+      <View style={[styles.bar, { borderColor: line }]}>
+        <Text style={styles.count}>{data.total + " products"}</Text>
+        {c.showLayoutToggle ? (
+          <Pressable style={[styles.round, { borderColor: line }]} onPress={() => setSingle(!single)}>
+            <Text style={[styles.roundText, { color: ink }]}>{single ? "▦" : "▢"}</Text>
+          </Pressable>
+        ) : null}
+        {c.showFilters ? (
+          <Pressable
+            style={[styles.pill, { borderColor: accent }]}
+            onPress={() => {
+              setDraft(filters);
+              setPanel(!panel);
+              setSorting(false);
+            }}
+          >
+            <Text style={[styles.pillText, { color: ink }]}>{active ? "Filters · " + active : "Filters"}</Text>
+          </Pressable>
+        ) : null}
+        {c.showSort ? (
+          <Pressable
+            style={[styles.pill, { borderColor: line }]}
+            onPress={() => {
+              setSorting(!sorting);
+              setPanel(false);
+            }}
+          >
+            <Text style={[styles.pillText, { color: ink }]}>{(SORTS.find((x) => x.key === sort) ?? SORTS[0]).label + " ▾"}</Text>
+          </Pressable>
+        ) : null}
       </View>
 
-      {c.showSort ? (
-        <View style={styles.sorts}>
-          {SORTS.map((s) => (
-            <Pressable
-              key={s.key}
-              style={[styles.sort, s.key === sort ? styles.sortOn : null]}
-              onPress={() => setSort(s.key)}
-            >
-              <Text style={[styles.sortText, s.key === sort ? styles.sortTextOn : null]}>
-                {s.label}
-              </Text>
+      {sorting ? (
+        <View style={styles.panel}>
+          {SORTS.map((o) => (
+            <Pressable key={o.key} style={chip(o.key === sort)} onPress={() => { setSort(o.key); setSorting(false); }}>
+              <Text style={chipText(o.key === sort)}>{o.label}</Text>
             </Pressable>
           ))}
         </View>
       ) : null}
 
-      <FlatList
-        key={columns}
-        data={products}
-        numColumns={columns}
-        keyExtractor={(p) => p.id}
-        columnWrapperStyle={styles.row}
-        contentContainerStyle={styles.grid}
-        onEndReachedThreshold={0.5}
-        onEndReached={more}
-        renderItem={({ item }) => (
-          <View style={{ flex: 1 / columns }}>
-            <ProductTile card={item} fill onPress={onOpenProduct} />
+      {panel ? (
+        <View style={[styles.filters, { borderColor: line }]}>
+          {vendors.length ? <Text style={styles.label}>BRAND</Text> : null}
+          <View style={styles.wrap}>
+            {vendors.map((v) => {
+              const on = draft.brands.includes(v.name);
+              return (
+                <Pressable
+                  key={v.name}
+                  style={chip(on)}
+                  onPress={() => setDraft({ ...draft, brands: on ? draft.brands.filter((b) => b !== v.name) : [...draft.brands, v.name] })}
+                >
+                  <Text style={chipText(on)}>{v.name + "  " + v.count}</Text>
+                </Pressable>
+              );
+            })}
           </View>
-        )}
-        ListEmptyComponent={
-          <Text style={styles.empty}>Nothing in this collection yet.</Text>
-        }
-        ListFooterComponent={
-          loadingMore ? <ActivityIndicator style={{ margin: 16 }} color={colors.accent} /> : null
-        }
-      />
+          <Text style={styles.label}>PRICE</Text>
+          <View style={styles.wrap}>
+            {[
+              { label: "Under 5,000", min: 0, max: 5000 },
+              { label: "5,000 – 10,000", min: 5000, max: 10000 },
+              { label: "Over 10,000", min: 10000, max: 0 },
+            ].map((r) => {
+              const on = draft.min === r.min && draft.max === r.max;
+              return (
+                <Pressable key={r.label} style={chip(on)} onPress={() => setDraft(on ? { ...draft, min: 0, max: 0 } : { ...draft, min: r.min, max: r.max })}>
+                  <Text style={chipText(on)}>{r.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <View style={styles.range}>
+            <TextInput
+              style={[styles.input, { borderColor: line }]}
+              keyboardType="numeric"
+              placeholder={String(data.facets ? data.facets.priceMin : 0)}
+              value={draft.min ? String(draft.min) : ""}
+              onChangeText={(t) => setDraft({ ...draft, min: Number(t) || 0 })}
+            />
+            <Text style={styles.count}>–</Text>
+            <TextInput
+              style={[styles.input, { borderColor: line }]}
+              keyboardType="numeric"
+              placeholder={String(data.facets ? data.facets.priceMax : 0)}
+              value={draft.max ? String(draft.max) : ""}
+              onChangeText={(t) => setDraft({ ...draft, max: Number(t) || 0 })}
+            />
+          </View>
+          <View style={styles.wrap}>
+            <Pressable style={chip(draft.inStock)} onPress={() => setDraft({ ...draft, inStock: !draft.inStock })}>
+              <Text style={chipText(draft.inStock)}>In stock only</Text>
+            </Pressable>
+            <Pressable style={chip(draft.onSale)} onPress={() => setDraft({ ...draft, onSale: !draft.onSale })}>
+              <Text style={chipText(draft.onSale)}>On sale</Text>
+            </Pressable>
+          </View>
+          <View style={styles.actions}>
+            <Pressable style={[styles.clear, { borderColor: line }]} onPress={() => { setDraft(NONE); setFilters(NONE); setPanel(false); }}>
+              <Text style={[styles.clearText, { color: ink }]}>Clear</Text>
+            </Pressable>
+            <Pressable style={[styles.apply, { backgroundColor: ink }]} onPress={() => { setFilters(draft); setPanel(false); }}>
+              <Text style={styles.applyText}>SHOW RESULTS</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
+    </View>
+  );
+
+  return (
+    <FlatList
+      key={"columns-" + columns}
+      style={{ flex: 1, backgroundColor: c.pageBg || "#f8f5f0" }}
+      data={products}
+      numColumns={columns}
+      keyExtractor={(p) => p.id}
+      columnWrapperStyle={columns > 1 ? styles.row : undefined}
+      contentContainerStyle={styles.grid}
+      ListHeaderComponent={header}
+      onEndReachedThreshold={0.5}
+      onEndReached={more}
+      renderItem={({ item }) => (
+        <View style={{ flex: 1 / columns, paddingHorizontal: 12 * (columns === 1 ? 1 : 0) }}>
+          <CollectionCard card={item} large={single} onOpen={onOpenProduct} onAdd={onAdd} />
+        </View>
+      )}
+      ListEmptyComponent={
+        <View style={styles.empty}>
+          <Text style={[styles.emptyText, { color: ink }]}>Nothing matches that — yet</Text>
+          {active ? (
+            <Pressable style={[styles.apply, { backgroundColor: ink, marginTop: 12 }]} onPress={() => setFilters(NONE)}>
+              <Text style={styles.applyText}>CLEAR FILTERS</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      }
+      ListFooterComponent={loadingMore ? <ActivityIndicator style={{ margin: 16 }} color={accent} /> : null}
+    />
+  );
+}
+
+/** A tile as the website draws one: white picture, cream panel, serif name, caramel price. */
+function CollectionCard({
+  card,
+  large,
+  onOpen,
+  onAdd,
+}: {
+  card: Card;
+  large: boolean;
+  onOpen: (id: string) => void;
+  onAdd?: (variantId: string) => void;
+}) {
+  const c = screens.collection;
+  const [added, setAdded] = useState(false);
+  const discount = off(card.priceMin, card.compareAt);
+  const accent = c.priceColor || "#b0603e";
+  const ink = c.inkColor || "#211a15";
+  return (
+    <View style={[styles.card, { borderColor: c.lineColor || "#eadfd2" }]}>
+      <Pressable onPress={() => onOpen(card.id)} style={[styles.picture, { aspectRatio: large ? 0.8 : 1 }]}>
+        {card.image ? <Image source={{ uri: card.image }} style={styles.pictureImage} resizeMode="contain" /> : null}
+        {c.showBadge && discount > 0 ? (
+          <View style={[styles.badge, { backgroundColor: accent }]}>
+            <Text style={styles.badgeText}>{"−" + discount + "%"}</Text>
+          </View>
+        ) : null}
+      </Pressable>
+      <View style={[styles.info, { backgroundColor: c.cardBg || "#f3ece4" }]}>
+        {c.showVendor && card.vendor ? <Text style={[styles.vendor, { color: accent }]} numberOfLines={1}>{card.vendor.toUpperCase()}</Text> : null}
+        {c.showRating && c.ratingText ? <Text style={[styles.rating, { color: ink }]}>{"★ " + c.ratingText}</Text> : null}
+        <Text style={[styles.name, { color: ink, fontSize: large ? 16 : 13 }]} numberOfLines={Math.min(Math.max(c.nameLines || 2, 1), 3)}>
+          {card.name}
+        </Text>
+        <View style={styles.priceRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.price, { color: accent, fontSize: large ? 19 : 14 }]}>{money(card.priceMin)}</Text>
+            {discount > 0 ? <Text style={styles.compare}>{money(card.compareAt)}</Text> : null}
+          </View>
+          {c.showQuickAdd && onAdd ? (
+            <Pressable
+              style={[styles.plus, added ? { backgroundColor: "#4a7858", borderColor: "#4a7858" } : { borderColor: accent }]}
+              onPress={() => {
+                if (card.variantId) {
+                  onAdd(card.variantId);
+                  setAdded(true);
+                  setTimeout(() => setAdded(false), 1400);
+                } else onOpen(card.id);
+              }}
+            >
+              <Text style={[styles.plusText, { color: added ? "#ffffff" : accent }]}>{added ? "✓" : "+"}</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.page },
-  head: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg },
-  title: { fontSize: 20, fontWeight: "700", color: colors.ink },
-  count: { marginTop: 2, fontSize: 12, color: colors.inkSoft },
-  sorts: { flexDirection: "row", flexWrap: "wrap", gap: 6, padding: spacing.lg, paddingBottom: 0 },
-  sort: { borderRadius: radius.pill, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 10, paddingVertical: 5 },
-  sortOn: { backgroundColor: colors.accent, borderColor: colors.accent },
-  sortText: { fontSize: 11, color: colors.inkMuted },
-  sortTextOn: { color: "#fff", fontWeight: "600" },
-  grid: { padding: spacing.lg, gap: spacing.md },
-  row: { gap: spacing.md },
-  empty: { padding: spacing.xl, textAlign: "center", fontSize: 13, color: colors.inkSoft },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl },
+  hero: { paddingHorizontal: 20, paddingTop: 22, paddingBottom: 24, overflow: "hidden" },
+  heroShade: { position: "absolute", top: 0, bottom: 0, left: 0, width: "62%", opacity: 0.85 },
+  heroKicker: { fontSize: 10, fontWeight: "600", letterSpacing: 2.2 },
+  heroTitle: { marginTop: 8, fontSize: 32, fontStyle: "italic", color: "#ffffff", fontFamily: theme.titleFont },
+  heroSub: { marginTop: 10, fontSize: 12, lineHeight: 18, color: "rgba(255,255,255,0.7)" },
+  brands: { gap: 6, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 },
+  chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: "#ffffff" },
+  chipText: { fontSize: 11, fontWeight: "600", letterSpacing: 0.6 },
+  bar: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1 },
+  count: { flex: 1, fontSize: 12, color: "#74685e" },
+  round: { width: 32, height: 32, borderRadius: 16, borderWidth: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#ffffff" },
+  roundText: { fontSize: 14 },
+  pill: { height: 32, borderRadius: 16, borderWidth: 1, paddingHorizontal: 12, alignItems: "center", justifyContent: "center", backgroundColor: "#ffffff" },
+  pillText: { fontSize: 12, fontWeight: "600" },
+  panel: { flexDirection: "row", flexWrap: "wrap", gap: 6, paddingHorizontal: 16, paddingTop: 10 },
+  filters: { margin: 16, marginBottom: 4, padding: 12, borderWidth: 1, borderRadius: 16, backgroundColor: "#ffffff", gap: 8 },
+  label: { fontSize: 10, fontWeight: "600", letterSpacing: 1.6, color: "#74685e" },
+  wrap: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  range: { flexDirection: "row", alignItems: "center", gap: 8 },
+  input: { flex: 1, height: 34, borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, fontSize: 12, backgroundColor: "#ffffff" },
+  actions: { flexDirection: "row", gap: 8, marginTop: 4 },
+  clear: { flex: 1, height: 38, borderRadius: 19, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  clearText: { fontSize: 12, fontWeight: "600" },
+  apply: { flex: 2, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center", paddingHorizontal: 16 },
+  applyText: { fontSize: 12, fontWeight: "700", letterSpacing: 1.4, color: "#ffffff" },
+  grid: { paddingBottom: 24 },
+  row: { gap: 8, paddingHorizontal: 12, marginTop: 8 },
+  card: { flex: 1, borderWidth: 1, backgroundColor: "#ffffff", overflow: "hidden", marginTop: 8 },
+  picture: { width: "100%", backgroundColor: "#ffffff" },
+  pictureImage: { position: "absolute", top: 8, right: 8, bottom: 8, left: 8 },
+  badge: { position: "absolute", top: 8, left: 8, paddingHorizontal: 6, paddingVertical: 2 },
+  badgeText: { fontSize: 9.5, fontWeight: "700", color: "#ffffff" },
+  info: { paddingHorizontal: 10, paddingTop: 8, paddingBottom: 10, flex: 1 },
+  vendor: { fontSize: 9, fontWeight: "600", letterSpacing: 1.2 },
+  rating: { marginTop: 2, fontSize: 10, fontWeight: "600" },
+  name: { marginTop: 4, lineHeight: 18, fontFamily: theme.titleFont },
+  priceRow: { flexDirection: "row", alignItems: "flex-end", marginTop: 8 },
+  price: { fontWeight: "600", fontFamily: theme.titleFont },
+  compare: { fontSize: 10, color: "#9ca3af", textDecorationLine: "line-through" },
+  plus: { width: 28, height: 28, borderRadius: 14, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  plusText: { fontSize: 16, lineHeight: 18 },
+  empty: { padding: 40, alignItems: "center" },
+  emptyText: { fontSize: 18, fontStyle: "italic", fontFamily: theme.titleFont },
+  center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
   error: { color: "#e11d48", fontSize: 13 },
 });
 `,
@@ -4949,159 +5207,474 @@ function productScreenFile(): GeneratedFile {
     path: "components/ProductScreen.tsx",
     language: "tsx",
     contents: `/**
- * One product. What appears is the merchant's — App → App theme → Product.
+ * One product, dressed as Beauty Bar's website. Every part is the merchant's -
+ * App → App theme → Product.
  *
  * The basket holds variant ids, never products: a product with three sizes has
  * three different things to have in stock, and an order line that only knows
  * the product cannot say which one to send.
  */
-import React, { useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  Image,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
-import { colors, radius, spacing } from "../theme";
+import React, { useEffect, useRef, useState } from "react";
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { theme } from "../theme";
 import { screens, say } from "../screens";
-import { fetchProduct, type Product, type Variant } from "../api";
+import { fetchProduct, searchProducts, type Card, type Product } from "../api";
 import { money } from "./Pieces";
+
+const NL = String.fromCharCode(10);
+
+/** The description with its HTML taken out and its lists kept as lines. */
+function plain(html: string) {
+  return html
+    .replace(/<br[^>]*>/gi, NL)
+    .replace(/<[/](p|div|li|h[1-6])>/gi, NL)
+    .replace(/<li[^>]*>/gi, "• ")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .split(NL)
+    .map((l) => l.trim())
+    .filter((l, i, all) => l || (i > 0 && all[i - 1]))
+    .join(NL)
+    .trim();
+}
+
+/** A steady number for a product, so its viewer count does not jump between visits. */
+function seeded(id: string, min: number, max: number) {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) % 1000003;
+  const lo = Math.min(min, max);
+  const hi = Math.max(min, max);
+  return lo + (h % (hi - lo + 1));
+}
+
+type Scroller = { scrollTo: (to: { x: number; animated?: boolean }) => void };
 
 export function ProductScreen({
   id,
   onAdd,
+  onBuyNow,
+  onOpenProduct,
+  onOpenScreen,
 }: {
   id: string;
   onAdd: (variantId: string, product: Product) => void;
+  /** Add, then go to the basket. */
+  onBuyNow?: (variantId: string, product: Product, quantity: number) => void;
+  onOpenProduct?: (id: string) => void;
+  onOpenScreen?: (screen: string) => void;
 }) {
   const p = screens.product;
   const [product, setProduct] = useState<Product | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [chosen, setChosen] = useState<string | null>(null);
+  const [qty, setQty] = useState(1);
+  const [slide, setSlide] = useState(0);
+  const [width, setWidth] = useState(0);
+  const [fold, setFold] = useState<"description" | "shipping" | null>("description");
+  const [more, setMore] = useState(false);
+  const [related, setRelated] = useState<Card[]>([]);
+  const [added, setAdded] = useState(false);
+  const [viewers, setViewers] = useState(0);
+  const gallery = useRef<Scroller | null>(null);
 
   useEffect(() => {
     let live = true;
     setProduct(null);
     setError(null);
+    setRelated([]);
+    setQty(1);
+    setSlide(0);
     fetchProduct(id)
       .then((d) => {
         if (!live) return;
         setProduct(d);
         const first = d.variants.find((v) => v.available > 0) ?? d.variants[0];
-        setChosen(d.selectedVariantId ?? first?.id ?? null);
+        setChosen(first ? first.id : null);
+        if (d.vendor && p.showRelated) {
+          searchProducts(d.vendor, 12)
+            .then((r) => live && setRelated(r.products.filter((x) => x.id !== d.id && x.handle !== d.handle).slice(0, 10)))
+            .catch(() => {});
+        }
       })
       .catch((e) => live && setError(String(e.message ?? e)));
     return () => {
       live = false;
     };
-  }, [id]);
+  }, [id, p.showRelated]);
+
+  // A few people come and go while the shopper looks.
+  useEffect(() => {
+    if (!p.showViewers) return;
+    const base = seeded(id, p.viewersMin || 12, p.viewersMax || 40);
+    setViewers(base);
+    const t = setInterval(() => setViewers(base + Math.round(Math.random() * 4) - 2), 5000);
+    return () => clearInterval(t);
+  }, [id, p.showViewers, p.viewersMin, p.viewersMax]);
+
+  const accent = p.accentColor || "#9d6540";
+  const ink = p.inkColor || "#211a15";
+  const muted = p.mutedColor || "#74685e";
+  const dark = p.darkColor || "#211a15";
 
   if (error) return <View style={styles.center}><Text style={styles.error}>{error}</Text></View>;
-  if (!product) return <View style={styles.center}><ActivityIndicator color={colors.accent} /></View>;
+  if (!product) return <View style={styles.center}><ActivityIndicator color={accent} /></View>;
 
-  const variant: Variant | undefined =
-    product.variants.find((v) => v.id === chosen) ?? product.variants[0];
-  const price = variant?.price ?? product.priceMin;
-  const compareAt = variant?.compareAt ?? product.compareAt;
+  const variant = product.variants.find((v) => v.id === chosen) ?? product.variants[0];
+  const price = variant && variant.price != null ? variant.price : product.priceMin;
+  const compareAt = variant && variant.compareAt != null ? variant.compareAt : product.compareAt;
+  const discount = price != null && compareAt != null && compareAt > price ? Math.round((1 - price / compareAt) * 100) : 0;
   const left = variant ? variant.available : product.available;
-  const soldOut = left <= 0;
+  const soldOut = !variant || left <= 0 || price == null;
   const images = product.images.length ? product.images : product.image ? [product.image] : [];
+  const months = Math.max(1, p.instalmentMonths || 6);
+  const providers = p.instalmentProviders.split(/[·,|]/).map((x) => x.trim()).filter(Boolean);
+  const description = product.description ? plain(product.description) : "";
+  const stars = Math.max(0, Math.min(5, Math.round(Number(p.ratingValue) || 0)));
+  const starLine = (on: string, offColor: string) =>
+    [0, 1, 2, 3, 4].map((i) => (
+      <Text key={i} style={{ color: i < stars ? on : offColor, fontSize: 11 }}>★</Text>
+    ));
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.page }}>
-      <ScrollView contentContainerStyle={styles.wrap}>
-        {images.length ? (
-          <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false}>
-            {images.map((src) => (
-              <Image key={src} source={{ uri: src }} style={styles.hero} />
+    <View style={{ flex: 1, backgroundColor: p.pageBg || "#f8f5f0" }}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
+        {/* gallery */}
+        <View style={styles.galleryWrap} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+          <ScrollView
+            ref={(node) => {
+              gallery.current = node as unknown as Scroller | null;
+            }}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onMomentumScrollEnd={(e) => width && setSlide(Math.round(e.nativeEvent.contentOffset.x / width))}
+          >
+            {(images.length ? images : [""]).map((src, i) => (
+              <View key={src + i} style={{ width: width || 1, aspectRatio: 1, backgroundColor: "#ffffff" }}>
+                {src ? <Image source={{ uri: src }} style={styles.galleryImage} resizeMode="contain" /> : null}
+              </View>
             ))}
           </ScrollView>
-        ) : (
-          <View style={styles.hero} />
-        )}
+          {p.showBadge && discount > 0 ? (
+            <View style={styles.badge}><Text style={styles.badgeText}>{"−" + discount + "%"}</Text></View>
+          ) : null}
+          {images.length > 1 ? (
+            <View style={styles.dots}>
+              {images.map((src, i) => (
+                <View key={src + i} style={[styles.dot, { width: i === slide ? 16 : 6, backgroundColor: i === slide ? accent : "rgba(0,0,0,0.13)" }]} />
+              ))}
+            </View>
+          ) : null}
+        </View>
+        {p.showThumbs && images.length > 1 ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.thumbs}>
+            {images.map((src, i) => (
+              <Pressable
+                key={src + i}
+                onPress={() => {
+                  setSlide(i);
+                  if (gallery.current && width) gallery.current.scrollTo({ x: i * width, animated: true });
+                }}
+                style={[styles.thumb, { borderColor: i === slide ? accent : "transparent" }]}
+              >
+                <Image source={{ uri: src }} style={styles.thumbImage} />
+              </Pressable>
+            ))}
+          </ScrollView>
+        ) : null}
 
-        <View style={styles.body}>
-          {product.vendor ? <Text style={styles.vendor}>{product.vendor}</Text> : null}
-          <Text style={styles.name}>{product.name}</Text>
+        {/* the card over it */}
+        <View style={styles.sheet}>
+          {p.showBreadcrumb ? (
+            <Text style={styles.crumb} numberOfLines={1}>{"Home / " + (product.category || "Shop") + " / " + product.name}</Text>
+          ) : null}
+          {product.vendor ? <Text style={[styles.vendor, { color: muted }]}>{product.vendor.toUpperCase()}</Text> : null}
+          <Text style={[styles.name, { color: ink }]}>{product.name}</Text>
 
-          <View style={styles.priceRow}>
-            <Text style={styles.price}>{money(price)}</Text>
-            {compareAt != null && price != null && compareAt > price ? (
-              <Text style={styles.compareAt}>{money(compareAt)}</Text>
-            ) : null}
-          </View>
-
-          {p.showVariants && product.variants.length > 1 ? (
-            <View style={styles.variants}>
-              {product.variants.map((v) => {
-                const on = v.id === chosen;
-                const out = v.available <= 0;
-                return (
-                  <Pressable
-                    key={v.id}
-                    disabled={out}
-                    style={[styles.variant, on ? styles.variantOn : null, out ? styles.variantOut : null]}
-                    onPress={() => setChosen(v.id)}
-                  >
-                    <Text style={[styles.variantText, on ? styles.variantTextOn : null]}>
-                      {v.variantTitle ?? "One size"}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+          {p.showRating && p.ratingValue ? (
+            <View style={styles.ratingRow}>
+              <View style={[styles.ratingChip, { backgroundColor: accent }]}>
+                <Text style={styles.ratingValue}>{p.ratingValue}</Text>
+                <View style={{ flexDirection: "row" }}>{starLine("#f5d27a", "rgba(255,255,255,0.35)")}</View>
+              </View>
+              <Text style={[styles.ratingMeta, { color: muted }]}>
+                {[p.reviewCount ? p.reviewCount + " " + p.reviewsWord : "", p.verifiedLabel].filter(Boolean).join(" · ")}
+              </Text>
+              {onOpenScreen ? (
+                <Pressable onPress={() => onOpenScreen("happy-customers")}>
+                  <Text style={[styles.seeAll, { color: accent }]}>See all</Text>
+                </Pressable>
+              ) : null}
             </View>
           ) : null}
 
-          {p.showStock && !soldOut && left <= 5 ? (
-            <Text style={styles.stock}>Only {left} left</Text>
+          <View style={styles.priceBlock}>
+            <Text style={[styles.price, { color: accent }]}>{money(price)}</Text>
+            {discount > 0 ? (
+              <View style={styles.saveRow}>
+                <Text style={styles.compare}>{money(compareAt)}</Text>
+                {p.showSave && compareAt != null && price != null ? (
+                  <View style={styles.save}><Text style={styles.saveText}>{say(p.saveLabel, "Save") + " " + money(compareAt - price)}</Text></View>
+                ) : null}
+              </View>
+            ) : null}
+          </View>
+
+          {p.showInstalments && price != null && price > 0 ? (
+            <View style={{ marginTop: 16 }}>
+              <Text style={[styles.label, { color: muted }]}>{say(p.instalmentsTitle, "Installments").toUpperCase()}</Text>
+              <View style={styles.instalments}>
+                <Text style={[styles.instalmentsText, { color: muted }]}>
+                  {"Pay "}
+                  <Text style={{ color: ink, fontWeight: "700" }}>{money(Math.round(price / months))}</Text>
+                  {" per month for "}
+                  <Text style={{ color: ink, fontWeight: "700" }}>{months + " months"}</Text>
+                </Text>
+                <View style={styles.providers}>
+                  {providers.map((name, i) => (
+                    <View key={name} style={[styles.provider, { backgroundColor: i === providers.length - 1 ? "#c83a2c" : dark }]}>
+                      <Text style={[styles.providerText, { color: i === providers.length - 1 ? "#ffffff" : "#d9a36f" }]}>{name}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            </View>
           ) : null}
 
-          {p.showDescription && product.description ? (
-            <Text style={styles.description}>{product.description}</Text>
+          {p.showVariants && product.variants.length > 1 ? (
+            <View style={{ marginTop: 16 }}>
+              <Text style={[styles.label, { color: muted }]}>{"CHOOSE" + (variant && variant.variantTitle ? " · " + variant.variantTitle : "")}</Text>
+              <View style={styles.variants}>
+                {product.variants.map((v) => {
+                  const on = variant ? v.id === variant.id : false;
+                  const out = v.available <= 0;
+                  return (
+                    <Pressable
+                      key={v.id}
+                      disabled={out}
+                      onPress={() => { setChosen(v.id); setQty(1); }}
+                      style={[styles.variant, on ? { backgroundColor: ink, borderColor: ink } : null, out ? { opacity: 0.35 } : null]}
+                    >
+                      <Text style={[styles.variantText, { color: on ? "#ffffff" : ink }, out ? { textDecorationLine: "line-through" } : null]}>
+                        {v.variantTitle ?? "One size"}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          ) : null}
+
+          {p.showQuantity && !soldOut ? (
+            <View style={styles.qtyRow}>
+              <Text style={[styles.label, { color: muted }]}>QTY</Text>
+              <View style={styles.stepper}>
+                <Pressable style={styles.step} onPress={() => setQty(Math.max(1, qty - 1))}><Text style={[styles.stepText, { color: ink }]}>−</Text></Pressable>
+                <Text style={[styles.qty, { color: ink }]}>{qty}</Text>
+                <Pressable style={styles.step} onPress={() => setQty(Math.min(Math.max(1, left), qty + 1))}><Text style={[styles.stepText, { color: ink }]}>+</Text></Pressable>
+              </View>
+            </View>
+          ) : null}
+
+          {p.showViewers && viewers > 0 ? (
+            <View style={styles.viewers}>
+              <View style={styles.liveDot} />
+              <Text style={styles.viewersText}>{say(p.viewersText, "{n} people are viewing this right now").split("{n}").join(String(viewers))}</Text>
+            </View>
+          ) : null}
+
+          {p.showStock && !soldOut && left <= (p.lowStockAt || 5) ? (
+            <View style={{ marginTop: 10 }}>
+              <View style={styles.lowStock}>
+                <Text style={[styles.lowStockText, { color: ink }]}>{"⏱  " + say(p.lowStockText, "Only {n} left in stock — order soon!").split("{n}").join(String(left))}</Text>
+              </View>
+              <View style={styles.stockTrack}>
+                <View style={[styles.stockFill, { width: Math.max(8, Math.min(100, (left / Math.max(1, (p.lowStockAt || 5) * 2)) * 100)) + "%" }]} />
+              </View>
+            </View>
+          ) : null}
+
+          {p.showPerks ? (
+            <View style={{ marginTop: 16, gap: 8 }}>
+              {[["🚚", p.perk1], ["↩️", p.perk2], ["✦", p.perk3]].filter((x) => x[1]).map(([icon, text]) => (
+                <View key={text} style={styles.perk}>
+                  <View style={styles.perkIcon}><Text style={{ color: accent, fontSize: 12 }}>{icon}</Text></View>
+                  <Text style={[styles.perkText, { color: ink }]}>{text}</Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+
+          {p.showDescription && description ? (
+            <View style={styles.fold}>
+              <Pressable style={styles.foldHead} onPress={() => setFold(fold === "description" ? null : "description")}>
+                <Text style={[styles.foldTitle, { color: ink }]}>{say(p.descriptionTitle, "Description")}</Text>
+                <Text style={{ color: ink }}>{fold === "description" ? "˄" : "˅"}</Text>
+              </Pressable>
+              {fold === "description" ? (
+                <View>
+                  <Text style={[styles.body, { color: muted }]} numberOfLines={more ? undefined : 4}>{description}</Text>
+                  {description.length > 220 ? (
+                    <Pressable onPress={() => setMore(!more)}><Text style={[styles.more, { color: accent }]}>{more ? "Show less" : "Read more"}</Text></Pressable>
+                  ) : null}
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+          {p.shippingText ? (
+            <View style={styles.fold}>
+              <Pressable style={styles.foldHead} onPress={() => setFold(fold === "shipping" ? null : "shipping")}>
+                <Text style={[styles.foldTitle, { color: ink }]}>{say(p.shippingTitle, "Delivery & returns")}</Text>
+                <Text style={{ color: ink }}>{fold === "shipping" ? "˄" : "˅"}</Text>
+              </Pressable>
+              {fold === "shipping" ? <Text style={[styles.body, { color: muted }]}>{p.shippingText}</Text> : null}
+            </View>
           ) : null}
         </View>
+
+        {p.showReviewsCard && p.ratingValue ? (
+          <View style={[styles.reviews, { backgroundColor: dark }]}>
+            {p.reviewsKicker ? <Text style={styles.reviewsKicker}>{p.reviewsKicker.toUpperCase()}</Text> : null}
+            <Text style={styles.reviewsHeading}>
+              {p.reviewsHeading ? p.reviewsHeading + " " : ""}
+              {p.reviewsItalic ? <Text style={styles.reviewsItalic}>{p.reviewsItalic}</Text> : null}
+            </Text>
+            <View style={styles.reviewsScore}>
+              <Text style={styles.reviewsValue}>{p.ratingValue}</Text>
+              <View>
+                <View style={{ flexDirection: "row" }}>{starLine("#d9a441", "rgba(255,255,255,0.2)")}</View>
+                {p.reviewCount ? <Text style={styles.reviewsCount}>{p.reviewCount + " " + p.reviewsWord}</Text> : null}
+              </View>
+            </View>
+            {p.reviewsButton && onOpenScreen ? (
+              <Pressable style={styles.reviewsButton} onPress={() => onOpenScreen("happy-customers")}>
+                <Text style={styles.reviewsButtonText}>{p.reviewsButton.toUpperCase() + "  →"}</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
+
+        {p.showRelated && related.length ? (
+          <View style={{ paddingTop: 20, paddingHorizontal: 12 }}>
+            {p.relatedKicker ? <Text style={[styles.label, { color: accent }]}>{p.relatedKicker.toUpperCase()}</Text> : null}
+            {p.relatedTitle ? <Text style={[styles.relatedTitle, { color: ink }]}>{p.relatedTitle}</Text> : null}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingTop: 12 }}>
+              {related.map((r) => (
+                <Pressable key={r.id} style={styles.related} onPress={() => onOpenProduct && onOpenProduct(r.id)}>
+                  <View style={styles.relatedPicture}>
+                    {r.image ? <Image source={{ uri: r.image }} style={styles.galleryImage} resizeMode="contain" /> : null}
+                  </View>
+                  <View style={styles.relatedInfo}>
+                    <Text style={[styles.relatedName, { color: ink }]} numberOfLines={1}>{r.name}</Text>
+                    <Text style={[styles.relatedPrice, { color: accent }]}>{money(r.priceMin)}</Text>
+                  </View>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        ) : null}
       </ScrollView>
 
+      {/* the bar that stays */}
       <View style={styles.footer}>
         <Pressable
-          style={[styles.cta, soldOut ? styles.ctaOff : null]}
-          disabled={soldOut || !variant}
-          onPress={() => variant && onAdd(variant.id, product)}
+          disabled={soldOut}
+          style={[styles.cta, { backgroundColor: added ? "#4a7858" : accent }, soldOut ? { opacity: 0.45 } : null]}
+          onPress={() => {
+            if (!variant) return;
+            for (let i = 0; i < qty; i++) onAdd(variant.id, product);
+            setAdded(true);
+            setTimeout(() => setAdded(false), 1600);
+          }}
         >
           <Text style={styles.ctaText}>
-            {soldOut ? say(p.soldOutLabel, "Sold out") : say(p.addLabel, "Add to basket")}
+            {soldOut ? say(p.soldOutLabel, "Sold out").toUpperCase() : added ? "ADDED ✓" : say(p.addLabel, "Add to cart").toUpperCase()}
           </Text>
         </Pressable>
+        {p.showBuyNow && !soldOut && onBuyNow && variant ? (
+          <Pressable style={[styles.cta, { backgroundColor: dark }]} onPress={() => onBuyNow(variant.id, product, qty)}>
+            <Text style={styles.ctaText}>{say(p.buyNowLabel, "Buy now")}</Text>
+          </Pressable>
+        ) : null}
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: { paddingBottom: spacing.xl },
-  hero: { width: 320, height: 320, backgroundColor: colors.surface },
-  body: { padding: spacing.lg, gap: spacing.sm },
-  vendor: { fontSize: 11, letterSpacing: 1, textTransform: "uppercase", color: colors.inkSoft },
-  name: { fontSize: 20, fontWeight: "700", color: colors.ink },
-  priceRow: { flexDirection: "row", alignItems: "baseline", gap: 8 },
-  price: { fontSize: 20, fontWeight: "700", color: colors.accent },
-  compareAt: { fontSize: 13, color: colors.inkSoft, textDecorationLine: "line-through" },
-  variants: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 4 },
-  variant: { borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 12, paddingVertical: 8 },
-  variantOn: { borderColor: colors.accent, backgroundColor: colors.accent },
-  variantOut: { opacity: 0.35 },
-  variantText: { fontSize: 12, color: colors.ink },
-  variantTextOn: { color: "#fff", fontWeight: "600" },
-  stock: { fontSize: 12, fontWeight: "600", color: "#b45309" },
-  description: { marginTop: spacing.sm, fontSize: 13, lineHeight: 20, color: colors.inkMuted },
-  footer: { borderTopWidth: 1, borderTopColor: colors.line, backgroundColor: colors.surface, padding: spacing.lg },
-  cta: { borderRadius: radius.md, backgroundColor: colors.accent, paddingVertical: 14, alignItems: "center" },
-  ctaOff: { opacity: 0.45 },
-  ctaText: { fontSize: 15, fontWeight: "700", color: "#fff" },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl },
+  galleryWrap: { backgroundColor: "#ffffff" },
+  galleryImage: { position: "absolute", top: 12, right: 12, bottom: 12, left: 12 },
+  badge: { position: "absolute", top: 12, left: 12, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: "#c0644a" },
+  badgeText: { fontSize: 11, fontWeight: "700", color: "#ffffff" },
+  dots: { position: "absolute", bottom: 8, left: 0, right: 0, flexDirection: "row", justifyContent: "center", gap: 6 },
+  dot: { height: 6, borderRadius: 3 },
+  thumbs: { gap: 8, paddingHorizontal: 12, paddingBottom: 12, backgroundColor: "#ffffff" },
+  thumb: { width: 56, height: 56, borderRadius: 8, borderWidth: 2, overflow: "hidden", backgroundColor: "#f8fafc" },
+  thumbImage: { width: "100%", height: "100%" },
+  sheet: { marginTop: -8, borderTopLeftRadius: 22, borderTopRightRadius: 22, backgroundColor: "#ffffff", paddingHorizontal: 16, paddingTop: 16, paddingBottom: 20 },
+  crumb: { fontSize: 11, color: "#64748b" },
+  vendor: { marginTop: 8, fontSize: 10, fontWeight: "600", letterSpacing: 2 },
+  name: { marginTop: 4, fontSize: 24, lineHeight: 28, fontFamily: theme.titleFont },
+  ratingRow: { marginTop: 10, flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 },
+  ratingChip: { flexDirection: "row", alignItems: "center", gap: 6, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
+  ratingValue: { color: "#ffffff", fontSize: 14, fontFamily: theme.titleFont },
+  ratingMeta: { flex: 1, fontSize: 12 },
+  seeAll: { fontSize: 12, textDecorationLine: "underline" },
+  priceBlock: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: "rgba(69,46,31,0.13)" },
+  price: { fontSize: 34, fontWeight: "600", fontFamily: theme.titleFont },
+  saveRow: { marginTop: 6, flexDirection: "row", alignItems: "center", gap: 8 },
+  compare: { fontSize: 13, color: "#9ca3af", textDecorationLine: "line-through" },
+  save: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 2, backgroundColor: "#e8f1ea" },
+  saveText: { fontSize: 11, fontWeight: "600", color: "#3f6f4f" },
+  label: { fontSize: 10, fontWeight: "600", letterSpacing: 1.6 },
+  instalments: { marginTop: 6, flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 16, borderWidth: 1, borderColor: "#e6d6c4", backgroundColor: "#f4ebe1", paddingHorizontal: 12, paddingVertical: 10 },
+  instalmentsText: { flex: 1, fontSize: 12, lineHeight: 17 },
+  providers: { flexDirection: "row", gap: 4 },
+  provider: { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 4 },
+  providerText: { fontSize: 9.5, fontWeight: "700" },
+  variants: { marginTop: 8, flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  variant: { minWidth: 44, alignItems: "center", borderRadius: 12, borderWidth: 1, borderColor: "#e0d4c4", paddingHorizontal: 12, paddingVertical: 8, backgroundColor: "#ffffff" },
+  variantText: { fontSize: 12, fontWeight: "600" },
+  qtyRow: { marginTop: 16, flexDirection: "row", alignItems: "center", gap: 12 },
+  stepper: { flexDirection: "row", alignItems: "center", borderRadius: 999, borderWidth: 1, borderColor: "#e0d4c4", backgroundColor: "#ffffff" },
+  step: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
+  stepText: { fontSize: 16 },
+  qty: { width: 24, textAlign: "center", fontSize: 14, fontWeight: "600" },
+  viewers: { marginTop: 16, flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 12, borderWidth: 1, borderColor: "#eed2c6", backgroundColor: "#f8e9e3", paddingHorizontal: 12, paddingVertical: 10 },
+  liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#ef4444" },
+  viewersText: { flex: 1, fontSize: 12, fontWeight: "500", color: "#b0402c" },
+  lowStock: { borderRadius: 12, borderWidth: 1, borderColor: "#e8dccb", backgroundColor: "#fbf6ef", paddingHorizontal: 12, paddingVertical: 10 },
+  lowStockText: { fontSize: 12, fontWeight: "500" },
+  stockTrack: { marginTop: 6, height: 4, borderRadius: 2, overflow: "hidden", backgroundColor: "#e5dbcd" },
+  stockFill: { height: "100%", borderRadius: 2, backgroundColor: "#c0644a" },
+  perk: { flexDirection: "row", alignItems: "center", gap: 10 },
+  perkIcon: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center", backgroundColor: "#f4ebe1" },
+  perkText: { flex: 1, fontSize: 12 },
+  fold: { marginTop: 16, borderTopWidth: 1, borderTopColor: "rgba(69,46,31,0.13)" },
+  foldHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12 },
+  foldTitle: { fontSize: 14, fontWeight: "600" },
+  body: { fontSize: 13, lineHeight: 20 },
+  more: { marginTop: 6, fontSize: 12, textDecorationLine: "underline" },
+  reviews: { marginHorizontal: 12, marginTop: 12, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 20, alignItems: "center" },
+  reviewsKicker: { fontSize: 10, fontWeight: "600", letterSpacing: 2.2, color: "#c98b5e" },
+  reviewsHeading: { marginTop: 6, fontSize: 24, color: "#ffffff", textAlign: "center", fontFamily: theme.titleFont },
+  reviewsItalic: { fontStyle: "italic", color: "#e6c9a8" },
+  reviewsScore: { marginTop: 12, flexDirection: "row", alignItems: "center", gap: 12 },
+  reviewsValue: { fontSize: 44, color: "#ffffff", fontFamily: theme.titleFont },
+  reviewsCount: { marginTop: 4, fontSize: 12, color: "rgba(255,255,255,0.6)" },
+  reviewsButton: { marginTop: 16, borderRadius: 999, borderWidth: 1, borderColor: "rgba(255,255,255,0.25)", paddingHorizontal: 20, paddingVertical: 8 },
+  reviewsButtonText: { fontSize: 11, fontWeight: "600", letterSpacing: 1.6, color: "#ffffff" },
+  relatedTitle: { fontSize: 22, fontFamily: theme.titleFont },
+  related: { width: 132, borderRadius: 12, borderWidth: 1, borderColor: "#eadfd2", overflow: "hidden", backgroundColor: "#ffffff" },
+  relatedPicture: { width: "100%", aspectRatio: 1, backgroundColor: "#ffffff" },
+  relatedInfo: { paddingHorizontal: 8, paddingTop: 6, paddingBottom: 8, backgroundColor: "#f3ece4" },
+  relatedName: { fontSize: 12, fontFamily: theme.titleFont },
+  relatedPrice: { fontSize: 13, fontWeight: "600", fontFamily: theme.titleFont },
+  footer: { flexDirection: "row", gap: 8, borderTopWidth: 1, borderTopColor: "rgba(69,46,31,0.13)", backgroundColor: "#ffffff", paddingHorizontal: 12, paddingVertical: 10 },
+  cta: { flex: 1, height: 48, borderRadius: 12, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
+  ctaText: { fontSize: 12, fontWeight: "700", letterSpacing: 1.4, color: "#ffffff", textAlign: "center" },
+  center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
   error: { color: "#e11d48", fontSize: 13 },
 });
 `,
@@ -5456,7 +6029,7 @@ export default function App() {
 
   const count = useMemo(() => lines.reduce((n, l) => n + l.quantity, 0), [lines]);
 
-  const add = useCallback((variantId: string, _product: Product) => {
+  const add = useCallback((variantId: string, _product?: Product) => {
     setLines((v) => {
       const found = v.find((l) => l.itemId === variantId);
       return found
@@ -5564,11 +6137,20 @@ export default function App() {
 
   const body = top ? (
     top.kind === "collection" ? (
-      <CollectionScreen handle={top.handle} onOpenProduct={(id) => push({ kind: "product", id })} />
+      <CollectionScreen handle={top.handle} onOpenProduct={(id) => push({ kind: "product", id })} onAdd={(v) => add(v)} />
     ) : top.kind === "search" ? (
       <SearchResults query={top.term} onOpenProduct={(id) => push({ kind: "product", id })} />
     ) : top.kind === "product" ? (
-      <ProductScreen id={top.id} onAdd={add} />
+      <ProductScreen
+        id={top.id}
+        onAdd={add}
+        onBuyNow={(v, product, quantity) => {
+          for (let i = 0; i < quantity; i++) add(v, product);
+          goTab("cart");
+        }}
+        onOpenProduct={(id) => push({ kind: "product", id })}
+        onOpenScreen={goScreen}
+      />
     ) : top.kind === "checkout" ? (
       <CheckoutScreen phone={phone ?? ""} busy={busy} onPlace={place} />
     ) : top.kind === "signin" ? (

@@ -71,7 +71,7 @@ because Liquid needs them; the conversion happens once, in `lib/api/catalog.ts`.
 | GET | `/products` | Catalogue cards — `?q=`, `?collection=`, `?category=`, `?inStock=1`, `?limit=`, `?offset=` |
 | GET | `/products/{id}` | One full product, by variant id **or** website handle |
 | GET | `/collections` | The merchant's published collections, in their order |
-| GET | `/collections/{handle}` | One collection's products — `?sort=`, `?limit=`, `?offset=`; `all` means the whole shop |
+| GET | `/collections/{handle}` | One collection's products — `?sort=`, `?limit=`, `?offset=`; `all` means the whole shop; `?vendor=a,b`, `?minPrice=`, `?maxPrice=`, `?inStock=1`, `?onSale=1` filter before paging; the reply carries `facets` (brands with counts, price span) |
 | GET | `/menus` | Every navigation menu, items carrying a typed target |
 | GET | `/menus/{handle}` | One menu — usually `main-menu` or `footer` |
 | GET | `/reviews` | Published reviews; `?featured=1` is the Happy Customers set |

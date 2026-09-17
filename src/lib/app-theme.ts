@@ -463,13 +463,88 @@ export const TAB_DEFAULTS: Record<TabKey, { ar: string; en: string; icon: string
  * the honest split: nobody reorders a checkout.
  */
 export type ScreenSettings = {
-  collection: { columns: 2 | 3; showSort: boolean; sortDefault: string };
+  collection: {
+    columns: 2 | 3;
+    showSort: boolean;
+    sortDefault: string;
+    /** The dark banner at the top: a small line, the title, and a line under it. */
+    showHero: boolean;
+    heroKicker: string;
+    /** Empty writes "326 pieces · Chanel · Gucci…" from the collection itself. */
+    heroSubtitle: string;
+    heroFrom: string;
+    heroTo: string;
+    heroAccent: string;
+    showBrandChips: boolean;
+    showFilters: boolean;
+    showLayoutToggle: boolean;
+    showBadge: boolean;
+    showWishlist: boolean;
+    showVendor: boolean;
+    showRating: boolean;
+    ratingText: string;
+    showQuickAdd: boolean;
+    nameLines: number;
+    pageSize: number;
+    pageBg: string;
+    cardBg: string;
+    priceColor: string;
+    inkColor: string;
+    lineColor: string;
+  };
   product: {
     showDescription: boolean;
     showVariants: boolean;
     showStock: boolean;
     addLabel: string;
     soldOutLabel: string;
+    showThumbs: boolean;
+    showBadge: boolean;
+    showWishlist: boolean;
+    showBreadcrumb: boolean;
+    showRating: boolean;
+    ratingValue: string;
+    reviewCount: string;
+    reviewsWord: string;
+    verifiedLabel: string;
+    showSave: boolean;
+    saveLabel: string;
+    showInstalments: boolean;
+    instalmentsTitle: string;
+    instalmentMonths: number;
+    /** Provider names, split on a middle dot, a comma or a bar. */
+    instalmentProviders: string;
+    showQuantity: boolean;
+    showBuyNow: boolean;
+    buyNowLabel: string;
+    showViewers: boolean;
+    viewersMin: number;
+    viewersMax: number;
+    /** {n} is the number of people. */
+    viewersText: string;
+    lowStockAt: number;
+    /** {n} is how many are left. */
+    lowStockText: string;
+    showPerks: boolean;
+    perk1: string;
+    perk2: string;
+    perk3: string;
+    descriptionTitle: string;
+    shippingTitle: string;
+    shippingText: string;
+    showReviewsCard: boolean;
+    reviewsKicker: string;
+    reviewsHeading: string;
+    reviewsItalic: string;
+    reviewsButton: string;
+    showRelated: boolean;
+    relatedKicker: string;
+    relatedTitle: string;
+    pageBg: string;
+    accentColor: string;
+    inkColor: string;
+    mutedColor: string;
+    darkColor: string;
   };
   cart: {
     emptyText: string;
@@ -534,13 +609,84 @@ export const DEFAULT_TABS: Tab[] = TAB_KEYS.map((key) => ({
 }));
 
 export const DEFAULT_SCREENS: ScreenSettings = {
-  collection: { columns: 2, showSort: true, sortDefault: "manual" },
+  // Beauty Bar's own look: a dark roast banner, cream cards, caramel prices.
+  collection: {
+    columns: 2,
+    showSort: true,
+    sortDefault: "manual",
+    showHero: true,
+    heroKicker: "Summer 2026 · New arrivals",
+    heroSubtitle: "",
+    heroFrom: "#1c1410",
+    heroTo: "#3d2619",
+    heroAccent: "#d08159",
+    showBrandChips: true,
+    showFilters: true,
+    showLayoutToggle: true,
+    showBadge: true,
+    showWishlist: true,
+    showVendor: true,
+    showRating: true,
+    ratingText: "5",
+    showQuickAdd: true,
+    nameLines: 2,
+    pageSize: 24,
+    pageBg: "#f8f5f0",
+    cardBg: "#f3ece4",
+    priceColor: "#b0603e",
+    inkColor: "#211a15",
+    lineColor: "#eadfd2",
+  },
   product: {
     showDescription: true,
     showVariants: true,
     showStock: true,
     addLabel: "",
     soldOutLabel: "",
+    showThumbs: true,
+    showBadge: true,
+    showWishlist: true,
+    showBreadcrumb: true,
+    showRating: true,
+    ratingValue: "4.9",
+    reviewCount: "1,627",
+    reviewsWord: "reviews",
+    verifiedLabel: "Verified",
+    showSave: true,
+    saveLabel: "",
+    showInstalments: true,
+    instalmentsTitle: "",
+    instalmentMonths: 6,
+    instalmentProviders: "TRU · valU · Sympl",
+    showQuantity: true,
+    showBuyNow: true,
+    buyNowLabel: "",
+    showViewers: true,
+    viewersMin: 18,
+    viewersMax: 45,
+    viewersText: "",
+    lowStockAt: 5,
+    lowStockText: "",
+    showPerks: true,
+    perk1: "Express delivery · Cairo & Giza tomorrow",
+    perk2: "Free returns within 14 days",
+    perk3: "100% authentic · box & dust bag",
+    descriptionTitle: "",
+    shippingTitle: "",
+    shippingText: "Express delivery tomorrow in Cairo and Giza when you order before 6pm, 2–4 days everywhere else. Returns are free within 14 days — we collect from your door.",
+    showReviewsCard: true,
+    reviewsKicker: "Customer reviews",
+    reviewsHeading: "What They're",
+    reviewsItalic: "Saying",
+    reviewsButton: "Read all reviews",
+    showRelated: true,
+    relatedKicker: "You may also like",
+    relatedTitle: "Complete the look",
+    pageBg: "#f8f5f0",
+    accentColor: "#9d6540",
+    inkColor: "#211a15",
+    mutedColor: "#74685e",
+    darkColor: "#211a15",
   },
   cart: {
     emptyText: "",
@@ -1242,7 +1388,7 @@ export function normalizeTheme(raw: unknown): AppTheme {
     for (const [k, v] of Object.entries(base)) {
       const g = given[k];
       if (typeof v === "boolean") out[k] = typeof g === "boolean" ? g : v;
-      else if (typeof v === "number") out[k] = Number(g) > 0 ? Number(g) : v;
+      else if (typeof v === "number") out[k] = g !== "" && g != null && Number.isFinite(Number(g)) && Number(g) >= 0 ? Number(g) : v;
       else out[k] = str(g, v as string).slice(0, 200);
     }
     return out as ScreenSettings[K];

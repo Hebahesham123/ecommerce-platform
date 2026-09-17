@@ -18,6 +18,7 @@ import {
   IcRedo,
 } from "@/components/icons";
 import { AppHome, type HomeData } from "@/components/app-home";
+import { CollectionPage, ProductPage, type ScreenHandlers } from "@/components/app-screens";
 import { AppStrip } from "@/components/app-strip";
 import { AppLive } from "@/components/app-live";
 import { AppHeader } from "@/components/app-header";
@@ -232,6 +233,17 @@ export function ThemeEditor() {
   }, []);
 
   const cartCount = cart.reduce((n, l) => n + l.quantity, 0);
+
+  // Adding from a product or a collection stays on that screen, the way the
+  // app does; buying now goes to the basket.
+  const addQuietly = useCallback((itemId: string, quantity: number) => {
+    setCart((c) => {
+      const found = c.find((l) => l.itemId === itemId);
+      return found
+        ? c.map((l) => (l.itemId === itemId ? { ...l, quantity: l.quantity + quantity } : l))
+        : [...c, { itemId, quantity }];
+    });
+  }, []);
 
   // The search box on the phone is a search box, not a picture of one — a
   // merchant deciding whether to keep it needs to see what it turns up.
@@ -1101,22 +1113,39 @@ export function ThemeEditor() {
                     <Orders ar={ar} signedIn={Boolean(shopper)} />
                   </div>
                 ) : screen.kind === "collection" ? (
-                  <CollectionScreen
+                  <CollectionPage
+                    key={screen.handle}
                     handle={screen.handle}
                     title={screen.title}
-                    accent={draft.settings.accent}
+                    settings={draft.screens.collection}
                     ar={ar}
-                    onBack={pop}
-                    onOpenProduct={(id) => push({ kind: "product", id })}
+                    handlers={{
+                      onBack: pop,
+                      onOpenProduct: (id) => push({ kind: "product", id }),
+                      onAdd: addQuietly,
+                      onToggleWishlist: toggleWish,
+                      wishlist: wishlist.map((w) => w.id),
+                    } satisfies ScreenHandlers}
                   />
                 ) : (
-                  <ProductScreen
+                  <ProductPage
+                    key={screen.id}
                     id={screen.id}
-                    accent={draft.settings.accent}
-                    ar={ar}
                     settings={draft.screens.product}
-                    onAdd={addToCart}
-                    onBack={pop}
+                    ar={ar}
+                    crumb={stack.find((x) => x.kind === "collection")?.title}
+                    handlers={{
+                      onBack: pop,
+                      onOpenProduct: (id) => push({ kind: "product", id }),
+                      onOpenScreen: () => {},
+                      onAdd: addQuietly,
+                      onBuyNow: (itemId, quantity) => {
+                        addQuietly(itemId, quantity);
+                        setPage("cart");
+                      },
+                      onToggleWishlist: toggleWish,
+                      wishlist: wishlist.map((w) => w.id),
+                    } satisfies ScreenHandlers}
                   />
                 )
               ) : (
@@ -3187,239 +3216,6 @@ function ScreenError({ error, ar }: { error: string; ar: boolean }) {
     </div>
   );
 }
-
-function CollectionScreen({
-  handle,
-  title,
-  accent,
-  ar,
-  onBack,
-  onOpenProduct,
-}: {
-  handle: string;
-  title: string;
-  accent: string;
-  ar: boolean;
-  onBack: () => void;
-  onOpenProduct: (id: string) => void;
-}) {
-  const [products, setProducts] = useState<
-    { id: string; name: string; image: string | null; priceMin: number | null }[] | null
-  >(null);
-  const [total, setTotal] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setProducts(null);
-    setError(null);
-    fetch(`/api/storefront/collections/${encodeURIComponent(handle)}?limit=12`, {
-      headers: { "x-store-channel": "app" },
-      cache: "no-store",
-    })
-      .then((r) => r.json())
-      .then((j) => {
-        if (!j?.ok) return setError(j?.error ?? "not_found");
-        setProducts(j.data.products ?? []);
-        setTotal(j.data.total ?? 0);
-      })
-      .catch((e) => setError(String((e as Error).message)));
-  }, [handle]);
-
-  return (
-    <div className="bg-slate-50">
-      <ScreenBar
-        title={title || handle}
-        accent={accent}
-        ar={ar}
-        onBack={onBack}
-        trailing={products ? <span className="shrink-0 text-[11px] text-slate-400">{total}</span> : null}
-      />
-      {error ? (
-        <ScreenError error={error} ar={ar} />
-      ) : (
-        <div className="p-4">
-          {!products ? (
-            <p className="py-16 text-center text-sm text-slate-400">…</p>
-          ) : products.length === 0 ? (
-            <p className="py-16 text-center text-sm text-slate-400">
-              {ar ? "لا منتجات في هذا القسم" : "Nothing in this collection"}
-            </p>
-          ) : (
-            <div className="grid grid-cols-2 gap-3">
-              {products.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => onOpenProduct(p.id)}
-                  className="overflow-hidden rounded-2xl border border-slate-200 bg-white text-start transition hover:border-violet-300"
-                >
-                  <div className="aspect-square bg-slate-100">
-                    {p.image && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={p.image} alt="" className="h-full w-full object-cover" />
-                    )}
-                  </div>
-                  <div className="p-2">
-                    <div className="line-clamp-2 text-[11px] leading-snug text-slate-800">
-                      {p.name}
-                    </div>
-                    <div className="mt-1 text-sm font-bold" style={{ color: accent }}>
-                      {money(p.priceMin, ar)}
-                    </div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/**
- * A product, as the app would show it.
- *
- * Its variants and their stock are the part worth seeing here: a collection
- * that looks full but whose products are all sold out is a section the
- * merchant should know about before a shopper finds it.
- */
-function ProductScreen({
-  id,
-  accent,
-  ar,
-  settings,
-  onBack,
-  onAdd,
-}: {
-  id: string;
-  accent: string;
-  ar: boolean;
-  settings: ScreenSettings["product"];
-  onBack: () => void;
-  onAdd: (itemId: string) => void;
-}) {
-  const [product, setProduct] = useState<{
-    name: string;
-    image: string | null;
-    description: string | null;
-    priceMin: number | null;
-    compareAt: number | null;
-    variants: { id: string; variantTitle: string | null; price: number | null; available: number }[];
-  } | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [chosen, setChosen] = useState<string | null>(null);
-
-  useEffect(() => {
-    setProduct(null);
-    setError(null);
-    setChosen(null);
-    fetch(`/api/storefront/products/${encodeURIComponent(id)}`, {
-      headers: { "x-store-channel": "app" },
-      cache: "no-store",
-    })
-      .then((r) => r.json())
-      .then((j) => {
-        if (!j?.ok) return setError(j?.error ?? "not_found");
-        setProduct(j.data);
-        // The first size that is actually there, so the button means something
-        // the moment the screen appears.
-        const first =
-          j.data.variants.find((v: { available: number }) => v.available > 0) ?? j.data.variants[0];
-        setChosen(first?.id ?? null);
-      })
-      .catch((e) => setError(String((e as Error).message)));
-  }, [id]);
-
-  return (
-    <div className="bg-slate-50">
-      <ScreenBar title={product?.name ?? "…"} accent={accent} ar={ar} onBack={onBack} />
-      {error ? (
-        <ScreenError error={error} ar={ar} />
-      ) : !product ? (
-        <p className="py-16 text-center text-sm text-slate-400">…</p>
-      ) : (
-        <div className="space-y-3 p-4">
-          <div className="aspect-square overflow-hidden rounded-2xl bg-slate-100">
-            {product.image && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={product.image} alt="" className="h-full w-full object-cover" />
-            )}
-          </div>
-          <div>
-            <h3 className="text-sm font-semibold text-slate-900">{product.name}</h3>
-            <div className="mt-1 flex items-baseline gap-2">
-              <span className="text-lg font-bold" style={{ color: accent }}>
-                {money(product.priceMin, ar)}
-              </span>
-              {product.compareAt != null &&
-                product.priceMin != null &&
-                product.compareAt > product.priceMin && (
-                  <span className="text-xs text-slate-400 line-through">
-                    {money(product.compareAt, ar)}
-                  </span>
-                )}
-            </div>
-          </div>
-          {product.description && (
-            <p className="line-clamp-4 text-xs leading-relaxed text-slate-600">
-              {product.description.replace(/<[^>]*>/g, " ").trim()}
-            </p>
-          )}
-          <ul className="space-y-1.5">
-            {product.variants.map((v) => (
-              <li
-                key={v.id}
-                role="button"
-                tabIndex={0}
-                onClick={() => v.available > 0 && setChosen(v.id)}
-                onKeyDown={(e) => e.key === "Enter" && v.available > 0 && setChosen(v.id)}
-                className={`flex items-center gap-2 rounded-xl border bg-white px-3 py-2 text-xs ${
-                  v.id === chosen ? "border-2" : "border-slate-200"
-                } ${v.available > 0 ? "cursor-pointer" : "opacity-60"}`}
-                style={v.id === chosen ? { borderColor: accent } : undefined}
-              >
-                <span className="min-w-0 flex-1 truncate text-slate-800">
-                  {v.variantTitle ?? (ar ? "الأساسي" : "Default")}
-                </span>
-                <span className="shrink-0 text-slate-500">{money(v.price, ar)}</span>
-                <span
-                  className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
-                    v.available > 0 ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"
-                  }`}
-                >
-                  {v.available > 0
-                    ? `${v.available} ${ar ? "متاح" : "left"}`
-                    : ar
-                      ? "نفد"
-                      : "sold out"}
-                </span>
-              </li>
-            ))}
-          </ul>
-
-          {(() => {
-            const v = product.variants.find((x) => x.id === chosen) ?? product.variants[0];
-            const soldOut = !v || v.available <= 0;
-            return (
-              <button
-                type="button"
-                disabled={soldOut}
-                onClick={() => v && onAdd(v.id)}
-                className="w-full rounded-xl py-3 text-sm font-bold text-white disabled:opacity-45"
-                style={{ background: accent }}
-              >
-                {soldOut
-                  ? settings.soldOutLabel || (ar ? "نفد" : "Sold out")
-                  : settings.addLabel || (ar ? "أضيفي إلى السلة" : "Add to basket")}
-              </button>
-            );
-          })()}
-        </div>
-      )}
-    </div>
-  );
-}
-
 
 /**
  * What the phone's own search finds.
