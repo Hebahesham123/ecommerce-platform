@@ -341,6 +341,28 @@ body {
   cursor: default;
 }
 
+/* App theme: cards that arrive rather than appear.
+   The delay is set per card so a row comes in as a row. Anyone who has
+   asked their system not to animate gets them already there. */
+@keyframes app-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.app-fade-in {
+  animation: app-fade-in 380ms ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-fade-in {
+    animation: none;
+  }
+}
+
 /* App theme: section titles set in the website's own display face.
    Every section heading is an h3, so one rule reaches all of them and
    whatever sections come later. */

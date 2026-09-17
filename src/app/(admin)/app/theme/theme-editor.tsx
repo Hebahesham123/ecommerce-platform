@@ -1521,12 +1521,13 @@ function BlockGroup({
       {(block.type === "collection_row" || block.type === "collection_grid") && (
         <>
           <Field label={ar ? "القسم" : "Collection"} type="collection">
-            <CollectionSelect
+            <LinkPicker
+              value={{ handle: text("handle") }}
+              onChange={(next) => onPatch({ handle: next.handle ?? "" })}
               collections={collections}
-              value={text("handle")}
-              onChange={(handle) => onPatch({ handle })}
-              anyLabel={ar ? "أول ٨ أقسام بالترتيب" : "Your first 8 collections, in your order"}
-              className={input}
+              input={input}
+              ar={ar}
+              kinds={["collection"]}
             />
           </Field>
           {text("handle") && (
@@ -2385,6 +2386,63 @@ function BlockGroup({
               />
             </Field>
           )}
+          {block.type === "collection_tabs" && (
+            <>
+              <Field label={ar ? "محاذاة العنوان" : "Header alignment"} type="select">
+                <select
+                  value={text("align") || "left"}
+                  onChange={(e) => onPatch({ align: e.target.value })}
+                  className={input}
+                >
+                  <option value="left">{ar ? "يسار" : "Left"}</option>
+                  <option value="center">{ar ? "وسط" : "Centre"}</option>
+                  <option value="right">{ar ? "يمين" : "Right"}</option>
+                </select>
+              </Field>
+              <Field label={ar ? "التبويبات بعرض الشاشة" : "Stretch pills to full width"} type="checkbox">
+                <Toggle
+                  on={bool("stretchTabs", false)}
+                  onChange={(v) => onPatch({ stretchTabs: v })}
+                  ar={ar}
+                />
+              </Field>
+              <Field label={ar ? "إظهار الرابط" : "Show the link"} type="checkbox">
+                <Toggle
+                  on={bool("showLink", true)}
+                  onChange={(v) => onPatch({ showLink: v })}
+                  ar={ar}
+                />
+              </Field>
+              <Field label={ar ? "شكل الصورة" : "Image shape"} type="select">
+                <select
+                  value={text("imageShape") || "square"}
+                  onChange={(e) => onPatch({ imageShape: e.target.value })}
+                  className={input}
+                >
+                  <option value="square">{ar ? "مربعة" : "Square"}</option>
+                  <option value="wide">{ar ? "عريضة" : "Wide"}</option>
+                  <option value="tall">{ar ? "طويلة" : "Tall"}</option>
+                </select>
+              </Field>
+              <Field label={ar ? "ملء الصورة" : "Image fit"} type="select">
+                <select
+                  value={text("imageFit") || "cover"}
+                  onChange={(e) => onPatch({ imageFit: e.target.value })}
+                  className={input}
+                >
+                  <option value="cover">{ar ? "تملأ الإطار" : "Fill the frame"}</option>
+                  <option value="contain">{ar ? "تظهر كاملة" : "Fit inside"}</option>
+                </select>
+              </Field>
+              <Field label={ar ? "ظهور تدريجي للبطاقات" : "Fade cards in"} type="checkbox">
+                <Toggle
+                  on={bool("fade", false)}
+                  onChange={(v) => onPatch({ fade: v })}
+                  ar={ar}
+                />
+              </Field>
+            </>
+          )}
         </>
       )}
 
@@ -2583,12 +2641,15 @@ function ItemList({
                             ar={ar}
                           />
                         ) : f.kind === "collection" ? (
-                          <CollectionSelect
+                          <LinkPicker
+                            value={{ handle: typeof value === "string" ? value : "" }}
+                            onChange={(next) =>
+                              patchItem(item.id, { [f.key]: next.handle ?? "" })
+                            }
                             collections={collections}
-                            value={typeof value === "string" ? value : ""}
-                            onChange={(handle) => patchItem(item.id, { [f.key]: handle })}
-                            anyLabel={ar ? "اختاري قسماً" : "Choose a collection"}
-                            className={`${input} mt-0.5 h-8 text-xs`}
+                            input={`${input} mt-0.5 h-8 text-xs`}
+                            ar={ar}
+                            kinds={["collection"]}
                           />
                         ) : (
                           <span className="mt-0.5 flex items-center gap-1.5">
@@ -2650,55 +2711,6 @@ function ItemList({
   );
 }
 
-/**
- * Pick a collection — including one this store does not have.
- *
- * The theme was exported from Shopify, and most of the collections it points
- * at were never recreated here. A plain select would show those as blank and
- * quietly overwrite them the moment anything else in the section changed, so
- * an unknown handle keeps its place in the list and says what it is. Losing
- * the merchant's own wiring while claiming to have imported it would be worse
- * than not importing it at all.
- */
-function CollectionSelect({
-  collections,
-  value,
-  onChange,
-  anyLabel,
-  className,
-}: {
-  collections: { handle: string; title: string; count: number; image: string | null }[];
-  value: string;
-  onChange: (handle: string) => void;
-  anyLabel: string;
-  className: string;
-}) {
-  const missing = Boolean(value) && !collections.some((c) => c.handle === value);
-  return (
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className={`${className} ${missing ? "border-amber-400 text-amber-700" : ""}`}
-    >
-      <option value="">{anyLabel}</option>
-      {missing && <option value={value}>{value} — not in this store</option>}
-      {collections.map((c) => (
-        <option key={c.handle} value={c.handle}>
-          {c.title} ({c.count})
-        </option>
-      ))}
-    </select>
-  );
-}
-
-/**
- * Where a tap in the preview lands.
- *
- * The editor is for arranging the home screen, so this is deliberately plain —
- * enough to prove the link goes where the merchant pointed it and that the
- * collection has something in it. The full app is one click away for the rest.
- */
-/** Which generated file a screen's settings end up in. */
 function screenFile(key: ScreenKey): string {
   return {
     collection: "CollectionScreen",

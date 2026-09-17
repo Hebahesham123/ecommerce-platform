@@ -150,16 +150,29 @@ function Thumb({
   src,
   className = "",
   style,
+  fit = "cover",
 }: {
   src: string | null;
   className?: string;
   style?: React.CSSProperties;
+  /**
+   * "cover" crops the picture to fill the box, "contain" fits all of it in.
+   *
+   * It belongs on the picture rather than on the box around it, which is
+   * why it is a prop: a style passed in from outside lands on the box and
+   * the picture goes on cropping regardless.
+   */
+  fit?: string;
 }) {
   return (
     <div className={`overflow-hidden rounded-xl bg-slate-100 ${className}`} style={style}>
       {src && (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={src} alt="" className="h-full w-full object-cover" />
+        <img
+          src={src}
+          alt=""
+          className={`h-full w-full ${fit === "contain" ? "object-contain" : "object-cover"}`}
+        />
       )}
     </div>
   );
@@ -197,6 +210,9 @@ function Tile({
   ar,
   accent,
   wide,
+  shape = "square",
+  fit = "cover",
+  fadeAfter,
   onOpen,
   onAdd,
   onWish,
@@ -206,6 +222,12 @@ function Tile({
   ar: boolean;
   accent: string;
   wide?: boolean;
+  /** The picture's proportions: wide, square or tall. */
+  shape?: string;
+  /** "cover" crops to fill it, "contain" fits the whole picture inside. */
+  fit?: string;
+  /** Milliseconds to wait before arriving. Undefined means just be there. */
+  fadeAfter?: number;
   onOpen?: (id: string) => void;
   onAdd?: (variantId: string, productId: string) => void;
   onWish?: (card: Card) => void;
@@ -222,14 +244,19 @@ function Tile({
   // behalf is how you earn a return.
   const single = card.variantId != null && (card.variantCount ?? 1) === 1;
   const canAdd = Boolean(onAdd);
+  const ratio =
+    shape === "wide" ? "aspect-[4/3]" : shape === "tall" ? "aspect-[3/4]" : "aspect-square";
 
   return (
     <div
-      className={`${wide ? "w-40 shrink-0" : ""} relative overflow-hidden rounded-2xl border border-slate-200 bg-white`}
+      className={`${wide ? "w-40 shrink-0" : ""} relative overflow-hidden rounded-2xl border border-slate-200 bg-white ${
+        fadeAfter === undefined ? "" : "app-fade-in"
+      }`}
+      style={fadeAfter === undefined ? undefined : { animationDelay: `${fadeAfter}ms` }}
     >
       <button onClick={() => onOpen?.(card.id)} className="block w-full text-start">
         <span className="relative block bg-white p-2">
-          <Thumb src={card.image} className="aspect-square rounded-xl" />
+          <Thumb src={card.image} className={`${ratio} rounded-xl`} fit={fit} />
           {off > 0 && (
             <span
               className="absolute bottom-1 start-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold text-white shadow-sm"
@@ -678,9 +705,14 @@ function BlockView({
       return (
         <Tabs
           title={str(s.title)}
-          kicker={str(s.kicker)}
           tabs={tabs}
           limit={int(s.limit, 8)}
+          align={str(s.align, "left")}
+          stretchTabs={s.stretchTabs === true}
+          showLink={s.showLink !== false}
+          imageShape={str(s.imageShape, "square")}
+          imageFit={str(s.imageFit, "cover")}
+          fade={s.fade === true}
           data={data}
           ar={ar}
           accent={accent}
@@ -922,18 +954,34 @@ function Hero({
 /** Collections as tabs, with the chosen one's products underneath. */
 function Tabs({
   title,
-  kicker,
   tabs,
   limit,
+  align,
+  stretchTabs,
+  showLink,
+  imageShape,
+  imageFit,
+  fade,
   data,
   ar,
   accent,
   handlers,
 }: {
   title: string;
-  kicker: string;
   tabs: Item[];
   limit: number;
+  /** Where the kicker and heading sit: left, centre or right. */
+  align: string;
+  /** Pills share the width equally instead of sitting at their own size. */
+  stretchTabs: boolean;
+  /** The link to the whole collection, beside the heading. */
+  showLink: boolean;
+  /** The shape of a product's picture: wide, square or tall. */
+  imageShape: string;
+  /** "cover" crops to fill the shape, "contain" fits the whole thing in. */
+  imageFit: string;
+  /** Cards arrive rather than appear. */
+  fade: boolean;
   data: HomeData;
   ar: boolean;
   accent: string;
@@ -944,21 +992,33 @@ function Tabs({
   const handle = str(active.handle);
   const products = (data.rows[handle] ?? []).slice(0, limit);
 
+  const alignClass = align === "center" ? "text-center" : align === "right" ? "text-end" : "text-start";
+
   return (
-    <section>
-      {kicker && <div className="text-[10px] uppercase tracking-wide text-slate-400">{kicker}</div>}
+    <section className={alignClass}>
       <Heading
         title={title}
-        onSeeAll={() => handlers.onOpenCollection?.(handle, str(active.label))}
+        onSeeAll={
+          showLink
+            ? () => handlers.onOpenCollection?.(handle, str(active.label))
+            : undefined
+        }
         ar={ar}
         accent={accent}
       />
-      <div className="-mx-4 mt-2 flex overflow-x-auto px-4 pb-1" style={{ gap: "calc(var(--app-item-gap, 8px) * 0.5)" }}>
+      <div
+        className={`-mx-4 mt-2 flex px-4 pb-1 ${
+          stretchTabs ? "" : "overflow-x-auto"
+        }`}
+        style={{ gap: "calc(var(--app-item-gap, 8px) * 0.5)" }}
+      >
         {tabs.map((t, i) => (
           <button
             key={t.id}
             onClick={() => setAt(i)}
-            className="shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition"
+            className={`whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition ${
+              stretchTabs ? "min-w-0 flex-1 truncate" : "shrink-0"
+            }`}
             style={
               i === at
                 ? { background: accent, color: "#fff" }
@@ -970,9 +1030,21 @@ function Tabs({
         ))}
       </div>
       {products.length ? (
-        <div className="-mx-4 mt-2 flex overflow-x-auto px-4 pb-1" style={{ gap: "var(--app-item-gap, 8px)" }}>
-          {products.map((p) => (
-            <Tile key={p.id} card={p} ar={ar} accent={accent} wide {...tileProps(handlers, p.id)} />
+        <div className="-mx-4 mt-2 flex overflow-x-auto px-4 pb-1 text-start" style={{ gap: "var(--app-item-gap, 8px)" }}>
+          {products.map((p, i) => (
+            <Tile
+              key={p.id}
+              card={p}
+              ar={ar}
+              accent={accent}
+              wide
+              shape={imageShape}
+              fit={imageFit}
+              // Each card a little after the one before it, so the row
+              // arrives as a row rather than all at once.
+              fadeAfter={fade ? i * 70 : undefined}
+              {...tileProps(handlers, p.id)}
+            />
           ))}
         </div>
       ) : (

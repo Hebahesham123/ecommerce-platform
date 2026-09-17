@@ -533,19 +533,26 @@ export function ProductTile({
   card,
   width = 128,
   fill = false,
+  shape = "square",
+  fit = "cover",
   onPress,
 }: {
   card: Card;
   width?: number;
   /** True in a grid, where the column decides the width and the picture squares itself. */
   fill?: boolean;
+  /** The picture's proportions: "square", "wide" or "tall". */
+  shape?: string;
+  /** "cover" crops to fill the frame, "contain" fits the whole picture in. */
+  fit?: string;
   onPress?: (id: string) => void;
 }) {
-  const box = fill ? styles.fillImage : { width, height: width };
+  const ratio = shape === "wide" ? 0.75 : shape === "tall" ? 1.34 : 1;
+  const box = fill ? styles.fillImage : { width, height: Math.round(width * ratio) };
   return (
     <Pressable style={[styles.tile, fill ? styles.fill : { width }]} onPress={() => onPress?.(card.id)}>
       {card.image ? (
-        <Image source={{ uri: card.image }} style={[styles.tileImage, box]} />
+        <Image source={{ uri: card.image }} style={[styles.tileImage, box]} resizeMode={fit === "contain" ? "contain" : "cover"} />
       ) : (
         <View style={[styles.tileImage, box]} />
       )}
@@ -1043,7 +1050,19 @@ import { ProductTile, SectionHeading } from "./Pieces";
 import type { HomePayload } from "../api";
 
 export type Tab = { id: string; handle?: string; label?: string; emoji?: string };
-export type CollectionTabsSettings = { kicker?: string; title?: string; limit?: number; items?: Tab[] };
+export type CollectionTabsSettings = {
+  title?: string;
+  limit?: number;
+  /** Where the kicker and heading sit: "left", "center" or "right". */
+  align?: string;
+  /** Pills share the width equally rather than scrolling at their own size. */
+  stretchTabs?: boolean;
+  /** The link to the whole collection, beside the heading. */
+  showLink?: boolean;
+  imageShape?: string;
+  imageFit?: string;
+  items?: Tab[];
+};
 
 export function CollectionTabs({
   settings,
@@ -1062,14 +1081,33 @@ export function CollectionTabs({
 
   const active = tabs[Math.min(at, tabs.length - 1)];
   const products = (rows[active.handle!] ?? []).slice(0, settings.limit ?? 8);
+  const align =
+    settings.align === "center" ? "center" : settings.align === "right" ? "flex-end" : "flex-start";
+  const stretch = settings.stretchTabs === true;
 
   return (
     <View>
-      {settings.kicker ? <Text style={styles.kicker}>{settings.kicker}</Text> : null}
       <SectionHeading
         title={settings.title ?? ""}
-        onSeeAll={() => onOpenCollection?.(active.handle!)}
+        onSeeAll={
+          settings.showLink === false ? undefined : () => onOpenCollection?.(active.handle!)
+        }
       />
+      {stretch ? (
+        <View style={styles.tabsRow}>
+          {tabs.map((t, i) => (
+            <Pressable
+              key={t.id}
+              onPress={() => setAt(i)}
+              style={[styles.tab, styles.tabGrow, i === at ? styles.tabOn : styles.tabOff]}
+            >
+              <Text numberOfLines={1} style={i === at ? styles.tabTextOn : styles.tabTextOff}>
+                {(t.emoji ? t.emoji + " " : "") + (t.label || t.handle)}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : (
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs}>
         {tabs.map((t, i) => (
           <Pressable
@@ -1083,16 +1121,26 @@ export function CollectionTabs({
           </Pressable>
         ))}
       </ScrollView>
+      )}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-        {products.map((p) => <ProductTile key={p.id} card={p} onPress={onOpenProduct} />)}
+        {products.map((p) => (
+          <ProductTile
+            key={p.id}
+            card={p}
+            shape={settings.imageShape ?? "square"}
+            fit={settings.imageFit ?? "cover"}
+            onPress={onOpenProduct}
+          />
+        ))}
       </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  kicker: { fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: colors.inkSoft },
   tabs: { gap: 6, paddingVertical: spacing.sm },
+  tabsRow: { flexDirection: "row", gap: 6, paddingVertical: spacing.sm },
+  tabGrow: { flex: 1, alignItems: "center" },
   row: { gap: gap.item, paddingVertical: spacing.sm },
   tab: { borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 6 },
   tabOn: { backgroundColor: colors.accent },
@@ -3017,7 +3065,15 @@ function settingsLiteral(block: Block): string {
   const keep: Record<BlockType, string[]> = {
     hero: [],
     promo_bar: ["lead", "rest", "code"],
-    collection_tabs: ["kicker", "title", "limit"],
+    collection_tabs: [
+      "title",
+      "limit",
+      "align",
+      "stretchTabs",
+      "showLink",
+      "imageShape",
+      "imageFit",
+    ],
     cards: ["kicker", "title"],
     tiers: ["title"],
     split: ["title"],
@@ -3207,7 +3263,9 @@ function settingsLiteral(block: Block): string {
         k === "showClaimed" ||
         k === "showLabel" ||
         k === "showNote" ||
-        k === "featureFirst"
+        k === "featureFirst" ||
+        k === "stretchTabs" ||
+        k === "showLink"
       ) {
         return `${k}: ${v === false ? "false" : "true"}`;
       }

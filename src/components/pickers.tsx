@@ -390,12 +390,24 @@ export function LinkPicker({
   collections,
   input,
   ar,
+  kinds,
 }: {
   value: LinkValue;
   onChange: (next: LinkValue) => void;
   collections: Collection[];
   input: string;
   ar: boolean;
+  /**
+   * Which kinds this particular control may offer. All five by default.
+   *
+   * Some places are not asking where a tap goes but which collection to
+   * read: a tab strip lists that collection's products, so a product or a
+   * web address there is not a narrower answer, it is a meaningless one.
+   * They get the same field and the same search with the menu narrowed to
+   * what makes sense, rather than a plainer control that behaves
+   * differently for no reason the merchant can see.
+   */
+  kinds?: Kind[];
 }) {
   // Which panel is showing: the menu of kinds, or one kind's list. null is the
   // closed state, where only the field is on screen.
@@ -483,13 +495,28 @@ export function LinkPicker({
 
   const Icon = kind === "none" ? null : KIND_ICON[kind];
 
-  const menu = [
+  /**
+   * A handle pointing at a collection this store does not have.
+   *
+   * Most of this theme came from Shopify and many of the collections it names
+   * were never recreated here. Showing the handle without saying that leaves
+   * a merchant looking at a section that is quietly empty and no way to tell
+   * why, so it says so and colours itself to be noticed.
+   */
+  const missing =
+    Boolean(value.handle) && !collections.some((c) => c.handle === value.handle);
+
+  const allKinds = [
     { kind: "collection" as const, icon: IcTag, ar: "الأقسام", en: "Collections" },
     { kind: "product" as const, icon: IcBox, ar: "المنتجات", en: "Products" },
     { kind: "page" as const, icon: IcPage, ar: "الصفحات", en: "Pages" },
     { kind: "screen" as const, icon: IcScreen, ar: "شاشات التطبيق", en: "App screens" },
     { kind: "url" as const, icon: IcLink, ar: "رابط", en: "Web address" },
   ];
+  const menu = kinds ? allKinds.filter((m) => kinds.includes(m.kind)) : allKinds;
+  // With one kind there is nothing to choose between, so the field opens
+  // straight onto the list rather than onto a menu of one.
+  const single = menu.length === 1 ? menu[0].kind : null;
 
   const row =
     "flex w-full items-center gap-2 px-2.5 py-1.5 text-start text-[12px] text-ink hover:bg-surface-hover";
@@ -500,8 +527,8 @@ export function LinkPicker({
       <div
         className={`${input} flex cursor-pointer items-center gap-2 ${
           open ? "ring-2 ring-[rgb(139,92,246)]" : ""
-        }`}
-        onClick={() => setOpen(open ? null : "menu")}
+        } ${missing ? "border-amber-400 text-amber-700" : ""}`}
+        onClick={() => setOpen(open ? null : (single ?? "menu"))}
       >
         <span className={kind === "none" ? "text-ink-soft" : "text-ink-muted"}>
           {Icon ? <Icon /> : <IcLink />}
@@ -509,8 +536,14 @@ export function LinkPicker({
         <span
           className={`flex-1 truncate ${kind === "none" ? "text-ink-soft" : ""}`}
           dir={value.url ? "ltr" : undefined}
+          title={missing ? (ar ? "هذا القسم غير موجود في المتجر" : "This collection is not in the store") : undefined}
         >
           {label()}
+          {missing && (
+            <span className="text-[11px]">
+              {ar ? " — غير موجود" : " — not in this store"}
+            </span>
+          )}
         </span>
         {kind !== "none" && (
           <button
@@ -565,16 +598,18 @@ export function LinkPicker({
 
           {open !== "menu" && (
             <>
-              <button
-                type="button"
-                onClick={() => setOpen("menu")}
-                className={`${row} border-b border-line font-medium text-ink-muted`}
-              >
-                <IcBack ar={ar} />
-                {ar
-                  ? menu.find((m) => m.kind === open)?.ar
-                  : menu.find((m) => m.kind === open)?.en}
-              </button>
+              {!single && (
+                <button
+                  type="button"
+                  onClick={() => setOpen("menu")}
+                  className={`${row} border-b border-line font-medium text-ink-muted`}
+                >
+                  <IcBack ar={ar} />
+                  {ar
+                    ? menu.find((m) => m.kind === open)?.ar
+                    : menu.find((m) => m.kind === open)?.en}
+                </button>
+              )}
 
               {open === "collection" && (
                 <CollectionList
