@@ -1730,6 +1730,71 @@ function BlockGroup({
         </>
       )}
 
+      {block.type === "review_summary" && (
+        <>
+          <Field label={ar ? "السطر العلوي الصغير" : "Small line above"} type="text">
+            <input value={text("eyebrow")} onChange={(e) => onPatch({ eyebrow: e.target.value })} placeholder="Customer reviews" className={input} />
+          </Field>
+          <Field label={ar ? "العنوان" : "Heading"} type="text">
+            <input value={text("heading")} onChange={(e) => onPatch({ heading: e.target.value })} placeholder="What They're" className={input} />
+          </Field>
+          <Field label={ar ? "الجزء المائل من العنوان" : "Italic part of the heading"} type="text">
+            <input value={text("headingItalic")} onChange={(e) => onPatch({ headingItalic: e.target.value })} placeholder="Saying" className={input} />
+          </Field>
+          <Field label={ar ? "متوسط التقييم" : "Average score"} type="text">
+            <input value={text("average")} onChange={(e) => onPatch({ average: e.target.value })} placeholder="4.9" className={input} />
+          </Field>
+          <Field label={ar ? "عدد المراجعات" : "Number of reviews"} type="text">
+            <input value={text("reviewCount")} onChange={(e) => onPatch({ reviewCount: e.target.value })} placeholder="1,627" className={input} />
+          </Field>
+          <Field label={ar ? "كلمة «مراجعات»" : "The word after the number"} type="text">
+            <input value={text("reviewsWord")} onChange={(e) => onPatch({ reviewsWord: e.target.value })} placeholder="reviews" className={input} />
+          </Field>
+          <Field label={ar ? "سطر الثقة" : "Trust line"} type="text">
+            <input value={text("trustNote")} onChange={(e) => onPatch({ trustNote: e.target.value })} placeholder="Verified buyers" className={input} />
+          </Field>
+          <div className="grid grid-cols-5 gap-1.5">
+            {[5, 4, 3, 2, 1].map((n) => (
+              <Field key={n} label={(ar ? "٪ " : "% ") + n + "★"} type="range">
+                <input type="number" min={0} max={100} value={num("pct" + n, 0)} onChange={(e) => onPatch({ ["pct" + n]: Number(e.target.value) })} className={input} />
+              </Field>
+            ))}
+          </div>
+          <Field label={ar ? "نص الزر" : "Button text"} type="text">
+            <input value={text("buttonLabel")} onChange={(e) => onPatch({ buttonLabel: e.target.value })} placeholder="Read all reviews" className={input} />
+          </Field>
+          <Field label={ar ? "البطاقة والزر يفتحان" : "Card and button open"} type="link">
+            <LinkPicker
+              value={{ handle: text("handle"), url: text("url"), productId: text("productId"), screen: text("screen") }}
+              onChange={(next) => onPatch({ handle: next.handle ?? "", url: next.url ?? "", productId: next.productId ?? "", screen: next.screen ?? "" })}
+              collections={collections}
+              input={input}
+              ar={ar}
+            />
+          </Field>
+          <Field label={ar ? "حركة الأشرطة عند الظهور" : "Bars grow into place"} type="checkbox">
+            <input type="checkbox" checked={block.settings?.animate !== false} onChange={(e) => onPatch({ animate: e.target.checked })} />
+          </Field>
+          <Field label={ar ? "حجم رقم التقييم" : "Score size"} type="range">
+            <input type="number" min={28} max={90} value={num("avgSize", 58)} onChange={(e) => onPatch({ avgSize: Number(e.target.value) })} className={input} />
+          </Field>
+          <Field label={ar ? "استدارة البطاقة" : "Card corners"} type="range">
+            <input type="number" min={0} max={32} value={num("radius", 18)} onChange={(e) => onPatch({ radius: Number(e.target.value) })} className={input} />
+          </Field>
+          <ColorRow label={ar ? "خلفية القسم" : "Section background"} value={text("bg")} fallback="#f6f0e8" onChange={(v) => onPatch({ bg: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "البطاقة — اللون الأول" : "Card colour (top)"} value={text("panelFrom")} fallback="#fdf9f3" onChange={(v) => onPatch({ panelFrom: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "البطاقة — اللون الثاني" : "Card colour (bottom)"} value={text("panelTo")} fallback="#f3e9db" onChange={(v) => onPatch({ panelTo: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "لون النجوم" : "Star colour"} value={text("starColor")} fallback="#c9a227" onChange={(v) => onPatch({ starColor: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "لون خلفية الشريط" : "Bar track colour"} value={text("barTrack")} fallback="#e5dbcd" onChange={(v) => onPatch({ barTrack: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "الشريط — اللون الأول" : "Bar colour (start)"} value={text("barFrom")} fallback="#c9a227" onChange={(v) => onPatch({ barFrom: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "الشريط — اللون الثاني" : "Bar colour (end)"} value={text("barTo")} fallback="#9d6540" onChange={(v) => onPatch({ barTo: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "لون الزر والسطر العلوي" : "Button & small line colour"} value={text("brownColor")} fallback="#684329" onChange={(v) => onPatch({ brownColor: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "لون الجزء المائل وسطر الثقة" : "Italic & trust line colour"} value={text("accentColor")} fallback="#9d6540" onChange={(v) => onPatch({ accentColor: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "لون العنوان والأرقام" : "Heading & figures colour"} value={text("inkColor")} fallback="#211a15" onChange={(v) => onPatch({ inkColor: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "لون النص الخفيف" : "Soft text colour"} value={text("mutedColor")} fallback="#74685e" onChange={(v) => onPatch({ mutedColor: v })} input={input} ar={ar} />
+        </>
+      )}
+
       {block.type === "brand_timeline" && (
         <>
           <Field label={ar ? "السطر العلوي الصغير" : "Small line above"} type="text">

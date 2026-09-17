@@ -45,6 +45,7 @@ export type BlockType =
   | "promo_card"
   | "complete_look"
   | "brand_timeline"
+  | "review_summary"
   | "showcase"
   | "reviews"
   | "text";
@@ -764,6 +765,12 @@ export const BLOCK_META: Record<
     hintAr: "وسوم تصف ذوق العميلة، كل وسم يفتح ما يناسبه",
     hintEn: "Tags describing the shopper's taste, each opening what matches it",
   },
+  review_summary: {
+    ar: "ملخص التقييمات",
+    en: "Rating summary",
+    hintAr: "متوسط التقييم بالنجوم وعدد المراجعات وأشرطة النِّسب وزر لكل المراجعات — مثل الموقع",
+    hintEn: "The average score, stars, review count, a bar per star and a button to every review — as on the website",
+  },
   brand_timeline: {
     ar: "تسوّقي حسب الماركة",
     en: "Shop by brand",
@@ -1002,6 +1009,40 @@ export function newBlock(type: BlockType): Block {
       cardBg: "",
       radius: 14,
       items: shape ? [shape.blank()] : [],
+    },
+    review_summary: {
+      kicker: "",
+      eyebrow: "Customer reviews",
+      heading: "What They're",
+      headingItalic: "Saying",
+      average: "4.9",
+      reviewCount: "1,627",
+      reviewsWord: "reviews",
+      trustNote: "Verified buyers",
+      pct5: 88,
+      pct4: 8,
+      pct3: 3,
+      pct2: 1,
+      pct1: 0,
+      buttonLabel: "Read all reviews",
+      handle: "",
+      url: "",
+      productId: "",
+      screen: "happy-customers",
+      animate: true,
+      avgSize: 58,
+      radius: 18,
+      bg: "",
+      panelFrom: "",
+      panelTo: "",
+      starColor: "",
+      barTrack: "",
+      barFrom: "",
+      barTo: "",
+      brownColor: "",
+      accentColor: "",
+      inkColor: "",
+      mutedColor: "",
     },
     brand_timeline: {
       eyebrow: "Shop by brand",

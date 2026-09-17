@@ -616,6 +616,12 @@ function BlockView({
       );
     }
 
+    case "review_summary":
+      if (!str(s.average) && !str(s.heading) && !str(s.headingItalic)) {
+        return <Placeholder ar={ar} label={ar ? "ملخص بلا تقييم بعد" : "Summary with no score yet"} />;
+      }
+      return <ReviewSummary block={block} data={data} handlers={handlers} />;
+
     case "brand_timeline": {
       const brands = itemsOf(block).filter((i) => str(i.label) || str(i.title) || str(i.imageUrl));
       if (!brands.length) return <Placeholder ar={ar} label={ar ? "لا ماركات بعد" : "No brands yet"} />;
@@ -2619,6 +2625,173 @@ function PromoBanner({
   );
 }
 
+/** A five-point star, the same drawing the website uses. */
+function StarMark({ className, color }: { className: string; color: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill={color} className={className} aria-hidden>
+      <path d="M12 2l2.9 6.26 6.85.72-5.1 4.6 1.44 6.72L12 16.9l-6.09 3.4 1.44-6.72-5.1-4.6 6.85-.72z" />
+    </svg>
+  );
+}
+
+/**
+ * Rating summary - the website's "What They're Saying".
+ *
+ * A heading with an italic second half, then one card: the average in large
+ * serif figures with its stars, the count and a verified line, and a bar per
+ * star that grows into place. The whole card and the button under it open the
+ * reviews. Every figure is typed by the merchant, as on the website.
+ */
+function ReviewSummary({
+  block,
+  data,
+  handlers,
+}: {
+  block: Block;
+  data: HomeData;
+  handlers: HomeHandlers;
+}) {
+  const s = block.settings ?? {};
+  const go = opener(data, handlers);
+  const star = str(s.starColor, "#c9a227");
+  const track = str(s.barTrack, "#e5dbcd");
+  const brown = str(s.brownColor, "#684329");
+  const caramel = str(s.accentColor, "#9d6540");
+  const ink = str(s.inkColor, "#211a15");
+  const muted = str(s.mutedColor, "#74685e");
+  const line = "rgba(69,46,31,.13)";
+  const serif = 'var(--font-display), "Cormorant Garamond", "Playfair Display", Georgia, serif';
+  const average = str(s.average);
+  const filled = Math.max(0, Math.min(5, Math.floor(Number(average) || 0)));
+  const animate = s.animate !== false;
+  const [grown, setGrown] = useState(!animate);
+  useEffect(() => {
+    if (!animate) return setGrown(true);
+    setGrown(false);
+    const t = setTimeout(() => setGrown(true), 150);
+    return () => clearTimeout(t);
+  }, [animate]);
+  const pct = (n: number) => {
+    const v = Number(s["pct" + n]);
+    return Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 0;
+  };
+  const count = [str(s.reviewCount), str(s.reviewsWord)].filter(Boolean).join(" ");
+
+  return (
+    <section
+      className={str(s.bg) ? "-mx-4 px-4 py-5" : ""}
+      style={str(s.bg) ? { background: str(s.bg) } : undefined}
+    >
+      <div className="text-center">
+        {str(s.eyebrow) && (
+          <span
+            dir="auto"
+            className="inline-flex items-center gap-3 text-[10.5px] font-semibold uppercase tracking-[0.24em]"
+            style={{ color: brown }}
+          >
+            <span aria-hidden className="h-px w-[34px] opacity-50" style={{ background: caramel }} />
+            {str(s.eyebrow)}
+            <span aria-hidden className="h-px w-[34px] opacity-50" style={{ background: caramel }} />
+          </span>
+        )}
+        {(str(s.heading) || str(s.headingItalic)) && (
+          <h3
+            dir="auto"
+            className="app-display mt-3 text-[28px] font-semibold leading-tight tracking-tight"
+            style={{ color: ink, fontFamily: serif }}
+          >
+            {str(s.heading)}{" "}
+            {str(s.headingItalic) && (
+              <em className="font-medium italic" style={{ color: caramel }}>
+                {str(s.headingItalic)}
+              </em>
+            )}
+          </h3>
+        )}
+      </div>
+
+      <button
+        dir="ltr"
+        onClick={() => go(s)}
+        className="mt-5 block w-full border px-[18px] py-[22px] text-left"
+        style={{
+          borderRadius: int(s.radius, 18),
+          borderColor: line,
+          background: `linear-gradient(160deg, ${str(s.panelFrom, "#fdf9f3")}, ${str(s.panelTo, "#f3e9db")})`,
+        }}
+      >
+        <span className="flex flex-col items-center border-b pb-4 text-center" style={{ borderColor: line }}>
+          {average && (
+            <span className="font-semibold leading-none tracking-tight" style={{ fontSize: int(s.avgSize, 58), color: ink, fontFamily: serif }}>
+              {average}
+            </span>
+          )}
+          <span className="mt-2 inline-flex gap-[3px]">
+            {[0, 1, 2, 3, 4].map((i) => (
+              <StarMark key={i} className="h-4 w-4" color={i < filled ? star : track} />
+            ))}
+          </span>
+          {count && (
+            <span dir="auto" className="mt-2 text-[11.5px]" style={{ color: muted }}>
+              {count}
+            </span>
+          )}
+          {str(s.trustNote) && (
+            <span
+              dir="auto"
+              className="mt-2.5 inline-flex items-center gap-1.5 text-[9.5px] font-semibold uppercase tracking-[0.12em]"
+              style={{ color: caramel }}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="h-[11px] w-[11px]">
+                <path d="M4 12l5 5L20 6" />
+              </svg>
+              {str(s.trustNote)}
+            </span>
+          )}
+        </span>
+        <span className="mt-4 flex flex-col gap-[7px]">
+          {[5, 4, 3, 2, 1].map((n) => (
+            <span key={n} className="flex items-center gap-2.5 px-1.5 py-1">
+              <span className="w-2.5 text-[11.5px] font-semibold" style={{ color: ink }}>
+                {n}
+              </span>
+              <StarMark className="h-3 w-3 shrink-0" color={star} />
+              <span className="h-[7px] min-w-0 flex-1 overflow-hidden rounded-full" style={{ background: track }}>
+                <span
+                  className="block h-full rounded-full transition-[width] duration-1000 ease-[cubic-bezier(.19,1,.22,1)]"
+                  style={{
+                    width: grown ? `${pct(n)}%` : 0,
+                    background: `linear-gradient(90deg, ${str(s.barFrom, "#c9a227")}, ${str(s.barTo, caramel)})`,
+                  }}
+                />
+              </span>
+              <span className="w-8 text-right text-[11px]" style={{ color: muted }}>
+                {pct(n)}%
+              </span>
+            </span>
+          ))}
+        </span>
+      </button>
+
+      {str(s.buttonLabel) && (
+        <div className="mt-5 text-center">
+          <button
+            dir="ltr"
+            onClick={() => go(s)}
+            className="inline-flex items-center gap-2 rounded-full px-[26px] py-[13px] text-[10.5px] font-bold uppercase tracking-[0.18em] text-white"
+            style={{ background: brown }}
+          >
+            <span dir="auto">{str(s.buttonLabel)}</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+              <path d="M5 12h14M13 6l6 6-6 6" />
+            </svg>
+          </button>
+        </div>
+      )}
+    </section>
+  );
+}
+
 /**
  * Shop by brand - the website's brand timeline.
  *
@@ -3186,6 +3359,8 @@ function isPlaceholder(node: React.ReactElement): boolean {
     // A shopper only sees it with something in it; guests never do.
     case "complete_look":
       return !data.recommended?.products.length;
+    case "review_summary":
+      return !str(s.average) && !str(s.heading) && !str(s.headingItalic);
     case "brand_timeline":
       return itemsOf(block).filter((i) => str(i.label) || str(i.title) || str(i.imageUrl)).length === 0;
     case "product_reasons":

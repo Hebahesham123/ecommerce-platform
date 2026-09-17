@@ -3023,6 +3023,178 @@ const styles = StyleSheet.create({
 });
 `,
 
+    review_summary: `import React, { useEffect, useRef } from "react";
+import { Animated, Easing, Pressable, StyleSheet, Text, View } from "react-native";
+import { theme } from "../theme";
+import { openLink } from "./Pieces";
+
+export type ReviewSummarySettings = {
+  eyebrow?: string;
+  heading?: string;
+  headingItalic?: string;
+  average?: string;
+  reviewCount?: string;
+  reviewsWord?: string;
+  trustNote?: string;
+  pct5?: number;
+  pct4?: number;
+  pct3?: number;
+  pct2?: number;
+  pct1?: number;
+  buttonLabel?: string;
+  handle?: string;
+  url?: string;
+  productId?: string;
+  screen?: string;
+  animate?: boolean;
+  avgSize?: number;
+  radius?: number;
+  bg?: string;
+  panelFrom?: string;
+  panelTo?: string;
+  starColor?: string;
+  barTrack?: string;
+  barFrom?: string;
+  barTo?: string;
+  brownColor?: string;
+  accentColor?: string;
+  inkColor?: string;
+  mutedColor?: string;
+};
+
+/** The average, its stars, the count and a bar per star, as on the website. */
+export function ReviewSummary({
+  settings,
+  onOpenCollection,
+  onOpenProduct,
+  onOpenScreen,
+}: {
+  settings: ReviewSummarySettings;
+  onOpenCollection?: (handle: string) => void;
+  onOpenProduct?: (id: string) => void;
+  onOpenScreen?: (screen: string) => void;
+}) {
+  const grow = useRef(new Animated.Value(settings.animate === false ? 1 : 0)).current;
+  useEffect(() => {
+    if (settings.animate === false) return;
+    Animated.timing(grow, { toValue: 1, duration: 1100, delay: 150, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+  }, [grow, settings.animate]);
+
+  if (!settings.average && !settings.heading && !settings.headingItalic) return null;
+  const go = () => openLink(settings, { onOpenCollection, onOpenProduct, onOpenScreen });
+  const star = settings.starColor || "#c9a227";
+  const track = settings.barTrack || "#e5dbcd";
+  const brown = settings.brownColor || "#684329";
+  const caramel = settings.accentColor || "#9d6540";
+  const ink = settings.inkColor || "#211a15";
+  const muted = settings.mutedColor || "#74685e";
+  const filled = Math.max(0, Math.min(5, Math.floor(Number(settings.average) || 0)));
+  const pcts: Record<number, number | undefined> = { 5: settings.pct5, 4: settings.pct4, 3: settings.pct3, 2: settings.pct2, 1: settings.pct1 };
+  const pct = (n: number) => Math.max(0, Math.min(100, Number(pcts[n]) || 0));
+  const count = [settings.reviewCount, settings.reviewsWord].filter(Boolean).join(" ");
+
+  return (
+    <View style={settings.bg ? [styles.band, { backgroundColor: settings.bg }] : null}>
+      {settings.eyebrow ? (
+        <View style={styles.eyebrowRow}>
+          <View style={[styles.rule, { backgroundColor: caramel }]} />
+          <Text style={[styles.eyebrow, { color: brown }]}>{settings.eyebrow.toUpperCase()}</Text>
+          <View style={[styles.rule, { backgroundColor: caramel }]} />
+        </View>
+      ) : null}
+      {settings.heading || settings.headingItalic ? (
+        <Text style={[styles.heading, { color: ink }]}>
+          {settings.heading ? settings.heading + " " : ""}
+          {settings.headingItalic ? <Text style={[styles.italic, { color: caramel }]}>{settings.headingItalic}</Text> : null}
+        </Text>
+      ) : null}
+
+      <Pressable
+        onPress={go}
+        style={[
+          styles.card,
+          {
+            borderRadius: typeof settings.radius === "number" ? settings.radius : 18,
+            backgroundColor: settings.panelFrom || "#fdf9f3",
+          },
+        ]}
+      >
+        <View style={[styles.cardLower, { backgroundColor: settings.panelTo || "#f3e9db" }]} />
+        <View style={styles.score}>
+          {settings.average ? (
+            <Text style={[styles.average, { color: ink, fontSize: settings.avgSize && settings.avgSize > 0 ? settings.avgSize : 58 }]}>
+              {settings.average}
+            </Text>
+          ) : null}
+          <View style={styles.stars}>
+            {[0, 1, 2, 3, 4].map((i) => (
+              <Text key={i} style={[styles.star, { color: i < filled ? star : track }]}>★</Text>
+            ))}
+          </View>
+          {count ? <Text style={[styles.count, { color: muted }]}>{count}</Text> : null}
+          {settings.trustNote ? <Text style={[styles.trust, { color: caramel }]}>{"✓  " + settings.trustNote.toUpperCase()}</Text> : null}
+        </View>
+        <View style={styles.bars}>
+          {[5, 4, 3, 2, 1].map((n) => (
+            <View key={n} style={styles.barRow}>
+              <Text style={[styles.barN, { color: ink }]}>{n}</Text>
+              <Text style={[styles.barStar, { color: star }]}>★</Text>
+              <View style={[styles.track, { backgroundColor: track }]}>
+                <Animated.View
+                  style={[
+                    styles.fill,
+                    {
+                      backgroundColor: settings.barTo || caramel,
+                      width: grow.interpolate({ inputRange: [0, 1], outputRange: ["0%", pct(n) + "%"] }),
+                    },
+                  ]}
+                >
+                  <View style={[styles.fillStart, { backgroundColor: settings.barFrom || "#c9a227" }]} />
+                </Animated.View>
+              </View>
+              <Text style={[styles.pct, { color: muted }]}>{pct(n) + "%"}</Text>
+            </View>
+          ))}
+        </View>
+      </Pressable>
+
+      {settings.buttonLabel ? (
+        <Pressable onPress={go} style={[styles.cta, { backgroundColor: brown }]}>
+          <Text style={styles.ctaText}>{settings.buttonLabel.toUpperCase() + "  →"}</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  band: { marginHorizontal: -16, paddingHorizontal: 16, paddingVertical: 20 },
+  eyebrowRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12 },
+  rule: { width: 34, height: 1, opacity: 0.5 },
+  eyebrow: { fontSize: 10.5, fontWeight: "600", letterSpacing: 2.5 },
+  heading: { marginTop: 12, fontSize: 28, fontWeight: "600", textAlign: "center", fontFamily: theme.titleFont },
+  italic: { fontStyle: "italic", fontWeight: "500" },
+  card: { marginTop: 20, borderWidth: 1, borderColor: "rgba(69,46,31,0.13)", paddingHorizontal: 18, paddingVertical: 22, overflow: "hidden" },
+  cardLower: { position: "absolute", left: 0, right: 0, bottom: 0, height: "55%", opacity: 0.6 },
+  score: { alignItems: "center", paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: "rgba(69,46,31,0.13)" },
+  average: { fontWeight: "600", fontFamily: theme.titleFont },
+  stars: { flexDirection: "row", gap: 3, marginTop: 8 },
+  star: { fontSize: 16 },
+  count: { marginTop: 8, fontSize: 11.5 },
+  trust: { marginTop: 10, fontSize: 9.5, fontWeight: "600", letterSpacing: 1.1 },
+  bars: { marginTop: 16, gap: 7 },
+  barRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 6, paddingVertical: 4 },
+  barN: { width: 10, fontSize: 11.5, fontWeight: "600" },
+  barStar: { fontSize: 12 },
+  track: { flex: 1, height: 7, borderRadius: 20, overflow: "hidden" },
+  fill: { height: "100%", borderRadius: 20, overflow: "hidden" },
+  fillStart: { position: "absolute", left: 0, top: 0, bottom: 0, width: "50%", opacity: 0.85 },
+  pct: { width: 32, textAlign: "right", fontSize: 11 },
+  cta: { marginTop: 20, alignSelf: "center", borderRadius: 100, paddingHorizontal: 26, paddingVertical: 13 },
+  ctaText: { color: "#ffffff", fontSize: 10.5, fontWeight: "700", letterSpacing: 1.9 },
+});
+`,
+
     brand_timeline: `import React, { useEffect, useRef, useState } from "react";
 import { Animated, Easing, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { theme } from "../theme";
@@ -3608,6 +3780,7 @@ function renderCall(block: Block, indent: number): string {
     promo_card: ["onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     complete_look: ["recs={recs}", "onOpenProduct={onOpenProduct}"],
     brand_timeline: ["onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
+    review_summary: ["onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     banner: ["collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     categories: ["collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     new_arrivals: ["products={data.newArrivals}", "onOpenProduct={onOpenProduct}"],
@@ -3642,6 +3815,12 @@ const SIZE_KEYS = new Set([
   "swatchSize",
   "cardHeight",
   "autoplay",
+  "pct5",
+  "pct4",
+  "pct3",
+  "pct2",
+  "pct1",
+  "avgSize",
   "percent",
   "minPrice",
   "maxPrice",
@@ -3876,6 +4055,39 @@ function settingsLiteral(block: Block): string {
       "screen",
     ],
     complete_look: ["title", "subtitle", "fallbackTitle", "fallbackSubtitle", "limit"],
+    review_summary: [
+      "eyebrow",
+      "heading",
+      "headingItalic",
+      "average",
+      "reviewCount",
+      "reviewsWord",
+      "trustNote",
+      "pct5",
+      "pct4",
+      "pct3",
+      "pct2",
+      "pct1",
+      "buttonLabel",
+      "handle",
+      "url",
+      "productId",
+      "screen",
+      "animate",
+      "avgSize",
+      "radius",
+      "bg",
+      "panelFrom",
+      "panelTo",
+      "starColor",
+      "barTrack",
+      "barFrom",
+      "barTo",
+      "brownColor",
+      "accentColor",
+      "inkColor",
+      "mutedColor",
+    ],
     brand_timeline: [
       "eyebrow",
       "heading",
@@ -3913,7 +4125,8 @@ function settingsLiteral(block: Block): string {
         k === "showNote" ||
         k === "featureFirst" ||
         k === "stretchTabs" ||
-        k === "showLink"
+        k === "showLink" ||
+        k === "animate"
       ) {
         return `${k}: ${v === false ? "false" : "true"}`;
       }
