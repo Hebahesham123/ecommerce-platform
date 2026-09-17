@@ -2729,8 +2729,16 @@ function ItemList({
                         : f.key === "title" || f.key === "label"
                           ? linked?.title ?? ""
                           : "";
+                    // A <label> forwards any click inside it to the first button
+                    // it holds. For a picker that button is the clear cross or
+                    // the menu's first entry, so pressing the field cleared the
+                    // link, or opened the menu and shut it again at once. Only
+                    // plain text boxes keep the label, where the forwarding is
+                    // what puts the cursor in the box.
+                    const Wrap =
+                      f.kind === "link" || f.kind === "collection" || f.kind === "color" ? "div" : "label";
                     return (
-                      <label key={f.key} className="block">
+                      <Wrap key={f.key} className="block">
                         <span className="text-[11px] font-medium text-ink-muted">
                           {ar ? f.ar : f.en}
                         </span>
@@ -2809,7 +2817,7 @@ function ItemList({
                               : "Taken from the linked collection"}
                           </span>
                         )}
-                      </label>
+                      </Wrap>
                     );
                   })}
                 </div>

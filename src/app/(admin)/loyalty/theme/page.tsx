@@ -262,7 +262,9 @@ export default function LoyaltyThemePage() {
                 </div>
                 <div className="space-y-2">
                   {COLOUR_FIELDS.filter((f) => f.group === g).map((f) => (
-                    <label key={f.key} className="flex items-center gap-3">
+                    // Not a <label>: it would forward a click on the colour's name
+                    // to the picker's first button and open the palette unasked.
+                    <div key={f.key} className="flex items-center gap-3">
                       <span className="w-44 shrink-0 text-xs text-ink-muted">
                         {ar ? f.ar : f.en}
                       </span>
@@ -276,7 +278,7 @@ export default function LoyaltyThemePage() {
                           ar={ar}
                         />
                       </span>
-                    </label>
+                    </div>
                   ))}
                 </div>
               </Card>
