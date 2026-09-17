@@ -198,6 +198,14 @@ export function Preview() {
   // Where a link goes. The five kinds a merchant can pick in the link
   // picker all land here, so a banner, a chip and a card behave alike.
   const openScreen = (screen: string) => {
+    // A search link: the header owns the search term, so setting it is what
+    // shows the results.
+    if (screen.startsWith("search:")) {
+      setTab("shop");
+      setStripOpen(null);
+      setQuery(screen.slice("search:".length));
+      return;
+    }
     if (screen === "home" || screen === "search") {
       setTab("shop");
       setStripOpen(null);

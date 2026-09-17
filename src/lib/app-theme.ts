@@ -169,7 +169,7 @@ export const ITEM_SHAPE: Partial<Record<BlockType, { ar: string; en: string; bla
   pick_colour: {
     ar: "لون",
     en: "Colour",
-    blank: () => ({ id: itemId(), color: "", label: "", handle: "", url: "" }),
+    blank: () => ({ id: itemId(), imageUrl: "", color: "", label: "", line1: "", line2: "", handle: "", url: "" }),
   },
   price_drop: {
     ar: "صورة",
@@ -318,8 +318,11 @@ export const ITEM_FIELDS: Partial<Record<BlockType, FieldSpec[]>> = {
     { key: "handle", kind: "link", ar: "يفتح", en: "Opens" },
   ],
   pick_colour: [
+    { key: "imageUrl", kind: "image", ar: "الصورة (شكل اللوحة)", en: "Picture (palette look)" },
     { key: "color", kind: "color", ar: "اللون", en: "Colour" },
     { key: "label", kind: "text", ar: "الاسم", en: "Label" },
+    { key: "line1", kind: "text", ar: "السطر الأول", en: "First line" },
+    { key: "line2", kind: "text", ar: "السطر الثاني", en: "Second line" },
     { key: "handle", kind: "link", ar: "يفتح", en: "Opens" },
   ],
   price_drop: [{ key: "imageUrl", kind: "image", ar: "الصورة", en: "Photo" }],

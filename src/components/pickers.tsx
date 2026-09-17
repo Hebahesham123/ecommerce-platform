@@ -294,11 +294,19 @@ const PAGES = [
 /** Every screen key the picker can store, pages included. */
 export const LINK_SCREEN_KEYS = [...SCREENS, ...PAGES].map((s) => s.key);
 
-type Kind = "none" | "collection" | "product" | "page" | "screen" | "url";
+type Kind = "none" | "collection" | "product" | "page" | "screen" | "search" | "url";
+
+/**
+ * A search, stored as the screen "search:<words>". The results of a search
+ * are a screen the app already has; the words are all that makes one
+ * different from another, so they travel in the same field.
+ */
+export const SEARCH_PREFIX = "search:";
 
 function kindOf(v: LinkValue): Kind {
   if (v.url) return "url";
   if (v.productId) return "product";
+  if (v.screen?.startsWith(SEARCH_PREFIX)) return "search";
   if (v.screen) return PAGES.some((p) => p.key === v.screen) ? "page" : "screen";
   if (v.handle) return "collection";
   return "none";
@@ -354,6 +362,15 @@ function IcLink() {
   );
 }
 
+function IcSearch() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" className={ICON}>
+      <circle cx="8.8" cy="8.8" r="5" />
+      <path d="m12.6 12.6 4 4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function IcX() {
   return (
     <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6" className="h-3 w-3">
@@ -381,6 +398,7 @@ const KIND_ICON: Record<Exclude<Kind, "none">, () => React.JSX.Element> = {
   product: IcBox,
   page: IcPage,
   screen: IcScreen,
+  search: IcSearch,
   url: IcLink,
 };
 
@@ -482,6 +500,9 @@ export function LinkPicker({
   const label = (): string => {
     if (value.url) return value.url;
     if (value.productId) return chosen || (ar ? "منتج" : "Product");
+    if (value.screen?.startsWith(SEARCH_PREFIX)) {
+      return (ar ? "بحث: " : "Search: ") + value.screen.slice(SEARCH_PREFIX.length);
+    }
     if (value.screen) {
       const found = [...SCREENS, ...PAGES].find((s) => s.key === value.screen);
       return found ? (ar ? found.ar : found.en) : value.screen;
@@ -511,6 +532,7 @@ export function LinkPicker({
     { kind: "product" as const, icon: IcBox, ar: "المنتجات", en: "Products" },
     { kind: "page" as const, icon: IcPage, ar: "الصفحات", en: "Pages" },
     { kind: "screen" as const, icon: IcScreen, ar: "شاشات التطبيق", en: "App screens" },
+    { kind: "search" as const, icon: IcSearch, ar: "نتائج بحث", en: "Search results" },
     { kind: "url" as const, icon: IcLink, ar: "رابط", en: "Web address" },
   ];
   const menu = kinds ? allKinds.filter((m) => kinds.includes(m.kind)) : allKinds;
@@ -688,6 +710,28 @@ export function LinkPicker({
                       {ar ? s.ar : s.en}
                     </button>
                   ))}
+                </div>
+              )}
+
+              {open === "search" && (
+                <div className="p-1.5">
+                  <input
+                    autoFocus
+                    defaultValue={
+                      value.screen?.startsWith(SEARCH_PREFIX) ? value.screen.slice(SEARCH_PREFIX.length) : ""
+                    }
+                    onChange={(e) =>
+                      only(e.target.value.trim() ? { screen: SEARCH_PREFIX + e.target.value.trim() } : {})
+                    }
+                    onKeyDown={(e) => e.key === "Enter" && setOpen(null)}
+                    placeholder={ar ? "كلمة البحث، مثل: أحمر" : "Search words, e.g. red"}
+                    className={`${input} h-8 text-xs`}
+                  />
+                  <p className="px-1 pt-1 text-[10px] text-ink-soft">
+                    {ar
+                      ? "يفتح نتائج البحث عن هذه الكلمة — مفيد حين لا يوجد قسم لها."
+                      : "Opens the search results for these words — handy when there is no collection for it."}
+                  </p>
                 </div>
               )}
 

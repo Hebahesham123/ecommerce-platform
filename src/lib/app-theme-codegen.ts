@@ -2509,12 +2509,49 @@ const styles = StyleSheet.create({
 `,
 
     pick_colour: `import React from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { colors, gap, spacing } from "../theme";
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { colors, gap, spacing, theme } from "../theme";
 import { SectionHeading, openLink, type LinkTo } from "./Pieces";
 
-export type Swatch = { id: string; color?: string; label?: string; handle?: string; url?: string };
-export type PickColourSettings = { title?: string; subtitle?: string; size?: number; items?: Swatch[] };
+export type Swatch = {
+  id: string;
+  color?: string;
+  label?: string;
+  imageUrl?: string;
+  line1?: string;
+  line2?: string;
+  handle?: string;
+  url?: string;
+  productId?: string;
+  screen?: string;
+};
+export type PickColourSettings = {
+  style?: string;
+  title?: string;
+  subtitle?: string;
+  size?: number;
+  eyebrow?: string;
+  linkLabel?: string;
+  pillText?: string;
+  pillCta?: string;
+  pillHandle?: string;
+  pillUrl?: string;
+  pillProductId?: string;
+  pillScreen?: string;
+  titleSize?: number;
+  imageHeight?: number;
+  cardWidth?: number;
+  swatchSize?: number;
+  radius?: number;
+  bg?: string;
+  cardBg?: string;
+  inkColor?: string;
+  mutedColor?: string;
+  accentColor?: string;
+  lineColor?: string;
+  pillBg?: string;
+  items?: Swatch[];
+};
 
 export function PickColour({
   settings,
@@ -2530,6 +2567,7 @@ export function PickColour({
   const items = (settings.items ?? []).filter((i) => i.color);
   if (!items.length) return null;
   const go = (to: LinkTo) => openLink(to, { onOpenCollection, onOpenProduct, onOpenScreen });
+  if (settings.style === "palette") return <Palette settings={settings} items={items} go={go} />;
   const size = settings.size && settings.size > 0 ? settings.size : 44;
 
   return (
@@ -2557,11 +2595,98 @@ export function PickColour({
   );
 }
 
+const num = (v: number | undefined, fallback: number) => (typeof v === "number" && v > 0 ? v : fallback);
+
+/** Shop by palette: the website's section - photo cards with a swatch on their edge. */
+function Palette({ settings, items, go }: { settings: PickColourSettings; items: Swatch[]; go: (to: LinkTo) => void }) {
+  const ink = settings.inkColor || "#211a15";
+  const muted = settings.mutedColor || "#74685e";
+  const caramel = settings.accentColor || "#9d6540";
+  const line = settings.lineColor || "#e0d4c4";
+  const r = typeof settings.radius === "number" && settings.radius >= 0 ? settings.radius : 12;
+  const h = num(settings.imageHeight, 104);
+  const w = num(settings.cardWidth, 0);
+  const sw = num(settings.swatchSize, 22);
+  const link = settings.linkLabel || "Shop now";
+  const pill = {
+    handle: settings.pillHandle,
+    url: settings.pillUrl,
+    productId: settings.pillProductId,
+    screen: settings.pillScreen,
+  };
+
+  const cards = items.map((i) => (
+    <Pressable
+      key={i.id}
+      onPress={() => go(i)}
+      style={[styles.card, w ? { width: w } : { flex: 1 }, { borderRadius: r, backgroundColor: settings.cardBg || "#fffdfa", borderColor: line }]}
+    >
+      {i.imageUrl ? (
+        <Image source={{ uri: i.imageUrl }} style={{ width: "100%", height: h }} resizeMode="cover" />
+      ) : (
+        <View style={{ width: "100%", height: h, backgroundColor: i.color }} />
+      )}
+      <View style={[styles.swatch, { width: sw, height: sw, borderRadius: sw / 2, marginTop: -sw / 2, backgroundColor: i.color }]} />
+      <View style={styles.cardBody}>
+        {i.label ? <Text style={[styles.cardTitle, { color: ink }]}>{i.label.toUpperCase()}</Text> : null}
+        {i.line1 ? <Text style={[styles.cardLines, { color: muted }]}>{i.line1}</Text> : null}
+        {i.line2 ? <Text style={[styles.cardLines, styles.cardLine2, { color: muted }]}>{i.line2}</Text> : null}
+        <Text style={[styles.cardLink, { color: ink }]}>{link.toUpperCase()}</Text>
+      </View>
+    </Pressable>
+  ));
+
+  return (
+    <View style={[styles.panel, { backgroundColor: settings.bg || "#f6f0e8" }]}>
+      {settings.eyebrow ? <Text style={[styles.eyebrow, { color: caramel }]}>{settings.eyebrow.toUpperCase()}</Text> : null}
+      {settings.title ? (
+        <Text style={[styles.paletteTitle, { color: ink, fontSize: num(settings.titleSize, 28) }]}>{settings.title}</Text>
+      ) : null}
+      {settings.subtitle ? <Text style={[styles.paletteSub, { color: muted }]}>{settings.subtitle}</Text> : null}
+      {w ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cardsScroll}>
+          {cards}
+        </ScrollView>
+      ) : (
+        <View style={styles.cardsRow}>{cards}</View>
+      )}
+      {settings.pillText || settings.pillCta ? (
+        <Pressable onPress={() => go(pill)} style={[styles.pill, { backgroundColor: settings.pillBg || "#f1e7d9", borderColor: line }]}>
+          {settings.pillText ? (
+            <Text style={[styles.pillText, { color: muted }]}>
+              <Text style={{ color: caramel }}>{"✦ "}</Text>
+              {settings.pillText}
+            </Text>
+          ) : null}
+          {settings.pillCta ? <Text style={[styles.pillCta, { color: ink }]}>{settings.pillCta.toUpperCase() + " →"}</Text> : null}
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   subtitle: { fontSize: 11, color: colors.inkSoft },
   row: { gap: gap.item, paddingVertical: spacing.sm },
   cell: { alignItems: "center", gap: 4 },
   label: { fontSize: 10, color: colors.inkMuted, textAlign: "center" },
+
+  panel: { marginHorizontal: -spacing.lg, paddingHorizontal: spacing.sm, paddingVertical: 20 },
+  eyebrow: { fontSize: 10, fontWeight: "600", letterSpacing: 2.2, textAlign: "center" },
+  paletteTitle: { marginTop: 6, textAlign: "center", fontFamily: theme.titleFont },
+  paletteSub: { marginTop: 8, fontSize: 12, lineHeight: 18, textAlign: "center", paddingHorizontal: spacing.lg },
+  cardsRow: { flexDirection: "row", gap: 5, marginTop: 16 },
+  cardsScroll: { gap: 6, marginTop: 16 },
+  card: { overflow: "hidden", borderWidth: 1 },
+  swatch: { alignSelf: "center", borderWidth: 2, borderColor: "#fffdfa" },
+  cardBody: { alignItems: "center", paddingHorizontal: 4, paddingTop: 6, paddingBottom: 8, flex: 1 },
+  cardTitle: { fontSize: 8.5, letterSpacing: 0.7, textAlign: "center", fontFamily: theme.titleFont },
+  cardLines: { marginTop: 4, fontSize: 7.5, lineHeight: 10, textAlign: "center" },
+  cardLine2: { marginTop: 0 },
+  cardLink: { marginTop: 6, fontSize: 7, fontWeight: "700", letterSpacing: 0.6, textDecorationLine: "underline" },
+  pill: { marginTop: 20, marginHorizontal: spacing.sm, borderWidth: 1, borderRadius: 999, paddingVertical: 10, paddingHorizontal: 16, alignItems: "center", gap: 4 },
+  pillText: { fontSize: 11 },
+  pillCta: { fontSize: 11, fontWeight: "600", letterSpacing: 1.5 },
 });
 `,
 
@@ -3315,6 +3440,9 @@ const SIZE_KEYS = new Set([
   "radius",
   "titleSize",
   "labelSize",
+  "imageHeight",
+  "cardWidth",
+  "swatchSize",
   "percent",
   "minPrice",
   "maxPrice",
@@ -3452,7 +3580,31 @@ function settingsLiteral(block: Block): string {
       "linkColor",
       "bg",
     ],
-    pick_colour: ["title", "subtitle", "size"],
+    pick_colour: [
+      "style",
+      "title",
+      "subtitle",
+      "size",
+      "eyebrow",
+      "linkLabel",
+      "pillText",
+      "pillCta",
+      "pillHandle",
+      "pillUrl",
+      "pillProductId",
+      "pillScreen",
+      "titleSize",
+      "imageHeight",
+      "cardWidth",
+      "swatchSize",
+      "bg",
+      "cardBg",
+      "inkColor",
+      "mutedColor",
+      "accentColor",
+      "lineColor",
+      "pillBg",
+    ],
     price_drop: [
       "title",
       "subtitle",
@@ -3613,7 +3765,7 @@ function itemsLiteral(type: BlockType, items: Item[]): string {
       "screen",
     ],
     circle_row: ["imageUrl", "label", "note", "handle", "url", "productId", "screen"],
-    pick_colour: ["color", "label", "handle", "url", "productId", "screen"],
+    pick_colour: ["color", "label", "imageUrl", "line1", "line2", "handle", "url", "productId", "screen"],
     price_drop: ["imageUrl"],
     style_profile: ["label", "color", "handle", "url", "productId", "screen"],
   };
@@ -4801,6 +4953,7 @@ import {
 import HomeScreen from "./HomeScreen";
 import { TabBar, type TabKey } from "./components/TabBar";
 import { CollectionScreen } from "./components/CollectionScreen";
+import { SearchResults } from "./components/SearchResults";
 import { ProductScreen } from "./components/ProductScreen";
 import { CartScreen } from "./components/CartScreen";
 import { CheckoutScreen, type Address } from "./components/CheckoutScreen";
@@ -4815,6 +4968,7 @@ import { SignInScreen } from "./components/SignInScreen";${
 /** A screen pushed on top of a tab. Tabs themselves are not pushed. */
 type Screen =
   | { kind: "collection"; handle: string; title?: string }
+  | { kind: "search"; term: string }
   | { kind: "product"; id: string }
   | { kind: "checkout" }
   | { kind: "signin" }
@@ -4963,6 +5117,8 @@ export default function App() {
    * their own, so this is the tab bar answering a tap somewhere else.
    */
   const goScreen = (screen: string) => {
+    // "search:<words>" - a link to the results for those words.
+    if (screen.startsWith("search:")) return push({ kind: "search", term: screen.slice(7) });
     if (screen === "home" || screen === "search") return goTab("shop");
     if (screen === "cart" || screen === "orders" || screen === "account"${
       live ? ' || screen === "live"' : ""
@@ -4981,6 +5137,8 @@ export default function App() {
   const body = top ? (
     top.kind === "collection" ? (
       <CollectionScreen handle={top.handle} onOpenProduct={(id) => push({ kind: "product", id })} />
+    ) : top.kind === "search" ? (
+      <SearchResults query={top.term} onOpenProduct={(id) => push({ kind: "product", id })} />
     ) : top.kind === "product" ? (
       <ProductScreen id={top.id} onAdd={add} />
     ) : top.kind === "checkout" ? (
@@ -5093,7 +5251,7 @@ export function generateApp(theme: AppTheme, baseUrl: string): GeneratedFile[] {
     appFile(theme),
     collectionScreenFile(),
     productScreenFile(),
-    ...(theme.settings.showSearch ? [searchScreenFile()] : []),
+    searchScreenFile(),
     cartScreenFile(),
     checkoutScreenFile(),
     accountScreenFile(),

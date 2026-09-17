@@ -644,6 +644,9 @@ function BlockView({
 
     case "pick_colour": {
       const colours = itemsOf(block).filter((i) => str(i.color));
+      if (colours.length && str(s.style) === "palette") {
+        return <PalettePanel block={block} items={colours} data={data} handlers={handlers} />;
+      }
       if (!colours.length) return <Placeholder ar={ar} label={ar ? "لا ألوان بعد" : "No colours yet"} />;
       return (
         <PickColour block={block} items={colours} data={data} ar={ar} accent={accent} handlers={handlers} />
@@ -2106,6 +2109,160 @@ function CircleRow({
 }
 
 /** Colour circles, each opening its own collection. */
+/**
+ * Shop by palette - the website's section, card for card.
+ *
+ * A cream panel with a centred heading, a row of tall cards (a styled photo,
+ * a colour swatch sitting on its edge, the edit's name, two short lines and a
+ * "Shop now"), and a pill underneath pointing at everything. The same items
+ * as the swatch look, so switching between the two loses nothing.
+ */
+function PalettePanel({
+  block,
+  items,
+  data,
+  handlers,
+}: {
+  block: Block;
+  items: Item[];
+  data: HomeData;
+  handlers: HomeHandlers;
+}) {
+  const s = block.settings ?? {};
+  const go = opener(data, handlers);
+  const ink = str(s.inkColor, "#211a15");
+  const muted = str(s.mutedColor, "#74685e");
+  const caramel = str(s.accentColor, "#9d6540");
+  const line = str(s.lineColor, "#e0d4c4");
+  const radius = int(s.radius, 12);
+  const imageHeight = int(s.imageHeight, 104);
+  const cardWidth = int(s.cardWidth, 0);
+  const swatch = int(s.swatchSize, 22);
+  const link = str(s.linkLabel, "Shop now");
+  const pill = str(s.pillText) || str(s.pillCta);
+
+  return (
+    <section
+      className="-mx-4 px-2 py-5"
+      style={{ background: str(s.bg, "#f6f0e8"), color: ink }}
+    >
+      <div className="px-2 text-center">
+        {str(s.eyebrow) && (
+          <div
+            dir="auto"
+            className="text-[10px] font-semibold uppercase tracking-[0.22em]"
+            style={{ color: caramel }}
+          >
+            {str(s.eyebrow)}
+          </div>
+        )}
+        {str(s.title) && (
+          <h3
+            dir="auto"
+            className="app-display mt-1.5 font-normal leading-tight"
+            style={{ fontSize: int(s.titleSize, 28), color: ink, fontFamily: 'var(--font-display), "Playfair Display", Georgia, serif' }}
+          >
+            {str(s.title)}
+          </h3>
+        )}
+        {str(s.subtitle) && (
+          <p dir="auto" className="mx-auto mt-2 max-w-[300px] text-[12px] leading-relaxed" style={{ color: muted }}>
+            {str(s.subtitle)}
+          </p>
+        )}
+      </div>
+
+      <div
+        className={cardWidth ? "-mx-2 mt-4 flex overflow-x-auto px-2 pb-1" : "mt-4 grid"}
+        style={
+          cardWidth
+            ? { gap: 6 }
+            : { gap: 5, gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }
+        }
+      >
+        {items.map((item) => (
+          <button
+            key={item.id}
+            onClick={() => go(item)}
+            className="flex shrink-0 flex-col overflow-hidden border text-center shadow-[0_2px_8px_rgba(33,26,21,0.06)]"
+            style={{
+              width: cardWidth || undefined,
+              borderRadius: radius,
+              background: str(s.cardBg, "#fffdfa"),
+              borderColor: line,
+            }}
+          >
+            <div className="relative w-full" style={{ height: imageHeight }}>
+              {str(item.imageUrl) ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={str(item.imageUrl)} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <div className="h-full w-full" style={{ background: str(item.color, line) }} />
+              )}
+            </div>
+            <span
+              className="relative mx-auto block rounded-full"
+              style={{
+                width: swatch,
+                height: swatch,
+                marginTop: -Math.round(swatch / 2),
+                background: str(item.color, line),
+                boxShadow: "0 0 0 2px #fffdfa, 0 2px 6px rgba(0,0,0,0.18)",
+              }}
+            />
+            <span className="flex flex-1 flex-col items-center px-1 pb-2 pt-1.5">
+              {str(item.label) && (
+                <span
+                  dir="auto"
+                  className="text-[8.5px] uppercase leading-tight tracking-[0.08em]"
+                  style={{ color: ink, fontFamily: 'var(--font-display), "Playfair Display", Georgia, serif' }}
+                >
+                  {str(item.label)}
+                </span>
+              )}
+              {(str(item.line1) || str(item.line2)) && (
+                <span dir="auto" className="mt-1 text-[7.5px] leading-snug" style={{ color: muted }}>
+                  {str(item.line1)}
+                  {str(item.line1) && str(item.line2) && <br />}
+                  {str(item.line2)}
+                </span>
+              )}
+              {link && (
+                <span
+                  dir="auto"
+                  className="mt-auto pt-1.5 text-[7px] font-bold uppercase tracking-[0.08em] underline underline-offset-2"
+                  style={{ color: ink }}
+                >
+                  {link}
+                </span>
+              )}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {pill && (
+        <button
+          onClick={() => go(s, "pill")}
+          className="mx-2 mt-5 flex w-[calc(100%-1rem)] flex-col items-center gap-1 rounded-full border px-4 py-2.5"
+          style={{ background: str(s.pillBg, "#f1e7d9"), borderColor: line }}
+        >
+          {str(s.pillText) && (
+            <span dir="auto" className="text-[11px]" style={{ color: muted }}>
+              <span style={{ color: caramel }}>✦</span> {str(s.pillText)}
+            </span>
+          )}
+          {str(s.pillCta) && (
+            <span dir="auto" className="text-[11px] font-semibold uppercase tracking-[0.14em]" style={{ color: ink }}>
+              {str(s.pillCta)} →
+            </span>
+          )}
+        </button>
+      )}
+    </section>
+  );
+}
+
 function PickColour({
   block,
   items,

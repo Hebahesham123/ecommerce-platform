@@ -2001,9 +2001,77 @@ function BlockGroup({
           )}
 
           {block.type === "pick_colour" && (
-            <Field label={ar ? "مقاس الدائرة" : "Circle size"} type="range">
-              <input type="number" min={24} max={80} value={num("size", 44)} onChange={(e) => onPatch({ size: Number(e.target.value) })} className={input} />
-            </Field>
+            <>
+              <Field label={ar ? "الشكل" : "Look"} type="select">
+                <select value={text("style") || "swatches"} onChange={(e) => onPatch({ style: e.target.value })} className={input}>
+                  <option value="swatches">{ar ? "دوائر ألوان" : "Colour circles"}</option>
+                  <option value="palette">{ar ? "لوحة الألوان (مثل الموقع)" : "Shop by palette (as on the website)"}</option>
+                </select>
+              </Field>
+              {text("style") !== "palette" ? (
+                <Field label={ar ? "مقاس الدائرة" : "Circle size"} type="range">
+                  <input type="number" min={24} max={80} value={num("size", 44)} onChange={(e) => onPatch({ size: Number(e.target.value) })} className={input} />
+                </Field>
+              ) : (
+                <>
+                  <Field label={ar ? "السطر العلوي الصغير" : "Small line above"} type="text">
+                    <input value={text("eyebrow")} onChange={(e) => onPatch({ eyebrow: e.target.value })} placeholder="Curated Aesthetics" className={input} />
+                  </Field>
+                  <Field label={ar ? "نص الرابط في كل بطاقة" : "Link text on each card"} type="text">
+                    <input value={text("linkLabel")} onChange={(e) => onPatch({ linkLabel: e.target.value })} placeholder="Shop now" className={input} />
+                  </Field>
+                  <Field label={ar ? "سطر الزر السفلي" : "Bottom pill line"} type="text">
+                    <input value={text("pillText")} onChange={(e) => onPatch({ pillText: e.target.value })} placeholder="Not sure where to start?" className={input} />
+                  </Field>
+                  <Field label={ar ? "نص الزر السفلي" : "Bottom pill button"} type="text">
+                    <input value={text("pillCta")} onChange={(e) => onPatch({ pillCta: e.target.value })} placeholder="Explore all collections" className={input} />
+                  </Field>
+                  <Field label={ar ? "الزر السفلي يفتح" : "Bottom pill opens"} type="link">
+                    <LinkPicker
+                      value={{
+                        handle: text("pillHandle"),
+                        url: text("pillUrl"),
+                        productId: text("pillProductId"),
+                        screen: text("pillScreen"),
+                      }}
+                      onChange={(next) =>
+                        onPatch({
+                          pillHandle: next.handle ?? "",
+                          pillUrl: next.url ?? "",
+                          pillProductId: next.productId ?? "",
+                          pillScreen: next.screen ?? "",
+                        })
+                      }
+                      collections={collections}
+                      input={input}
+                      ar={ar}
+                    />
+                  </Field>
+                  <Field label={ar ? "حجم العنوان" : "Heading size"} type="range">
+                    <input type="number" min={16} max={44} value={num("titleSize", 28)} onChange={(e) => onPatch({ titleSize: Number(e.target.value) })} className={input} />
+                  </Field>
+                  <Field label={ar ? "ارتفاع الصورة" : "Picture height"} type="range">
+                    <input type="number" min={60} max={220} value={num("imageHeight", 104)} onChange={(e) => onPatch({ imageHeight: Number(e.target.value) })} className={input} />
+                  </Field>
+                  <Field label={ar ? "عرض البطاقة (٠ = كلها في صف)" : "Card width (0 = all in one row)"} type="range">
+                    <input type="number" min={0} max={200} value={num("cardWidth", 0)} onChange={(e) => onPatch({ cardWidth: Number(e.target.value) })} className={input} />
+                  </Field>
+                  <Field label={ar ? "مقاس دائرة اللون" : "Swatch size"} type="range">
+                    <input type="number" min={12} max={40} value={num("swatchSize", 22)} onChange={(e) => onPatch({ swatchSize: Number(e.target.value) })} className={input} />
+                  </Field>
+                  <Field label={ar ? "استدارة البطاقة" : "Card corners"} type="range">
+                    <input type="number" min={0} max={28} value={num("radius", 12)} onChange={(e) => onPatch({ radius: Number(e.target.value) })} className={input} />
+                  </Field>
+                  <ColorRow label={ar ? "خلفية القسم" : "Section background"} value={text("bg")} fallback="#f6f0e8" onChange={(v) => onPatch({ bg: v })} input={input} ar={ar} />
+                  <ColorRow label={ar ? "خلفية البطاقة" : "Card background"} value={text("cardBg")} fallback="#fffdfa" onChange={(v) => onPatch({ cardBg: v })} input={input} ar={ar} />
+                  <ColorRow label={ar ? "لون النص" : "Text colour"} value={text("inkColor")} fallback="#211a15" onChange={(v) => onPatch({ inkColor: v })} input={input} ar={ar} />
+                  <ColorRow label={ar ? "لون النص الخفيف" : "Soft text colour"} value={text("mutedColor")} fallback="#74685e" onChange={(v) => onPatch({ mutedColor: v })} input={input} ar={ar} />
+                  <ColorRow label={ar ? "لون التمييز" : "Accent colour"} value={text("accentColor")} fallback="#9d6540" onChange={(v) => onPatch({ accentColor: v })} input={input} ar={ar} />
+                  <ColorRow label={ar ? "لون الحدود" : "Border colour"} value={text("lineColor")} fallback="#e0d4c4" onChange={(v) => onPatch({ lineColor: v })} input={input} ar={ar} />
+                  <ColorRow label={ar ? "خلفية الزر السفلي" : "Pill background"} value={text("pillBg")} fallback="#f1e7d9" onChange={(v) => onPatch({ pillBg: v })} input={input} ar={ar} />
+                </>
+              )}
+            </>
           )}
 
           {block.type === "price_drop" && (
@@ -2712,8 +2780,10 @@ function ItemList({
   };
 
   const labelOf = (item: Item) => {
-    for (const f of fields) {
-      if (f.kind === "image") continue;
+    // Words first: a colour's hex code names a row far worse than its label.
+    const ordered = [...fields.filter((f) => f.kind === "text"), ...fields.filter((f) => f.kind !== "text")];
+    for (const f of ordered) {
+      if (f.kind === "image" || f.kind === "color") continue;
       const v = item[f.key];
       if (typeof v === "string" && v) {
         return f.kind === "collection" || f.kind === "link"
