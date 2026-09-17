@@ -2026,11 +2026,20 @@ const styles = StyleSheet.create({
 `,
 
     price_slider: `import React, { useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Image, StyleSheet, Text, View } from "react-native";
 import { colors, gap, spacing } from "../theme";
 import { SectionHeading } from "./Pieces";
 
-export type InstalmentPlan = { id: string; name?: string; months?: string; badge?: string; color?: string };
+export type InstalmentPlan = {
+  id: string;
+  logo?: string;
+  name?: string;
+  months?: string;
+  badge?: string;
+  /** Several promises on one line, split on a middle dot, comma or bar. */
+  perks?: string;
+  color?: string;
+};
 export type PriceSliderSettings = {
   title?: string;
   subtitle?: string;
@@ -2105,10 +2114,29 @@ export function PriceSlider({ settings }: { settings: PriceSliderSettings }) {
             const months = Math.max(1, parseInt(i.months ?? "", 10) || 1);
             return (
               <View key={i.id} style={styles.row}>
-                <Text style={styles.provider}>{i.name}</Text>
+                <View style={styles.provider}>
+                  {i.logo ? (
+                    <Image source={{ uri: i.logo }} style={styles.logo} resizeMode="contain" accessibilityLabel={i.name} />
+                  ) : (
+                    <Text style={styles.providerName} numberOfLines={1}>{i.name}</Text>
+                  )}
+                </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.monthly}>{cur + " " + nf(price / months) + " / month"}</Text>
                   <Text style={styles.months}>{months + " months"}</Text>
+                  {i.perks ? (
+                    <View style={styles.perks}>
+                      {i.perks
+                        .split(/[·,|]/)
+                        .map((p) => p.trim())
+                        .filter(Boolean)
+                        .map((p) => (
+                          <View key={p} style={[styles.perk, { backgroundColor: (i.color || colors.accent) + "14" }]}>
+                            <Text style={[styles.perkText, { color: i.color || colors.accent }]}>{p}</Text>
+                          </View>
+                        ))}
+                    </View>
+                  ) : null}
                 </View>
                 {i.badge ? (
                   <View style={[styles.badge, { backgroundColor: (i.color || colors.accent) + "1f" }]}>
@@ -2135,7 +2163,12 @@ const styles = StyleSheet.create({
   ends: { flexDirection: "row", justifyContent: "space-between" },
   end: { fontSize: 10, color: colors.inkSoft },
   row: { flexDirection: "row", alignItems: "center", gap: gap.item, borderWidth: 1, borderColor: colors.line, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 },
-  provider: { width: 56, fontSize: 11, fontWeight: "600", color: colors.inkMuted },
+  provider: { width: 56, height: 36, justifyContent: "center", alignItems: "center" },
+  providerName: { width: 56, fontSize: 11, fontWeight: "600", color: colors.inkMuted },
+  logo: { width: 56, height: 36 },
+  perks: { flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 4 },
+  perk: { borderRadius: 999, paddingHorizontal: 6, paddingVertical: 1 },
+  perkText: { fontSize: 9, fontWeight: "600" },
   monthly: { fontSize: 13, fontWeight: "700", color: colors.accent },
   months: { fontSize: 10, color: colors.inkSoft },
   badge: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
@@ -3359,7 +3392,7 @@ function itemsLiteral(type: BlockType, items: Item[]): string {
     ],
     info_rows: ["emoji", "title", "subtitle", "note", "handle", "url", "productId", "screen"],
     payment_plans: ["name", "headline", "note", "color", "handle", "url", "productId", "screen"],
-    price_slider: ["name", "months", "badge", "color"],
+    price_slider: ["logo", "name", "months", "badge", "perks", "color"],
     offer_cards: ["badge", "title", "subtitle", "color", "handle", "url", "productId", "screen"],
     product_reasons: [
       "imageUrl",

@@ -1677,6 +1677,19 @@ function PaymentPlans({
 }
 
 /** Move the slider, see what each provider charges a month. */
+/**
+ * A plan's perks, one chip each.
+ *
+ * Triple Zero is three promises - no interest, no down payment, no fees -
+ * and a single badge can only carry one of them, so they are written on one
+ * line and split on a middle dot, a comma or a bar.
+ */
+const perksOf = (item: Item): string[] =>
+  str(item.perks)
+    .split(/[·,|]/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+
 function PriceSlider({ block, items, ar, accent }: { block: Block; items: Item[]; ar: boolean; accent: string }) {
   const s = block.settings ?? {};
   const min = int(s.minPrice, 2999);
@@ -1726,8 +1739,20 @@ function PriceSlider({ block, items, ar, accent }: { block: Block; items: Item[]
                 key={item.id}
                 className="flex items-center gap-3 rounded-xl border border-slate-200 px-3 py-2"
               >
-                <span className="w-14 shrink-0 truncate text-[11px] font-semibold text-slate-700">
-                  {str(item.name)}
+                {/* The provider's own mark when there is one, its name until then. */}
+                <span className="grid h-9 w-14 shrink-0 place-items-center">
+                  {str(item.logo) ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={str(item.logo)}
+                      alt={str(item.name)}
+                      className="max-h-9 max-w-full object-contain"
+                    />
+                  ) : (
+                    <span className="w-full truncate text-[11px] font-semibold text-slate-700">
+                      {str(item.name)}
+                    </span>
+                  )}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[13px] font-bold" style={{ color: accent }}>
@@ -1737,9 +1762,27 @@ function PriceSlider({ block, items, ar, accent }: { block: Block; items: Item[]
                   <span className="block text-[10px] text-slate-500">
                     {months} {ar ? "شهور" : "months"}
                   </span>
+                  {perksOf(item).length > 0 && (
+                    <span className="mt-1 flex flex-wrap gap-1">
+                      {perksOf(item).map((perk) => (
+                        <span
+                          key={perk}
+                          dir="auto"
+                          className="rounded-full px-1.5 py-px text-[9px] font-semibold"
+                          style={{
+                            background: `${str(item.color, accent)}14`,
+                            color: str(item.color, accent),
+                          }}
+                        >
+                          {perk}
+                        </span>
+                      ))}
+                    </span>
+                  )}
                 </span>
                 {str(item.badge) && (
                   <span
+                    dir="auto"
                     className="shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold"
                     style={{
                       background: `${str(item.color, accent)}1f`,

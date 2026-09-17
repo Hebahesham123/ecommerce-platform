@@ -280,9 +280,11 @@ export const ITEM_FIELDS: Partial<Record<BlockType, FieldSpec[]>> = {
     { key: "handle", kind: "link", ar: "يفتح", en: "Opens" },
   ],
   price_slider: [
+    { key: "logo", kind: "image", ar: "الشعار", en: "Logo" },
     { key: "name", kind: "text", ar: "الجهة", en: "Provider" },
     { key: "months", kind: "text", ar: "عدد الشهور", en: "Months" },
     { key: "badge", kind: "text", ar: "الشارة", en: "Badge" },
+    { key: "perks", kind: "text", ar: "المزايا (افصلي بـ ·)", en: "Perks (separate with ·)" },
     { key: "color", kind: "color", ar: "لون الشارة", en: "Badge colour" },
   ],
   offer_cards: [
