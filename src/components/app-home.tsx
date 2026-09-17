@@ -1826,22 +1826,40 @@ function RowHead({
   seeAll,
   onSeeAll,
   accent,
+  titleSize = 16,
+  linkColor,
 }: {
   title: string;
   subtitle: string;
   seeAll: string;
   onSeeAll: () => void;
   accent: string;
+  /** Heading size in pixels. The link grows with it past the default. */
+  titleSize?: number;
+  /** The see-all link's colour. Empty follows the brand. */
+  linkColor?: string;
 }) {
   if (!title && !subtitle && !seeAll) return null;
+  const linkSize = titleSize <= 16 ? 12 : Math.round(titleSize * 0.82);
   return (
-    <div className="flex items-end justify-between gap-2">
+    <div className="flex items-center justify-between gap-2">
       <div className="min-w-0">
-        {title && <h3 className="truncate text-[16px] font-bold tracking-tight text-slate-900">{title}</h3>}
+        {title && (
+          <h3
+            className="truncate font-bold tracking-tight text-slate-900"
+            style={{ fontSize: titleSize }}
+          >
+            {title}
+          </h3>
+        )}
         {subtitle && <p className="truncate text-[11px] text-slate-500">{subtitle}</p>}
       </div>
       {seeAll && (
-        <button onClick={onSeeAll} className="shrink-0 text-xs font-semibold" style={{ color: accent }}>
+        <button
+          onClick={onSeeAll}
+          className="shrink-0 font-bold"
+          style={{ color: linkColor || accent, fontSize: linkSize }}
+        >
           {seeAll} ›
         </button>
       )}
@@ -1969,16 +1987,29 @@ function CircleRow({
   const size = int(s.size, 76);
   const showLabel = s.showLabel !== false;
   const showNote = s.showNote !== false;
+  // A circle, a rounded tile the way noon draws its categories, or a square.
+  const shape = str(s.shape, "circle");
+  const tileRadius = shape === "square" ? 0 : shape === "rounded" ? int(s.radius, 22) : 9999;
+  const labelSize = int(s.labelSize, 10);
+  const labelColor = str(s.labelColor);
+  const labelBold = s.labelBold === true;
+  const bg = str(s.bg);
+  // The cell is the tile plus a little air, and wide enough for its label.
   const cell = Math.max(size + 14, 56);
 
   return (
-    <section>
+    <section
+      className={bg ? "-mx-4 px-4 py-3" : undefined}
+      style={bg ? { background: bg } : undefined}
+    >
       <RowHead
         title={str(s.title)}
         subtitle={str(s.subtitle)}
         seeAll={str(s.seeAllLabel)}
         onSeeAll={() => go(s, "seeAll")}
         accent={accent}
+        titleSize={int(s.titleSize, 16)}
+        linkColor={str(s.linkColor)}
       />
       <div className="-mx-4 mt-2 flex overflow-x-auto px-4 pb-1" style={{ gap: "var(--app-item-gap, 8px)" }}>
         {items.map((item) => {
@@ -1992,8 +2023,8 @@ function CircleRow({
             >
               <Thumb
                 src={borrowed.image}
-                className="border border-slate-200"
-                style={{ width: size, height: size, borderRadius: 9999 }}
+                className={shape === "circle" ? "border border-slate-200" : ""}
+                style={{ width: size, height: size, borderRadius: tileRadius }}
               />
               {showNote && str(item.note) && (
                 <span className="mt-1.5 w-full truncate text-center text-[11px] font-bold" style={{ color: accent }}>
@@ -2001,7 +2032,12 @@ function CircleRow({
                 </span>
               )}
               {showLabel && (
-                <span className="w-full truncate text-center text-[10px] text-slate-500">
+                <span
+                  className={`mt-1.5 w-full truncate text-center ${labelBold ? "font-semibold" : ""} ${
+                    labelColor ? "" : "text-slate-500"
+                  }`}
+                  style={{ fontSize: labelSize, color: labelColor || undefined }}
+                >
                   {str(item.label, borrowed.title)}
                 </span>
               )}

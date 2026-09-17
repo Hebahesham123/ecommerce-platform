@@ -1846,9 +1846,37 @@ function BlockGroup({
 
           {block.type === "circle_row" && (
             <>
-              <Field label={ar ? "مقاس الدائرة" : "Circle size"} type="range">
-                <input type="number" min={32} max={120} value={num("size", 64)} onChange={(e) => onPatch({ size: Number(e.target.value) })} className={input} />
+              <Field label={ar ? "شكل الصورة" : "Picture shape"} type="select">
+                <select
+                  value={text("shape") || "circle"}
+                  onChange={(e) => onPatch({ shape: e.target.value })}
+                  className={input}
+                >
+                  <option value="circle">{ar ? "دائرة" : "Circle"}</option>
+                  <option value="rounded">{ar ? "مربع بحواف مستديرة" : "Rounded tile"}</option>
+                  <option value="square">{ar ? "مربع" : "Square"}</option>
+                </select>
               </Field>
+              {text("shape") === "rounded" && (
+                <Field label={ar ? "استدارة الحواف" : "Corner radius"} type="range">
+                  <input type="number" min={2} max={60} value={num("radius", 22)} onChange={(e) => onPatch({ radius: Number(e.target.value) })} className={input} />
+                </Field>
+              )}
+              <Field label={ar ? "مقاس الصورة" : "Picture size"} type="range">
+                <input type="number" min={32} max={160} value={num("size", 64)} onChange={(e) => onPatch({ size: Number(e.target.value) })} className={input} />
+              </Field>
+              <Field label={ar ? "مقاس العنوان" : "Heading size"} type="range">
+                <input type="number" min={12} max={32} value={num("titleSize", 16)} onChange={(e) => onPatch({ titleSize: Number(e.target.value) })} className={input} />
+              </Field>
+              <Field label={ar ? "مقاس الاسم" : "Label size"} type="range">
+                <input type="number" min={8} max={20} value={num("labelSize", 10)} onChange={(e) => onPatch({ labelSize: Number(e.target.value) })} className={input} />
+              </Field>
+              <Field label={ar ? "اسم عريض" : "Bold label"} type="checkbox">
+                <Toggle on={bool("labelBold", false)} onChange={(v) => onPatch({ labelBold: v })} ar={ar} />
+              </Field>
+              <ColorRow label={ar ? "لون الاسم" : "Label colour"} value={text("labelColor")} fallback="#64748b" onChange={(v) => onPatch({ labelColor: v })} input={input} ar={ar} />
+              <ColorRow label={ar ? "لون رابط «الكل»" : "See-all link colour"} value={text("linkColor")} fallback={accent} onChange={(v) => onPatch({ linkColor: v })} input={input} ar={ar} />
+              <ColorRow label={ar ? "خلفية القسم" : "Section background"} value={text("bg")} fallback="#f3f3f3" onChange={(v) => onPatch({ bg: v })} input={input} ar={ar} />
               <Field label={ar ? "إظهار الاسم" : "Show label"} type="checkbox">
                 <Toggle on={bool("showLabel", true)} onChange={(v) => onPatch({ showLabel: v })} ar={ar} />
               </Field>

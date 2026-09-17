@@ -2360,6 +2360,17 @@ export type CircleRowSettings = {
   size?: number;
   showLabel?: boolean;
   showNote?: boolean;
+  /** "circle", "rounded" or "square". */
+  shape?: string;
+  /** Corner radius for a rounded tile. */
+  radius?: number;
+  titleSize?: number;
+  labelSize?: number;
+  labelBold?: boolean;
+  labelColor?: string;
+  linkColor?: string;
+  /** Paints the whole section, edge to edge. */
+  bg?: string;
   items?: Circle[];
 };
 
@@ -2381,17 +2392,31 @@ export function CircleRow({
   const go = (to: LinkTo) => openLink(to, { onOpenCollection, onOpenProduct, onOpenScreen });
   const size = settings.size && settings.size > 0 ? settings.size : 76;
   const cell = Math.max(size + 14, 56);
+  const shape = settings.shape ?? "circle";
+  const tileRadius =
+    shape === "square" ? 0 : shape === "rounded" ? (settings.radius && settings.radius > 0 ? settings.radius : 22) : Math.round(size / 2);
+  const titleSize = settings.titleSize && settings.titleSize > 0 ? settings.titleSize : 16;
+  const linkSize = titleSize <= 16 ? 12 : Math.round(titleSize * 0.82);
+  const labelSize = settings.labelSize && settings.labelSize > 0 ? settings.labelSize : 10;
 
   return (
-    <>
+    <View
+      style={
+        settings.bg
+          ? { backgroundColor: settings.bg, marginHorizontal: -spacing.lg, paddingHorizontal: spacing.lg, paddingVertical: spacing.md }
+          : undefined
+      }
+    >
       <View style={styles.head}>
         <View style={{ flex: 1 }}>
-          {settings.title ? <Text style={styles.title}>{settings.title}</Text> : null}
+          {settings.title ? <Text style={[styles.title, { fontSize: titleSize }]}>{settings.title}</Text> : null}
           {settings.subtitle ? <Text style={styles.subtitle}>{settings.subtitle}</Text> : null}
         </View>
         {settings.seeAllLabel ? (
           <Pressable onPress={() => go({ url: settings.seeAllUrl, handle: settings.seeAllHandle, productId: settings.seeAllProductId, screen: settings.seeAllScreen })}>
-            <Text style={styles.seeAll}>{settings.seeAllLabel}</Text>
+            <Text style={[styles.seeAll, { fontSize: linkSize }, settings.linkColor ? { color: settings.linkColor } : null]}>
+              {settings.seeAllLabel + " \u203A"}
+            </Text>
           </Pressable>
         ) : null}
       </View>
@@ -2399,7 +2424,7 @@ export function CircleRow({
         {items.map((i) => {
           const borrowed = inherit(i, collections);
           const photo = i.imageUrl || borrowed.image;
-          const round = { width: size, height: size, borderRadius: Math.round(size / 2) };
+          const round = { width: size, height: size, borderRadius: tileRadius };
           return (
             <Pressable key={i.id} style={[styles.cell, { width: cell }]} onPress={() => go(i)}>
               {photo ? (
@@ -2411,18 +2436,28 @@ export function CircleRow({
                 <Text style={styles.note} numberOfLines={1}>{i.note}</Text>
               ) : null}
               {settings.showLabel !== false ? (
-                <Text style={styles.label} numberOfLines={1}>{i.label || borrowed.title}</Text>
+                <Text
+                  style={[
+                    styles.label,
+                    { fontSize: labelSize, marginTop: 6 },
+                    settings.labelBold ? { fontWeight: "600" } : null,
+                    settings.labelColor ? { color: settings.labelColor } : null,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {i.label || borrowed.title}
+                </Text>
               ) : null}
             </Pressable>
           );
         })}
       </ScrollView>
-    </>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  head: { flexDirection: "row", alignItems: "flex-end", gap: spacing.sm },
+  head: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   title: { fontSize: 16, fontWeight: "700", color: colors.ink, fontFamily: theme.titleFont },
   subtitle: { fontSize: 11, color: colors.inkSoft },
   seeAll: { fontSize: 12, fontWeight: "600", color: colors.accent },
@@ -3051,6 +3086,8 @@ const SIZE_KEYS = new Set([
   "offerTitleSize",
   "offerTextSize",
   "radius",
+  "titleSize",
+  "labelSize",
   "percent",
   "minPrice",
   "maxPrice",
@@ -3179,6 +3216,14 @@ function settingsLiteral(block: Block): string {
       "showNote",
       "seeAllProductId",
       "seeAllScreen",
+      "shape",
+      "radius",
+      "titleSize",
+      "labelSize",
+      "labelBold",
+      "labelColor",
+      "linkColor",
+      "bg",
     ],
     pick_colour: ["title", "subtitle", "size"],
     price_drop: [
@@ -3256,6 +3301,7 @@ function settingsLiteral(block: Block): string {
       // be compared as one.
       if (k === "offerMinutes") return `${k}: ${n(v, 10)}`;
       if (k === "endsInMinutes") return `${k}: ${n(v, 135)}`;
+      if (k === "labelBold") return v === true ? `${k}: true` : null;
       if (
         k === "showReplays" ||
         k === "offerEnabled" ||
