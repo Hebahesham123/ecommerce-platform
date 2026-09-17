@@ -3023,6 +3023,202 @@ const styles = StyleSheet.create({
 });
 `,
 
+    brand_timeline: `import React, { useEffect, useRef, useState } from "react";
+import { Animated, Easing, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { theme } from "../theme";
+import { openLink, type LinkTo } from "./Pieces";
+
+export type Brand = {
+  id: string;
+  logoText?: string;
+  label?: string;
+  title?: string;
+  description?: string;
+  imageUrl?: string;
+  focal?: string;
+  handle?: string;
+  url?: string;
+  productId?: string;
+  screen?: string;
+};
+export type BrandTimelineSettings = {
+  eyebrow?: string;
+  heading?: string;
+  intro?: string;
+  linkLabel?: string;
+  autoplay?: number;
+  cardHeight?: number;
+  radius?: number;
+  overlay?: number;
+  bg?: string;
+  accentColor?: string;
+  brownColor?: string;
+  inkColor?: string;
+  lineColor?: string;
+  items?: Brand[];
+};
+
+/**
+ * Shop by brand: round logo marks over one wide photo card at a time. The
+ * cards slide on their own with a bar filling underneath; a swipe or a tap on
+ * a mark takes over, and tapping the card opens the brand.
+ */
+export function BrandTimeline({
+  settings,
+  onOpenCollection,
+  onOpenProduct,
+  onOpenScreen,
+}: {
+  settings: BrandTimelineSettings;
+  onOpenCollection?: (handle: string) => void;
+  onOpenProduct?: (id: string) => void;
+  onOpenScreen?: (screen: string) => void;
+}) {
+  const items = (settings.items ?? []).filter((i) => i.label || i.title || i.imageUrl);
+  const [on, setOn] = useState(0);
+  const [width, setWidth] = useState(0);
+  // Only scrollTo is needed, so only scrollTo is promised.
+  const scroller = useRef<{ scrollTo: (to: { x: number; animated?: boolean }) => void } | null>(null);
+  const bar = useRef(new Animated.Value(0)).current;
+  const seconds = typeof settings.autoplay === "number" ? settings.autoplay : 3;
+
+  // Show the current card, run its bar, then move on.
+  useEffect(() => {
+    if (width) scroller.current?.scrollTo({ x: on * width, animated: true });
+    if (!(seconds > 0) || items.length < 2) return;
+    bar.setValue(0);
+    const run = Animated.timing(bar, { toValue: 1, duration: seconds * 1000, easing: Easing.linear, useNativeDriver: false });
+    run.start();
+    const t = setTimeout(() => setOn((i) => (i + 1) % items.length), seconds * 1000);
+    return () => {
+      run.stop();
+      clearTimeout(t);
+    };
+  }, [on, width, seconds, items.length, bar]);
+
+  if (!items.length) return null;
+  const go = (to: LinkTo) => openLink(to, { onOpenCollection, onOpenProduct, onOpenScreen });
+  const caramel = settings.accentColor || "#9d6540";
+  const brown = settings.brownColor || "#684329";
+  const ink = settings.inkColor || "#211a15";
+  const line = settings.lineColor || "rgba(69,46,31,0.16)";
+  const r = typeof settings.radius === "number" && settings.radius >= 0 ? settings.radius : 20;
+  const h = settings.cardHeight && settings.cardHeight > 0 ? settings.cardHeight : 150;
+  const shade = (typeof settings.overlay === "number" ? settings.overlay : 72) / 100;
+
+  return (
+    <View style={settings.bg ? [styles.band, { backgroundColor: settings.bg }] : null}>
+      {settings.eyebrow ? (
+        <View style={styles.eyebrowRow}>
+          <View style={[styles.eyebrowRule, { backgroundColor: caramel }]} />
+          <Text style={[styles.eyebrow, { color: brown }]}>{settings.eyebrow.toUpperCase()}</Text>
+        </View>
+      ) : null}
+      {settings.heading ? <Text style={[styles.heading, { color: ink }]}>{settings.heading}</Text> : null}
+      {settings.intro ? <Text style={styles.intro}>{settings.intro}</Text> : null}
+
+      <View style={styles.marks}>
+        <View style={[styles.hairline, { backgroundColor: line }]} />
+        {items.map((b, i) => {
+          const active = i === on;
+          return (
+            <Pressable key={b.id} style={styles.mark} onPress={() => setOn(i)}>
+              <View
+                style={[
+                  styles.circle,
+                  { backgroundColor: active ? caramel : "#fffdfa", borderColor: active ? caramel : line },
+                  active ? styles.circleOn : null,
+                ]}
+              >
+                <Text style={[styles.logo, { color: active ? "#ffffff" : brown }]} numberOfLines={2}>
+                  {b.logoText ?? ""}
+                </Text>
+              </View>
+              <Text style={[styles.markLabel, { color: active ? brown : ink }]} numberOfLines={2}>
+                {(b.label || b.title || "").toUpperCase()}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      <View style={[styles.cards, { borderRadius: r }]} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+        <ScrollView
+          ref={(node) => {
+            scroller.current = node as unknown as { scrollTo: (to: { x: number; animated?: boolean }) => void } | null;
+          }}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          onMomentumScrollEnd={(e) => {
+            if (width) setOn(Math.round(e.nativeEvent.contentOffset.x / width));
+          }}
+        >
+          {items.map((b) => (
+            <Pressable key={b.id} onPress={() => go(b)} style={{ width: width || 1, height: h }}>
+              {b.imageUrl ? <Image source={{ uri: b.imageUrl }} style={styles.fill} resizeMode="cover" /> : null}
+              <View style={[styles.shadeFull, { opacity: shade * 0.25 }]} />
+              <View style={[styles.shadeHalf, { opacity: shade * 0.45 }]} />
+              <View style={[styles.shadeEdge, { opacity: shade * 0.4 }]} />
+              <View style={styles.copy}>
+                <Text style={styles.cardTitle}>{b.title || b.label}</Text>
+                {b.description ? <Text style={styles.cardDesc}>{b.description}</Text> : null}
+                {settings.linkLabel ? (
+                  <View style={styles.cta}>
+                    <Text style={styles.ctaText}>{settings.linkLabel.toUpperCase() + "  →"}</Text>
+                    <View style={styles.ctaRule} />
+                  </View>
+                ) : null}
+              </View>
+            </Pressable>
+          ))}
+        </ScrollView>
+        {seconds > 0 && items.length > 1 ? (
+          <View style={styles.progress}>
+            <Animated.View
+              style={[
+                styles.progressFill,
+                { backgroundColor: caramel, width: bar.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }) },
+              ]}
+            />
+          </View>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  band: { marginHorizontal: -16, paddingHorizontal: 12, paddingVertical: 20 },
+  eyebrowRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12 },
+  eyebrowRule: { width: 40, height: 1 },
+  eyebrow: { fontSize: 11, fontWeight: "600", letterSpacing: 2.6 },
+  heading: { marginTop: 8, fontSize: 24, fontWeight: "600", textAlign: "center", fontFamily: theme.titleFont },
+  intro: { marginTop: 8, fontSize: 11.5, lineHeight: 17, color: "#74685e", textAlign: "center" },
+  marks: { flexDirection: "row", marginTop: 16, alignItems: "flex-start" },
+  hairline: { position: "absolute", left: "10%", right: "10%", top: 20, height: 1 },
+  mark: { flex: 1, alignItems: "center", gap: 6 },
+  circle: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  circleOn: { transform: [{ scale: 1.06 }] },
+  logo: { fontSize: 12, fontWeight: "600", textAlign: "center", paddingHorizontal: 2, fontFamily: theme.titleFont },
+  markLabel: { fontSize: 8, fontWeight: "600", letterSpacing: 1, textAlign: "center" },
+  cards: { marginTop: 16, overflow: "hidden", backgroundColor: "#b89d82" },
+  // Written out: newer React Native no longer declares absoluteFill in its types.
+  fill: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, width: "100%", height: "100%" },
+  shadeFull: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "#1c120c" },
+  shadeHalf: { position: "absolute", left: 0, top: 0, bottom: 0, width: "60%", backgroundColor: "#1c120c" },
+  shadeEdge: { position: "absolute", left: 0, top: 0, bottom: 0, width: "32%", backgroundColor: "#1c120c" },
+  copy: { position: "absolute", left: 20, top: 0, bottom: 0, maxWidth: "78%", justifyContent: "center", alignItems: "flex-start" },
+  cardTitle: { color: "#ffffff", fontSize: 22, fontWeight: "600", fontFamily: theme.titleFont },
+  cardDesc: { marginTop: 6, color: "#ffffff", fontSize: 11.5, lineHeight: 16, opacity: 0.95 },
+  cta: { marginTop: 8, paddingBottom: 4 },
+  ctaText: { color: "#ffffff", fontSize: 11.5, fontWeight: "600", letterSpacing: 1.6 },
+  ctaRule: { position: "absolute", left: 0, bottom: 0, width: 40, height: 1, backgroundColor: "rgba(255,255,255,0.65)" },
+  progress: { position: "absolute", left: 0, right: 0, bottom: 0, height: 3, backgroundColor: "rgba(0,0,0,0.15)" },
+  progressFill: { height: "100%" },
+});
+`,
+
     complete_look: `import React from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { colors, gap, spacing } from "../theme";
@@ -3411,6 +3607,7 @@ function renderCall(block: Block, indent: number): string {
     style_profile: ["onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     promo_card: ["onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     complete_look: ["recs={recs}", "onOpenProduct={onOpenProduct}"],
+    brand_timeline: ["onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     banner: ["collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     categories: ["collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     new_arrivals: ["products={data.newArrivals}", "onOpenProduct={onOpenProduct}"],
@@ -3443,6 +3640,8 @@ const SIZE_KEYS = new Set([
   "imageHeight",
   "cardWidth",
   "swatchSize",
+  "cardHeight",
+  "autoplay",
   "percent",
   "minPrice",
   "maxPrice",
@@ -3677,6 +3876,21 @@ function settingsLiteral(block: Block): string {
       "screen",
     ],
     complete_look: ["title", "subtitle", "fallbackTitle", "fallbackSubtitle", "limit"],
+    brand_timeline: [
+      "eyebrow",
+      "heading",
+      "intro",
+      "linkLabel",
+      "autoplay",
+      "cardHeight",
+      "radius",
+      "overlay",
+      "bg",
+      "accentColor",
+      "brownColor",
+      "inkColor",
+      "lineColor",
+    ],
     text: ["heading", "body"],
   };
   const set = block.settings ?? {};
@@ -3766,6 +3980,7 @@ function itemsLiteral(type: BlockType, items: Item[]): string {
     ],
     circle_row: ["imageUrl", "label", "note", "handle", "url", "productId", "screen"],
     pick_colour: ["color", "label", "imageUrl", "line1", "line2", "handle", "url", "productId", "screen"],
+    brand_timeline: ["logoText", "label", "title", "description", "imageUrl", "focal", "handle", "url", "productId", "screen"],
     price_drop: ["imageUrl"],
     style_profile: ["label", "color", "handle", "url", "productId", "screen"],
   };

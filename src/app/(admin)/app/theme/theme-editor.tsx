@@ -1730,6 +1730,40 @@ function BlockGroup({
         </>
       )}
 
+      {block.type === "brand_timeline" && (
+        <>
+          <Field label={ar ? "السطر العلوي الصغير" : "Small line above"} type="text">
+            <input value={text("eyebrow")} onChange={(e) => onPatch({ eyebrow: e.target.value })} placeholder="Shop by brand" className={input} />
+          </Field>
+          <Field label={ar ? "العنوان (اختياري)" : "Heading (optional)"} type="text">
+            <input value={text("heading")} onChange={(e) => onPatch({ heading: e.target.value })} placeholder="Timeless Icons. Endless Style." className={input} />
+          </Field>
+          <Field label={ar ? "سطر تعريفي (اختياري)" : "Intro line (optional)"} type="text">
+            <input value={text("intro")} onChange={(e) => onPatch({ intro: e.target.value })} className={input} />
+          </Field>
+          <Field label={ar ? "نص الرابط على البطاقة" : "Link text on the card"} type="text">
+            <input value={text("linkLabel")} onChange={(e) => onPatch({ linkLabel: e.target.value })} placeholder="Shop Now" className={input} />
+          </Field>
+          <Field label={ar ? "التبديل التلقائي كل (ثوانٍ، ٠ = يدوي)" : "Slide every (seconds, 0 = manual)"} type="range">
+            <input type="number" min={0} max={15} value={num("autoplay", 3)} onChange={(e) => onPatch({ autoplay: Number(e.target.value) })} className={input} />
+          </Field>
+          <Field label={ar ? "ارتفاع البطاقة" : "Card height"} type="range">
+            <input type="number" min={100} max={320} value={num("cardHeight", 150)} onChange={(e) => onPatch({ cardHeight: Number(e.target.value) })} className={input} />
+          </Field>
+          <Field label={ar ? "استدارة البطاقة" : "Card corners"} type="range">
+            <input type="number" min={0} max={32} value={num("radius", 20)} onChange={(e) => onPatch({ radius: Number(e.target.value) })} className={input} />
+          </Field>
+          <Field label={ar ? "تعتيم الصورة خلف النص (٪)" : "Shade behind the text (%)"} type="range">
+            <input type="number" min={0} max={100} value={num("overlay", 72)} onChange={(e) => onPatch({ overlay: Number(e.target.value) })} className={input} />
+          </Field>
+          <ColorRow label={ar ? "خلفية القسم" : "Section background"} value={text("bg")} fallback="#f6f0e8" onChange={(v) => onPatch({ bg: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "لون الدائرة المختارة والشريط" : "Selected circle & bar colour"} value={text("accentColor")} fallback="#9d6540" onChange={(v) => onPatch({ accentColor: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "لون الشعارات والسطر العلوي" : "Logos & small line colour"} value={text("brownColor")} fallback="#684329" onChange={(v) => onPatch({ brownColor: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "لون الأسماء" : "Names colour"} value={text("inkColor")} fallback="#211a15" onChange={(v) => onPatch({ inkColor: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "لون الخط والحدود" : "Line & border colour"} value={text("lineColor")} fallback="#e0d4c4" onChange={(v) => onPatch({ lineColor: v })} input={input} ar={ar} />
+        </>
+      )}
+
       {block.type === "complete_look" && (
         <>
           <p className="rounded-lg bg-surface-page px-3 py-2 text-[11px] leading-relaxed text-ink-soft">

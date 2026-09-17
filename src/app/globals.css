@@ -401,3 +401,18 @@ body {
     animation: none;
   }
 }
+
+/* App theme: Shop by brand - the bar that fills while a card is showing. */
+@keyframes app-brand-progress {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+.app-brand-progress {
+  transform: scaleX(0);
+  animation: app-brand-progress 3s linear forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-brand-progress {
+    display: none;
+  }
+}

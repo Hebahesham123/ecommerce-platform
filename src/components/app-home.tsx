@@ -616,6 +616,12 @@ function BlockView({
       );
     }
 
+    case "brand_timeline": {
+      const brands = itemsOf(block).filter((i) => str(i.label) || str(i.title) || str(i.imageUrl));
+      if (!brands.length) return <Placeholder ar={ar} label={ar ? "لا ماركات بعد" : "No brands yet"} />;
+      return <BrandTimeline block={block} items={brands} data={data} handlers={handlers} />;
+    }
+
     case "complete_look":
       return <CompleteLook block={block} data={data} ar={ar} accent={accent} handlers={handlers} />;
 
@@ -2613,6 +2619,190 @@ function PromoBanner({
   );
 }
 
+/**
+ * Shop by brand - the website's brand timeline.
+ *
+ * A row of round logo marks joined by a hairline, the current one filled,
+ * over one wide photo card at a time. The cards slide on their own every few
+ * seconds with a thin bar filling underneath, a swipe or a tap on a mark takes
+ * over, and tapping the card opens the brand.
+ */
+function BrandTimeline({
+  block,
+  items,
+  data,
+  handlers,
+}: {
+  block: Block;
+  items: Item[];
+  data: HomeData;
+  handlers: HomeHandlers;
+}) {
+  const s = block.settings ?? {};
+  const go = opener(data, handlers);
+  const [on, setOn] = useState(0);
+  const [downX, setDownX] = useState<number | null>(null);
+  const caramel = str(s.accentColor, "#9d6540");
+  const brown = str(s.brownColor, "#684329");
+  const ink = str(s.inkColor, "#211a15");
+  const line = str(s.lineColor, "rgba(69,46,31,.16)");
+  const radius = int(s.radius, 20);
+  const height = int(s.cardHeight, 150);
+  const overlay = Math.min(100, Math.max(0, Number.isFinite(Number(s.overlay)) && s.overlay !== "" ? Number(s.overlay) : 72)) / 100;
+  const seconds = Number.isFinite(Number(s.autoplay)) ? Number(s.autoplay) : 3;
+  const serif = 'var(--font-display), "Cormorant Garamond", "Playfair Display", Georgia, serif';
+  const current = Math.min(on, items.length - 1);
+
+  // A slide that is showing waits its turn, then hands over to the next.
+  useEffect(() => {
+    if (!(seconds > 0) || items.length < 2) return;
+    const t = setTimeout(() => setOn((i) => (i + 1) % items.length), seconds * 1000);
+    return () => clearTimeout(t);
+  }, [current, seconds, items.length]);
+
+  const step = (by: number) => setOn((i) => (i + by + items.length) % items.length);
+
+  return (
+    <section
+      className={str(s.bg) ? "-mx-4 px-3 py-5" : ""}
+      style={str(s.bg) ? { background: str(s.bg) } : undefined}
+    >
+      <div className="text-center">
+        {str(s.eyebrow) && (
+          <span
+            dir="auto"
+            className="inline-flex items-center gap-3 text-[11px] font-semibold uppercase tracking-[0.24em]"
+            style={{ color: brown }}
+          >
+            <span aria-hidden className="h-px w-10" style={{ background: caramel }} />
+            {str(s.eyebrow)}
+          </span>
+        )}
+        {str(s.heading) && (
+          <h3 dir="auto" className="app-display mt-2 text-[24px] font-semibold leading-none" style={{ color: ink, fontFamily: serif }}>
+            {str(s.heading)}
+          </h3>
+        )}
+        {str(s.intro) && (
+          <p dir="auto" className="mx-auto mt-2 max-w-[300px] text-[11.5px] leading-relaxed text-slate-500">
+            {str(s.intro)}
+          </p>
+        )}
+      </div>
+
+      {/* The marks. Laid out left to right like the website, whatever the app's direction. */}
+      <div dir="ltr" className="relative mt-4 flex items-start justify-between">
+        <span aria-hidden className="absolute left-[10%] right-[10%] top-5 h-px" style={{ background: line }} />
+        {items.map((item, i) => {
+          const active = i === current;
+          return (
+            <button
+              key={item.id}
+              onClick={() => setOn(i)}
+              className="relative flex flex-1 flex-col items-center gap-1.5"
+              aria-label={str(item.label, str(item.title))}
+            >
+              <span
+                className="grid h-10 w-10 place-items-center rounded-full border transition-all duration-500"
+                style={{
+                  background: active ? caramel : "#fffdfa",
+                  borderColor: active ? caramel : line,
+                  transform: active ? "scale(1.06)" : undefined,
+                }}
+              >
+                <span
+                  className="px-1 text-center text-[12px] font-semibold leading-none"
+                  style={{ color: active ? "#ffffff" : brown, fontFamily: serif }}
+                >
+                  {str(item.logoText)}
+                </span>
+              </span>
+              <span
+                className="px-0.5 text-center text-[8px] font-semibold uppercase leading-tight tracking-[0.12em]"
+                style={{ color: active ? brown : ink }}
+              >
+                {str(item.label, str(item.title))}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* The cards. */}
+      <div
+        dir="ltr"
+        className="relative mt-4 w-full touch-pan-y overflow-hidden"
+        style={{ borderRadius: radius }}
+        onPointerDown={(e) => setDownX(e.clientX)}
+        onPointerUp={(e) => {
+          if (downX == null) return;
+          const dx = e.clientX - downX;
+          setDownX(null);
+          if (Math.abs(dx) > 40) step(dx < 0 ? 1 : -1);
+          else go(items[current]);
+        }}
+      >
+        <div
+          className="flex transition-transform duration-500 ease-[cubic-bezier(.19,1,.22,1)]"
+          style={{ transform: `translateX(-${current * 100}%)` }}
+        >
+          {items.map((item) => (
+            <div
+              key={item.id}
+              className="relative w-full shrink-0 cursor-pointer overflow-hidden"
+              style={{ height, borderRadius: radius, background: "#b89d82" }}
+            >
+              {str(item.imageUrl) && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={str(item.imageUrl)}
+                  alt=""
+                  draggable={false}
+                  className="pointer-events-none absolute inset-0 h-full w-full select-none object-cover"
+                  style={{ objectPosition: str(item.focal, "50% 50%") }}
+                />
+              )}
+              <span
+                aria-hidden
+                className="absolute inset-0"
+                style={{
+                  background: `linear-gradient(90deg, rgba(28,18,12,${overlay}) 0%, rgba(28,18,12,${overlay * 0.47}) 46%, rgba(28,18,12,0.02) 74%)`,
+                }}
+              />
+              <span className="absolute left-5 top-1/2 flex max-w-[78%] -translate-y-1/2 flex-col items-start text-white">
+                <span className="text-[22px] font-semibold leading-none" style={{ fontFamily: serif }}>
+                  {str(item.title, str(item.label))}
+                </span>
+                {str(item.description) && (
+                  <span className="mt-1.5 text-[11.5px] leading-snug opacity-95">{str(item.description)}</span>
+                )}
+                {str(s.linkLabel) && (
+                  <span className="relative mt-2 inline-flex items-center gap-2 pb-1 text-[11.5px] font-semibold uppercase tracking-[0.14em]">
+                    {str(s.linkLabel)}
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-3.5 w-3.5">
+                      <path d="M5 12h14M13 6l6 6-6 6" />
+                    </svg>
+                    <span aria-hidden className="absolute bottom-0 left-0 h-px w-10 bg-white/65" />
+                  </span>
+                )}
+              </span>
+            </div>
+          ))}
+        </div>
+        {seconds > 0 && items.length > 1 && (
+          <span aria-hidden className="absolute inset-x-0 bottom-0 z-10 h-[3px] overflow-hidden bg-black/15">
+            <span
+              key={current}
+              className="app-brand-progress block h-full w-full origin-left"
+              style={{ background: caramel, animationDuration: `${seconds}s` }}
+            />
+          </span>
+        )}
+      </div>
+    </section>
+  );
+}
+
 /** "{product}" becomes the piece they bought; with no piece, the line goes. */
 function withProduct(line: string, product: string | null | undefined): string {
   if (!line.includes("{product}")) return line;
@@ -2996,6 +3186,8 @@ function isPlaceholder(node: React.ReactElement): boolean {
     // A shopper only sees it with something in it; guests never do.
     case "complete_look":
       return !data.recommended?.products.length;
+    case "brand_timeline":
+      return itemsOf(block).filter((i) => str(i.label) || str(i.title) || str(i.imageUrl)).length === 0;
     case "product_reasons":
       return itemsOf(block).filter((i) => str(i.name) || str(i.imageUrl) || str(i.handle)).length === 0;
     case "circle_row":

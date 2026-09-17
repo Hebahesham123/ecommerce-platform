@@ -44,6 +44,7 @@ export type BlockType =
   | "style_profile"
   | "promo_card"
   | "complete_look"
+  | "brand_timeline"
   | "showcase"
   | "reviews"
   | "text";
@@ -180,6 +181,11 @@ export const ITEM_SHAPE: Partial<Record<BlockType, { ar: string; en: string; bla
     ar: "وسم",
     en: "Tag",
     blank: () => ({ id: itemId(), label: "", color: "", handle: "", url: "" }),
+  },
+  brand_timeline: {
+    ar: "ماركة",
+    en: "Brand",
+    blank: () => ({ id: itemId(), logoText: "", label: "", title: "", description: "", imageUrl: "", focal: "", handle: "", url: "" }),
   },
   complete_look: {
     ar: "قاعدة توافق",
@@ -333,6 +339,15 @@ export const ITEM_FIELDS: Partial<Record<BlockType, FieldSpec[]>> = {
   ],
   // Read by the server, never shipped to the app: what someone bought decides
   // where the suggestions come from.
+  brand_timeline: [
+    { key: "imageUrl", kind: "image", ar: "صورة البطاقة", en: "Card picture" },
+    { key: "logoText", kind: "text", ar: "الشعار داخل الدائرة (مثل LV)", en: "Logo in the circle (e.g. LV)" },
+    { key: "label", kind: "text", ar: "الاسم تحت الدائرة", en: "Name under the circle" },
+    { key: "title", kind: "text", ar: "العنوان على البطاقة", en: "Title on the card" },
+    { key: "description", kind: "text", ar: "سطر تحت العنوان", en: "Line under the title" },
+    { key: "focal", kind: "text", ar: "موضع الصورة (مثل 70% 30%)", en: "Picture position (e.g. 70% 30%)" },
+    { key: "handle", kind: "link", ar: "يفتح", en: "Opens" },
+  ],
   complete_look: [
     { key: "from", kind: "collection", ar: "إذا اشترت من", en: "When they bought from" },
     { key: "to1", kind: "collection", ar: "اقترحي من", en: "Suggest from" },
@@ -749,6 +764,12 @@ export const BLOCK_META: Record<
     hintAr: "وسوم تصف ذوق العميلة، كل وسم يفتح ما يناسبه",
     hintEn: "Tags describing the shopper's taste, each opening what matches it",
   },
+  brand_timeline: {
+    ar: "تسوّقي حسب الماركة",
+    en: "Shop by brand",
+    hintAr: "دوائر شعارات الماركات فوق بطاقة صورة كبيرة تتبدّل تلقائياً — مثل الموقع",
+    hintEn: "A row of brand logo circles over a big photo card that slides on its own — as on the website",
+  },
   complete_look: {
     ar: "أكملي إطلالتك",
     en: "Complete your look",
@@ -980,6 +1001,22 @@ export function newBlock(type: BlockType): Block {
       url: "",
       cardBg: "",
       radius: 14,
+      items: shape ? [shape.blank()] : [],
+    },
+    brand_timeline: {
+      eyebrow: "Shop by brand",
+      heading: "",
+      intro: "",
+      linkLabel: "Shop Now",
+      autoplay: 3,
+      cardHeight: 150,
+      radius: 20,
+      overlay: 72,
+      bg: "",
+      accentColor: "",
+      brownColor: "",
+      inkColor: "",
+      lineColor: "",
       items: shape ? [shape.blank()] : [],
     },
     complete_look: {
