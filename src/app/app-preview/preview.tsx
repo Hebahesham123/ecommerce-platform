@@ -1,5 +1,6 @@
 "use client";
 
+import type { HomeData } from "@/components/app-home";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useI18n } from "@/lib/i18n";
 import {
@@ -163,6 +164,16 @@ export function Preview() {
     api.get<Account>("/me").then((r) => setShopperName(r.ok ? r.data.name : null));
   }, [phone]);
 
+  // Complete your look. A guest has no history to match, so nothing is asked
+  // and the section stays hidden.
+  const [recommended, setRecommended] = useState<HomeData["recommended"]>(null);
+  useEffect(() => {
+    if (!phone) return setRecommended(null);
+    api
+      .get<NonNullable<HomeData["recommended"]>>("/recommendations")
+      .then((r) => setRecommended(r.ok ? r.data : null));
+  }, [phone]);
+
   // The smart popup the merchant built in Marketing - Smart popups. The app
   // draws the same campaign the site does rather than owning a second one.
   const [nudge, setNudge] = useState<NudgeCampaign | null>(null);
@@ -319,6 +330,7 @@ export function Preview() {
                 onToggleWish={toggleWish}
                 onTheme={setTheme}
                 shopperName={shopperName}
+                recommended={recommended}
                 query={query}
                 onQuery={setQuery}
                 openCollection={stripOpen}

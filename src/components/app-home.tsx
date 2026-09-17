@@ -56,6 +56,16 @@ export type HomeData = {
    * so nothing here has to go and fetch an account it does not otherwise need.
    */
   shopperName?: string | null;
+  /**
+   * What goes with the signed-in shopper's past orders. Left out entirely by
+   * a surface with no shopper (the editor), which then draws a sample; an
+   * empty list hides the section.
+   */
+  recommended?: {
+    mode: "pairs" | "fallback" | "none";
+    basedOn: string | null;
+    products: Card[];
+  } | null;
 };
 
 export type HomeHandlers = {
@@ -605,6 +615,9 @@ function BlockView({
         <StyleProfile block={block} items={tags} data={data} ar={ar} accent={accent} handlers={handlers} />
       );
     }
+
+    case "complete_look":
+      return <CompleteLook block={block} data={data} ar={ar} accent={accent} handlers={handlers} />;
 
     case "promo_card": {
       if (!str(s.title) && !str(s.body)) {
@@ -2443,6 +2456,89 @@ function PromoBanner({
   );
 }
 
+/** "{product}" becomes the piece they bought; with no piece, the line goes. */
+function withProduct(line: string, product: string | null | undefined): string {
+  if (!line.includes("{product}")) return line;
+  if (!product) return "";
+  // Cut at a word, without an ellipsis: in a right-to-left app a trailing
+  // "…" after English text is drawn at the start of the line.
+  const short = product.length > 32 ? product.slice(0, 32).replace(/\s+\S*$/, "") : product;
+  return line.split("{product}").join(short);
+}
+
+/**
+ * Complete your look: what goes with the shopper's last purchases.
+ *
+ * The server does the matching - see lib/recommendations.ts. This only draws
+ * what came back, titled by how it was found: a match says "Complete your
+ * look", a shopper whose purchases fit no rule gets "Recommended for you".
+ * Nothing came back means the section is not there at all.
+ *
+ * The editor has no shopper, so it draws a sample from the rules' own
+ * collections and says so.
+ */
+function CompleteLook({
+  block,
+  data,
+  ar,
+  accent,
+  handlers,
+}: {
+  block: Block;
+  data: HomeData;
+  ar: boolean;
+  accent: string;
+  handlers: HomeHandlers;
+}) {
+  const s = block.settings ?? {};
+  const limit = int(s.limit, 8);
+  const recs = data.recommended;
+  const sample = recs === undefined;
+
+  let cards: Card[];
+  if (sample) {
+    const handles = itemsOf(block)
+      .flatMap((i) => [i.to1, i.to2, i.to3])
+      .map((h) => str(h).toLowerCase())
+      .filter(Boolean);
+    const pool = [
+      ...handles.flatMap((h) => (data.rows[h] ?? []).slice(0, 3)),
+      ...Object.values(data.rows).flat(),
+      ...data.newArrivals,
+    ];
+    const seen = new Set<string>();
+    cards = pool.filter((c) => !seen.has(c.id) && seen.add(c.id)).slice(0, limit);
+  } else {
+    cards = recs?.products ?? [];
+  }
+  if (!cards.length) {
+    return <Placeholder ar={ar} label={ar ? "لا اقتراحات لهذه العميلة" : "Nothing to suggest for this shopper"} />;
+  }
+
+  const pairs = sample || recs?.mode !== "fallback";
+  const title = pairs ? str(s.title, "Complete your look") : str(s.fallbackTitle, "Recommended for you");
+  const subtitle = withProduct(
+    pairs ? str(s.subtitle) : str(s.fallbackSubtitle),
+    sample ? (ar ? "حقيبتك الأخيرة" : "last bag") : recs?.basedOn,
+  );
+
+  return (
+    <section>
+      {sample && (
+        <div className="mb-1.5 inline-flex rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+          {ar ? "معاينة — تظهر فقط لمن اشترت من قبل" : "Sample — only shoppers with past orders see this"}
+        </div>
+      )}
+      <RowHead title={title} subtitle={subtitle} seeAll="" onSeeAll={() => {}} accent={accent} />
+      <div className="-mx-4 mt-2 flex overflow-x-auto px-4 pb-1" style={{ gap: "var(--app-item-gap, 8px)" }}>
+        {cards.map((card) => (
+          <Tile key={card.id} card={card} ar={ar} accent={accent} wide {...tileProps(handlers, card.id)} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
 /** A solid colour card with a heading, a line and a button. */
 function PromoCard({
   block,
@@ -2740,6 +2836,9 @@ function isPlaceholder(node: React.ReactElement): boolean {
       return itemsOf(block).filter((i) => str(i.label)).length === 0 && !str(s.cardTitle);
     case "promo_card":
       return !str(s.title) && !str(s.body);
+    // A shopper only sees it with something in it; guests never do.
+    case "complete_look":
+      return !data.recommended?.products.length;
     case "product_reasons":
       return itemsOf(block).filter((i) => str(i.name) || str(i.imageUrl) || str(i.handle)).length === 0;
     case "circle_row":

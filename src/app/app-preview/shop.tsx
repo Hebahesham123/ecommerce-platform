@@ -13,7 +13,7 @@ import {
 } from "./api";
 import { Btn, Empty, money, Note, Sheet, Spinner } from "./ui";
 import { Reviews } from "./reviews";
-import { AppHome } from "@/components/app-home";
+import { AppHome, type HomeData } from "@/components/app-home";
 
 /**
  * The shopping half of the preview.
@@ -45,6 +45,7 @@ export function Shop({
   onLeave,
   onTheme,
   shopperName,
+  recommended,
   query,
   onQuery,
   openCollection,
@@ -63,6 +64,8 @@ export function Shop({
   onTheme?: (theme: Home["theme"]) => void;
   /** Only the live-now offer uses it, and it reads fine without one. */
   shopperName?: string | null;
+  /** What goes with this shopper's past orders; null hides the section. */
+  recommended?: HomeData["recommended"];
   /**
    * When the app header draws the search field, it owns the term too and the
    * one in here stands down — two boxes searching the same shop is one box
@@ -251,6 +254,7 @@ export function Shop({
           onOpen={(p) => setOpen(p.id)}
           onScreen={onScreen}
           shopperName={shopperName}
+          recommended={recommended}
           onAdd={onAdd}
           wishlist={wishlist}
           onToggleWish={onToggleWish}
@@ -318,12 +322,14 @@ function HomeView({
   onOpen,
   onScreen,
   shopperName,
+  recommended,
   onAdd,
   wishlist,
   onToggleWish,
 }: {
   ar: boolean;
   home: Home;
+  recommended?: HomeData["recommended"];
   onOpenCollection: (c: Collection) => void;
   onOpen: (p: ProductCard) => void;
   onScreen?: (screen: string) => void;
@@ -343,6 +349,8 @@ function HomeView({
           newArrivals: home.newArrivals,
           reviews: home.reviews,
           shopperName,
+          // Never undefined here: undefined is the editor's "draw a sample".
+          recommended: recommended ?? null,
         }}
         handlers={{
           onOpenCollection: (handle, title) =>

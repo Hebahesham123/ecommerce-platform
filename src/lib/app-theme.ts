@@ -43,6 +43,7 @@ export type BlockType =
   | "price_drop"
   | "style_profile"
   | "promo_card"
+  | "complete_look"
   | "showcase"
   | "reviews"
   | "text";
@@ -179,6 +180,11 @@ export const ITEM_SHAPE: Partial<Record<BlockType, { ar: string; en: string; bla
     ar: "وسم",
     en: "Tag",
     blank: () => ({ id: itemId(), label: "", color: "", handle: "", url: "" }),
+  },
+  complete_look: {
+    ar: "قاعدة توافق",
+    en: "Pairing rule",
+    blank: () => ({ id: itemId(), from: "", to1: "", to2: "", to3: "" }),
   },
 };
 
@@ -321,6 +327,14 @@ export const ITEM_FIELDS: Partial<Record<BlockType, FieldSpec[]>> = {
     { key: "label", kind: "text", ar: "الوسم", en: "Tag" },
     { key: "color", kind: "color", ar: "لونه", en: "Its colour" },
     { key: "handle", kind: "link", ar: "يفتح", en: "Opens" },
+  ],
+  // Read by the server, never shipped to the app: what someone bought decides
+  // where the suggestions come from.
+  complete_look: [
+    { key: "from", kind: "collection", ar: "إذا اشترت من", en: "When they bought from" },
+    { key: "to1", kind: "collection", ar: "اقترحي من", en: "Suggest from" },
+    { key: "to2", kind: "collection", ar: "ومن", en: "And from" },
+    { key: "to3", kind: "collection", ar: "ومن", en: "And from" },
   ],
 };
 
@@ -732,6 +746,12 @@ export const BLOCK_META: Record<
     hintAr: "وسوم تصف ذوق العميلة، كل وسم يفتح ما يناسبه",
     hintEn: "Tags describing the shopper's taste, each opening what matches it",
   },
+  complete_look: {
+    ar: "أكملي إطلالتك",
+    en: "Complete your look",
+    hintAr: "منتجات تناسب ما اشترته العميلة من قبل — تختفي للزوار ولمن لم تشترِ بعد",
+    hintEn: "Pieces that go with what the shopper already bought — hidden for guests and first-time shoppers",
+  },
   promo_card: {
     ar: "بطاقة عرض",
     en: "Promo card",
@@ -957,6 +977,14 @@ export function newBlock(type: BlockType): Block {
       url: "",
       cardBg: "",
       radius: 14,
+      items: shape ? [shape.blank()] : [],
+    },
+    complete_look: {
+      title: "Complete your look",
+      subtitle: "To go with your {product}",
+      fallbackTitle: "Recommended for you",
+      fallbackSubtitle: "Picked from what you shop",
+      limit: 8,
       items: shape ? [shape.blank()] : [],
     },
     style_profile: {

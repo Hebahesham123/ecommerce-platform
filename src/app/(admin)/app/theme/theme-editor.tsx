@@ -1730,6 +1730,31 @@ function BlockGroup({
         </>
       )}
 
+      {block.type === "complete_look" && (
+        <>
+          <p className="rounded-lg bg-surface-page px-3 py-2 text-[11px] leading-relaxed text-ink-soft">
+            {ar
+              ? "يظهر فقط للعميلات المسجّلات ولهن طلبات سابقة، ويختفي تماماً للزوار. نقترح من الأقسام في قواعد التوافق بالأسفل، دون تكرار ما اشترته العميلة أو ما نفد. إن لم تنطبق أي قاعدة نعرض «العنوان البديل». اكتبي {product} ليظهر اسم آخر قطعة اشترتها."
+              : "Only signed-in shoppers with past orders see this; guests never do. Suggestions come from the pairing rules below, never repeating what they bought or anything sold out. When no rule fits their purchases, the fallback title is used. Write {product} to show the last piece they bought."}
+          </p>
+          <Field label={ar ? "العنوان عند التوافق" : "Title when a rule matches"} type="text">
+            <input value={text("title")} onChange={(e) => onPatch({ title: e.target.value })} placeholder="Complete your look" className={input} />
+          </Field>
+          <Field label={ar ? "السطر تحته" : "Line under it"} type="text">
+            <input value={text("subtitle")} onChange={(e) => onPatch({ subtitle: e.target.value })} placeholder="To go with your {product}" className={input} />
+          </Field>
+          <Field label={ar ? "العنوان البديل" : "Fallback title"} type="text">
+            <input value={text("fallbackTitle")} onChange={(e) => onPatch({ fallbackTitle: e.target.value })} placeholder="Recommended for you" className={input} />
+          </Field>
+          <Field label={ar ? "السطر البديل" : "Fallback line"} type="text">
+            <input value={text("fallbackSubtitle")} onChange={(e) => onPatch({ fallbackSubtitle: e.target.value })} className={input} />
+          </Field>
+          <Field label={ar ? "عدد المنتجات" : "Products shown"} type="range">
+            <input type="number" min={2} max={16} value={num("limit", 8)} onChange={(e) => onPatch({ limit: Number(e.target.value) })} className={input} />
+          </Field>
+        </>
+      )}
+
       {block.type === "promo_card" && (
         <>
           <Field label={ar ? "الشكل" : "Look"} type="select">

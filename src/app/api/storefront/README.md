@@ -65,6 +65,7 @@ because Liquid needs them; the conversion happens once, in `lib/api/catalog.ts`.
 | POST | `/auth/verify` | Check the code, return a token |
 | POST | `/auth/login` | Sign in a number we already know, return a token |
 | GET | `/me` | Profile and order history |
+| GET | `/recommendations` | Complete your look: products that go with the shopper’s past orders, from the theme’s pairing rules. Guests and first-time shoppers get an empty list |
 | GET | `/home` | The front page in one request: the theme, its blocks' data, menus, collections |
 | GET | `/theme` | How the app should look and what its home screen is made of |
 | GET | `/products` | Catalogue cards — `?q=`, `?collection=`, `?category=`, `?inStock=1`, `?limit=`, `?offset=` |

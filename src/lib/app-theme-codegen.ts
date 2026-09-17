@@ -249,6 +249,13 @@ export type HomePayload = {
 export const fetchHome = () => api<HomePayload>("/home");
 
 /**
+ * What goes with the signed-in shopper's past orders. A guest gets an empty
+ * list rather than an error, and the section is then not drawn.
+ */
+export type Recommendations = { mode: "pairs" | "fallback" | "none"; basedOn: string | null; products: Card[] };
+export const fetchRecommendations = () => api<Recommendations>("/recommendations");
+
+/**
  * Search the catalogue.
  *
  * The shop does the matching, over titles, brands, categories and tags, on the
@@ -2891,6 +2898,63 @@ const styles = StyleSheet.create({
 });
 `,
 
+    complete_look: `import React from "react";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { colors, gap, spacing } from "../theme";
+import { ProductTile, SectionHeading } from "./Pieces";
+import type { Recommendations } from "../api";
+
+export type CompleteLookSettings = {
+  title?: string;
+  subtitle?: string;
+  fallbackTitle?: string;
+  fallbackSubtitle?: string;
+  limit?: number;
+};
+
+/** "{product}" becomes the piece they bought; with no piece, the line goes. */
+function withProduct(line: string, product: string | null): string {
+  if (!line.includes("{product}")) return line;
+  if (!product) return "";
+  const short = product.length > 32 ? product.slice(0, 32).replace(/ +[^ ]*$/, "") : product;
+  return line.split("{product}").join(short);
+}
+
+/**
+ * What goes with the shopper's past orders. The shop does the matching; a
+ * guest or a first-time shopper gets nothing back, and then this is not drawn.
+ */
+export function CompleteLook({
+  settings,
+  recs,
+  onOpenProduct,
+}: {
+  settings: CompleteLookSettings;
+  recs: Recommendations | null;
+  onOpenProduct?: (id: string) => void;
+}) {
+  if (!recs || !recs.products.length) return null;
+  const pairs = recs.mode !== "fallback";
+  const title = pairs ? settings.title || "Complete your look" : settings.fallbackTitle || "Recommended for you";
+  const subtitle = withProduct((pairs ? settings.subtitle : settings.fallbackSubtitle) || "", recs.basedOn);
+
+  return (
+    <View>
+      <SectionHeading title={title} />
+      {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+        {recs.products.map((p) => <ProductTile key={p.id} card={p} onPress={onOpenProduct} />)}
+      </ScrollView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  subtitle: { marginTop: 2, fontSize: 12, color: colors.inkSoft },
+  row: { gap: gap.item, paddingVertical: spacing.sm },
+});
+`,
+
     showcase: `import React from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { colors, spacing } from "../theme";
@@ -3016,6 +3080,7 @@ function homeScreenFile(theme: AppTheme): GeneratedFile {
     .map((t) => `import { ${exportName(t)} } from "./components/${componentName(t)}";`)
     .join("\n");
   const search = theme.settings.showSearch;
+  const recsUsed = used.includes("complete_look");
 
   // A section can carry a line above it and a colour under it. Resolved here,
   // at generation time, so the screen stays a plain list of sections rather
@@ -3038,7 +3103,11 @@ function homeScreenFile(theme: AppTheme): GeneratedFile {
       const above = kicker
         ? `\n          <Text style={styles.kicker}>{${q(kicker)}}</Text>`
         : ``
-      return `        <View key=${q(b.id)} style={[styles.block${bandStyle}]}>${above}\n${renderCall(b, 10)}\n        </View>`;
+      const section = `        <View key=${q(b.id)} style={[styles.block${bandStyle}]}>${above}\n${renderCall(b, 10)}\n        </View>`;
+      // Nothing to suggest means no section at all - not an empty band.
+      return b.type === "complete_look"
+        ? `        {recs && recs.products.length ? (\n${section}\n        ) : null}`
+        : section;
     })
     .join(`\n`);
 
@@ -3063,18 +3132,20 @@ import {
   View,
 } from "react-native";
 import { colors, gap, radius, spacing, theme } from "./theme";
-import { fetchHome, type HomePayload } from "./api";
+import { fetchHome, ${recsUsed ? "fetchRecommendations, type Recommendations, " : ""}type HomePayload } from "./api";
 import { openLink } from "./components/Pieces";
 ${search ? 'import { SearchResults } from "./components/SearchResults";\n' : ""}${imports}
 
 export default function HomeScreen({
   onOpenCollection,
   onOpenProduct,
-  onOpenScreen,
+  onOpenScreen,${recsUsed ? "\n  signedIn," : ""}
 }: {
   onOpenCollection?: (handle: string) => void;
   onOpenProduct?: (id: string) => void;
   onOpenScreen?: (screen: string) => void;
+  /** Whether someone is signed in - what Complete your look is built from. */
+  signedIn?: boolean;
 }) {
   const [data, setData] = useState<HomePayload | null>(null);
   const [error, setError] = useState<string | null>(null);${
@@ -3083,7 +3154,11 @@ export default function HomeScreen({
 
   useEffect(() => {
     fetchHome().then(setData).catch((e) => setError(String(e.message ?? e)));
-  }, []);
+  }, []);${
+    recsUsed
+      ? "\n\n  // Asked again whenever someone signs in or out; a failure just hides it.\n  const [recs, setRecs] = useState<Recommendations | null>(null);\n  useEffect(() => {\n    if (!signedIn) return setRecs(null);\n    fetchRecommendations().then(setRecs).catch(() => setRecs(null));\n  }, [signedIn]);"
+      : ""
+  }
 
   if (error) return <View style={styles.center}><Text style={styles.error}>{error}</Text></View>;
   if (!data) return <View style={styles.center}><ActivityIndicator color={colors.accent} /></View>;
@@ -3210,6 +3285,7 @@ function renderCall(block: Block, indent: number): string {
     showcase: ["collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     style_profile: ["onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     promo_card: ["onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
+    complete_look: ["recs={recs}", "onOpenProduct={onOpenProduct}"],
     banner: ["collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     categories: ["collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     new_arrivals: ["products={data.newArrivals}", "onOpenProduct={onOpenProduct}"],
@@ -3448,6 +3524,7 @@ function settingsLiteral(block: Block): string {
       "productId",
       "screen",
     ],
+    complete_look: ["title", "subtitle", "fallbackTitle", "fallbackSubtitle", "limit"],
     text: ["heading", "body"],
   };
   const set = block.settings ?? {};
@@ -3487,7 +3564,8 @@ function settingsLiteral(block: Block): string {
 
   // Slides, tabs, cards, tiers, panels and badges travel with the block —
   // they are the merchant's content, not the component's business.
-  const items = itemsOf(block);
+  // Pairing rules are read by the shop, not the app.
+  const items = block.type === "complete_look" ? [] : itemsOf(block);
   if (items.length) parts.push(`items: ${itemsLiteral(block.type, items)}`);
 
   return parts.length ? `{ ${parts.join(", ")} }` : "{}";
@@ -4923,6 +5001,7 @@ export default function App() {
       onOpenCollection={(handle) => push({ kind: "collection", handle })}
       onOpenProduct={(id) => push({ kind: "product", id })}
       onOpenScreen={goScreen}
+      signedIn={Boolean(phone)}
     />
   )${
     live
