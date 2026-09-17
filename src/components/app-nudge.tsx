@@ -68,10 +68,28 @@ export function AppNudge({
   // overlay does not watch, so they are left to the web rather than faked.
   useEffect(() => {
     if (!campaign || !campaign.enabled || done) return;
+    // The merchant's own limits: once shown, not again until the cooldown has
+    // passed, and never more than the per-session count. Without this the
+    // same wheel greets a shopper every single time they open the app.
+    const seenKey = `app_nudge_seen_${campaign.id}`;
+    const countKey = `app_nudge_count_${campaign.id}`;
+    try {
+      const last = Number(localStorage.getItem(seenKey)) || 0;
+      if (last && Date.now() - last < Math.max(0, campaign.cooldownHours) * 3600 * 1000) return;
+      if ((Number(sessionStorage.getItem(countKey)) || 0) >= Math.max(1, campaign.maxPerSession)) return;
+    } catch {
+      /* storage blocked - show it, as before */
+    }
     const seconds = campaign.dwellEnabled ? Math.max(1, campaign.dwellSeconds) : 3;
     const t = setTimeout(() => {
       setOpen(true);
       onEvent?.("shown");
+      try {
+        localStorage.setItem(seenKey, String(Date.now()));
+        sessionStorage.setItem(countKey, String((Number(sessionStorage.getItem(countKey)) || 0) + 1));
+      } catch {
+        /* private browsing */
+      }
     }, seconds * 1000);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps

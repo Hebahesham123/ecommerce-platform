@@ -1628,7 +1628,7 @@ const styles = StyleSheet.create({
 });
 `,
 
-    coming_up_live: `import React from "react";
+    coming_up_live: `import React, { useState } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { colors, gap, radius, spacing } from "../theme";
 import { SectionHeading, inherit, openLink, type LinkTo } from "./Pieces";
@@ -1638,6 +1638,7 @@ export type Session = { id: string; imageUrl?: string; title?: string; when?: st
 export type ComingUpLiveSettings = {
   title?: string;
   remindLabel?: string;
+  remindedLabel?: string;
   cardBg?: string;
   radius?: number;
   items?: Session[];
@@ -1657,6 +1658,8 @@ export function ComingUpLive({
   onOpenScreen?: (screen: string) => void;
 }) {
   const items = (settings.items ?? []).filter((i) => i.title || i.imageUrl || i.handle);
+  // Remind me sets a reminder and stays put; the session itself opens its collection.
+  const [reminded, setReminded] = useState<string[]>([]);
   if (!items.length) return null;
 
   /** A typed link wins over a collection: it is the more specific thing to set. */
@@ -1675,14 +1678,23 @@ export function ComingUpLive({
           const photo = i.imageUrl || borrowed.image;
           return (
             <View key={i.id} style={styles.row}>
-              {photo ? <Image source={{ uri: photo }} style={styles.thumb} /> : <View style={styles.thumb} />}
-              <View style={{ flex: 1 }}>
-                <Text style={styles.title} numberOfLines={1}>{i.title || borrowed.title}</Text>
-                {i.when ? <Text style={styles.when} numberOfLines={1}>{i.when}</Text> : null}
-              </View>
+              <Pressable style={styles.session} onPress={() => go(i)}>
+                {photo ? <Image source={{ uri: photo }} style={styles.thumb} /> : <View style={styles.thumb} />}
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.title} numberOfLines={1}>{i.title || borrowed.title}</Text>
+                  {i.when ? <Text style={styles.when} numberOfLines={1}>{i.when}</Text> : null}
+                </View>
+              </Pressable>
               {remind ? (
-                <Pressable style={styles.remind} onPress={() => go(i)}>
-                  <Text style={styles.remindText}>{remind}</Text>
+                <Pressable
+                  style={[styles.remind, reminded.includes(i.id) ? styles.remindOn : null]}
+                  onPress={() =>
+                    setReminded((cur) => (cur.includes(i.id) ? cur.filter((x) => x !== i.id) : [...cur, i.id]))
+                  }
+                >
+                  <Text style={[styles.remindText, reminded.includes(i.id) ? styles.remindTextOn : null]}>
+                    {reminded.includes(i.id) ? "✓ " + (settings.remindedLabel || "Reminder set") : remind}
+                  </Text>
                 </Pressable>
               ) : null}
             </View>
@@ -1699,8 +1711,11 @@ const styles = StyleSheet.create({
   thumb: { width: 48, height: 48, borderRadius: 10, backgroundColor: colors.page },
   title: { fontSize: 12, fontWeight: "700", color: colors.ink },
   when: { fontSize: 11, color: colors.inkSoft },
-  remind: { borderRadius: radius.pill, backgroundColor: colors.accent, paddingHorizontal: 12, paddingVertical: 6 },
+  session: { flex: 1, flexDirection: "row", alignItems: "center", gap: gap.item },
+  remind: { borderRadius: radius.pill, borderWidth: 1, borderColor: colors.accent, backgroundColor: colors.accent, paddingHorizontal: 12, paddingVertical: 6 },
+  remindOn: { backgroundColor: colors.surface },
   remindText: { fontSize: 11, fontWeight: "600", color: "#fff" },
+  remindTextOn: { color: colors.accent },
 });
 `,
 
@@ -3271,6 +3286,8 @@ export function BrandTimeline({
 }) {
   const items = (settings.items ?? []).filter((i) => i.label || i.title || i.imageUrl);
   const [on, setOn] = useState(0);
+  // Once the shopper takes hold, the cards stop moving on their own.
+  const [held, setHeld] = useState(false);
   const [width, setWidth] = useState(0);
   // Only scrollTo is needed, so only scrollTo is promised.
   const scroller = useRef<{ scrollTo: (to: { x: number; animated?: boolean }) => void } | null>(null);
@@ -3280,7 +3297,7 @@ export function BrandTimeline({
   // Show the current card, run its bar, then move on.
   useEffect(() => {
     if (width) scroller.current?.scrollTo({ x: on * width, animated: true });
-    if (!(seconds > 0) || items.length < 2) return;
+    if (!(seconds > 0) || items.length < 2 || held) return;
     bar.setValue(0);
     const run = Animated.timing(bar, { toValue: 1, duration: seconds * 1000, easing: Easing.linear, useNativeDriver: false });
     run.start();
@@ -3289,7 +3306,7 @@ export function BrandTimeline({
       run.stop();
       clearTimeout(t);
     };
-  }, [on, width, seconds, items.length, bar]);
+  }, [on, width, seconds, items.length, bar, held]);
 
   if (!items.length) return null;
   const go = (to: LinkTo) => openLink(to, { onOpenCollection, onOpenProduct, onOpenScreen });
@@ -3317,7 +3334,7 @@ export function BrandTimeline({
         {items.map((b, i) => {
           const active = i === on;
           return (
-            <Pressable key={b.id} style={styles.mark} onPress={() => setOn(i)}>
+            <Pressable key={b.id} style={styles.mark} onPress={() => { setHeld(true); setOn(i); }}>
               <View
                 style={[
                   styles.circle,
@@ -3345,6 +3362,7 @@ export function BrandTimeline({
           horizontal
           pagingEnabled
           showsHorizontalScrollIndicator={false}
+          onScrollBeginDrag={() => setHeld(true)}
           onMomentumScrollEnd={(e) => {
             if (width) setOn(Math.round(e.nativeEvent.contentOffset.x / width));
           }}
@@ -3368,7 +3386,7 @@ export function BrandTimeline({
             </Pressable>
           ))}
         </ScrollView>
-        {seconds > 0 && items.length > 1 ? (
+        {seconds > 0 && items.length > 1 && !held ? (
           <View style={styles.progress}>
             <Animated.View
               style={[
@@ -3604,7 +3622,8 @@ function homeScreenFile(theme: AppTheme): GeneratedFile {
   const rendered = theme.blocks
     .map((b) => {
       const set = b.settings ?? {};
-      const kicker = s(set.kicker);
+      // The mystery box banner carries its line as a tag inside itself.
+      const kicker = b.type === "promo_card" && s(set.style) === "banner" ? "" : s(set.kicker);
       const band = s(set.band);
       const washed = band === "tint" || band === "paper";
       // A band bleeds to the screen edges, so the page padding comes off and
@@ -3906,7 +3925,7 @@ function settingsLiteral(block: Block): string {
       "offerProductId",
       "offerScreen",
     ],
-    coming_up_live: ["title", "remindLabel", "cardBg", "radius"],
+    coming_up_live: ["title", "remindLabel", "remindedLabel", "cardBg", "radius"],
     countdown_deals: [
       "featureFirst",
       "title",
@@ -4854,11 +4873,34 @@ const SORTS: { key: Sort; label: string }[] = [
 
 const NONE: CollectionFilters = { brands: [], min: 0, max: 0, inStock: false, onSale: false };
 
+/**
+ * A collection link can carry a narrowing: "all?minPrice=3000&maxPrice=4999"
+ * is the whole shop between those prices, which is how a price tier opens.
+ */
+function splitLink(link: string): { handle: string; filters: CollectionFilters } {
+  const parts = link.split("?");
+  const params: Record<string, string> = {};
+  (parts[1] || "").split("&").forEach((pair) => {
+    const kv = pair.split("=");
+    if (kv[0]) params[kv[0]] = decodeURIComponent(kv[1] || "");
+  });
+  return {
+    handle: parts[0],
+    filters: {
+      brands: (params.vendor || "").split(",").map((v) => v.trim()).filter(Boolean),
+      min: Number(params.minPrice) || 0,
+      max: Number(params.maxPrice) || 0,
+      inStock: params.inStock === "1",
+      onSale: params.onSale === "1",
+    },
+  };
+}
+
 const off = (price: number | null, compareAt: number | null) =>
   price != null && compareAt != null && compareAt > price ? Math.round((1 - price / compareAt) * 100) : 0;
 
 export function CollectionScreen({
-  handle,
+  handle: link,
   onOpenProduct,
   onAdd,
 }: {
@@ -4868,9 +4910,11 @@ export function CollectionScreen({
   onAdd?: (variantId: string) => void;
 }) {
   const c = screens.collection;
+  const handle = splitLink(link).handle;
+  const preset = splitLink(link).filters;
   const [sort, setSort] = useState<Sort>((c.sortDefault as Sort) || "manual");
-  const [filters, setFilters] = useState<CollectionFilters>(NONE);
-  const [draft, setDraft] = useState<CollectionFilters>(NONE);
+  const [filters, setFilters] = useState<CollectionFilters>(preset);
+  const [draft, setDraft] = useState<CollectionFilters>(preset);
   const [panel, setPanel] = useState(false);
   const [sorting, setSorting] = useState(false);
   const [single, setSingle] = useState(false);
@@ -4916,7 +4960,15 @@ export function CollectionScreen({
   const columns = single ? 1 : c.columns === 3 ? 3 : 2;
   const active =
     filters.brands.length + (filters.min > 0 || filters.max > 0 ? 1 : 0) + (filters.inStock ? 1 : 0) + (filters.onSale ? 1 : 0);
-  const subtitle =
+  const range =
+    preset.min > 0 && preset.max > 0
+      ? money(preset.min) + " – " + money(preset.max)
+      : preset.max > 0
+        ? "Under " + money(preset.max)
+        : preset.min > 0
+          ? money(preset.min) + "+"
+          : "";
+  const subtitle = range ? range + " · " + data.total + " pieces" :
     c.heroSubtitle ||
     [String(data.collection.productCount || data.total) + "+ pieces", vendors.slice(0, 5).map((v) => v.name).join(" · ")]
       .filter(Boolean)

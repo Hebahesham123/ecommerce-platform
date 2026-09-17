@@ -113,6 +113,26 @@ type CollectionReply = {
 type Filters = { brands: string[]; min: number; max: number; inStock: boolean; onSale: boolean };
 const NO_FILTERS: Filters = { brands: [], min: 0, max: 0, inStock: false, onSale: false };
 
+/**
+ * A collection link can carry a narrowing: "all?minPrice=3000&maxPrice=4999"
+ * is the whole shop between those prices. That is how a price tier opens a
+ * real page without a collection having to be kept for every budget.
+ */
+export function splitCollectionLink(link: string): { handle: string; filters: Filters } {
+  const [handle, query = ""] = link.split("?");
+  const q = new URLSearchParams(query);
+  return {
+    handle,
+    filters: {
+      brands: (q.get("vendor") ?? "").split(",").map((v) => v.trim()).filter(Boolean),
+      min: Number(q.get("minPrice")) || 0,
+      max: Number(q.get("maxPrice")) || 0,
+      inStock: q.get("inStock") === "1",
+      onSale: q.get("onSale") === "1",
+    },
+  };
+}
+
 const SORTS = [
   { key: "manual", ar: "مميّز", en: "Featured" },
   { key: "newest", ar: "الأحدث", en: "Newest" },
@@ -130,7 +150,7 @@ const SORTS = [
  * collection, and the grid keeps loading as the shopper scrolls.
  */
 export function CollectionPage({
-  handle,
+  handle: link,
   title,
   settings: c,
   ar,
@@ -142,9 +162,10 @@ export function CollectionPage({
   ar: boolean;
   handlers?: ScreenHandlers;
 }) {
+  const { handle, filters: preset } = useMemo(() => splitCollectionLink(link), [link]);
   const [sort, setSort] = useState(c.sortDefault || "manual");
-  const [filters, setFilters] = useState<Filters>(NO_FILTERS);
-  const [draft, setDraft] = useState<Filters>(NO_FILTERS);
+  const [filters, setFilters] = useState<Filters>(preset);
+  const [draft, setDraft] = useState<Filters>(preset);
   const [panel, setPanel] = useState(false);
   const [single, setSingle] = useState(false);
   const [reply, setReply] = useState<CollectionReply | null>(null);
@@ -203,12 +224,22 @@ export function CollectionPage({
 
   const facets = reply?.facets;
   const brandsLine = (facets?.vendors ?? []).slice(0, 5).map((v) => v.name).join(" · ");
-  const heading = reply?.collection.title || title || handle;
-  const subtitle =
-    c.heroSubtitle ||
-    [reply ? `${reply.collection.productCount || reply.total}+ ${ar ? "قطعة" : "pieces"}` : "", brandsLine]
-      .filter(Boolean)
-      .join(" · ");
+  const heading = reply?.collection.title || (title && title !== link ? title : "") || handle;
+  // A page opened on a price range says which range it is.
+  const range =
+    preset.min > 0 && preset.max > 0
+      ? `${money(preset.min, ar)} – ${money(preset.max, ar)}`
+      : preset.max > 0
+        ? `${ar ? "حتى" : "Under"} ${money(preset.max, ar)}`
+        : preset.min > 0
+          ? `${money(preset.min, ar)}+`
+          : "";
+  const subtitle = range
+    ? [range, reply ? `${reply.total} ${ar ? "قطعة" : "pieces"}` : ""].filter(Boolean).join(" · ")
+    : c.heroSubtitle ||
+      [reply ? `${reply.collection.productCount || reply.total}+ ${ar ? "قطعة" : "pieces"}` : "", brandsLine]
+        .filter(Boolean)
+        .join(" · ");
   const active =
     filters.brands.length + (filters.min > 0 || filters.max > 0 ? 1 : 0) + (filters.inStock ? 1 : 0) + (filters.onSale ? 1 : 0);
   const columns = single ? 1 : c.columns === 3 ? 3 : 2;

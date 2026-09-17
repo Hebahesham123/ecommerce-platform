@@ -508,8 +508,13 @@ export function LinkPicker({
       return found ? (ar ? found.ar : found.en) : value.screen;
     }
     if (value.handle) {
-      const found = collections.find((c) => c.handle === value.handle);
-      return found ? found.title : value.handle;
+      const [base, query = ""] = value.handle.split("?");
+      const found = collections.find((c) => c.handle === base);
+      const q = new URLSearchParams(query);
+      const min = Number(q.get("minPrice")) || 0;
+      const max = Number(q.get("maxPrice")) || 0;
+      const range = min || max ? ` · ${min || 0}–${max || "∞"}` : "";
+      return (found ? found.title : base === "all" ? (ar ? "كل المنتجات" : "All products") : base) + range;
     }
     return ar ? "لا يفتح شيئاً" : "Opens nothing";
   };
@@ -524,8 +529,9 @@ export function LinkPicker({
    * a merchant looking at a section that is quietly empty and no way to tell
    * why, so it says so and colours itself to be noticed.
    */
+  const baseHandle = (value.handle ?? "").split("?")[0];
   const missing =
-    Boolean(value.handle) && !collections.some((c) => c.handle === value.handle);
+    Boolean(baseHandle) && baseHandle !== "all" && !collections.some((c) => c.handle === baseHandle);
 
   const allKinds = [
     { kind: "collection" as const, icon: IcTag, ar: "الأقسام", en: "Collections" },
@@ -634,16 +640,53 @@ export function LinkPicker({
               )}
 
               {open === "collection" && (
-                <CollectionList
-                  collections={collections}
-                  q={q}
-                  onQ={setQ}
-                  ar={ar}
-                  onPick={(handle) => {
-                    only({ handle });
-                    setOpen(null);
-                  }}
-                />
+                <>
+                  <CollectionList
+                    collections={[
+                      // The whole shop, which a price range narrows.
+                      { handle: "all", title: ar ? "كل المنتجات" : "All products", count: 0, image: null },
+                      ...collections,
+                    ]}
+                    q={q}
+                    onQ={setQ}
+                    ar={ar}
+                    onPick={(handle) => {
+                      const query = (value.handle ?? "").split("?")[1];
+                      only({ handle: query ? handle + "?" + query : handle });
+                      setOpen(null);
+                    }}
+                  />
+                  {!kinds && (
+                    <div className="border-t border-line p-2">
+                      <div className="text-[10px] font-semibold uppercase tracking-wide text-ink-soft">
+                        {ar ? "نطاق سعر (اختياري)" : "Price range (optional)"}
+                      </div>
+                      <div className="mt-1 flex items-center gap-1.5">
+                        {(["minPrice", "maxPrice"] as const).map((key) => {
+                          const [base, query = ""] = (value.handle || "all").split("?");
+                          const params = new URLSearchParams(query);
+                          return (
+                            <input
+                              key={key}
+                              type="number"
+                              min={0}
+                              value={params.get(key) ?? ""}
+                              placeholder={key === "minPrice" ? (ar ? "من" : "From") : ar ? "إلى" : "To"}
+                              onChange={(e) => {
+                                const n = Number(e.target.value);
+                                if (n > 0) params.set(key, String(n));
+                                else params.delete(key);
+                                const rest = params.toString();
+                                only({ handle: rest ? base + "?" + rest : base });
+                              }}
+                              className={`${input} h-8 text-xs`}
+                            />
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
 
               {open === "product" && (

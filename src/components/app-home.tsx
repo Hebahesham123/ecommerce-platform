@@ -354,7 +354,7 @@ function Heading({
   if (!title && !onSeeAll) return null;
   return (
     <div className="flex items-end justify-between gap-2">
-      <h3 className="min-w-0 truncate text-[16px] font-bold tracking-tight text-slate-900">{title}</h3>
+      <h3 dir="auto" className="min-w-0 truncate text-[16px] font-bold tracking-tight text-slate-900">{title}</h3>
       {onSeeAll && (
         <button
           onClick={onSeeAll}
@@ -1372,6 +1372,28 @@ function ComingUpLive({
   const radius = int(s.radius, 16);
   const cardBg = str(s.cardBg, "#ffffff");
   const remind = str(s.remindLabel, ar ? "ذكّريني" : "Remind me");
+  const reminded = str(s.remindedLabel, ar ? "تم التذكير" : "Reminder set");
+
+  // "Remind me" sets a reminder - it does not leave the screen. The session
+  // itself (its picture and name) is what opens the collection.
+  const [set, setSet] = useState<string[]>([]);
+  useEffect(() => {
+    try {
+      setSet(JSON.parse(localStorage.getItem("app_live_reminders") || "[]"));
+    } catch {
+      /* private browsing */
+    }
+  }, []);
+  const toggle = (id: string) =>
+    setSet((cur) => {
+      const next = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id];
+      try {
+        localStorage.setItem("app_live_reminders", JSON.stringify(next));
+      } catch {
+        /* private browsing */
+      }
+      return next;
+    });
 
   return (
     <section>
@@ -1384,22 +1406,28 @@ function ComingUpLive({
           const borrowed = inherit(item, data);
           return (
             <div key={item.id} className="flex items-center gap-3">
-              <Thumb src={borrowed.image} className="h-12 w-12 shrink-0" style={{ borderRadius: 10 }} />
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[12px] font-bold text-slate-900">
-                  {str(item.title, borrowed.title)}
-                </div>
-                {str(item.when) && (
-                  <div className="truncate text-[11px] text-slate-500">{str(item.when)}</div>
-                )}
-              </div>
+              <button onClick={() => go(item)} className="flex min-w-0 flex-1 items-center gap-3 text-start">
+                <Thumb src={borrowed.image} className="h-12 w-12 shrink-0" style={{ borderRadius: 10 }} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[12px] font-bold text-slate-900">
+                    {str(item.title, borrowed.title)}
+                  </span>
+                  {str(item.when) && (
+                    <span className="block truncate text-[11px] text-slate-500">{str(item.when)}</span>
+                  )}
+                </span>
+              </button>
               {remind && (
                 <button
-                  onClick={() => go(item)}
-                  className="shrink-0 rounded-full px-3 py-1.5 text-[11px] font-semibold text-white"
-                  style={{ background: accent }}
+                  onClick={() => toggle(item.id)}
+                  className="shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-semibold transition"
+                  style={
+                    set.includes(item.id)
+                      ? { background: "#ffffff", borderColor: accent, color: accent }
+                      : { background: accent, borderColor: accent, color: "#ffffff" }
+                  }
                 >
-                  {remind}
+                  {set.includes(item.id) ? `✓ ${reminded}` : remind}
                 </button>
               )}
             </div>
@@ -1917,6 +1945,7 @@ function RowHead({
       <div className="min-w-0">
         {title && (
           <h3
+            dir="auto"
             className="truncate font-bold tracking-tight text-slate-900"
             style={{ fontSize: titleSize }}
           >
@@ -2815,6 +2844,9 @@ function BrandTimeline({
   const go = opener(data, handlers);
   const [on, setOn] = useState(0);
   const [downX, setDownX] = useState<number | null>(null);
+  // Once the shopper takes hold - a tap on a mark, a swipe - the cards stop
+  // moving on their own, so the brand they chose is the one they tap.
+  const [held, setHeld] = useState(false);
   const caramel = str(s.accentColor, "#9d6540");
   const brown = str(s.brownColor, "#684329");
   const ink = str(s.inkColor, "#211a15");
@@ -2828,12 +2860,15 @@ function BrandTimeline({
 
   // A slide that is showing waits its turn, then hands over to the next.
   useEffect(() => {
-    if (!(seconds > 0) || items.length < 2) return;
+    if (!(seconds > 0) || items.length < 2 || held) return;
     const t = setTimeout(() => setOn((i) => (i + 1) % items.length), seconds * 1000);
     return () => clearTimeout(t);
-  }, [current, seconds, items.length]);
+  }, [current, seconds, items.length, held]);
 
-  const step = (by: number) => setOn((i) => (i + by + items.length) % items.length);
+  const step = (by: number) => {
+    setHeld(true);
+    setOn((i) => (i + by + items.length) % items.length);
+  };
 
   return (
     <section
@@ -2871,7 +2906,10 @@ function BrandTimeline({
           return (
             <button
               key={item.id}
-              onClick={() => setOn(i)}
+              onClick={() => {
+                setHeld(true);
+                setOn(i);
+              }}
               className="relative flex flex-1 flex-col items-center gap-1.5"
               aria-label={str(item.label, str(item.title))}
             >
@@ -2962,7 +3000,7 @@ function BrandTimeline({
             </div>
           ))}
         </div>
-        {seconds > 0 && items.length > 1 && (
+        {seconds > 0 && items.length > 1 && !held && (
           <span aria-hidden className="absolute inset-x-0 bottom-0 z-10 h-[3px] overflow-hidden bg-black/15">
             <span
               key={current}
@@ -3276,7 +3314,9 @@ function SectionBand({
   children: React.ReactNode;
 }) {
   const s = block.settings ?? {};
-  const kicker = str(s.kicker);
+  // The mystery box banner wears its line as a tag inside itself; drawing it
+  // above as well says it twice.
+  const kicker = block.type === "promo_card" && str(s.style) === "banner" ? "" : str(s.kicker);
   const band = str(s.band);
   const washed = band === "tint" || band === "paper";
 

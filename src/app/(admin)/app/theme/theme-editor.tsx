@@ -2433,6 +2433,7 @@ function BlockGroup({
           </Field>
 
           {block.type === "coming_up_live" && (
+            <>
             <Field label={ar ? "نص الزر" : "Button text"} type="text">
               <input
                 value={text("remindLabel")}
@@ -2441,6 +2442,15 @@ function BlockGroup({
                 className={input}
               />
             </Field>
+            <Field label={ar ? "نص الزر بعد الضغط" : "Button text once set"} type="text">
+              <input
+                value={text("remindedLabel")}
+                onChange={(e) => onPatch({ remindedLabel: e.target.value })}
+                placeholder={ar ? "تم التذكير" : "Reminder set"}
+                className={input}
+              />
+            </Field>
+            </>
           )}
 
           {block.type === "countdown_deals" && (

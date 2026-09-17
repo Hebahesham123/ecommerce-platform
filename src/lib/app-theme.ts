@@ -1060,6 +1060,7 @@ export function newBlock(type: BlockType): Block {
     coming_up_live: {
       title: "Coming up live",
       remindLabel: "Remind me",
+      remindedLabel: "Reminder set",
       cardBg: "",
       radius: 16,
       items: shape ? [shape.blank()] : [],
