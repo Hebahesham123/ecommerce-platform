@@ -2711,14 +2711,19 @@ const styles = StyleSheet.create({
 });
 `,
 
-    promo_card: `import React from "react";
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+    promo_card: `import React, { useEffect, useRef } from "react";
+import { Animated, Easing, Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { colors, spacing } from "../theme";
 import { openLink } from "./Pieces";
 
 export type PromoCardSettings = {
+  style?: string;
+  kicker?: string;
   title?: string;
   body?: string;
+  price?: string;
+  worth?: string;
+  stockNote?: string;
   buttonLabel?: string;
   handle?: string;
   productId?: string;
@@ -2726,8 +2731,17 @@ export type PromoCardSettings = {
   url?: string;
   imageUrl?: string;
   bg?: string;
+  bg2?: string;
+  glow?: string;
   textColor?: string;
   radius?: number;
+  height?: number;
+};
+
+type Openers = {
+  onOpenCollection?: (handle: string) => void;
+  onOpenProduct?: (id: string) => void;
+  onOpenScreen?: (screen: string) => void;
 };
 
 export function PromoCard({
@@ -2735,14 +2749,10 @@ export function PromoCard({
   onOpenCollection,
   onOpenProduct,
   onOpenScreen,
-}: {
-  settings: PromoCardSettings;
-  onOpenCollection?: (handle: string) => void;
-  onOpenProduct?: (id: string) => void;
-  onOpenScreen?: (screen: string) => void;
-}) {
+}: { settings: PromoCardSettings } & Openers) {
   if (!settings.title && !settings.body) return null;
   const go = () => openLink(settings, { onOpenCollection, onOpenProduct, onOpenScreen });
+  if (settings.style === "banner") return <MysteryBanner settings={settings} onOpen={go} />;
   const r = settings.radius && settings.radius > 0 ? settings.radius : 16;
   const bg = settings.bg || colors.accent;
   const ink = settings.textColor || "#ffffff";
@@ -2763,6 +2773,88 @@ export function PromoCard({
   );
 }
 
+/** The mystery box as a banner: a night gradient and a glowing gift box. */
+function MysteryBanner({ settings, onOpen }: { settings: PromoCardSettings; onOpen: () => void }) {
+  const bg = settings.bg || "#2a1433";
+  const bg2 = settings.bg2 || "#8a3b5c";
+  const glow = settings.glow || "#f6c453";
+  const ink = settings.textColor || "#ffffff";
+  const r = settings.radius && settings.radius > 0 ? settings.radius : 20;
+  const h = settings.height && settings.height > 0 ? settings.height : 196;
+
+  // The lid and the question mark bob gently, as if something inside is waking.
+  const bob = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(bob, { toValue: 1, duration: 1300, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(bob, { toValue: 0, duration: 1300, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [bob]);
+  const lift = bob.interpolate({ inputRange: [0, 1], outputRange: [0, -5] });
+
+  return (
+    <Pressable onPress={onOpen} style={[styles.banner, { minHeight: h, borderRadius: r, backgroundColor: bg }]}>
+      <View style={[styles.glowBig, { backgroundColor: bg2 }]} />
+      <View style={[styles.glowSmall, { backgroundColor: glow }]} />
+
+      <View style={styles.copy}>
+        {settings.kicker ? (
+          <View style={[styles.kicker, { borderColor: glow + "66", backgroundColor: glow + "1f" }]}>
+            <Text style={[styles.kickerText, { color: glow }]}>{"✦ " + settings.kicker.toUpperCase()}</Text>
+          </View>
+        ) : null}
+        {settings.title ? <Text style={[styles.bannerTitle, { color: ink }]}>{settings.title}</Text> : null}
+        {settings.body ? (
+          <Text style={[styles.bannerBody, { color: ink }]} numberOfLines={3}>
+            {settings.body}
+          </Text>
+        ) : null}
+        {settings.price || settings.worth ? (
+          <View style={styles.priceRow}>
+            {settings.price ? <Text style={[styles.price, { color: glow }]}>{settings.price}</Text> : null}
+            {settings.worth ? <Text style={[styles.worth, { color: ink }]}>{settings.worth}</Text> : null}
+          </View>
+        ) : null}
+        {settings.buttonLabel || settings.stockNote ? (
+          <View style={styles.ctaRow}>
+            {settings.buttonLabel ? (
+              <View style={[styles.bannerCta, { backgroundColor: glow }]}>
+                <Text style={[styles.bannerCtaText, { color: bg }]}>{settings.buttonLabel + " →"}</Text>
+              </View>
+            ) : null}
+            {settings.stockNote ? <Text style={[styles.stock, { color: ink }]}>{settings.stockNote}</Text> : null}
+          </View>
+        ) : null}
+      </View>
+
+      <View style={styles.art}>
+        {settings.imageUrl ? (
+          <Image source={{ uri: settings.imageUrl }} style={styles.artImage} resizeMode="contain" />
+        ) : (
+          <View style={styles.stage}>
+            <View style={[styles.halo, { backgroundColor: glow }]} />
+            <Text style={[styles.spark, { top: 6, left: 8, fontSize: 14, color: glow }]}>✦</Text>
+            <Text style={[styles.spark, { top: 26, right: 6, fontSize: 10, color: glow }]}>✦</Text>
+            <Text style={[styles.spark, { bottom: 40, left: 2, fontSize: 9, color: glow }]}>✦</Text>
+            <Animated.Text style={[styles.question, { textShadowColor: glow, transform: [{ translateY: lift }] }]}>?</Animated.Text>
+            <Animated.View style={[styles.lid, { backgroundColor: glow, transform: [{ translateY: lift }, { rotate: "-9deg" }] }]}>
+              <View style={[styles.ribbon, { backgroundColor: bg2 }]} />
+            </Animated.View>
+            <View style={[styles.box, { backgroundColor: glow }]}>
+              <View style={styles.boxShade} />
+              <View style={[styles.ribbon, { backgroundColor: bg2 }]} />
+            </View>
+          </View>
+        )}
+      </View>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   photo: { width: "100%", height: 112, backgroundColor: colors.page },
   body: { padding: spacing.lg },
@@ -2770,6 +2862,32 @@ const styles = StyleSheet.create({
   text: { marginTop: 4, fontSize: 11, lineHeight: 16, opacity: 0.8 },
   cta: { marginTop: spacing.md, alignSelf: "flex-start", borderRadius: 12, paddingHorizontal: 16, paddingVertical: 8 },
   ctaText: { fontSize: 12, fontWeight: "700" },
+
+  banner: { flexDirection: "row", overflow: "hidden" },
+  glowBig: { position: "absolute", width: 220, height: 220, borderRadius: 110, right: -70, bottom: -90, opacity: 0.7 },
+  glowSmall: { position: "absolute", width: 160, height: 160, borderRadius: 80, right: -20, bottom: -60, opacity: 0.18 },
+  copy: { flex: 1, justifyContent: "center", paddingVertical: spacing.lg, paddingLeft: spacing.lg, paddingRight: spacing.sm, gap: 6 },
+  kicker: { alignSelf: "flex-start", borderWidth: 1, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
+  kickerText: { fontSize: 9, fontWeight: "700", letterSpacing: 1.2 },
+  bannerTitle: { fontSize: 22, fontWeight: "800", lineHeight: 26 },
+  bannerBody: { fontSize: 11, lineHeight: 16, opacity: 0.78 },
+  priceRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "baseline", gap: 8 },
+  price: { fontSize: 15, fontWeight: "800" },
+  worth: { fontSize: 10, opacity: 0.72 },
+  ctaRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 4 },
+  bannerCta: { borderRadius: 999, paddingHorizontal: 14, paddingVertical: 6 },
+  bannerCtaText: { fontSize: 12, fontWeight: "700" },
+  stock: { fontSize: 10, fontWeight: "600", opacity: 0.8 },
+  art: { width: "44%", alignItems: "center", justifyContent: "center", paddingVertical: spacing.md },
+  artImage: { width: "100%", height: 150 },
+  stage: { width: 124, height: 132 },
+  halo: { position: "absolute", top: 16, left: 16, width: 92, height: 92, borderRadius: 46, opacity: 0.35 },
+  spark: { position: "absolute" },
+  question: { position: "absolute", top: 12, left: 50, width: 24, textAlign: "center", fontSize: 36, fontWeight: "900", color: "#ffffff", textShadowRadius: 12 },
+  lid: { position: "absolute", bottom: 62, left: 14, width: 96, height: 18, borderRadius: 6 },
+  box: { position: "absolute", bottom: 8, left: 20, width: 84, height: 56, borderBottomLeftRadius: 8, borderBottomRightRadius: 8, overflow: "hidden" },
+  boxShade: { position: "absolute", left: 0, right: 0, bottom: 0, height: 22, backgroundColor: "rgba(0,0,0,0.18)" },
+  ribbon: { position: "absolute", top: 0, bottom: 0, left: "50%", marginLeft: -7, width: 14 },
 });
 `,
 
@@ -3310,8 +3428,16 @@ function settingsLiteral(block: Block): string {
       "radius",
     ],
     promo_card: [
+      "style",
+      "kicker",
       "title",
       "body",
+      "price",
+      "worth",
+      "stockNote",
+      "bg2",
+      "glow",
+      "height",
       "buttonLabel",
       "handle",
       "url",

@@ -2259,6 +2259,190 @@ function StyleProfile({
   );
 }
 
+/**
+ * The mystery box as a banner: a night-sky gradient with a glowing gift box
+ * whose lid floats open and lets a question mark out. Everything the shopper
+ * reads - the tag, the price, what it is worth, how many are left - is the
+ * merchant's, and a picture of the real box can stand in for the drawing.
+ */
+function PromoBanner({
+  s,
+  onOpen,
+}: {
+  s: Record<string, unknown>;
+  onOpen: () => void;
+}) {
+  const bg = str(s.bg, "#2a1433");
+  const bg2 = str(s.bg2, "#8a3b5c");
+  const glow = str(s.glow, "#f6c453");
+  const ink = str(s.textColor, "#ffffff");
+  const radius = int(s.radius, 20);
+  const height = int(s.height, 0) || 196;
+  const art = str(s.imageUrl);
+  const sparkles = [
+    { top: "8%", left: "10%", size: 14, delay: "0s" },
+    { top: "22%", left: "82%", size: 10, delay: "0.6s" },
+    { top: "62%", left: "4%", size: 9, delay: "1.1s" },
+    { top: "4%", left: "58%", size: 8, delay: "1.6s" },
+  ];
+
+  return (
+    <section
+      onClick={onOpen}
+      className="relative flex cursor-pointer overflow-hidden"
+      style={{
+        minHeight: height,
+        borderRadius: radius,
+        background: `linear-gradient(135deg, ${bg} 0%, ${bg} 40%, ${bg2} 100%)`,
+      }}
+    >
+      {/* Starlight dots and two soft glows give the night its depth. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 opacity-60"
+        style={{
+          backgroundImage: "radial-gradient(rgba(255,255,255,0.14) 1px, transparent 1px)",
+          backgroundSize: "14px 14px",
+        }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -bottom-16 -end-10 h-56 w-56 rounded-full blur-2xl"
+        style={{ background: glow, opacity: 0.22 }}
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -start-12 -top-16 h-40 w-40 rounded-full blur-2xl"
+        style={{ background: bg2, opacity: 0.5 }}
+      />
+
+      <div className="relative z-10 flex min-w-0 flex-1 flex-col justify-center gap-1.5 py-4 pe-2 ps-4">
+        {str(s.kicker) && (
+          <span
+            dir="auto"
+            className="self-start rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.14em]"
+            style={{ color: glow, borderColor: `${glow}66`, background: `${glow}1f` }}
+          >
+            ✦ {str(s.kicker)}
+          </span>
+        )}
+        {str(s.title) && (
+          <div dir="auto" className="text-[22px] font-extrabold leading-tight" style={{ color: ink }}>
+            {str(s.title)}
+          </div>
+        )}
+        {str(s.body) && (
+          <p dir="auto" className="line-clamp-3 text-[11px] leading-relaxed" style={{ color: ink, opacity: 0.78 }}>
+            {str(s.body)}
+          </p>
+        )}
+        {(str(s.price) || str(s.worth)) && (
+          <div className="flex flex-wrap items-baseline gap-x-2">
+            {str(s.price) && (
+              <span dir="auto" className="text-[15px] font-extrabold" style={{ color: glow }}>
+                {str(s.price)}
+              </span>
+            )}
+            {str(s.worth) && (
+              <span dir="auto" className="text-[10px]" style={{ color: ink, opacity: 0.72 }}>
+                {str(s.worth)}
+              </span>
+            )}
+          </div>
+        )}
+        {(str(s.buttonLabel) || str(s.stockNote)) && (
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            {str(s.buttonLabel) && (
+              <span
+                dir="auto"
+                className="rounded-full px-3.5 py-1.5 text-[12px] font-bold shadow-lg"
+                style={{ background: glow, color: bg, boxShadow: `0 6px 18px ${glow}55` }}
+              >
+                {/* The arrow follows the label's own script, not the app's. */}
+                {str(s.buttonLabel)} {/[؀-ۿ]/.test(str(s.buttonLabel)) ? "←" : "→"}
+              </span>
+            )}
+            {str(s.stockNote) && (
+              <span dir="auto" className="text-[10px] font-semibold" style={{ color: ink, opacity: 0.8 }}>
+                {str(s.stockNote)}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="relative z-10 grid w-[44%] shrink-0 place-items-center py-3 pe-1">
+        {art ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={art}
+            alt=""
+            className="max-h-[150px] w-full object-contain"
+            style={{ filter: `drop-shadow(0 10px 22px ${glow}66)` }}
+          />
+        ) : (
+          <div aria-hidden className="relative h-[132px] w-[124px]">
+            <div className="absolute inset-3 rounded-full blur-xl" style={{ background: glow, opacity: 0.45 }} />
+            {/* Light escaping the box. */}
+            <div
+              className="app-mystery-rays absolute left-1/2 top-1 h-[104px] w-[104px] -ml-[52px] rounded-full"
+              style={{
+                background: `conic-gradient(from 0deg, transparent 0 8%, ${glow}66 10% 13%, transparent 15% 33%, ${glow}66 35% 38%, transparent 40% 58%, ${glow}66 60% 63%, transparent 65% 83%, ${glow}66 85% 88%, transparent 90%)`,
+                WebkitMaskImage: "radial-gradient(circle, #000 20%, transparent 70%)",
+                maskImage: "radial-gradient(circle, #000 20%, transparent 70%)",
+              }}
+            />
+            {sparkles.map((p) => (
+              <span
+                key={p.top + p.left}
+                className="app-mystery-twinkle absolute"
+                style={{ top: p.top, left: p.left, fontSize: p.size, color: glow, animationDelay: p.delay }}
+              >
+                ✦
+              </span>
+            ))}
+            {/* The question mark rising out of the box. */}
+            <span
+              className="app-mystery-float absolute left-1/2 top-[14px] -ml-[12px] w-6 text-center text-[36px] font-black leading-none"
+              style={{ color: "#ffffff", textShadow: `0 0 14px ${glow}, 0 0 4px ${glow}` }}
+            >
+              ?
+            </span>
+            {/* The lid, lifted and tilted. */}
+            <div className="app-mystery-lid absolute bottom-[62px] left-1/2 -ml-[48px] h-[18px] w-[96px]">
+              <div
+                className="h-full w-full rounded-md"
+                style={{
+                  background: `linear-gradient(180deg, rgba(255,255,255,0.35), rgba(0,0,0,0.18)), ${glow}`,
+                  transform: "rotate(-9deg)",
+                  boxShadow: "0 6px 12px rgba(0,0,0,0.25)",
+                }}
+              >
+                <div className="absolute inset-y-0 left-1/2 -ml-[7px] w-[14px]" style={{ background: bg2 }} />
+                <div
+                  className="absolute -top-[10px] left-1/2 -ml-[14px] h-[12px] w-[28px] rounded-t-full border-[4px] border-b-0"
+                  style={{ borderColor: bg2 }}
+                />
+              </div>
+            </div>
+            {/* The box. */}
+            <div
+              className="absolute bottom-2 left-1/2 -ml-[42px] h-[56px] w-[84px] overflow-hidden rounded-b-lg rounded-t-sm"
+              style={{
+                background: `linear-gradient(160deg, rgba(255,255,255,0.3), rgba(0,0,0,0.28)), ${glow}`,
+                boxShadow: `0 12px 24px rgba(0,0,0,0.35), inset 0 -8px 0 rgba(0,0,0,0.12)`,
+              }}
+            >
+              <div className="absolute inset-y-0 left-1/2 -ml-[7px] w-[14px]" style={{ background: bg2 }} />
+              <div className="absolute inset-x-0 top-0 h-[6px]" style={{ background: "rgba(0,0,0,0.25)" }} />
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 /** A solid colour card with a heading, a line and a button. */
 function PromoCard({
   block,
@@ -2278,6 +2462,8 @@ function PromoCard({
   const radius = int(s.radius, 16);
   const ink = str(s.textColor, "#ffffff");
   const button = str(s.buttonLabel);
+
+  if (str(s.style) === "banner") return <PromoBanner s={s} onOpen={() => go(s)} />;
 
   return (
     <section

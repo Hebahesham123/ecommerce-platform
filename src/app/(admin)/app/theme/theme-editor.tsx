@@ -1732,12 +1732,36 @@ function BlockGroup({
 
       {block.type === "promo_card" && (
         <>
+          <Field label={ar ? "الشكل" : "Look"} type="select">
+            <select value={text("style") || "card"} onChange={(e) => onPatch({ style: e.target.value })} className={input}>
+              <option value="card">{ar ? "بطاقة بلون واحد" : "Solid colour card"}</option>
+              <option value="banner">{ar ? "بانر الصندوق الغامض" : "Mystery box banner"}</option>
+            </select>
+          </Field>
+          {text("style") === "banner" && (
+            <Field label={ar ? "الوسم الصغير" : "Tag"} type="text">
+              <input value={text("kicker")} onChange={(e) => onPatch({ kicker: e.target.value })} placeholder="Surprise drop" className={input} />
+            </Field>
+          )}
           <Field label={ar ? "العنوان" : "Title"} type="text">
             <input value={text("title")} onChange={(e) => onPatch({ title: e.target.value })} className={input} />
           </Field>
           <Field label={ar ? "النص" : "Body"} type="richtext">
             <textarea value={text("body")} onChange={(e) => onPatch({ body: e.target.value })} rows={3} className={`${input} h-auto py-2`} />
           </Field>
+          {text("style") === "banner" && (
+            <>
+              <Field label={ar ? "السعر" : "Price"} type="text">
+                <input value={text("price")} onChange={(e) => onPatch({ price: e.target.value })} placeholder="You pay EGP 999" className={input} />
+              </Field>
+              <Field label={ar ? "القيمة الحقيقية" : "Worth"} type="text">
+                <input value={text("worth")} onChange={(e) => onPatch({ worth: e.target.value })} placeholder="Worth up to EGP 2,500" className={input} />
+              </Field>
+              <Field label={ar ? "ملاحظة الكمية" : "Stock note"} type="text">
+                <input value={text("stockNote")} onChange={(e) => onPatch({ stockNote: e.target.value })} placeholder="Only 40 boxes this week" className={input} />
+              </Field>
+            </>
+          )}
           <Field label={ar ? "نص الزر" : "Button text"} type="text">
             <input value={text("buttonLabel")} onChange={(e) => onPatch({ buttonLabel: e.target.value })} className={input} />
           </Field>
@@ -1762,17 +1786,42 @@ function BlockGroup({
               ar={ar}
             />
           </Field>
-          <Field label={ar ? "صورة أعلى البطاقة" : "Picture on top"} type="image_picker">
+          <Field
+            label={
+              text("style") === "banner"
+                ? ar ? "صورة بدل الصندوق المرسوم" : "Picture instead of the drawn box"
+                : ar ? "صورة أعلى البطاقة" : "Picture on top"
+            }
+            type="image_picker"
+          >
             <span className="flex items-center gap-2">
               <ImageUpload onUploaded={(url) => onPatch({ imageUrl: url })} ar={ar} />
               <input value={text("imageUrl")} onChange={(e) => onPatch({ imageUrl: e.target.value })} placeholder="https://…" className={input} dir="ltr" />
             </span>
           </Field>
-          <ColorRow label={ar ? "لون البطاقة" : "Card colour"} value={text("bg")} fallback={accent} onChange={(v) => onPatch({ bg: v })} input={input} ar={ar} />
+          <ColorRow
+            label={text("style") === "banner" ? (ar ? "لون الخلفية الأول" : "Background (start)") : ar ? "لون البطاقة" : "Card colour"}
+            value={text("bg")}
+            fallback={text("style") === "banner" ? "#2a1433" : accent}
+            onChange={(v) => onPatch({ bg: v })}
+            input={input}
+            ar={ar}
+          />
+          {text("style") === "banner" && (
+            <>
+              <ColorRow label={ar ? "لون الخلفية الثاني" : "Background (end)"} value={text("bg2")} fallback="#8a3b5c" onChange={(v) => onPatch({ bg2: v })} input={input} ar={ar} />
+              <ColorRow label={ar ? "لون التوهج والصندوق" : "Glow & box colour"} value={text("glow")} fallback="#f6c453" onChange={(v) => onPatch({ glow: v })} input={input} ar={ar} />
+            </>
+          )}
           <ColorRow label={ar ? "لون النص" : "Text colour"} value={text("textColor")} fallback="#ffffff" onChange={(v) => onPatch({ textColor: v })} input={input} ar={ar} />
           <Field label={ar ? "استدارة الحواف" : "Corner radius"} type="range">
             <input type="number" min={0} max={32} value={num("radius", 16)} onChange={(e) => onPatch({ radius: Number(e.target.value) })} className={input} />
           </Field>
+          {text("style") === "banner" && (
+            <Field label={ar ? "ارتفاع البانر" : "Banner height"} type="range">
+              <input type="number" min={140} max={320} value={num("height", 196) || 196} onChange={(e) => onPatch({ height: Number(e.target.value) })} className={input} />
+            </Field>
+          )}
         </>
       )}
 

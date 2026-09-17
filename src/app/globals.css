@@ -371,3 +371,33 @@ body {
   font-family: var(--font-display), "Playfair Display", Georgia, "Times New Roman", serif;
   letter-spacing: -0.01em;
 }
+
+/* App theme: the mystery box banner - a floating lid, a rising question
+   mark, turning light and twinkling sparkles. Still for anyone who asks. */
+@keyframes app-mystery-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+@keyframes app-mystery-lid {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-4px) rotate(-3deg); }
+}
+@keyframes app-mystery-rays {
+  to { transform: rotate(360deg); }
+}
+@keyframes app-mystery-twinkle {
+  0%, 100% { opacity: 0.25; transform: scale(0.7); }
+  50% { opacity: 1; transform: scale(1.1); }
+}
+.app-mystery-float { animation: app-mystery-float 2.6s ease-in-out infinite; }
+.app-mystery-lid { animation: app-mystery-lid 2.6s ease-in-out infinite; }
+.app-mystery-rays { animation: app-mystery-rays 14s linear infinite; }
+.app-mystery-twinkle { animation: app-mystery-twinkle 1.8s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .app-mystery-float,
+  .app-mystery-lid,
+  .app-mystery-rays,
+  .app-mystery-twinkle {
+    animation: none;
+  }
+}
