@@ -55,6 +55,7 @@ import {
   CART_KEY,
   readCart,
   readWishlist,
+  Saved,
   WISHLIST_KEY,
   type CartLine,
   type Wish,
@@ -176,6 +177,7 @@ export function ThemeEditor() {
   const [cart, setCart] = useState<CartLine[]>([]);
   const [shopper, setShopper] = useState<string | null>(null);
   const [signInOpen, setSignInOpen] = useState(false);
+  const [savedOpen, setSavedOpen] = useState(false);
   const [cartReady, setCartReady] = useState(false);
   const [wishlist, setWishlist] = useState<Wish[]>([]);
 
@@ -981,6 +983,8 @@ export function ThemeEditor() {
                 }}
                 cartCount={cartCount}
                 onBag={() => setPage("cart")}
+                wishlistCount={wishlist.length}
+                onWishlist={() => setSavedOpen(true)}
               />
 
               {draft.settings.stripEnabled && (
@@ -1197,6 +1201,22 @@ export function ThemeEditor() {
                     setShopper(who);
                     setSignInOpen(false);
                   }}
+                />
+              </Sheet>
+              <Sheet
+                open={savedOpen}
+                onClose={() => setSavedOpen(false)}
+                title={ar ? "المفضّلة" : "Saved"}
+              >
+                <Saved
+                  ar={ar}
+                  accent={draft.settings.accent}
+                  items={wishlist}
+                  onOpen={(id) => {
+                    setSavedOpen(false);
+                    push({ kind: "product", id });
+                  }}
+                  onRemove={(id) => setWishlist((w) => w.filter((x) => x.id !== id))}
                 />
               </Sheet>
             </div>

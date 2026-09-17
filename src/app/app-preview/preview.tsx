@@ -118,7 +118,7 @@ export function Preview() {
   const [ready, setReady] = useState(false);
   const [cart, setCart] = useState<CartLine[]>([]);
   const [wishlist, setWishlist] = useState<Wish[]>([]);
-  const [sheet, setSheet] = useState<"signin" | "returns" | "enquiry" | null>(null);
+  const [sheet, setSheet] = useState<"signin" | "returns" | "enquiry" | "wishlist" | null>(null);
   const log = useApiLog();
   const [showLog, setShowLog] = useState(false);
   // The theme arrives with /home, which the Shop tab fetches. Until it does,
@@ -286,6 +286,8 @@ export function Preview() {
             }}
             cartCount={count}
             onBag={() => setTab("cart")}
+            wishlistCount={wishlist.length}
+            onWishlist={() => setSheet("wishlist")}
           />
 
           {brand.stripEnabled && (
@@ -444,6 +446,22 @@ export function Preview() {
             title={ar ? "استفسار" : "Ask a question"}
           >
             <Enquiry ar={ar} />
+          </Sheet>
+          <Sheet
+            open={sheet === "wishlist"}
+            onClose={() => setSheet(null)}
+            title={ar ? "المفضّلة" : "Saved"}
+          >
+            <Saved
+              ar={ar}
+              accent={accent}
+              items={wishlist}
+              onOpen={(id) => {
+                setSheet(null);
+                openProductLink(id);
+              }}
+              onRemove={(id) => setWishlist((w) => w.filter((x) => x.id !== id))}
+            />
           </Sheet>
         </div>
       </div>
@@ -903,5 +921,71 @@ function Row({ label, onClick }: { label: string; onClick: () => void }) {
       {label}
       <span className="text-slate-300">›</span>
     </button>
+  );
+}
+
+/**
+ * What the shopper has hearted.
+ *
+ * Read from the same saved list the hearts on the product cards write to, so
+ * it is always what they pressed. Each entry keeps its own name, price and
+ * picture, which is why it can draw without asking the shop for anything:
+ * tapping one opens the product, where the price is checked for real.
+ */
+export function Saved({
+  ar,
+  accent,
+  items,
+  onOpen,
+  onRemove,
+}: {
+  ar: boolean;
+  accent: string;
+  items: Wish[];
+  onOpen: (id: string) => void;
+  onRemove: (id: string) => void;
+}) {
+  if (!items.length) {
+    return (
+      <Empty>
+        {ar ? "لا شيء في المفضّلة بعد. اضغطي القلب على أي منتج لحفظه." : "Nothing saved yet. Tap the heart on any product to keep it here."}
+      </Empty>
+    );
+  }
+  return (
+    <ul className="space-y-2">
+      {items.map((w) => (
+        <li key={w.id} className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-2">
+          <button
+            onClick={() => onOpen(w.id)}
+            className="flex min-w-0 flex-1 items-center gap-3 text-start"
+          >
+            <span className="h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-slate-100">
+              {w.image && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={w.image} alt="" className="h-full w-full object-cover" />
+              )}
+            </span>
+            <span className="min-w-0">
+              <span className="line-clamp-2 block text-[12px] leading-snug text-slate-800">{w.name}</span>
+              {w.price != null && (
+                <span className="mt-0.5 block text-[13px] font-bold" style={{ color: accent }}>
+                  {money(w.price, ar)}
+                </span>
+              )}
+            </span>
+          </button>
+          <button
+            onClick={() => onRemove(w.id)}
+            aria-label={ar ? "إزالة من المفضّلة" : "Remove from saved"}
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-full"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill={accent} stroke={accent} strokeWidth="2">
+              <path d="M20.8 5.6a5 5 0 0 0-7.1 0L12 7.3l-1.7-1.7a5 5 0 1 0-7.1 7.1l8.8 8.8 8.8-8.8a5 5 0 0 0 0-7.1Z" />
+            </svg>
+          </button>
+        </li>
+      ))}
+    </ul>
   );
 }
