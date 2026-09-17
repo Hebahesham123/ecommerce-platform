@@ -54,7 +54,10 @@ import {
   Cart,
   CART_KEY,
   readCart,
+  readWishlist,
+  WISHLIST_KEY,
   type CartLine,
+  type Wish,
 } from "@/app/app-preview/preview";
 import { Orders, SignIn } from "@/app/app-preview/screens";
 import { Sheet } from "@/app/app-preview/ui";
@@ -174,9 +177,11 @@ export function ThemeEditor() {
   const [shopper, setShopper] = useState<string | null>(null);
   const [signInOpen, setSignInOpen] = useState(false);
   const [cartReady, setCartReady] = useState(false);
+  const [wishlist, setWishlist] = useState<Wish[]>([]);
 
   useEffect(() => {
     setCart(readCart());
+    setWishlist(readWishlist());
     setShopper(getToken() ? getPhone() : null);
     setCartReady(true);
   }, []);
@@ -189,6 +194,30 @@ export function ThemeEditor() {
       /* private browsing */
     }
   }, [cart, cartReady]);
+
+  useEffect(() => {
+    if (!cartReady) return;
+    try {
+      localStorage.setItem(WISHLIST_KEY, JSON.stringify(wishlist));
+    } catch {
+      /* private browsing */
+    }
+  }, [wishlist, cartReady]);
+
+  /** Press the heart: on the list if it was not, off it if it was. */
+  const toggleWish = useCallback(
+    (card: { id: string; name: string; priceMin: number | null; image: string | null }) => {
+      setWishlist((w) =>
+        w.some((x) => x.id === card.id)
+          ? w.filter((x) => x.id !== card.id)
+          : [
+              ...w,
+              { id: card.id, name: card.name, price: card.priceMin ?? undefined, image: card.image ?? undefined },
+            ],
+      );
+    },
+    [],
+  );
 
   const addToCart = useCallback((itemId: string) => {
     setCart((c) => {
@@ -1094,13 +1123,13 @@ export function ThemeEditor() {
                               push({ kind: "collection", handle, title }),
                             onOpenProduct: (id) => push({ kind: "product", id }),
                             onOpenScreen: showScreen,
-                            // Drawn, but wired to nothing. This preview earns
-                            // its keep by showing the card the app will show,
-                            // and a card missing its heart and its add button
-                            // is not that card. There is no basket to fill
-                            // here, so the buttons sit there looking right.
-                            onAddToCart: () => {},
-                            onToggleWishlist: () => {},
+                            // The heart and the add button work here as they do
+                            // in the test app, on the same saved list and basket,
+                            // so a merchant pressing either sees something happen
+                            // rather than wondering if it is broken.
+                            onAddToCart: (variantId) => addToCart(variantId),
+                            onToggleWishlist: toggleWish,
+                            wishlist: wishlist.map((w) => w.id),
                           }}
                           showPlaceholders
                         />
