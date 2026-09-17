@@ -391,8 +391,9 @@ export function ThemeEditor() {
     });
   }
 
-  function add(type: BlockType) {
-    const block = newBlock(type);
+  function add(type: BlockType, preset?: Record<string, unknown>) {
+    const made = newBlock(type);
+    const block = preset ? { ...made, settings: { ...made.settings, ...preset } } : made;
     setDraft((d) => (d ? { ...d, blocks: [...d.blocks, block] } : d));
     setOpen((s) => ({ ...s, [block.id]: true }));
   }
@@ -891,6 +892,35 @@ export function ThemeEditor() {
                 {ar ? "إضافة قسم" : "Add a section"}
               </div>
               <div className="mt-2 flex flex-wrap gap-1.5">
+                {/* A circle row already dressed the way noon draws its
+                    category rows, so it does not have to be built by hand. */}
+                <button
+                  onClick={() =>
+                    add("circle_row", {
+                      title: ar ? "تسوّقي لها" : "Shop Her",
+                      seeAllLabel: ar ? "تسوّقي الآن" : "Shop Now",
+                      shape: "rounded",
+                      radius: 22,
+                      size: 104,
+                      titleSize: 20,
+                      labelSize: 13,
+                      labelBold: true,
+                      labelColor: "#1f2937",
+                      linkColor: "#3866df",
+                      bg: "#f3f3f3",
+                      showNote: false,
+                    })
+                  }
+                  title={
+                    ar
+                      ? "صف أقسام بصور مربعة مستديرة وعنوان كبير ورابط، مثل نون"
+                      : "A row of rounded category tiles under a big heading and a link, the way noon does it"
+                  }
+                  className="btn-outline h-8 gap-1 border-brand-300 px-2.5 text-xs text-brand-700"
+                >
+                  <IcPlus className="h-3 w-3" />
+                  {ar ? "صف أقسام (نون)" : "Category row (noon)"}
+                </button>
                 {(Object.keys(BLOCK_META) as BlockType[]).map((type) => (
                   <button
                     key={type}
@@ -1269,10 +1299,12 @@ function Group({
               open ? "rotate-90" : ""
             } rtl:-scale-x-100`}
           />
-          <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{title}</span>
-          {subtitle && (
-            <span className="shrink-0 font-mono text-[10px] text-ink-soft">{subtitle}</span>
-          )}
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="truncate text-sm font-medium text-ink">{title}</span>
+            {subtitle && (
+              <span className="truncate font-mono text-[10px] text-ink-soft">{subtitle}</span>
+            )}
+          </span>
         </button>
         {actions}
         {codeHref && (
@@ -1409,6 +1441,10 @@ function BlockGroup({
 }) {
   const meta = BLOCK_META[block.type];
   const s = block.settings ?? {};
+  /** What the merchant called this section, if anything. */
+  const ownName = [s.title, s.heading, s.kicker]
+    .map((v) => (typeof v === "string" ? v.trim() : ""))
+    .find(Boolean);
   const text = (k: string) => (typeof s[k] === "string" ? (s[k] as string) : "");
   const num = (k: string, d: number) => (Number(s[k]) > 0 ? Number(s[k]) : d);
   const num0 = (k: string, d: number) => {
@@ -1446,8 +1482,12 @@ function BlockGroup({
       blockKey={block.id}
       highlighted={highlighted}
       onHover={onHover}
-      title={ar ? meta.ar : meta.en}
-      subtitle={`${componentName(block.type)}.tsx`}
+      title={ownName || (ar ? meta.ar : meta.en)}
+      subtitle={
+        ownName
+          ? `${ar ? meta.ar : meta.en} · ${componentName(block.type)}.tsx`
+          : `${componentName(block.type)}.tsx`
+      }
       open={open}
       onToggle={onToggle}
       codeHref={`/app/theme/code?file=components/${componentName(block.type)}.tsx`}
