@@ -23,6 +23,7 @@ import {
   useTestStreamAction,
 } from "./actions";
 import { listStoreProducts, type StoreProduct } from "../../store/actions";
+import { CameraCheck } from "./camera-check";
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui";
 import {
@@ -466,6 +467,7 @@ function LiveDrawer({
   const [editing, setEditing] = useState(false);
   const [showKey, setShowKey] = useState(false);
   const [picker, setPicker] = useState(false);
+  const [checking, setChecking] = useState(false);
 
   async function run(label: string, fn: () => Promise<{ ok: boolean; error?: string; data?: unknown }>) {
     setErr(null);
@@ -536,8 +538,8 @@ function LiveDrawer({
                   <div className="mt-3 rounded-xl border border-dashed border-line p-3">
                     <p className="text-xs text-ink-soft">
                       {ar
-                        ? "لا يوجد حساب بث بعد. يمكنك تجربة كل شيء — البدء، الدردشة، تثبيت المنتج، الإنهاء، التسجيل — على فيديو تجريبي."
-                        : "No streaming account yet. You can rehearse everything — going on air, chat, pinning, ending, the replay — on a sample video."}
+                        ? "لا يوجد حساب بث بعد. يمكنك تجربة كل شيء — البدء، الدردشة، تثبيت المنتج، الإنهاء، التسجيل — على مقطع جاهز. ملاحظة: هذا ليس كاميرتك، بل فيديو ثابت لتجربة الخطوات فقط."
+                        : "No streaming account yet. You can rehearse everything — going on air, chat, pinning, ending, the replay — on a fixed clip. Note it is NOT your camera: it is a stand-in so the steps can be walked."}
                     </p>
                     <button
                       onClick={() => run("test", () => useTestStreamAction(live.id))}
@@ -605,6 +607,9 @@ function LiveDrawer({
                   <IcRefresh className="h-4 w-4" /> {ar ? "تحديث التسجيل" : "Check for replay"}
                 </button>
               )}
+              <button onClick={() => setChecking(true)} className="btn-outline h-10 px-4 text-sm">
+                {ar ? "فحص الكاميرا" : "Camera check"}
+              </button>
               <button onClick={() => setEditing(true)} className="btn-outline h-10 px-4 text-sm">
                 {ar ? "تعديل" : "Edit"}
               </button>
@@ -710,6 +715,8 @@ function LiveDrawer({
           }}
         />
       )}
+
+      {checking && <CameraCheck ar={ar} onClose={() => setChecking(false)} />}
 
       {picker && (
         <ProductPicker
