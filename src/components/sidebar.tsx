@@ -51,7 +51,7 @@ const groups: Group[] = [
     label: "group_store",
     items: [
       { href: "/dashboard", key: "nav_overview", icon: IcOverview },
-      { href: "/orders", key: "nav_orders", icon: IcOrders, badge: 7 },
+      { href: "/orders", key: "nav_orders", icon: IcOrders },
       { href: "/returns", key: "nav_returns", icon: IcRefresh },
       { href: "/products", key: "nav_products", icon: IcProducts },
       { href: "/collections", key: "nav_collections", icon: IcCollection },
