@@ -256,23 +256,54 @@ export async function setLocationActive(
 // has to be read page by page or the grid silently shows only the first slice.
 const PAGE_SIZE = 1000;
 
+/**
+ * The catalogue, briefly remembered.
+ *
+ * Four screens - the overview, products, inventory and collections - each want
+ * the whole catalogue, and a merchant moving between them was waiting for
+ * four thousand rows to come down the wire every single time. The rows are
+ * held for a few seconds instead, so the second screen opens at once, and any
+ * write here drops the copy so nobody is shown a stale count.
+ */
+let cached: { at: number; items: InventoryItem[] } | null = null;
+const CACHE_MS = 20_000;
+
+/** Called by every write below: the next read goes back to the database. */
+function forgetInventory() {
+  cached = null;
+}
+
 export async function listInventory(): Promise<ActionResult<InventoryItem[]>> {
   if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  if (cached && Date.now() - cached.at < CACHE_MS) return { ok: true, data: cached.items };
   try {
     const supabase = getServerSupabase();
-    const rows: Row[] = [];
-    for (let from = 0; ; from += PAGE_SIZE) {
-      const { data, error } = await supabase
+    const read = (from: number) =>
+      supabase
         .from("inventory_items")
-        .select("*, inventory_levels(*)")
+        .select("*, inventory_levels(*)", { count: "exact" })
         .order("created_at", { ascending: true })
         .range(from, from + PAGE_SIZE - 1);
-      if (error) return { ok: false, error: error.message };
-      const page = (data ?? []) as Row[];
-      rows.push(...page);
-      if (page.length < PAGE_SIZE) break;
+
+    // The first page also says how many there are, so the rest are fetched
+    // together rather than one after another.
+    const first = await read(0);
+    if (first.error) return { ok: false, error: first.error.message };
+    const rows = [...((first.data ?? []) as Row[])];
+    const total = first.count ?? rows.length;
+    if (total > PAGE_SIZE) {
+      const rest = await Promise.all(
+        Array.from({ length: Math.ceil((total - PAGE_SIZE) / PAGE_SIZE) }, (_, i) => read((i + 1) * PAGE_SIZE)),
+      );
+      for (const page of rest) {
+        if (page.error) return { ok: false, error: page.error.message };
+        rows.push(...((page.data ?? []) as Row[]));
+      }
     }
-    return { ok: true, data: rows.map(rowToItem) };
+
+    const items = rows.map(rowToItem);
+    cached = { at: Date.now(), items };
+    return { ok: true, data: items };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }
@@ -281,6 +312,7 @@ export async function listInventory(): Promise<ActionResult<InventoryItem[]>> {
 export async function createItem(
   item: InventoryItem,
 ): Promise<ActionResult<{ id: string }>> {
+  forgetInventory();
   if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
   try {
     const supabase = getServerSupabase();
@@ -320,6 +352,7 @@ export async function createItem(
 export async function createItems(
   items: InventoryItem[],
 ): Promise<ActionResult<{ count: number }>> {
+  forgetInventory();
   if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
   if (items.length === 0) return { ok: true, data: { count: 0 } };
   try {
@@ -359,6 +392,7 @@ export async function updateItem(
   id: string,
   item: InventoryItem,
 ): Promise<ActionResult> {
+  forgetInventory();
   if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
   try {
     const supabase = getServerSupabase();
@@ -384,6 +418,7 @@ export async function updateItem(
  * rewriting what a customer was charged for — the order still reads the same.
  */
 export async function deleteItems(ids: string[]): Promise<ActionResult<number>> {
+  forgetInventory();
   if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
   const clean = [...new Set(ids.filter(Boolean))];
   if (!clean.length) return { ok: true, data: 0 };
@@ -405,6 +440,7 @@ export async function setItemsStatus(
   ids: string[],
   status: "active" | "draft" | "archived",
 ): Promise<ActionResult<number>> {
+  forgetInventory();
   if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
   const clean = [...new Set(ids.filter(Boolean))];
   if (!clean.length) return { ok: true, data: 0 };
@@ -425,6 +461,7 @@ export async function setItemsStatus(
 }
 
 export async function deleteItem(id: string): Promise<ActionResult> {
+  forgetInventory();
   if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
   try {
     const supabase = getServerSupabase();
@@ -448,6 +485,7 @@ export async function setLevel(
   locationId: string,
   fields: { onHand?: number; committed?: number; incoming?: number },
 ): Promise<ActionResult> {
+  forgetInventory();
   if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
   try {
     const supabase = getServerSupabase();
