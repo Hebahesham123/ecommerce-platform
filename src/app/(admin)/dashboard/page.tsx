@@ -147,7 +147,7 @@ export default function DashboardPage() {
         subtitle={ar ? "أهلاً هبة 👋 — نظرة سريعة على أداء متجرك اليوم." : "Good morning, Heba 👋 — here's your store today."}
         actions={
           <>
-            <Link href="/store" className="btn-outline">{ar ? "زيارة المتجر" : "Visit store"}</Link>
+            <Link href="/shop" className="btn-outline">{ar ? "زيارة المتجر" : "Visit store"}</Link>
             <Link href="/inventory?new=1" className="btn-primary">{ar ? "إضافة منتج" : "Add product"}</Link>
           </>
         }

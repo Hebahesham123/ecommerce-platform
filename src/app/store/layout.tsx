@@ -7,13 +7,8 @@ import { useI18n, egp } from "@/lib/i18n";
 import { CartProvider, useCart } from "./cart";
 import { IcX } from "@/components/icons";
 import type { Lang } from "@/lib/i18n";
+import { STOREFRONT_HOME } from "@/lib/storefront";
 
-/**
- * Where "home" is for a shopper: the published theme at /shop, which is what
- * they were browsing. (/store is the separate React storefront.) Checkout
- * already uses this convention.
- */
-const STOREFRONT_HOME = "/shop";
 
 /**
  * The theme storefront keeps the shopper's chosen language in `sf_locale`, so

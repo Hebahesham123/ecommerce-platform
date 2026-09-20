@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useI18n, egp, num } from "@/lib/i18n";
 import { getOrderByNumber, setOrderExperience } from "../../actions";
 import { DELIVERY_SLOTS } from "@/lib/offers";
+import { STOREFRONT_HOME } from "@/lib/storefront";
 
 type OrderRow = Record<string, unknown>;
 function ymd(d: Date) {
@@ -207,7 +208,7 @@ export default function OrderConfirmationPage({ params }: { params: Promise<{ nu
       )}
 
       <div className="mt-5 flex flex-col items-center gap-2">
-        <Link href="/store" className="inline-flex rounded-xl bg-rose-600 px-6 py-3 text-base font-semibold text-white shadow-md transition hover:bg-rose-700">{ar ? "متابعة التسوّق" : "Continue shopping"}</Link>
+        <Link href={STOREFRONT_HOME} className="inline-flex rounded-xl bg-rose-600 px-6 py-3 text-base font-semibold text-white shadow-md transition hover:bg-rose-700">{ar ? "متابعة التسوّق" : "Continue shopping"}</Link>
         <span className="text-xs text-slate-400">{ar ? "احتفظي برقم الطلب للمتابعة" : "Keep your order number for tracking"}</span>
       </div>
     </div>

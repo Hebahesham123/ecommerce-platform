@@ -9,12 +9,8 @@ import {
   type CustomerProfile, type CouponPreview,
 } from "../actions";
 import { normalizePhone } from "@/lib/phone";
+import { STOREFRONT_HOME } from "@/lib/storefront";
 
-/**
- * Where "home" is for a shopper in checkout: the published theme at /shop,
- * which is what they were browsing. (/store is the separate React storefront.)
- */
-const STOREFRONT_HOME = "/shop";
 
 const GOVERNORATES = [
   "القاهرة", "الجيزة", "الإسكندرية", "القليوبية", "الدقهلية", "الشرقية",
