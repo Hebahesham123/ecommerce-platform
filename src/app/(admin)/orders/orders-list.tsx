@@ -19,6 +19,7 @@ import {
   type OrderDetail,
 } from "./actions";
 import { PageHeader } from "@/components/page-header";
+import { DataTable, type Column } from "@/components/data-table";
 import { Card } from "@/components/ui";
 import {
   KpiStrip,
@@ -240,6 +241,101 @@ export function OrdersList({ lockChannel }: { lockChannel?: Channel } = {}) {
     });
   }
 
+  // Ranked by use. The order number and customer name the card, the money and
+  // the payment state sit on its face, and the rest waits behind the chevron.
+  const columns: Column<(typeof pg.items)[number]>[] = [
+    {
+      key: "order",
+      header: t("col_order"),
+      rank: "title",
+      cell: (o) => (
+        <span className="flex items-center gap-1.5">
+          <span className="font-semibold text-ink">#{o.id}</span>
+          {o.flag && <IcFile className="h-3.5 w-3.5 text-ink-soft" />}
+          <span className="font-normal text-ink-muted sm:hidden">· {o.customer}</span>
+        </span>
+      ),
+    },
+    {
+      key: "total",
+      header: t("col_total"),
+      rank: "primary",
+      align: "end",
+      cell: (o) => <span className="font-semibold text-ink">{egp(o.total, lang)}</span>,
+    },
+    {
+      key: "payment",
+      header: t("col_payment"),
+      rank: "primary",
+      cell: (o) => {
+        const m = paymentMeta(String(o.payment));
+        return <StatusPill label={ar ? m.ar : m.en} tone={m.tone} hollow={m.hollow} />;
+      },
+    },
+    {
+      key: "date",
+      header: t("col_date"),
+      rank: "secondary",
+      cell: (o) => <span className="text-ink-muted">{fmtDate(o.date)}</span>,
+    },
+    {
+      key: "customer",
+      header: t("col_customer"),
+      rank: "secondary",
+      cell: (o) => (
+        <span className="block min-w-0">
+          <span className="block truncate font-medium text-ink">{o.customer}</span>
+          <span className="block text-xs text-ink-soft" dir="ltr">
+            {o.phone}
+          </span>
+        </span>
+      ),
+    },
+    {
+      key: "fulfillment",
+      header: t("col_fulfillment"),
+      rank: "secondary",
+      cell: (o) => {
+        const m = fulfillMeta(String(o.fulfillment));
+        return <StatusPill label={ar ? m.ar : m.en} tone={m.tone} hollow={m.hollow} />;
+      },
+    },
+    {
+      key: "items",
+      header: ar ? "الأصناف" : "Items",
+      rank: "secondary",
+      align: "end",
+      cell: (o) => (
+        <span className="text-ink-muted">
+          {num(o.itemsCount, lang)} <span className="text-ink-soft">{ar ? "صنف" : "items"}</span>
+        </span>
+      ),
+      hideBelow: "lg",
+    },
+    {
+      key: "governorate",
+      header: t("col_governorate"),
+      rank: "secondary",
+      cell: (o) => (
+        <span className="flex items-center gap-2">
+          <span className="text-ink-muted">{o.governorate}</span>
+          {o.flag && <StatusPill label={flagLabel(o.flag)} tone={flagPill[o.flag]} />}
+        </span>
+      ),
+      hideBelow: "lg",
+    },
+    ...(lockChannel
+      ? []
+      : [
+          {
+            key: "channel",
+            header: t("col_channel"),
+            rank: "secondary" as const,
+            cell: (o: (typeof pg.items)[number]) => <ChannelBadge value={o.channel} />,
+          },
+        ]),
+  ];
+
   return (
     <>
       <PageHeader
@@ -257,12 +353,8 @@ export function OrdersList({ lockChannel }: { lockChannel?: Channel } = {}) {
               ? "إدارة ومتابعة الطلبات"
               : "Manage & track orders"
         }
-        actions={
-          <>
-            <button className="btn-outline">{t("export")}</button>
-            <button className="btn-primary">{ar ? "إنشاء طلب" : "Create order"}</button>
-          </>
-        }
+        actions={<button className="btn-outline h-10">{t("export")}</button>}
+        primary={{ label: ar ? "إنشاء طلب" : "Create order" }}
       />
 
       <Card className="overflow-hidden">
@@ -350,96 +442,24 @@ export function OrdersList({ lockChannel }: { lockChannel?: Channel } = {}) {
           </Toolbar>
         )}
 
-        {/* Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1080px] text-sm">
-            <thead>
-              <tr className="border-b border-line text-xs text-ink-soft">
-                <th className="w-10 ps-5 pe-2 py-3">
-                  <Checkbox checked={allSelected} indeterminate={someSelected} onChange={toggleAll} />
-                </th>
-                <th className="px-3 py-3 text-start font-medium">{t("col_order")}</th>
-                <th className="px-3 py-3 text-start font-medium">{t("col_date")}</th>
-                <th className="px-3 py-3 text-start font-medium">{t("col_customer")}</th>
-                <th className="px-3 py-3 text-end font-medium">{t("col_total")}</th>
-                <th className="px-3 py-3 text-start font-medium">{t("col_payment")}</th>
-                <th className="px-3 py-3 text-start font-medium">{t("col_fulfillment")}</th>
-                <th className="px-3 py-3 text-end font-medium">{ar ? "الأصناف" : "Items"}</th>
-                <th className="px-3 py-3 text-start font-medium">{t("col_governorate")}</th>
-                {!lockChannel && (
-                  <th className="px-5 py-3 text-start font-medium">{t("col_channel")}</th>
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {pg.items.map((o) => {
-                const sel = selected.has(o.id);
-                return (
-                  <tr
-                    key={o.id}
-                    onClick={() => setDetail(o)}
-                    className={`cursor-pointer border-b border-line last:border-0 transition-colors hover:bg-surface-page ${
-                      sel ? "bg-brand-50/40" : ""
-                    }`}
-                  >
-                    <td className="ps-5 pe-2 py-3.5">
-                      <Checkbox checked={sel} onChange={() => toggleOne(o.id)} />
-                    </td>
-                    <td className="px-3 py-3.5">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-semibold text-ink">#{o.id}</span>
-                        {o.flag && <IcFile className="h-3.5 w-3.5 text-ink-soft" />}
-                      </div>
-                    </td>
-                    <td className="px-3 py-3.5 text-ink-muted">{fmtDate(o.date)}</td>
-                    <td className="px-3 py-3.5">
-                      <div className="font-medium text-ink">{o.customer}</div>
-                      <div className="text-xs text-ink-soft" dir="ltr">{o.phone}</div>
-                    </td>
-                    <td className="px-3 py-3.5 text-end font-semibold text-ink">
-                      {egp(o.total, lang)}
-                    </td>
-                    <td className="px-3 py-3.5">
-                      {(() => {
-                        const m = paymentMeta(String(o.payment));
-                        return <StatusPill label={ar ? m.ar : m.en} tone={m.tone} hollow={m.hollow} />;
-                      })()}
-                    </td>
-                    <td className="px-3 py-3.5">
-                      {(() => {
-                        const m = fulfillMeta(String(o.fulfillment));
-                        return <StatusPill label={ar ? m.ar : m.en} tone={m.tone} hollow={m.hollow} />;
-                      })()}
-                    </td>
-                    <td className="px-3 py-3.5 text-end text-ink-muted">
-                      {num(o.itemsCount, lang)} <span className="text-ink-soft">{ar ? "صنف" : "items"}</span>
-                    </td>
-                    <td className="px-3 py-3.5">
-                      <div className="flex items-center gap-2">
-                        <span className="text-ink-muted">{o.governorate}</span>
-                        {o.flag && <StatusPill label={flagLabel(o.flag)} tone={flagPill[o.flag]} />}
-                      </div>
-                    </td>
-                    {!lockChannel && (
-                      <td className="px-5 py-3.5">
-                        <ChannelBadge value={o.channel} />
-                      </td>
-                    )}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-
-          {filtered.length === 0 && (
-            <div className="py-16 text-center">
+        {/* Rows: a table on a desktop, cards a thumb can open on a phone */}
+        <DataTable
+          flush
+          rows={pg.items}
+          columns={columns}
+          getKey={(o) => o.id}
+          onRowClick={(o) => setDetail(o)}
+          selectable={(o) => <Checkbox checked={selected.has(o.id)} onChange={() => toggleOne(o.id)} />}
+          selectAll={<Checkbox checked={allSelected} indeterminate={someSelected} onChange={toggleAll} />}
+          empty={
+            <div className="py-10 text-center">
               <div className="font-semibold text-ink">{ar ? "لا توجد طلبات مطابقة" : "No matching orders"}</div>
               <p className="mt-1 text-sm text-ink-soft">
                 {ar ? "جرّب تعديل الفلاتر." : "Try adjusting your filters."}
               </p>
             </div>
-          )}
-        </div>
+          }
+        />
 
         <Pagination {...pg} />
       </Card>

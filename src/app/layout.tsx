@@ -44,11 +44,12 @@ export default async function RootLayout({
   // The storefront records the shopper's language in `sf_locale`. Resolving it
   // here means the first paint — html dir/lang included — is already correct,
   // instead of rendering Arabic and correcting it after hydration.
-  // No cookie means the admin, which is Arabic-first, so the default stands.
+  // No cookie means the admin, which reads English by default; a merchant who
+  // switches to Arabic is remembered by that same cookie.
   const locale = (await cookies()).get("sf_locale")?.value;
   const initialLang: Lang | undefined =
     locale === "ar" || locale === "en" ? locale : undefined;
-  const lang: Lang = initialLang ?? "ar";
+  const lang: Lang = initialLang ?? "en";
   const dir = lang === "ar" ? "rtl" : "ltr";
 
   // Whichever pixel the merchant configured, or nothing at all. Hardcoding an
@@ -63,11 +64,11 @@ export default async function RootLayout({
       suppressHydrationWarning
     >
       <head>
-        {/* Apply the theme before paint to avoid a flash. Admin defaults to dark
-            unless the user picked light; the storefront (/store) stays light. */}
+        {/* Apply the theme before paint to avoid a flash. Light is the default
+            everywhere; dark is applied only when the merchant asked for it. */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `try{var s=location.pathname.indexOf('/store')===0;if(!s&&localStorage.getItem('theme')!=='light')document.documentElement.classList.add('dark')}catch(e){}`,
+            __html: `try{if(localStorage.getItem('theme')==='dark')document.documentElement.classList.add('dark')}catch(e){}`,
           }}
         />
       </head>

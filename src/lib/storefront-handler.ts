@@ -24,6 +24,7 @@ import { searchProducts, type ProductDrop } from "@/lib/storefront-data";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { getActiveNudge, recordNudgeEvent } from "@/lib/nudge-service";
 import { nudgeScript } from "@/lib/nudge-script";
+import { analyticsScript } from "@/lib/analytics-script";
 
 const escHtml = (s: string) =>
   s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] as string);
@@ -908,7 +909,8 @@ async function storefrontGet(req: Request, config: MountConfig): Promise<Respons
 
   // The account icon is identical for every shopper, so it stays cache-safe.
   // navLinksScript adds Reviews & Requests into the store menu (both cache-safe).
-  const inject = `${mountPathScript(mount)}${stockGuard}${localizationScript(mount)}${cartSync}${accountLinkScript(mount)}${navLinksScript(mount)}${nudge}`;
+  // Counting the visit: the same figures the Website analytics page shows.
+  const inject = `${mountPathScript(mount)}${stockGuard}${localizationScript(mount)}${cartSync}${accountLinkScript(mount)}${navLinksScript(mount)}${nudge}${analyticsScript(mount)}`;
   const withLoc = res.html.includes("</body>")
     ? res.html.replace(/<\/body>/i, `${inject}</body>`)
     : res.html + inject;

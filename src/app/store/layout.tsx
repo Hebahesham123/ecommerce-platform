@@ -6,6 +6,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useI18n, egp } from "@/lib/i18n";
 import { CartProvider, useCart } from "./cart";
 import { IcX } from "@/components/icons";
+import { AnalyticsBeacon } from "@/components/analytics-beacon";
 import type { Lang } from "@/lib/i18n";
 import { STOREFRONT_HOME } from "@/lib/storefront";
 
@@ -55,6 +56,7 @@ export default function StoreLayout({ children }: { children: ReactNode }) {
   if (bare) {
     return (
       <CartProvider>
+        <AnalyticsBeacon />
         <div className="store-theme min-h-screen">{children}</div>
       </CartProvider>
     );
@@ -62,6 +64,8 @@ export default function StoreLayout({ children }: { children: ReactNode }) {
 
   return (
     <CartProvider>
+      {/* Counts this visit for Analytics → Website. */}
+      <AnalyticsBeacon />
       <div className="store-theme min-h-screen bg-white text-ink">
         <StoreHeader />
         <main className="mx-auto max-w-6xl px-4 py-6">{children}</main>

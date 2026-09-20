@@ -49,6 +49,18 @@ const dict = {
   requests_subtitle: { ar: "نموذج طلبات واستفسارات العملاء — مدمج", en: "Customer request & inquiry form — embedded" },
   nav_returns: { ar: "الاسترجاع والاستبدال", en: "Returns" },
   nav_settings: { ar: "الإعدادات", en: "Settings" },
+  nav_more: { ar: "المزيد", en: "More" },
+
+  // Analytics
+  group_analytics: { ar: "التحليلات", en: "Analytics" },
+  nav_web_analytics: { ar: "تحليلات الموقع", en: "Website analytics" },
+  nav_app_analytics: { ar: "تحليلات التطبيق", en: "App analytics" },
+
+  // Tables that become cards on a phone
+  dt_empty: { ar: "لا توجد بيانات", en: "Nothing here yet" },
+  dt_more: { ar: "التفاصيل", en: "Show details" },
+  dt_less: { ar: "إخفاء التفاصيل", en: "Hide details" },
+  dt_select_all: { ar: "تحديد الكل", en: "Select all" },
   group_store: { ar: "المتجر", en: "Store" },
   group_engage: { ar: "التواصل", en: "Engage" },
 
@@ -614,7 +626,9 @@ export function LangProvider({
    */
   initialLang?: Lang;
 }) {
-  const [lang, setLang] = useState<Lang>(initialLang ?? "ar");
+  // English is the default; Arabic is one tap away in the top bar and is
+  // remembered per browser.
+  const [lang, setLang] = useState<Lang>(initialLang ?? "en");
 
   useEffect(() => {
     // The server already knew the language: trusting localStorage here would

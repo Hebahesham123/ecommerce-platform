@@ -1,88 +1,50 @@
 "use client";
 
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  ResponsiveContainer, AreaChart, Area, BarChart, Bar, CartesianGrid, XAxis, Tooltip,
+  ResponsiveContainer, AreaChart, Area, CartesianGrid, XAxis, YAxis, Tooltip,
 } from "recharts";
 import { useI18n, egp, num } from "@/lib/i18n";
-import { salesSeries } from "@/lib/data";
 import {
-  type InventoryItem, totalAvailable, totalOnHand, stockStatus,
+  type InventoryItem, totalAvailable, stockStatus,
 } from "@/lib/inventory";
 import { listInventory } from "../inventory/actions";
 import { listStoreOrders, type PlacedOrder } from "../../store/actions";
 import { PageHeader } from "@/components/page-header";
-import { IcImage } from "@/components/icons";
+import { KpiCard, Panel, ChartFrame, chartAxis } from "@/components/analytics-ui";
 import { CHART, useIsDark, type ChartColor } from "@/lib/chart-theme";
 
+/**
+ * The overview.
+ *
+ * Every figure on this page is the merchant's own orders and stock, counted
+ * here - there is no sample series behind the chart and no placeholder revenue
+ * when a store is quiet. A new store sees zeroes and an empty chart, which is
+ * the truth, rather than a demo that flatters it.
+ */
 
-function Delta({ delta }: { delta: number }) {
-  const up = delta >= 0;
-  return (
-    <span className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-xs font-semibold ${up ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400" : "bg-rose-500/10 text-rose-600 dark:text-rose-400"}`}>
-      {up ? "▲" : "▼"}{Math.abs(delta)}%
-    </span>
-  );
-}
+const DAYS = 14;
 
-function Sparkline({ data, color, type }: { data: { v: number }[]; color: string; type: "area" | "bar" }) {
-  const gid = "g" + useId().replace(/[^a-zA-Z0-9]/g, "");
-  if (type === "bar") {
-    return (
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart data={data} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
-          <Bar dataKey="v" fill={color} radius={[2, 2, 0, 0]} />
-        </BarChart>
-      </ResponsiveContainer>
-    );
+/** The last N days as ISO dates, oldest first. */
+function lastDays(n: number) {
+  const out: string[] = [];
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  for (let i = n - 1; i >= 0; i--) {
+    const day = new Date(d);
+    day.setDate(d.getDate() - i);
+    out.push(day.toISOString().slice(0, 10));
   }
-  return (
-    <ResponsiveContainer width="100%" height="100%">
-      <AreaChart data={data} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
-        <defs>
-          <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity={0.3} />
-            <stop offset="100%" stopColor={color} stopOpacity={0} />
-          </linearGradient>
-        </defs>
-        <Area type="monotone" dataKey="v" stroke={color} strokeWidth={2} fill={`url(#${gid})`} dot={false} />
-      </AreaChart>
-    </ResponsiveContainer>
-  );
+  return out;
 }
 
-function KpiCard({
-  icon, tint, label, value, delta, data, color, type,
-}: {
-  icon: string; tint: string; label: string; value: string; delta?: number;
-  data: { v: number }[]; color: string; type: "area" | "bar";
-}) {
-  return (
-    <div className="rounded-2xl border border-line bg-surface p-5 shadow-card">
-      <div className="flex items-start justify-between">
-        <span className={`flex h-10 w-10 items-center justify-center rounded-xl text-lg ${tint}`}>{icon}</span>
-        {delta != null && <Delta delta={delta} />}
-      </div>
-      <div className="mt-4 text-sm text-ink-muted">{label}</div>
-      <div className="text-2xl font-bold tracking-tight text-ink">{value}</div>
-      <div className="mt-3 h-10">
-        <Sparkline data={data} color={color} type={type} />
-      </div>
-    </div>
-  );
-}
+const dayOf = (iso: string) => String(iso).slice(0, 10);
 
-function Panel({ title, action, children, className = "" }: { title: string; action?: React.ReactNode; children: React.ReactNode; className?: string }) {
-  return (
-    <div className={`rounded-2xl border border-line bg-surface shadow-card ${className}`}>
-      <div className="flex items-center justify-between px-5 pt-4 pb-3">
-        <h3 className="text-sm font-semibold text-ink">{title}</h3>
-        {action}
-      </div>
-      {children}
-    </div>
-  );
+/** How much this period is up or down on the one before it. */
+function delta(now: number, before: number): number | undefined {
+  if (!before) return undefined;
+  return Math.round(((now - before) / before) * 100);
 }
 
 export default function DashboardPage() {
@@ -93,133 +55,187 @@ export default function DashboardPage() {
 
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [placed, setPlaced] = useState<PlacedOrder[]>([]);
+  const [loading, setLoading] = useState(true);
 
+  // Orders first, on their own: the figures at the top of the page should not
+  // wait on a catalogue of a thousand products to finish loading.
   useEffect(() => {
-    (async () => {
-      const [inv, ord] = await Promise.all([listInventory(), listStoreOrders()]);
-      if (inv.ok) setItems(inv.data);
-      if (ord.ok) setPlaced(ord.data);
-    })();
+    listStoreOrders()
+      .then((ord) => ord.ok && setPlaced(ord.data))
+      // A failed read still ends the wait: a skeleton that never resolves
+      // reads as a broken page.
+      .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    listInventory().then((inv) => inv.ok && setItems(inv.data));
+  }, []);
+
+  const live = useMemo(() => placed.filter((o) => o.lifecycle !== "cancelled"), [placed]);
+
+  const days = useMemo(() => lastDays(DAYS), []);
+  const series = useMemo(() => {
+    const byDay = new Map(days.map((d) => [d, { sales: 0, orders: 0 }]));
+    for (const o of live) {
+      const slot = byDay.get(dayOf(o.createdAt || o.date));
+      if (!slot) continue;
+      slot.sales += o.total;
+      slot.orders += 1;
+    }
+    return days.map((d) => ({
+      day: d,
+      label: new Date(d).toLocaleDateString(ar ? "ar-EG" : "en-GB", { day: "numeric", month: "short" }),
+      ...byDay.get(d)!,
+    }));
+  }, [days, live, ar]);
+
+  // This fortnight against the one before it, so a delta means something.
   const stats = useMemo(() => {
-    const productCount = new Set(items.map((i) => i.productName)).size;
-    const low = items.filter((i) => stockStatus(totalAvailable(i)) === "low_stock").length;
-    const out = items.filter((i) => totalAvailable(i) <= 0).length;
-    const units = items.reduce((s, i) => s + totalOnHand(i), 0);
-    const revenue = placed.reduce((s, o) => s + o.total, 0);
-    const ordersCount = placed.length;
-    const aov = ordersCount ? Math.round(revenue / ordersCount) : 0;
-    const customers = new Set(placed.map((o) => o.phone)).size;
-    return { productCount, low, out, units, revenue, ordersCount, aov, customers };
-  }, [items, placed]);
+    const start = new Date(days[0]).getTime();
+    const before = start - DAYS * 86400000;
+    const inWindow = (o: PlacedOrder, from: number, to: number) => {
+      const at = new Date(o.createdAt || o.date).getTime();
+      return at >= from && at < to;
+    };
+    const nowOrders = live.filter((o) => inWindow(o, start, Date.now() + 86400000));
+    const prevOrders = live.filter((o) => inWindow(o, before, start));
+    const sum = (list: PlacedOrder[]) => list.reduce((s, o) => s + o.total, 0);
+    const revenue = sum(nowOrders);
+    const prevRevenue = sum(prevOrders);
+    const aov = nowOrders.length ? Math.round(revenue / nowOrders.length) : 0;
+    const prevAov = prevOrders.length ? Math.round(prevRevenue / prevOrders.length) : 0;
+    const customers = new Set(nowOrders.map((o) => o.phone)).size;
+    const prevCustomers = new Set(prevOrders.map((o) => o.phone)).size;
+    return {
+      revenue,
+      revenueDelta: delta(revenue, prevRevenue),
+      orders: nowOrders.length,
+      ordersDelta: delta(nowOrders.length, prevOrders.length),
+      aov,
+      aovDelta: delta(aov, prevAov),
+      customers,
+      customersDelta: delta(customers, prevCustomers),
+      allRevenue: sum(live),
+      allOrders: live.length,
+    };
+  }, [live, days]);
 
-  const revenue = stats.revenue || 128430;
-  const ordersCount = stats.ordersCount || 12842;
-  const aov = stats.aov || 541;
-  const customers = stats.customers || 3892;
-
-  const revData = salesSeries.map((d) => ({ v: d.sales }));
-  const ordData = salesSeries.map((d) => ({ v: d.orders }));
-  const aovData = salesSeries.map((d) => ({ v: d.orders ? Math.round(d.sales / d.orders) : 0 }));
-  const revenueSeries = salesSeries.map((d) => ({ label: ar ? d.day : d.dayEn, sales: d.sales }));
-
-  const featured = useMemo(
-    () => [...items].filter((i) => i.imageUrl && (i.price ?? 0) > 0).sort((a, b) => (b.price ?? 0) - (a.price ?? 0)).slice(0, 5),
-    [items],
-  );
-  const topPrice = featured[0]?.price ?? 1;
+  const stock = useMemo(() => {
+    const low = items.filter((i) => stockStatus(totalAvailable(i)) === "low_stock");
+    const out = items.filter((i) => totalAvailable(i) <= 0);
+    return { low, out, needs: [...out, ...low].slice(0, 5) };
+  }, [items]);
 
   const recentCustomers = useMemo(() => {
     const seen = new Map<string, { name: string; gov: string; total: number }>();
-    for (const o of placed) if (!seen.has(o.phone)) seen.set(o.phone, { name: o.customer, gov: o.governorate, total: o.total });
+    for (const o of live) if (!seen.has(o.phone)) seen.set(o.phone, { name: o.customer, gov: o.governorate, total: o.total });
     return [...seen.values()].slice(0, 5);
-  }, [placed]);
+  }, [live]);
 
-  const insight = ar
-    ? `إيراداتك ${egp(revenue, lang)} من ${num(ordersCount, lang)} طلب (متوسط ${egp(aov, lang)}). ${stats.low + stats.out > 0 ? `${num(stats.low + stats.out, lang)} منتج يحتاج إعادة تخزين.` : "المخزون في وضع جيد."}`
-    : `Revenue ${egp(revenue, lang)} across ${num(ordersCount, lang)} orders (avg ${egp(aov, lang)}). ${stats.low + stats.out > 0 ? `${num(stats.low + stats.out, lang)} products need restocking.` : "Inventory looks healthy."}`;
+  const period = ar ? `آخر ${DAYS} يوماً` : `Last ${DAYS} days`;
 
   return (
     <>
       <PageHeader
         title={t("nav_overview")}
-        subtitle={ar ? "أهلاً هبة 👋 — نظرة سريعة على أداء متجرك اليوم." : "Good morning, Heba 👋 — here's your store today."}
-        actions={
-          <>
-            <Link href="/shop" className="btn-outline">{ar ? "زيارة المتجر" : "Visit store"}</Link>
-            <Link href="/inventory?new=1" className="btn-primary">{ar ? "إضافة منتج" : "Add product"}</Link>
-          </>
+        subtitle={
+          ar
+            ? `${period} · ${num(stats.allOrders, lang)} طلب بإجمالي ${egp(stats.allRevenue, lang)} منذ البداية.`
+            : `${period} · ${num(stats.allOrders, lang)} orders worth ${egp(stats.allRevenue, lang)} all time.`
         }
+        actions={
+          <Link href="/shop" className="btn-outline h-10">
+            {ar ? "زيارة المتجر" : "Visit store"}
+          </Link>
+        }
+        primary={{ label: ar ? "إضافة منتج" : "Add product", href: "/inventory?new=1" }}
       />
 
-      {/* KPI cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard icon="💰" tint="bg-brand-100 text-brand-600" label={t("kpi_revenue")} value={egp(revenue, lang)} delta={12} data={revData} color={c("violet")} type="area" />
-        <KpiCard icon="📦" tint="bg-blue-500/10 text-blue-500" label={t("kpi_orders")} value={num(ordersCount, lang)} delta={8} data={ordData} color={c("blue")} type="bar" />
-        <KpiCard icon="📈" tint="bg-emerald-500/10 text-emerald-500" label={t("kpi_aov")} value={egp(aov, lang)} delta={3} data={aovData} color={c("green")} type="area" />
-        <KpiCard icon="👥" tint="bg-orange-500/10 text-orange-500" label={ar ? "العملاء" : "Customers"} value={num(customers, lang)} delta={5} data={ordData} color={c("orange")} type="area" />
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <KpiCard label={t("kpi_revenue")} value={egp(stats.revenue, lang)} delta={stats.revenueDelta} note={period} loading={loading} />
+        <KpiCard label={t("kpi_orders")} value={num(stats.orders, lang)} delta={stats.ordersDelta} note={period} loading={loading} />
+        <KpiCard label={t("kpi_aov")} value={egp(stats.aov, lang)} delta={stats.aovDelta} note={period} loading={loading} />
+        <KpiCard label={ar ? "العملاء" : "Customers"} value={num(stats.customers, lang)} delta={stats.customersDelta} note={period} loading={loading} />
       </div>
 
-      {/* Revenue overview + AI insight */}
-      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-3">
         <Panel
-          title={ar ? "نظرة على الإيرادات" : "Revenue Overview"}
           className="lg:col-span-2"
-          action={<span className="text-lg font-bold text-ink">{egp(revenue, lang)}</span>}
+          title={ar ? "الإيرادات" : "Revenue"}
+          action={<span className="text-sm font-semibold text-ink">{egp(stats.revenue, lang)}</span>}
         >
-          <div className="h-64 w-full px-2 pb-3" dir="ltr">
+          <ChartFrame empty={stats.orders === 0} emptyText={ar ? "لا طلبات في هذه الفترة." : "No orders in this period."}>
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={revenueSeries} margin={{ top: 8, right: 12, left: 12, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="revFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={c("violet")} stopOpacity={0.3} />
-                    <stop offset="100%" stopColor={c("violet")} stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid vertical={false} stroke="rgba(148,148,168,0.14)" />
-                <XAxis dataKey="label" tickLine={false} axisLine={false} tick={{ fontSize: 12, fill: "#8b8b9c" }} />
+              <AreaChart data={series} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                <CartesianGrid vertical={false} stroke="rgba(148,148,168,0.16)" />
+                <XAxis dataKey="label" {...chartAxis} interval="preserveStartEnd" />
+                <YAxis {...chartAxis} width={52} tickFormatter={(v) => num(Number(v), lang)} />
                 <Tooltip
                   cursor={{ stroke: "rgba(148,148,168,0.3)" }}
-                  content={({ active, payload, label }) => {
-                    if (!active || !payload?.length) return null;
-                    return (
-                      <div className="rounded-xl border border-line bg-surface px-3 py-2 text-xs shadow-pop">
+                  content={({ active, payload, label }) =>
+                    active && payload?.length ? (
+                      <div className="rounded-xl border border-line bg-surface px-3 py-2 text-xs">
                         <div className="font-semibold text-ink">{label}</div>
-                        <div className="mt-1 font-bold" style={{ color: c("violet") }}>{egp(Number(payload[0].value), lang)}</div>
+                        <div className="mt-1 text-ink-muted">{egp(Number(payload[0].value), lang)}</div>
                       </div>
-                    );
-                  }}
+                    ) : null
+                  }
                 />
-                <Area type="monotone" dataKey="sales" stroke={c("violet")} strokeWidth={2.5} fill="url(#revFill)" activeDot={{ r: 4 }} />
+                <Area type="monotone" dataKey="sales" stroke={c("violet")} strokeWidth={2} fill={c("violet")} fillOpacity={0.08} activeDot={{ r: 3 }} />
               </AreaChart>
             </ResponsiveContainer>
-          </div>
+          </ChartFrame>
         </Panel>
 
-        <div className="rounded-2xl border border-brand-500/30 bg-gradient-to-br from-brand-500/15 to-transparent p-5 shadow-card">
-          <div className="flex items-center gap-2 text-sm font-semibold text-brand-600 dark:text-brand-500">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-600 text-white">✦</span>
-            {ar ? "رؤية ذكية" : "AI Insight"}
+        <Panel
+          title={ar ? "المخزون" : "Stock to watch"}
+          action={
+            <Link href="/inventory" className="text-sm font-medium text-brand-600 hover:underline">
+              {t("view_all")}
+            </Link>
+          }
+        >
+          <div className="grid grid-cols-2 gap-2 px-4 pb-1">
+            <div className="rounded-xl border border-line px-3 py-2.5">
+              <div className="kpi-label">{ar ? "قارب على النفاد" : "Low stock"}</div>
+              <div className="mt-1 text-xl font-semibold text-ink">{num(stock.low.length, lang)}</div>
+            </div>
+            <div className="rounded-xl border border-line px-3 py-2.5">
+              <div className="kpi-label">{ar ? "نفد" : "Out of stock"}</div>
+              <div className="mt-1 text-xl font-semibold text-ink">{num(stock.out.length, lang)}</div>
+            </div>
           </div>
-          <p className="mt-3 text-sm leading-relaxed text-ink-muted">{insight}</p>
-          <Link href="/orders" className="mt-4 inline-flex text-sm font-semibold text-brand-600 hover:underline dark:text-brand-500">
-            {ar ? "عرض التقرير الكامل" : "View full report"} →
-          </Link>
-        </div>
+          {stock.needs.length === 0 ? (
+            <p className="px-4 py-4 text-sm text-ink-soft">{ar ? "كل المنتجات متوفرة." : "Everything is in stock."}</p>
+          ) : (
+            <ul className="px-2 py-2">
+              {stock.needs.map((i) => (
+                <li key={i.id} className="flex items-center gap-2 rounded-xl px-2 py-2 hover:bg-surface-hover">
+                  <span className="min-w-0 flex-1 truncate text-sm text-ink">{i.productName}</span>
+                  <span className={`badge ${totalAvailable(i) <= 0 ? "bg-rose-500/10 text-rose-600" : "bg-amber-500/10 text-amber-600"}`}>
+                    {num(totalAvailable(i), lang)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
       </div>
 
-      {/* Activity / Top products / Recent customers */}
-      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
-        {/* Recent orders (activity) */}
-        <Panel title={t("recent_orders")} action={<Link href="/orders" className="text-sm font-medium text-brand-600 hover:underline">{t("view_all")}</Link>}>
-          {placed.length === 0 ? (
-            <div className="px-5 pb-5 text-sm text-ink-soft">{ar ? "لا توجد طلبات بعد." : "No orders yet."}</div>
+      <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
+        <Panel
+          title={t("recent_orders")}
+          action={<Link href="/orders" className="text-sm font-medium text-brand-600 hover:underline">{t("view_all")}</Link>}
+        >
+          {live.length === 0 ? (
+            <p className="px-4 py-4 text-sm text-ink-soft">{ar ? "لا توجد طلبات بعد." : "No orders yet."}</p>
           ) : (
-            <ul className="px-3 pb-3">
-              {placed.slice(0, 5).map((o) => (
+            <ul className="px-2 pb-2">
+              {live.slice(0, 6).map((o) => (
                 <li key={o.id} className="flex items-center gap-3 rounded-xl px-2 py-2.5 hover:bg-surface-hover">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-100 text-sm font-semibold text-brand-600">{o.customer.trim().charAt(0)}</span>
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-page text-sm font-semibold text-ink-muted">
+                    {o.customer.trim().charAt(0)}
+                  </span>
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-medium text-ink">{o.customer}</div>
                     <div className="text-xs text-ink-soft">#{o.id} · {o.governorate}</div>
@@ -231,40 +247,19 @@ export default function DashboardPage() {
           )}
         </Panel>
 
-        {/* Top products */}
-        <Panel title={ar ? "المنتجات الأكثر مبيعاً" : "Top Products"} action={<Link href="/products" className="text-sm font-medium text-brand-600 hover:underline">{t("view_all")}</Link>}>
-          <ul className="space-y-2 px-4 pb-4">
-            {featured.length === 0 ? (
-              <li className="px-1 py-2 text-sm text-ink-soft">{ar ? "أضيفي منتجات لتظهر هنا." : "Add products to see them here."}</li>
-            ) : featured.map((p) => (
-              <li key={p.id} className="flex items-center gap-3">
-                <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-line bg-surface-page">
-                  {p.imageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={p.imageUrl} alt="" className="h-full w-full object-cover" />
-                  ) : (<span className="flex h-full w-full items-center justify-center"><IcImage className="h-4 w-4 text-ink-soft" /></span>)}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="line-clamp-1 text-sm font-medium text-ink">{p.productName}</div>
-                  <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-surface-hover">
-                    <div className="h-full rounded-full" style={{ width: `${Math.round(((p.price ?? 0) / topPrice) * 100)}%`, background: c("violet") }} />
-                  </div>
-                </div>
-                <span className="text-sm font-semibold text-ink">{p.price != null ? egp(p.price, lang) : "—"}</span>
-              </li>
-            ))}
-          </ul>
-        </Panel>
-
-        {/* Recent customers */}
-        <Panel title={ar ? "أحدث العملاء" : "Recent Customers"} action={<Link href="/customers" className="text-sm font-medium text-brand-600 hover:underline">{t("view_all")}</Link>}>
+        <Panel
+          title={ar ? "أحدث العملاء" : "Recent customers"}
+          action={<Link href="/customers" className="text-sm font-medium text-brand-600 hover:underline">{t("view_all")}</Link>}
+        >
           {recentCustomers.length === 0 ? (
-            <div className="px-5 pb-5 text-sm text-ink-soft">{ar ? "لا يوجد عملاء بعد." : "No customers yet."}</div>
+            <p className="px-4 py-4 text-sm text-ink-soft">{ar ? "لا يوجد عملاء بعد." : "No customers yet."}</p>
           ) : (
-            <ul className="px-3 pb-3">
+            <ul className="px-2 pb-2">
               {recentCustomers.map((cust, i) => (
                 <li key={i} className="flex items-center gap-3 rounded-xl px-2 py-2.5 hover:bg-surface-hover">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-hover text-sm font-semibold text-ink-muted">{cust.name.trim().charAt(0)}</span>
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-page text-sm font-semibold text-ink-muted">
+                    {cust.name.trim().charAt(0)}
+                  </span>
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-medium text-ink">{cust.name}</div>
                     <div className="text-xs text-ink-soft">{cust.gov}</div>

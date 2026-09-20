@@ -282,11 +282,13 @@ export default function ProductsPage() {
             <button className="btn-outline" onClick={() => router.push("/inventory")}>
               <IcInventory className="h-4 w-4" /> {t("manage_inventory")}
             </button>
-            <button className="btn-primary" onClick={() => setEditItem(emptyItem())}>
-              <IcPlus className="h-4 w-4" /> {t("add_product")}
-            </button>
           </>
         }
+        primary={{
+          label: t("add_product"),
+          onClick: () => setEditItem(emptyItem()),
+          icon: <IcPlus className="h-4 w-4" />,
+        }}
       />
 
       <div className="mb-4">

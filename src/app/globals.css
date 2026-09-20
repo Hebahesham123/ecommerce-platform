@@ -80,8 +80,32 @@ body {
 }
 
 @layer components {
+  /* A panel is a white sheet with a hairline around it. No shadow: a page of
+     cards that each float reads as noise, and the border alone separates them. */
   .card {
-    @apply rounded-2xl border border-line bg-surface shadow-card;
+    @apply rounded-2xl border border-line bg-surface;
+  }
+
+  /* ---- One type scale for the whole dashboard -------------------------------
+     Four sizes, each with one job, so a figure never competes with its label
+     and every table reads the same way. */
+  .kpi-label {
+    @apply text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-soft;
+  }
+  .kpi-value {
+    @apply text-[26px] font-semibold leading-none tracking-tight text-ink;
+  }
+  .kpi-note {
+    @apply text-[12px] text-ink-muted;
+  }
+  .section-title {
+    @apply text-[15px] font-semibold tracking-tight text-ink;
+  }
+  .th {
+    @apply px-3 py-2.5 text-start text-[11px] font-semibold uppercase tracking-[0.06em] text-ink-soft;
+  }
+  .td {
+    @apply px-3 py-3 align-middle text-sm text-ink;
   }
   .badge {
     @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium;

@@ -32,6 +32,7 @@ import {
   IcCode,
   IcEye,
   IcSignature,
+  IcChart,
 } from "./icons";
 import type { ComponentType, SVGProps } from "react";
 
@@ -111,6 +112,16 @@ const groups: Group[] = [
       { href: "/app/requests", key: "nav_app_requests", icon: IcClipboard },
       { href: "/app/connect", key: "nav_app_connect", icon: IcCode },
       { href: "/app-preview", key: "nav_app_preview", icon: IcEye },
+    ],
+  },
+  // Figures live together: the website and the app are two halves of the same
+  // question, and a merchant comparing them should not have to hunt.
+  {
+    id: "analytics",
+    label: "group_analytics",
+    items: [
+      { href: "/analytics/website", key: "nav_web_analytics", icon: IcChart },
+      { href: "/analytics/app", key: "nav_app_analytics", icon: IcChart },
     ],
   },
   {

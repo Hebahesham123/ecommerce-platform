@@ -308,3 +308,10 @@ export const IcAccounting = (p: P) => (
     <path d="M15 11.5v4M13 13.5h4" />
   </svg>
 );
+export const IcChart = (p: P) => (
+  <svg {...base(p)}>
+    <path d="M4 19V5" />
+    <path d="M4 19h16" />
+    <path d="M8 16v-5M12.5 16V8M17 16v-3" />
+  </svg>
+);

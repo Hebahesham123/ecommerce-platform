@@ -15,11 +15,10 @@ export function Topbar() {
 
   useEffect(() => {
     setIsMac(/Mac|iPhone|iPad|iPod/.test(navigator.platform));
-    // Admin defaults to dark unless the user explicitly chose light (also
-    // re-applies dark when returning from the always-light storefront).
-    let wantDark = true;
+    // Light is the default; dark is remembered only when the merchant picks it.
+    let wantDark = false;
     try {
-      wantDark = localStorage.getItem("theme") !== "light";
+      wantDark = localStorage.getItem("theme") === "dark";
     } catch {}
     document.documentElement.classList.toggle("dark", wantDark);
     setDark(wantDark);

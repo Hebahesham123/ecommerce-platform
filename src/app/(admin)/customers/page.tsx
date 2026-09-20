@@ -5,6 +5,7 @@ import { useI18n, egp, num } from "@/lib/i18n";
 import { labels, type PayMethod, type Lifecycle } from "@/lib/data";
 import { listStoreOrders } from "../../store/actions";
 import { PageHeader } from "@/components/page-header";
+import { DataTable, type Column } from "@/components/data-table";
 import { LifecycleBadge } from "@/components/status";
 import { Card, Avatar, Badge } from "@/components/ui";
 import {
@@ -264,6 +265,106 @@ export default function CustomersPage() {
     return `https://wa.me/2${digits.replace(/^0/, "")}`;
   }
 
+  // Ranked by use: who they are, what they have spent and how many orders -
+  // everything else waits behind a tap on a phone.
+  const columns: Column<(typeof pg.items)[number]>[] = [
+    {
+      key: "customer",
+      header: t("col_customer"),
+      rank: "title",
+      cell: (c) => (
+        <span className="flex items-center gap-3">
+          <span className="hidden sm:block">
+            <Avatar name={c.name} />
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate font-medium text-ink">{c.name}</span>
+            <span className="block text-xs text-ink-soft" dir="ltr">
+              {c.phone}
+            </span>
+          </span>
+        </span>
+      ),
+    },
+    {
+      key: "spent",
+      header: ar ? "إجمالي الإنفاق" : "Total spent",
+      rank: "primary",
+      cell: (c) => <span className="font-medium text-ink">{egp(c.totalSpent, lang)}</span>,
+    },
+    {
+      key: "orders",
+      header: t("nav_orders"),
+      rank: "primary",
+      cell: (c) => <span>{num(c.ordersCount, lang)} {ar ? "طلب" : "orders"}</span>,
+    },
+    {
+      key: "governorate",
+      header: t("col_governorate"),
+      rank: "secondary",
+      cell: (c) => <span className="text-ink-muted">{c.governorate}</span>,
+      hideBelow: "lg",
+    },
+    {
+      key: "last",
+      header: ar ? "آخر طلب" : "Last order",
+      rank: "secondary",
+      cell: (c) => (
+        <span className="text-ink-muted" dir="ltr">
+          {formatDate(c.lastDate)}
+        </span>
+      ),
+    },
+    {
+      key: "status",
+      header: ar ? "حالة الطلب" : "Order status",
+      rank: "secondary",
+      cell: (c) => (
+        <span className="flex flex-wrap items-center gap-1.5">
+          <LifecycleBadge v={c.lastStatus} />
+          {c.openCount > 1 && (
+            <span className="text-xs text-ink-soft">
+              {ar ? `+${num(c.openCount - 1, lang)} قيد التنفيذ` : `+${num(c.openCount - 1, lang)} open`}
+            </span>
+          )}
+        </span>
+      ),
+    },
+    {
+      key: "segment",
+      header: ar ? "الشريحة" : "Segment",
+      rank: "secondary",
+      cell: (c) => (
+        <span className="flex flex-wrap items-center gap-1.5">
+          {isVip(c) && <Badge className={segmentTone.vip}>VIP</Badge>}
+          {c.isRepeat ? (
+            <Badge className={segmentTone.repeat}>{ar ? "متكرر" : "Repeat"}</Badge>
+          ) : (
+            <Badge className={segmentTone.new}>{ar ? "جديد" : "New"}</Badge>
+          )}
+        </span>
+      ),
+      hideBelow: "xl",
+    },
+    {
+      key: "whatsapp",
+      header: "",
+      align: "end",
+      cell: (c) => (
+        <a
+          href={whatsappHref(c.phone)}
+          target="_blank"
+          rel="noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="btn-ghost inline-flex h-8 w-8 items-center justify-center p-0 text-emerald-600 hover:bg-emerald-500/10 dark:text-emerald-400"
+          aria-label="WhatsApp"
+        >
+          <IcWhatsApp className="h-4 w-4" />
+        </a>
+      ),
+    },
+  ];
+
   return (
     <>
       <PageHeader
@@ -364,139 +465,46 @@ export default function CustomersPage() {
           </span>
         </Toolbar>
 
-        {/* ---- Table ---- */}
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[960px] text-sm">
-            <thead>
-              <tr className="border-b border-line text-xs text-ink-soft">
-                <th className="px-5 py-3 text-start font-medium">{t("col_customer")}</th>
-                <th className="px-3 py-3 text-start font-medium">{t("col_governorate")}</th>
-                <th className="px-3 py-3 text-start font-medium">{t("nav_orders")}</th>
-                <th className="px-3 py-3 text-start font-medium">
-                  {ar ? "إجمالي الإنفاق" : "Total spent"}
-                </th>
-                <th className="px-3 py-3 text-start font-medium">
-                  {ar ? "آخر طلب" : "Last order"}
-                </th>
-                <th className="px-3 py-3 text-start font-medium">
-                  {ar ? "حالة الطلب" : "Order status"}
-                </th>
-                <th className="px-3 py-3 text-start font-medium">
-                  {ar ? "الشريحة" : "Segment"}
-                </th>
-                <th className="px-5 py-3 text-end font-medium"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {pg.items.map((c) => {
-                const vip = isVip(c);
-                return (
-                  <tr
-                    key={c.key}
-                    className="group border-b border-line transition-colors last:border-0 hover:bg-surface-page"
-                  >
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center gap-3">
-                        <Avatar name={c.name} />
-                        <div className="min-w-0">
-                          <div className="truncate font-medium text-ink">{c.name}</div>
-                          <div className="text-xs text-ink-soft" dir="ltr">
-                            {c.phone}
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-3 py-3.5 text-ink-muted">{c.governorate}</td>
-                    <td className="px-3 py-3.5 text-ink">{num(c.ordersCount, lang)}</td>
-                    <td className="px-3 py-3.5 font-medium text-ink">{egp(c.totalSpent, lang)}</td>
-                    <td className="px-3 py-3.5 text-ink-muted" dir="ltr">
-                      {formatDate(c.lastDate)}
-                    </td>
-                    <td className="px-3 py-3.5">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <LifecycleBadge v={c.lastStatus} />
-                        {/* Only worth saying when an earlier order is also still
-                            open — the badge already speaks for the newest one. */}
-                        {c.openCount > 1 && (
-                          <span className="text-xs text-ink-soft">
-                            {ar
-                              ? `+${num(c.openCount - 1, lang)} قيد التنفيذ`
-                              : `+${num(c.openCount - 1, lang)} open`}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-3 py-3.5">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        {vip && <Badge className={segmentTone.vip}>VIP</Badge>}
-                        {c.isRepeat ? (
-                          <Badge className={segmentTone.repeat}>
-                            {ar ? "متكرر" : "Repeat"}
-                          </Badge>
-                        ) : (
-                          <Badge className={segmentTone.new}>{ar ? "جديد" : "New"}</Badge>
-                        )}
-                        <span className="text-xs text-ink-soft">
-                          {t(labels.methodKey[c.method])}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-5 py-3.5 text-end">
-                      <a
-                        href={whatsappHref(c.phone)}
-                        target="_blank"
-                        rel="noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="btn-ghost inline-flex h-8 w-8 items-center justify-center p-0 text-emerald-600 opacity-0 hover:bg-emerald-500/10 group-hover:opacity-100 dark:text-emerald-400"
-                        aria-label="WhatsApp"
-                      >
-                        <IcWhatsApp className="h-4 w-4" />
-                      </a>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-
-          {filtered.length === 0 && (
-            <div className="flex flex-col items-center gap-3 py-16 text-center">
-              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-brand-600">
-                <IcCustomers className="h-6 w-6" />
-              </span>
-              <div>
-                <div className="font-semibold text-ink">
-                  {loading
-                    ? ar
-                      ? "جارٍ التحميل…"
-                      : "Loading…"
-                    : customers.length === 0
-                      ? ar
-                        ? "لا يوجد عملاء بعد"
-                        : "No customers yet"
-                      : ar
-                        ? "لا يوجد عملاء مطابقون"
-                        : "No matching customers"}
+        {/* ---- Rows: a table on a desktop, cards on a phone ---- */}
+        <div className="p-0 sm:p-0">
+          <DataTable
+            flush
+            rows={pg.items}
+            columns={columns}
+            getKey={(c) => c.key}
+            empty={
+              <div className="flex flex-col items-center gap-3 py-8 text-center">
+                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-surface-page text-ink-muted">
+                  <IcCustomers className="h-6 w-6" />
+                </span>
+                <div>
+                  <div className="font-semibold text-ink">
+                    {loading
+                      ? ar ? "جارٍ التحميل…" : "Loading…"
+                      : customers.length === 0
+                        ? ar ? "لا يوجد عملاء بعد" : "No customers yet"
+                        : ar ? "لا يوجد عملاء مطابقون" : "No matching customers"}
+                  </div>
+                  <p className="mt-1 text-sm text-ink-soft">
+                    {loading
+                      ? ""
+                      : customers.length === 0
+                        ? ar
+                          ? "سيظهر العملاء هنا بمجرد وصول أول طلب."
+                          : "Customers appear here as soon as the first order comes in."
+                        : ar
+                          ? "جرّب تعديل البحث أو الفلاتر."
+                          : "Try adjusting your search or filters."}
+                  </p>
                 </div>
-                <p className="mt-1 text-sm text-ink-soft">
-                  {loading
-                    ? ""
-                    : customers.length === 0
-                      ? ar
-                        ? "سيظهر العملاء هنا بمجرد وصول أول طلب."
-                        : "Customers appear here as soon as the first order comes in."
-                      : ar
-                        ? "جرّب تعديل البحث أو الفلاتر."
-                        : "Try adjusting your search or filters."}
-                </p>
+                {filtersActive && (
+                  <button className="btn-outline mt-1" onClick={clearFilters}>
+                    <IcX className="h-4 w-4" /> {t("clear_filters")}
+                  </button>
+                )}
               </div>
-              {filtersActive && (
-                <button className="btn-outline mt-1" onClick={clearFilters}>
-                  <IcX className="h-4 w-4" /> {t("clear_filters")}
-                </button>
-              )}
-            </div>
-          )}
+            }
+          />
         </div>
 
         <Pagination {...pg} />

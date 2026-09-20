@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Preview } from "./preview";
+import { AnalyticsBeacon } from "@/components/analytics-beacon";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,8 @@ export const dynamic = "force-dynamic";
 export default function Page() {
   return (
     <main className="min-h-screen bg-surface-page">
+      {/* The preview is the app: its visits belong to Analytics → App. */}
+      <AnalyticsBeacon channel="app" platform="web" />
       <div className="sticky top-0 z-20 border-b border-line bg-surface/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-3 lg:px-8">
           <Link
