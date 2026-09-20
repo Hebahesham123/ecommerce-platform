@@ -33,6 +33,7 @@ import {
   IcEye,
   IcSignature,
   IcChart,
+  IcVideo,
 } from "./icons";
 import type { ComponentType, SVGProps } from "react";
 
@@ -105,6 +106,7 @@ const groups: Group[] = [
     items: [
       { href: "/app", key: "nav_app_home", icon: IcMobile },
       { href: "/app/theme", key: "nav_app_theme", icon: IcTheme },
+      { href: "/lives", key: "nav_lives", icon: IcVideo },
       { href: "/app/orders", key: "nav_app_orders", icon: IcOrders },
       // Returns, exchanges and enquiries are one entry: on the storefront the
       // shopper fills in one form and picks between them, so two menu items

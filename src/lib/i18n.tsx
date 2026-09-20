@@ -47,6 +47,7 @@ const dict = {
   nav_requests: { ar: "الطلبات والاستفسارات", en: "Requests" },
   reviews_subtitle: { ar: "نموذج تقييم العملاء — مدمج", en: "Customer review form — embedded" },
   requests_subtitle: { ar: "نموذج طلبات واستفسارات العملاء — مدمج", en: "Customer request & inquiry form — embedded" },
+  nav_lives: { ar: "البث المباشر", en: "Lives" },
   nav_returns: { ar: "الاسترجاع والاستبدال", en: "Returns" },
   nav_settings: { ar: "الإعدادات", en: "Settings" },
   nav_more: { ar: "المزيد", en: "More" },
