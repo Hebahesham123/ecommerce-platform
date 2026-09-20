@@ -28,6 +28,8 @@ export type LiveStream = {
   hostName: string | null;
   coverUrl: string | null;
   status: LiveStatus;
+  /** "cloudflare" in earnest, "test" while rehearsing without an account. */
+  provider: string;
   scheduledAt: string | null;
   startedAt: string | null;
   endedAt: string | null;
@@ -67,6 +69,8 @@ export function watchableState(s: LiveStream): "live" | "replay" | "upcoming" | 
   if (s.status === "scheduled") return "upcoming";
   return "gone";
 }
+
+export const isTestStream = (s: { provider: string }) => s.provider === "test";
 
 /** Chat is only open while a live is on air. A replay's chat is history. */
 export const chatIsOpen = (s: LiveStream) => s.status === "live";
@@ -122,6 +126,7 @@ export function mapLiveStream(r: Row): LiveStream {
     hostName: s(r.host_name),
     coverUrl: s(r.cover_url),
     status: (r.status as LiveStatus) ?? "scheduled",
+    provider: String(r.provider ?? "cloudflare"),
     scheduledAt: s(r.scheduled_at),
     startedAt: s(r.started_at),
     endedAt: s(r.ended_at),

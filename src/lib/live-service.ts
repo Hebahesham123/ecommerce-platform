@@ -238,6 +238,44 @@ export async function prepareLive(id: string): Promise<Result<LiveStream>> {
   }
 }
 
+/**
+ * Rehearse the whole thing without a streaming account.
+ *
+ * Every part of a live except the video — going on air, the chat, the pinned
+ * product, the viewer count, ending, the replay — is ours, and none of it
+ * could be exercised before a card was on file somewhere. This points the
+ * live at a public sample video so the flow can be walked end to end.
+ *
+ * It is offered only while no real provider is configured, so it cannot be
+ * reached by accident once the shop is actually broadcasting, and the live is
+ * stamped provider = "test" so the dashboard can say so plainly.
+ */
+const TEST_PLAYBACK_URL =
+  "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8";
+
+export async function useTestStream(id: string): Promise<Result<LiveStream>> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  if (providerConfigured()) return { ok: false, error: "provider_already_configured" };
+  try {
+    const supabase = getServerSupabase();
+    const { data, error } = await supabase
+      .from(TABLE)
+      .update({
+        provider: "test",
+        playback_url: TEST_PLAYBACK_URL,
+        recording_url: TEST_PLAYBACK_URL,
+        ingest_url: null,
+        stream_key: null,
+      })
+      .eq("id", id)
+      .select(SELECT)
+      .single();
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, data: mapLiveStream(data) };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
 export async function setLiveStatus(
   id: string,
   status: "scheduled" | "live" | "ended" | "cancelled",

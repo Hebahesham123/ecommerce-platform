@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useI18n, egp, num } from "@/lib/i18n";
 import {
   deliveredMinutes,
+  isTestStream,
   estimatedCost,
   STATUS_LABELS,
   type LiveStatus,
@@ -19,6 +20,7 @@ import {
   saveLiveAction,
   setLiveProductsAction,
   setLiveStatusAction,
+  useTestStreamAction,
 } from "./actions";
 import { listStoreProducts, type StoreProduct } from "../../store/actions";
 import { PageHeader } from "@/components/page-header";
@@ -499,6 +501,11 @@ function LiveDrawer({
             <div className="flex items-center gap-2">
               <h2 className="truncate text-lg font-bold text-ink">{live.title}</h2>
               <StatusPill label={STATUS_LABELS[live.status][ar ? "ar" : "en"]} tone={statusTone[live.status]} />
+              {isTestStream(live) && (
+                <span className="badge bg-amber-500/10 text-amber-600 dark:text-amber-400">
+                  {ar ? "فيديو تجريبي" : "Test stream"}
+                </span>
+              )}
             </div>
             {live.subtitle && <p className="mt-0.5 truncate text-sm text-ink-muted">{live.subtitle}</p>}
           </div>
@@ -526,9 +533,20 @@ function LiveDrawer({
                   {busy === "prepare" ? (ar ? "جارٍ التجهيز…" : "Preparing…") : ar ? "تجهيز البث" : "Prepare live"}
                 </button>
                 {!providerReady && (
-                  <p className="mt-2 text-xs text-ink-soft">
-                    {ar ? "يتطلب ربط حساب Cloudflare." : "Needs the Cloudflare account connected."}
-                  </p>
+                  <div className="mt-3 rounded-xl border border-dashed border-line p-3">
+                    <p className="text-xs text-ink-soft">
+                      {ar
+                        ? "لا يوجد حساب بث بعد. يمكنك تجربة كل شيء — البدء، الدردشة، تثبيت المنتج، الإنهاء، التسجيل — على فيديو تجريبي."
+                        : "No streaming account yet. You can rehearse everything — going on air, chat, pinning, ending, the replay — on a sample video."}
+                    </p>
+                    <button
+                      onClick={() => run("test", () => useTestStreamAction(live.id))}
+                      disabled={busy === "test"}
+                      className="btn-outline mt-2 h-9 px-3 text-xs"
+                    >
+                      {ar ? "استخدمي فيديو تجريبي" : "Use a test stream"}
+                    </button>
+                  </div>
                 )}
               </>
             ) : (

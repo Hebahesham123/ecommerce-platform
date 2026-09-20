@@ -13,6 +13,7 @@ import {
   saveLive,
   setLiveProducts,
   setLiveStatus,
+  useTestStream,
   type LiveProductInput,
   type Result,
 } from "@/lib/live-service";
@@ -86,6 +87,11 @@ export async function listLiveMessagesAction(liveId: string): Promise<Result<Liv
 
 export async function hideLiveMessageAction(id: string, hidden: boolean): Promise<Result<void>> {
   return hideMessage(id, hidden);
+}
+
+/** Walk the whole flow on a sample video, while there is no account yet. */
+export async function useTestStreamAction(id: string): Promise<Result<LiveStream>> {
+  return useTestStream(id);
 }
 
 /** Whether the streaming account is wired up, so the page can say what to do. */
