@@ -12,6 +12,7 @@ import {
 } from "recharts";
 import { useI18n, egp, num } from "@/lib/i18n";
 import { PageHeader } from "@/components/page-header";
+import { DataTable, type Column } from "@/components/data-table";
 import { Card, Badge, SectionHeader } from "@/components/ui";
 import {
   StatTile,
@@ -171,16 +172,112 @@ export default function MarketingPage() {
     revenue: campaigns.filter((c) => c.channel === ch).reduce((s, c) => s + c.revenue, 0),
   }));
 
+  // Ranked by use: the campaign names the card, what it earned and its state
+  // sit on the face, and the channel, sends and rates wait behind a tap.
+  const columns: Column<(typeof pg.items)[number]>[] = [
+    {
+      key: "campaign",
+      header: t("campaigns"),
+      rank: "title",
+      cell: (c) => <span className="font-medium text-ink">{name(c)}</span>,
+    },
+    {
+      key: "revenue",
+      header: t("kpi_revenue"),
+      rank: "primary",
+      align: "end",
+      cell: (c) => <span className="font-medium text-ink">{egp(c.revenue, lang)}</span>,
+    },
+    {
+      key: "status",
+      header: t("col_status"),
+      rank: "primary",
+      cell: (c) => {
+        const st = STATUS_META[c.status];
+        return <Badge className={st.tone}>{lang === "ar" ? st.ar : st.en}</Badge>;
+      },
+    },
+    {
+      key: "channel",
+      header: t("col_channel"),
+      rank: "secondary",
+      cell: (c) => {
+        const meta = CHANNEL_META[c.channel];
+        const Icon = meta.Icon;
+        return (
+          <span className={`badge ${meta.tone}`}>
+            <Icon className="h-3.5 w-3.5" />
+            {lang === "ar" ? meta.nameAr : meta.nameEn}
+          </span>
+        );
+      },
+    },
+    {
+      key: "sent",
+      header: lang === "ar" ? "أُرسلت" : "Sent",
+      rank: "secondary",
+      cell: (c) => <span className="text-ink">{num(c.sent, lang)}</span>,
+      hideBelow: "lg",
+    },
+    {
+      key: "open",
+      header: lang === "ar" ? "معدل الفتح" : "Open rate",
+      rank: "secondary",
+      cell: (c) => {
+        const openRate = c.sent > 0 ? c.opened / c.sent : 0;
+        return (
+          <span className="flex items-center gap-2">
+            <span className="w-9 text-ink">{num(Math.round(openRate * 100), lang)}%</span>
+            <span className="hidden h-1.5 w-16 overflow-hidden rounded-full bg-slate-100 lg:block">
+              <span
+                className="block h-full rounded-full bg-emerald-400"
+                style={{ width: `${Math.min(100, Math.round(openRate * 100))}%` }}
+              />
+            </span>
+          </span>
+        );
+      },
+    },
+    {
+      key: "click",
+      header: lang === "ar" ? "معدل النقر" : "Click rate",
+      rank: "secondary",
+      cell: (c) => (
+        <span className="text-ink-muted">{num(Math.round((c.sent > 0 ? c.clicked / c.sent : 0) * 100), lang)}%</span>
+      ),
+      hideBelow: "xl",
+    },
+    {
+      key: "actions",
+      header: "",
+      align: "end",
+      cell: (c) => (
+        <span className="flex items-center justify-end gap-1.5">
+          {c.status === "scheduled" && (
+            <button onClick={() => sendNow(c.id)} className="btn-outline h-8 gap-1 px-2.5 text-xs">
+              <IcSend className="h-3.5 w-3.5" />
+              {lang === "ar" ? "إرسال" : "Send"}
+            </button>
+          )}
+          <button onClick={() => duplicate(c)} className="btn-ghost h-8 gap-1 px-2.5 text-xs text-ink-muted">
+            <IcCopy className="h-3.5 w-3.5" />
+            {lang === "ar" ? "نسخ" : "Duplicate"}
+          </button>
+        </span>
+      ),
+    },
+  ];
+
   return (
     <>
       <PageHeader
         title={t("nav_marketing")}
         subtitle={lang === "ar" ? "حملات الواتساب والبريد والرسائل والاسترجاع" : "WhatsApp, email, SMS & cart recovery"}
-        actions={
-          <a href="#broadcast" className="btn-primary">
-            <IcSend className="h-4 w-4" /> {t("whatsapp_broadcast")}
-          </a>
-        }
+        primary={{
+          label: t("whatsapp_broadcast"),
+          href: "#broadcast",
+          icon: <IcSend className="h-4 w-4" />,
+        }}
       />
 
       {/* ---- KPI tiles ---- */}
@@ -341,82 +438,14 @@ export default function MarketingPage() {
           </span>
         </Toolbar>
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-sm">
-            <thead>
-              <tr className="border-b border-line text-xs text-ink-soft">
-                <th className="px-5 py-3 text-start font-medium">{t("col_channel")}</th>
-                <th className="px-3 py-3 text-start font-medium">{t("campaigns")}</th>
-                <th className="px-3 py-3 text-start font-medium">{lang === "ar" ? "أُرسلت" : "Sent"}</th>
-                <th className="px-3 py-3 text-start font-medium">{lang === "ar" ? "معدل الفتح" : "Open rate"}</th>
-                <th className="px-3 py-3 text-start font-medium">{lang === "ar" ? "معدل النقر" : "Click rate"}</th>
-                <th className="px-3 py-3 text-start font-medium">{t("kpi_revenue")}</th>
-                <th className="px-3 py-3 text-start font-medium">{t("col_status")}</th>
-                <th className="px-5 py-3 text-end font-medium"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {pg.items.map((c) => {
-                const meta = CHANNEL_META[c.channel];
-                const st = STATUS_META[c.status];
-                const openRate = c.sent > 0 ? c.opened / c.sent : 0;
-                const clickRate = c.sent > 0 ? c.clicked / c.sent : 0;
-                const Icon = meta.Icon;
-                return (
-                  <tr key={c.id} className="border-b border-line last:border-0 hover:bg-surface-page">
-                    <td className="px-5 py-3.5">
-                      <span className={`badge ${meta.tone}`}>
-                        <Icon className="h-3.5 w-3.5" />
-                        {lang === "ar" ? meta.nameAr : meta.nameEn}
-                      </span>
-                    </td>
-                    <td className="px-3 py-3.5 font-medium text-ink">{name(c)}</td>
-                    <td className="px-3 py-3.5 text-ink">{num(c.sent, lang)}</td>
-                    <td className="px-3 py-3.5">
-                      <div className="flex items-center gap-2">
-                        <span className="w-9 text-ink">{num(Math.round(openRate * 100), lang)}%</span>
-                        <div className="hidden h-1.5 w-16 overflow-hidden rounded-full bg-slate-100 sm:block">
-                          <div
-                            className="h-full rounded-full bg-emerald-400"
-                            style={{ width: `${Math.min(100, Math.round(openRate * 100))}%` }}
-                          />
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-3 py-3.5 text-ink-muted">{num(Math.round(clickRate * 100), lang)}%</td>
-                    <td className="px-3 py-3.5 font-medium text-ink">{egp(c.revenue, lang)}</td>
-                    <td className="px-3 py-3.5">
-                      <Badge className={st.tone}>{lang === "ar" ? st.ar : st.en}</Badge>
-                    </td>
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center justify-end gap-1.5">
-                        {c.status === "scheduled" && (
-                          <button
-                            onClick={() => sendNow(c.id)}
-                            className="btn-outline h-8 gap-1 px-2.5 text-xs"
-                          >
-                            <IcSend className="h-3.5 w-3.5" />
-                            {lang === "ar" ? "إرسال" : "Send"}
-                          </button>
-                        )}
-                        <button
-                          onClick={() => duplicate(c)}
-                          className="btn-ghost h-8 gap-1 px-2.5 text-xs text-ink-muted"
-                        >
-                          <IcCopy className="h-3.5 w-3.5" />
-                          {lang === "ar" ? "نسخ" : "Duplicate"}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-
-          {filtered.length === 0 && (
-            <div className="flex flex-col items-center gap-3 py-16 text-center">
-              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-brand-600">
+        <DataTable
+          flush
+          rows={pg.items}
+          columns={columns}
+          getKey={(c) => c.id}
+          empty={
+            <div className="flex flex-col items-center gap-3 py-8 text-center">
+              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-surface-page text-ink-muted">
                 <IcMarketing className="h-6 w-6" />
               </span>
               <div>
@@ -433,8 +462,8 @@ export default function MarketingPage() {
                 </button>
               )}
             </div>
-          )}
-        </div>
+          }
+        />
 
         <Pagination {...pg} />
       </Card>

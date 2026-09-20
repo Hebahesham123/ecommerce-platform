@@ -14,6 +14,7 @@ import {
 } from "@/lib/discounts";
 import { listDiscounts, deleteDiscount, setDiscountStatus } from "./actions";
 import { PageHeader } from "@/components/page-header";
+import { DataTable, type Column } from "@/components/data-table";
 import { Card, Badge } from "@/components/ui";
 import { summaryLine } from "@/components/discount-summary";
 import { Pagination, usePagination } from "@/components/dashboard-ui";
@@ -116,21 +117,114 @@ export default function DiscountsPage() {
     URL.revokeObjectURL(url);
   }
 
+  // Ranked by use: the code or title names the card, its state and how many
+  // times it has been used sit on the face, the rest waits behind a tap.
+  const columns: Column<(typeof pg.items)[number]>[] = [
+    {
+      key: "title",
+      header: t("col_title"),
+      rank: "title",
+      cell: (d) => (
+        <span className="block min-w-0">
+          <span className="block truncate font-semibold text-ink">
+            {d.method === "code" ? d.code || d.title : d.title}
+          </span>
+          <span className="block truncate text-xs font-normal text-ink-soft">{summaryLine(d, lang)}</span>
+        </span>
+      ),
+    },
+    {
+      key: "status",
+      header: t("col_status"),
+      rank: "primary",
+      cell: (d) => <Badge className={statusTone[d.status]}>{t(statusKey[d.status])}</Badge>,
+    },
+    {
+      key: "used",
+      header: t("col_used"),
+      rank: "primary",
+      align: "end",
+      cell: (d) => (
+        <span className="font-medium text-ink">
+          {num(d.usedCount, lang)} <span className="font-normal text-ink-soft">{t("col_used")}</span>
+        </span>
+      ),
+    },
+    {
+      key: "method",
+      header: t("col_method"),
+      rank: "secondary",
+      cell: (d) => <span className="text-ink-muted">{t(methodKey[d.method])}</span>,
+    },
+    {
+      key: "eligibility",
+      header: t("col_eligibility"),
+      rank: "secondary",
+      cell: (d) => (
+        <span className="text-ink-muted">{d.eligibility === "all" ? t("elig_all") : t("elig_customers")}</span>
+      ),
+      hideBelow: "lg",
+    },
+    {
+      key: "type",
+      header: t("col_type"),
+      rank: "secondary",
+      cell: (d) => <span className="text-ink-muted">{t(typeKey[d.discountType])}</span>,
+      hideBelow: "lg",
+    },
+    {
+      key: "combinations",
+      header: t("col_combinations"),
+      rank: "secondary",
+      cell: (d) => <CombinationDots d={d} />,
+      hideBelow: "xl",
+    },
+    {
+      key: "actions",
+      header: "",
+      align: "end",
+      cell: (d) => (
+        <span className="flex items-center justify-end gap-1">
+          {d.status === "draft" && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onActivate(d.id);
+              }}
+              className="btn-ghost h-8 px-2 text-xs text-emerald-600 hover:bg-emerald-50"
+            >
+              {t("activate")}
+            </button>
+          )}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(d.id);
+            }}
+            className="btn-ghost h-8 px-2 text-xs text-rose-600 hover:bg-rose-50"
+          >
+            {t("delete")}
+          </button>
+        </span>
+      ),
+    },
+  ];
+
   return (
     <>
       <PageHeader
         title={t("nav_discounts")}
         subtitle={t("discounts_subtitle")}
         actions={
-          <>
-            <button className="btn-outline" onClick={exportCsv}>
-              {t("export")}
-            </button>
-            <Link href="/discounts/new" className="btn-primary">
-              <IcPlus className="h-4 w-4" /> {t("create_discount")}
-            </Link>
-          </>
+          <button className="btn-outline h-10" onClick={exportCsv}>
+            {t("export")}
+          </button>
         }
+        primary={{
+          label: t("create_discount"),
+          href: "/discounts/new",
+          icon: <IcPlus className="h-4 w-4" />,
+        }}
       />
 
       {error === "not_configured" && (
@@ -174,94 +268,31 @@ export default function DiscountsPage() {
         </div>
 
         {/* Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] text-sm">
-            <thead>
-              <tr className="text-xs text-ink-soft">
-                <th className="px-5 py-3 text-start font-medium">{t("col_title")}</th>
-                <th className="px-3 py-3 text-start font-medium">{t("col_status")}</th>
-                <th className="px-3 py-3 text-start font-medium">{t("col_method")}</th>
-                <th className="px-3 py-3 text-start font-medium">{t("col_eligibility")}</th>
-                <th className="px-3 py-3 text-start font-medium">{t("col_type")}</th>
-                <th className="px-3 py-3 text-start font-medium">{t("col_combinations")}</th>
-                <th className="px-3 py-3 text-end font-medium">{t("col_used")}</th>
-                <th className="px-5 py-3 text-end font-medium"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {pg.items.map((d) => (
-                <tr
-                  key={d.id}
-                  className="cursor-pointer border-t border-line transition-colors hover:bg-surface-page"
-                  onClick={() => router.push(`/discounts/${d.id}`)}
-                >
-                  <td className="px-5 py-3.5">
-                    <div className="font-semibold text-ink">
-                      {d.method === "code" ? d.code || d.title : d.title}
-                    </div>
-                    <div className="text-xs text-ink-soft">{summaryLine(d, lang)}</div>
-                  </td>
-                  <td className="px-3 py-3.5">
-                    <Badge className={statusTone[d.status]}>
-                      {t(statusKey[d.status])}
-                    </Badge>
-                  </td>
-                  <td className="px-3 py-3.5 text-ink-muted">{t(methodKey[d.method])}</td>
-                  <td className="px-3 py-3.5 text-ink-muted">
-                    {d.eligibility === "all" ? t("elig_all") : t("elig_customers")}
-                  </td>
-                  <td className="px-3 py-3.5 text-ink-muted">{t(typeKey[d.discountType])}</td>
-                  <td className="px-3 py-3.5">
-                    <CombinationDots d={d} />
-                  </td>
-                  <td className="px-3 py-3.5 text-end font-medium text-ink">
-                    {num(d.usedCount, lang)}
-                  </td>
-                  <td
-                    className="px-5 py-3.5 text-end"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <div className="flex items-center justify-end gap-1">
-                      {d.status === "draft" && (
-                        <button
-                          onClick={() => onActivate(d.id)}
-                          className="btn-ghost h-8 px-2 text-xs text-emerald-600 hover:bg-emerald-50"
-                        >
-                          {t("activate")}
-                        </button>
-                      )}
-                      <button
-                        onClick={() => onDelete(d.id)}
-                        className="btn-ghost h-8 px-2 text-xs text-rose-600 hover:bg-rose-50"
-                      >
-                        {t("delete")}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          {/* States */}
-          {loading && (
-            <div className="py-12 text-center text-sm text-ink-soft">{t("loading")}</div>
-          )}
-          {!loading && filtered.length === 0 && (
-            <div className="flex flex-col items-center gap-3 py-16 text-center">
-              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-brand-600">
-                <IcDiscount className="h-6 w-6" />
-              </span>
-              <div>
-                <div className="font-semibold text-ink">{t("no_discounts")}</div>
-                <p className="mt-1 text-sm text-ink-soft">{t("no_discounts_hint")}</p>
+        {loading ? (
+          <div className="py-12 text-center text-sm text-ink-soft">{t("loading")}</div>
+        ) : (
+          <DataTable
+            flush
+            rows={pg.items}
+            columns={columns}
+            getKey={(d) => d.id}
+            onRowClick={(d) => router.push(`/discounts/${d.id}`)}
+            empty={
+              <div className="flex flex-col items-center gap-3 py-8 text-center">
+                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-surface-page text-ink-muted">
+                  <IcDiscount className="h-6 w-6" />
+                </span>
+                <div>
+                  <div className="font-semibold text-ink">{t("no_discounts")}</div>
+                  <p className="mt-1 text-sm text-ink-soft">{t("no_discounts_hint")}</p>
+                </div>
+                <Link href="/discounts/new" className="btn-primary mt-1">
+                  <IcPlus className="h-4 w-4" /> {t("create_discount")}
+                </Link>
               </div>
-              <Link href="/discounts/new" className="btn-primary mt-1">
-                <IcPlus className="h-4 w-4" /> {t("create_discount")}
-              </Link>
-            </div>
-          )}
-        </div>
+            }
+          />
+        )}
 
         {!loading && <Pagination {...pg} />}
       </Card>

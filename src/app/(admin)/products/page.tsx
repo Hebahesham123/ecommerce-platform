@@ -16,6 +16,7 @@ import { deleteItems, listInventory, listLocations, setItemsStatus } from "../in
 import { ProductEditor } from "../inventory/product-editor";
 import { ProductImport } from "@/components/product-import";
 import { PageHeader } from "@/components/page-header";
+import { DataTable, type Column } from "@/components/data-table";
 import { Card, Badge } from "@/components/ui";
 import {
   KpiStrip,
@@ -269,6 +270,71 @@ export default function ProductsPage() {
   const invLabel = (p: Product) =>
     `${num(p.available, lang)} ${ar ? "بالمخزون" : "in stock"}${p.variants > 1 ? ` · ${num(p.variants, lang)} ${ar ? "تنويعة" : "variants"}` : ""}`;
 
+  // Ranked by use: the picture and name make the card, price and stock sit on
+  // its face, and status, category and vendor wait behind a tap.
+  const columns: Column<(typeof pg.items)[number]>[] = [
+    {
+      key: "product",
+      header: t("col_product"),
+      rank: "title",
+      cell: (p) => (
+        <span className="flex items-center gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-surface-page">
+            {p.image ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={p.image} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <IcImage className="h-4 w-4 text-ink-soft" />
+            )}
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate font-medium text-ink">{p.name}</span>
+            {p.vendor && <span className="block truncate text-xs font-normal text-ink-soft">{p.vendor}</span>}
+          </span>
+        </span>
+      ),
+    },
+    {
+      key: "price",
+      header: t("col_price"),
+      rank: "primary",
+      align: "end",
+      cell: (p) => <span className="font-semibold text-ink">{priceLabel(p)}</span>,
+    },
+    {
+      key: "inventory",
+      header: t("nav_inventory"),
+      rank: "primary",
+      cell: (p) => <span className={invTone(withStatus(p))}>{invLabel(p)}</span>,
+    },
+    {
+      key: "status",
+      header: t("col_status"),
+      rank: "secondary",
+      cell: (p) => <StatusPill label={t(`st_${p.status}`)} tone={statusPill[p.status]} />,
+    },
+    {
+      key: "category",
+      header: t("fld_category"),
+      rank: "secondary",
+      cell: (p) =>
+        p.category && p.category !== "—" ? (
+          // Categories drive collections, so open the matching one.
+          <a
+            href={`/collections?edit=${encodeURIComponent(collectionHandle(p.category))}`}
+            onClick={(e) => e.stopPropagation()}
+            className="badge bg-slate-100 text-ink-muted transition-colors hover:bg-brand-50 hover:text-brand-700"
+            title={lang === "ar" ? "تعديل التصنيف" : "Edit this collection"}
+          >
+            {p.category}
+          </a>
+        ) : (
+          <Badge className="bg-slate-100 text-ink-muted">{p.category}</Badge>
+        ),
+      hideBelow: "lg",
+    },
+  ];
+
   return (
     <>
       <PageHeader
@@ -405,87 +471,50 @@ export default function ProductsPage() {
         )}
 
         {view === "list" ? (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[820px] text-sm">
-              <thead>
-                <tr className="border-b border-line text-xs text-ink-soft">
-                  <th className="w-10 ps-5 pe-2 py-3">
-                    <Checkbox checked={allSelected} indeterminate={someSelected}
-                      onChange={() => setSelected(allSelected ? new Set() : new Set(pg.items.map((p) => p.key)))} />
-                  </th>
-                  <th className="px-3 py-3 text-start font-medium">{t("col_product")}</th>
-                  <th className="px-3 py-3 text-start font-medium">{t("col_status")}</th>
-                  <th className="px-3 py-3 text-start font-medium">{t("nav_inventory")}</th>
-                  <th className="px-3 py-3 text-start font-medium">{t("fld_category")}</th>
-                  <th className="px-5 py-3 text-end font-medium">{t("col_price")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pg.items.map((p) => {
-                  const sel = selected.has(p.key);
-                  return (
-                    <tr key={p.key} onClick={() => openProduct(p)}
-                      className={`cursor-pointer border-b border-line last:border-0 transition-colors hover:bg-surface-page ${sel ? "bg-brand-50/40" : ""}`}>
-                      <td className="ps-5 pe-2 py-3" onClick={(e) => e.stopPropagation()}>
-                        <Checkbox checked={sel} onChange={() =>
-                          setSelected((prev) => { const n = new Set(prev); if (n.has(p.key)) n.delete(p.key); else n.add(p.key); return n; })} />
-                      </td>
-                      <td className="px-3 py-3">
-                        <div className="flex items-center gap-3">
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-surface-page">
-                            {p.image ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img src={p.image} alt="" className="h-full w-full object-cover" />
-                            ) : (<IcImage className="h-4 w-4 text-ink-soft" />)}
-                          </div>
-                          <div className="min-w-0">
-                            <div className="truncate font-medium text-ink">{p.name}</div>
-                            {p.vendor && <div className="truncate text-xs text-ink-soft">{p.vendor}</div>}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-3 py-3"><StatusPill label={t(`st_${p.status}`)} tone={statusPill[p.status]} /></td>
-                      <td className={`px-3 py-3 ${invTone(withStatus(p))}`}>{invLabel(p)}</td>
-                      <td className="px-3 py-3">
-                        {p.category && p.category !== "—" ? (
-                          // Categories drive collections, so open the matching one.
-                          <a
-                            href={`/collections?edit=${encodeURIComponent(collectionHandle(p.category))}`}
-                            onClick={(e) => e.stopPropagation()}
-                            className="badge bg-slate-100 text-ink-muted transition-colors hover:bg-brand-50 hover:text-brand-700"
-                            title={lang === "ar" ? "تعديل التصنيف" : "Edit this collection"}
-                          >
-                            {p.category}
-                          </a>
-                        ) : (
-                          <Badge className="bg-slate-100 text-ink-muted">{p.category}</Badge>
-                        )}
-                      </td>
-                      <td className="px-5 py-3 text-end font-semibold text-ink">{priceLabel(p)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            {!loading && filtered.length === 0 && (
-              <div className="py-16 text-center text-sm text-ink-soft">
-                {allProducts.length === 0
-                  ? ar
-                    ? "لا توجد منتجات بعد"
-                    : "No products yet"
-                  : ar
-                    ? "لا توجد منتجات مطابقة"
-                    : "No matching products"}
-              </div>
-            )}
-            {loading && <div className="py-16 text-center text-sm text-ink-soft">{t("loading")}</div>}
-          </div>
+          loading ? (
+            <div className="py-16 text-center text-sm text-ink-soft">{t("loading")}</div>
+          ) : (
+            <DataTable
+              flush
+              rows={pg.items}
+              columns={columns}
+              getKey={(p) => p.key}
+              onRowClick={(p) => openProduct(p)}
+              selectable={(p) => (
+                <Checkbox
+                  checked={selected.has(p.key)}
+                  onChange={() =>
+                    setSelected((prev) => {
+                      const n = new Set(prev);
+                      if (n.has(p.key)) n.delete(p.key);
+                      else n.add(p.key);
+                      return n;
+                    })
+                  }
+                />
+              )}
+              selectAll={
+                <Checkbox
+                  checked={allSelected}
+                  indeterminate={someSelected}
+                  onChange={() => setSelected(allSelected ? new Set() : new Set(pg.items.map((p) => p.key)))}
+                />
+              }
+              empty={
+                <div className="py-10 text-center text-sm text-ink-soft">
+                  {allProducts.length === 0
+                    ? ar ? "لا توجد منتجات بعد" : "No products yet"
+                    : ar ? "لا توجد منتجات مطابقة" : "No matching products"}
+                </div>
+              }
+            />
+          )
         ) : (
           <div className="grid grid-cols-1 gap-4 p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {pg.items.map((p) => (
               <div key={p.key} onClick={() => openProduct(p)}
                 className="cursor-pointer overflow-hidden rounded-2xl border border-line bg-surface transition-shadow hover:shadow-pop">
-                <div className="flex aspect-square items-center justify-center overflow-hidden bg-gradient-to-br from-brand-50 to-slate-50">
+                <div className="flex aspect-square items-center justify-center overflow-hidden bg-surface-page">
                   {p.image ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={p.image} alt={p.name} className="h-full w-full object-cover" />

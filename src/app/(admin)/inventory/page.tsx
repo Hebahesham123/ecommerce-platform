@@ -20,6 +20,7 @@ import {
 import { listInventory, listLocations, setLevel, deleteItem } from "./actions";
 import { ProductEditor } from "./product-editor";
 import { PageHeader } from "@/components/page-header";
+import { DataTable, type Column } from "@/components/data-table";
 import { Card, Badge } from "@/components/ui";
 import {
   StatTile,
@@ -208,21 +209,152 @@ export default function InventoryPage() {
     updated: t("sort_updated"),
   };
 
+  // Ranked by use: the piece names the card, how many are left and its price
+  // sit on the face, and SKU, status and tags wait behind a tap.
+  const columns: Column<(typeof pg.items)[number]>[] = [
+    {
+      key: "product",
+      header: t("col_product"),
+      rank: "title",
+      cell: (item) => (
+        <span className="flex items-center gap-3">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-surface-page">
+            {item.imageUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={item.imageUrl} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <IcImage className="h-4 w-4 text-ink-soft" />
+            )}
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate font-semibold text-ink">{item.productName}</span>
+            <span className="flex flex-wrap items-center gap-1.5 text-xs font-normal text-ink-soft">
+              {item.variantTitle && <span>{item.variantTitle}</span>}
+              {item.vendor && <span>· {item.vendor}</span>}
+            </span>
+          </span>
+        </span>
+      ),
+    },
+    {
+      key: "available",
+      header: t("col_available"),
+      rank: "primary",
+      cell: (item) => {
+        const available = availOf(item);
+        const st = stockStatus(available);
+        const barPct = Math.min(100, Math.round((Math.max(0, available) / maxAvail) * 100));
+        const barColor =
+          st === "out_stock" ? "bg-rose-400" : st === "low_stock" ? "bg-amber-400" : "bg-emerald-400";
+        return (
+          <span className="flex items-center gap-2.5" onClick={(e) => singleLoc && e.stopPropagation()}>
+            {singleLoc ? (
+              <EditableQty
+                value={levelAt(item, loc).onHand}
+                onSave={async (v) => {
+                  patchLevel(item.id, loc, v);
+                  await setLevel(item.id, loc, { onHand: v });
+                }}
+              />
+            ) : (
+              <span className="w-9 text-end font-semibold text-ink">{num(available, lang)}</span>
+            )}
+            <span className="hidden flex-1 lg:block">
+              <span className="block h-1.5 w-full max-w-[120px] overflow-hidden rounded-full bg-slate-100">
+                <span className={`block h-full rounded-full ${barColor}`} style={{ width: `${barPct}%` }} />
+              </span>
+            </span>
+            <Badge className={stockStatusTone[st]}>{t(stockStatusKey[st])}</Badge>
+          </span>
+        );
+      },
+    },
+    {
+      key: "price",
+      header: t("col_price"),
+      rank: "primary",
+      align: "end",
+      cell: (item) =>
+        item.price != null ? (
+          <span className="inline-flex items-center gap-1.5">
+            {item.compareAtPrice != null && item.compareAtPrice > item.price && (
+              <span className="text-xs text-ink-soft line-through">{egp(item.compareAtPrice, lang)}</span>
+            )}
+            <span className="font-semibold text-ink">{egp(item.price, lang)}</span>
+          </span>
+        ) : (
+          <span className="text-ink-soft">—</span>
+        ),
+    },
+    {
+      key: "sku",
+      header: t("col_sku"),
+      rank: "secondary",
+      cell: (item) => (
+        <span className="text-ink-muted" dir="ltr">
+          {item.sku || "—"}
+        </span>
+      ),
+      hideBelow: "lg",
+    },
+    {
+      key: "status",
+      header: t("col_status"),
+      rank: "secondary",
+      cell: (item) => <Badge className={statusTone[item.status]}>{t(statusKey[item.status])}</Badge>,
+    },
+    {
+      key: "tags",
+      header: lang === "ar" ? "الوسوم" : "Tags",
+      rank: "secondary",
+      cell: (item) =>
+        item.tags.length ? (
+          <span className="flex flex-wrap gap-1.5">
+            {item.tags.slice(0, 4).map((tg) => (
+              <span key={tg} className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-ink-muted">
+                {tg}
+              </span>
+            ))}
+          </span>
+        ) : (
+          <span className="text-ink-soft">—</span>
+        ),
+      hideBelow: "xl",
+    },
+    {
+      key: "delete",
+      header: "",
+      align: "end",
+      cell: (item) => (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete(item);
+          }}
+          className="btn-ghost h-8 w-8 p-0 text-rose-600 hover:bg-rose-50"
+          aria-label="delete"
+        >
+          <IcTrash className="h-4 w-4" />
+        </button>
+      ),
+    },
+  ];
+
   return (
     <>
       <PageHeader
         title={t("nav_inventory")}
         subtitle={t("inventory_subtitle")}
         actions={
-          <>
-            <Link href="/inventory/locations" className="btn-outline">
-              <IcLocation className="h-4 w-4" /> {t("nav_locations")}
-            </Link>
-            <button className="btn-primary" onClick={() => setDrawer(emptyItem())}>
-              <IcPlus className="h-4 w-4" /> {t("add_item")}
-            </button>
-          </>
+          <Link href="/inventory/locations" className="btn-outline h-10">
+            <IcLocation className="h-4 w-4" /> {t("nav_locations")}
+          </Link>
         }
+        primary={{
+          label: t("add_item"),
+          onClick: () => setDrawer(emptyItem()),
+          icon: <IcPlus className="h-4 w-4" />,
+        }}
       />
 
       {error === "not_configured" && (
@@ -347,172 +479,40 @@ export default function InventoryPage() {
           </div>
         </div>
 
-        {/* ---- Table ---- */}
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[880px] text-sm">
-            <thead>
-              <tr className="border-b border-line text-xs text-ink-soft">
-                <th className="px-5 py-3 text-start font-medium">{t("col_product")}</th>
-                <th className="px-3 py-3 text-start font-medium">{t("col_sku")}</th>
-                <th className="px-3 py-3 text-start font-medium">{t("col_status")}</th>
-                <th className="px-3 py-3 text-end font-medium">{t("col_price")}</th>
-                <th className="px-3 py-3 text-start font-medium">{t("col_available")}</th>
-                <th className="px-5 py-3 text-end font-medium"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {pg.items.map((item) => {
-                const available = availOf(item);
-                const st = stockStatus(available);
-                const barPct = Math.min(100, Math.round((Math.max(0, available) / maxAvail) * 100));
-                const barColor =
-                  st === "out_stock"
-                    ? "bg-rose-400"
-                    : st === "low_stock"
-                      ? "bg-amber-400"
-                      : "bg-emerald-400";
-                return (
-                  <tr
-                    key={item.id}
-                    className="group cursor-pointer border-b border-line transition-colors last:border-0 hover:bg-surface-page"
-                    onClick={() => setDrawer(item)}
-                  >
-                    {/* Product */}
-                    <td className="px-5 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-line bg-surface-page">
-                          {item.imageUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={item.imageUrl} alt="" className="h-full w-full object-cover" />
-                          ) : (
-                            <IcImage className="h-4 w-4 text-ink-soft" />
-                          )}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="truncate font-semibold text-ink">
-                            {item.productName}
-                          </div>
-                          <div className="flex flex-wrap items-center gap-1.5 text-xs text-ink-soft">
-                            {item.variantTitle && <span>{item.variantTitle}</span>}
-                            {item.vendor && <span>· {item.vendor}</span>}
-                            {item.tags.slice(0, 2).map((tg) => (
-                              <span
-                                key={tg}
-                                className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-ink-muted"
-                              >
-                                {tg}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-
-                    {/* SKU */}
-                    <td className="px-3 py-3 text-ink-muted" dir="ltr">
-                      {item.sku || "—"}
-                    </td>
-
-                    {/* Status */}
-                    <td className="px-3 py-3">
-                      <Badge className={statusTone[item.status]}>
-                        {t(statusKey[item.status])}
-                      </Badge>
-                    </td>
-
-                    {/* Price */}
-                    <td className="px-3 py-3 text-end">
-                      {item.price != null ? (
-                        <span className="inline-flex items-center gap-1.5">
-                          {item.compareAtPrice != null &&
-                            item.compareAtPrice > item.price && (
-                              <span className="text-xs text-ink-soft line-through">
-                                {egp(item.compareAtPrice, lang)}
-                              </span>
-                            )}
-                          <span className="font-semibold text-ink">
-                            {egp(item.price, lang)}
-                          </span>
-                        </span>
-                      ) : (
-                        <span className="text-ink-soft">—</span>
-                      )}
-                    </td>
-
-                    {/* Available: number + status + meter, editable in a single location */}
-                    <td className="px-3 py-3" onClick={(e) => singleLoc && e.stopPropagation()}>
-                      <div className="flex items-center gap-2.5">
-                        {singleLoc ? (
-                          <EditableQty
-                            value={levelAt(item, loc).onHand}
-                            onSave={async (v) => {
-                              patchLevel(item.id, loc, v);
-                              await setLevel(item.id, loc, { onHand: v });
-                            }}
-                          />
-                        ) : (
-                          <span className="w-9 text-end font-semibold text-ink">
-                            {num(available, lang)}
-                          </span>
-                        )}
-                        <div className="hidden flex-1 sm:block">
-                          <div className="h-1.5 w-full max-w-[120px] overflow-hidden rounded-full bg-slate-100">
-                            <div
-                              className={`h-full rounded-full ${barColor}`}
-                              style={{ width: `${barPct}%` }}
-                            />
-                          </div>
-                        </div>
-                        <Badge className={stockStatusTone[st]}>
-                          {t(stockStatusKey[st])}
-                        </Badge>
-                      </div>
-                    </td>
-
-                    {/* Actions */}
-                    <td className="px-5 py-3 text-end" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        onClick={() => onDelete(item)}
-                        className="btn-ghost h-8 w-8 p-0 text-rose-600 opacity-0 hover:bg-rose-50 group-hover:opacity-100"
-                        aria-label="delete"
-                      >
-                        <IcTrash className="h-4 w-4" />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-
-          {loading && (
-            <div className="py-12 text-center text-sm text-ink-soft">{t("loading")}</div>
-          )}
-          {!loading && filtered.length === 0 && (
-            <div className="flex flex-col items-center gap-3 py-16 text-center">
-              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-brand-600">
-                <IcInventory className="h-6 w-6" />
-              </span>
-              <div>
-                <div className="font-semibold text-ink">
-                  {filtersActive ? t("no_inventory") : t("no_inventory")}
+        {/* ---- Rows: a table on a desktop, cards on a phone ---- */}
+        {loading ? (
+          <div className="py-12 text-center text-sm text-ink-soft">{t("loading")}</div>
+        ) : (
+          <DataTable
+            flush
+            rows={pg.items}
+            columns={columns}
+            getKey={(item) => item.id}
+            onRowClick={(item) => setDrawer(item)}
+            empty={
+              <div className="flex flex-col items-center gap-3 py-8 text-center">
+                <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-surface-page text-ink-muted">
+                  <IcInventory className="h-6 w-6" />
+                </span>
+                <div>
+                  <div className="font-semibold text-ink">{t("no_inventory")}</div>
+                  <p className="mt-1 text-sm text-ink-soft">
+                    {filtersActive ? t("clear_filters") : t("no_inventory_hint")}
+                  </p>
                 </div>
-                <p className="mt-1 text-sm text-ink-soft">
-                  {filtersActive ? t("clear_filters") : t("no_inventory_hint")}
-                </p>
+                {filtersActive ? (
+                  <button className="btn-outline mt-1" onClick={clearFilters}>
+                    <IcX className="h-4 w-4" /> {t("clear_filters")}
+                  </button>
+                ) : (
+                  <button className="btn-primary mt-1" onClick={() => setDrawer(emptyItem())}>
+                    <IcPlus className="h-4 w-4" /> {t("add_item")}
+                  </button>
+                )}
               </div>
-              {filtersActive ? (
-                <button className="btn-outline mt-1" onClick={clearFilters}>
-                  <IcX className="h-4 w-4" /> {t("clear_filters")}
-                </button>
-              ) : (
-                <button className="btn-primary mt-1" onClick={() => setDrawer(emptyItem())}>
-                  <IcPlus className="h-4 w-4" /> {t("add_item")}
-                </button>
-              )}
-            </div>
-          )}
-        </div>
+            }
+          />
+        )}
 
         {!loading && <Pagination {...pg} />}
       </Card>

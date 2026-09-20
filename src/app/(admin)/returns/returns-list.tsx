@@ -14,6 +14,7 @@ import {
 } from "@/lib/returns";
 import { listReturnRequests, setRequestNote, setRequestStatus } from "./actions";
 import { PageHeader } from "@/components/page-header";
+import { DataTable, type Column } from "@/components/data-table";
 import { Card } from "@/components/ui";
 import {
   KpiRow,
@@ -138,6 +139,122 @@ export function ReturnsList({ lockChannel }: { lockChannel?: Channel } = {}) {
 
   const fmtDate = (d: string) =>
     new Date(d).toLocaleDateString(ar ? "ar-EG" : "en-GB", { day: "numeric", month: "short" });
+
+  // Ranked by use: the reference names the card, the money and the state sit
+  // on its face, and the customer, dates and window wait behind a tap.
+  const columns: Column<(typeof pg.items)[number]>[] = [
+    {
+      key: "request",
+      header: ar ? "الطلب" : "Request",
+      rank: "title",
+      cell: (r) => (
+        <span className="block min-w-0">
+          <span className="block truncate font-semibold text-ink" dir="ltr">
+            {r.reference}
+          </span>
+          <span className="block text-xs font-normal text-ink-soft" dir="ltr">
+            #{r.orderNumber}
+          </span>
+        </span>
+      ),
+    },
+    {
+      key: "difference",
+      header: ar ? "الفرق" : "Difference",
+      rank: "primary",
+      align: "end",
+      cell: (r) =>
+        r.extraAmount > 0 ? (
+          <span className="font-semibold text-emerald-600">+{egp(r.extraAmount, lang)}</span>
+        ) : (
+          <span className="font-semibold text-rose-600">−{egp(r.refundAmount, lang)}</span>
+        ),
+    },
+    {
+      key: "status",
+      header: t("col_status"),
+      rank: "primary",
+      cell: (r) => <StatusPill label={statusLabel[r.status][ar ? "ar" : "en"]} tone={statusTone[r.status]} />,
+    },
+    {
+      key: "kind",
+      header: ar ? "النوع" : "Type",
+      rank: "secondary",
+      cell: (r) => (
+        <span
+          className={`badge ${
+            r.kind === "exchange"
+              ? "bg-sky-500/10 text-sky-600 dark:text-sky-400"
+              : "bg-slate-500/10 text-slate-600 dark:text-slate-300"
+          }`}
+        >
+          {kindLabel[r.kind][ar ? "ar" : "en"]}
+        </span>
+      ),
+    },
+    {
+      key: "customer",
+      header: t("col_customer"),
+      rank: "secondary",
+      cell: (r) => (
+        <span className="block min-w-0">
+          <span className="block truncate font-medium text-ink">{r.customerName || "—"}</span>
+          <span className="block text-xs font-normal text-ink-soft" dir="ltr">
+            {r.phone}
+          </span>
+        </span>
+      ),
+    },
+    {
+      key: "date",
+      header: t("col_date"),
+      rank: "secondary",
+      cell: (r) => <span className="text-ink-muted">{fmtDate(r.createdAt)}</span>,
+      hideBelow: "lg",
+    },
+    {
+      key: "window",
+      header: ar ? "المهلة" : "Window",
+      rank: "secondary",
+      cell: (r) => {
+        const left = msLeftInWindow(r.orderCreatedAt, new Date(now));
+        return <span className={`text-xs ${left <= 0 ? "text-rose-600" : "text-ink-muted"}`}>{formatCountdown(left, ar)}</span>;
+      },
+      hideBelow: "lg",
+    },
+    ...(lockChannel
+      ? []
+      : [
+          {
+            key: "channel",
+            header: t("col_channel"),
+            rank: "secondary" as const,
+            cell: (r: (typeof pg.items)[number]) => <ChannelBadge value={r.channel} />,
+            hideBelow: "xl" as const,
+          },
+        ]),
+    {
+      key: "actions",
+      header: "",
+      align: "end",
+      cell: (r) => (
+        <span onClick={(e) => e.stopPropagation()}>
+          {nextStatuses(r.status).length > 0 ? (
+            <Select value="" onChange={(v) => v && changeStatus(r, v as RequestStatus)}>
+              <option value="">{ar ? "تغيير الحالة" : "Change status"}</option>
+              {nextStatuses(r.status).map((st) => (
+                <option key={st} value={st}>
+                  {statusLabel[st][ar ? "ar" : "en"]}
+                </option>
+              ))}
+            </Select>
+          ) : (
+            <span className="text-xs text-ink-soft">{ar ? "تم تحديث المخزون" : "Stock updated"}</span>
+          )}
+        </span>
+      ),
+    },
+  ];
 
   return (
     <>
@@ -271,115 +388,36 @@ export function ReturnsList({ lockChannel }: { lockChannel?: Channel } = {}) {
           </span>
         </Toolbar>
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[960px] text-sm">
-            <thead>
-              <tr className="border-b border-line text-xs text-ink-soft">
-                <th className="px-5 py-3 text-start font-medium">{ar ? "الطلب" : "Request"}</th>
-                <th className="px-3 py-3 text-start font-medium">{ar ? "النوع" : "Type"}</th>
-                <th className="px-3 py-3 text-start font-medium">{t("col_customer")}</th>
-                <th className="px-3 py-3 text-start font-medium">{t("col_date")}</th>
-                <th className="px-3 py-3 text-start font-medium">{ar ? "المهلة" : "Window"}</th>
-                <th className="px-3 py-3 text-end font-medium">{ar ? "الفرق" : "Difference"}</th>
-                <th className="px-3 py-3 text-start font-medium">{t("col_status")}</th>
-                {!lockChannel && (
-                  <th className="px-3 py-3 text-start font-medium">{t("col_channel")}</th>
-                )}
-                <th className="px-5 py-3 text-end font-medium" />
-              </tr>
-            </thead>
-            <tbody>
-              {pg.items.map((r) => {
-                const left = msLeftInWindow(r.orderCreatedAt, new Date(now));
-                return (
-                  <tr
-                    key={r.id}
-                    onClick={() => setOpen(r)}
-                    className="cursor-pointer border-b border-line transition-colors last:border-0 hover:bg-surface-page"
-                  >
-                    <td className="px-5 py-3.5">
-                      <div className="font-semibold text-ink" dir="ltr">{r.reference}</div>
-                      <div className="text-xs text-ink-soft" dir="ltr">#{r.orderNumber}</div>
-                    </td>
-                    <td className="px-3 py-3.5">
-                      <span
-                        className={`badge ${
-                          r.kind === "exchange"
-                            ? "bg-sky-500/10 text-sky-600 dark:text-sky-400"
-                            : "bg-slate-500/10 text-slate-600 dark:text-slate-300"
-                        }`}
-                      >
-                        {kindLabel[r.kind][ar ? "ar" : "en"]}
-                      </span>
-                    </td>
-                    <td className="px-3 py-3.5">
-                      <div className="font-medium text-ink">{r.customerName || "—"}</div>
-                      <div className="text-xs text-ink-soft" dir="ltr">{r.phone}</div>
-                    </td>
-                    <td className="px-3 py-3.5 text-ink-muted">{fmtDate(r.createdAt)}</td>
-                    <td className={`px-3 py-3.5 text-xs ${left <= 0 ? "text-rose-600" : "text-ink-muted"}`}>
-                      {formatCountdown(left, ar)}
-                    </td>
-                    <td className="px-3 py-3.5 text-end font-semibold">
-                      {r.extraAmount > 0 ? (
-                        <span className="text-emerald-600">+{egp(r.extraAmount, lang)}</span>
-                      ) : (
-                        <span className="text-rose-600">−{egp(r.refundAmount, lang)}</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-3.5">
-                      <StatusPill
-                        label={statusLabel[r.status][ar ? "ar" : "en"]}
-                        tone={statusTone[r.status]}
-                      />
-                    </td>
-                    {!lockChannel && (
-                      <td className="px-3 py-3.5">
-                        <ChannelBadge value={r.channel} />
-                      </td>
-                    )}
-                    <td className="px-5 py-3.5 text-end" onClick={(e) => e.stopPropagation()}>
-                      {nextStatuses(r.status).length > 0 ? (
-                        <Select
-                          value=""
-                          onChange={(v) => v && changeStatus(r, v as RequestStatus)}
-                        >
-                          <option value="">{ar ? "تغيير الحالة" : "Change status"}</option>
-                          {nextStatuses(r.status).map((s) => (
-                            <option key={s} value={s}>{statusLabel[s][ar ? "ar" : "en"]}</option>
-                          ))}
-                        </Select>
-                      ) : (
-                        <span className="text-xs text-ink-soft">
-                          {ar ? "تم تحديث المخزون" : "Stock updated"}
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-
-          {loading && <div className="py-14 text-center text-sm text-ink-soft">{t("loading")}</div>}
-          {!loading && filtered.length === 0 && !error && (
-            <div className="flex flex-col items-center gap-3 py-16 text-center">
-              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-brand-600">
-                <IcRefresh className="h-6 w-6" />
-              </span>
-              <div>
-                <div className="font-semibold text-ink">
-                  {ar ? "لا توجد طلبات استرجاع أو استبدال" : "No returns or exchanges yet"}
+        {loading ? (
+          <div className="py-14 text-center text-sm text-ink-soft">{t("loading")}</div>
+        ) : (
+          <DataTable
+            flush
+            rows={pg.items}
+            columns={columns}
+            getKey={(r) => r.id}
+            onRowClick={(r) => setOpen(r)}
+            empty={
+              error ? null : (
+                <div className="flex flex-col items-center gap-3 py-8 text-center">
+                  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-surface-page text-ink-muted">
+                    <IcRefresh className="h-6 w-6" />
+                  </span>
+                  <div>
+                    <div className="font-semibold text-ink">
+                      {ar ? "لا توجد طلبات استرجاع أو استبدال" : "No returns or exchanges yet"}
+                    </div>
+                    <p className="mt-1 max-w-sm text-sm text-ink-soft">
+                      {ar
+                        ? "تظهر هنا طلبات العملاء من صفحتي الاسترجاع والاستبدال في المتجر."
+                        : "Requests customers open from the storefront's return and exchange pages land here."}
+                    </p>
+                  </div>
                 </div>
-                <p className="mt-1 max-w-sm text-sm text-ink-soft">
-                  {ar
-                    ? "تظهر هنا طلبات العملاء من صفحتي الاسترجاع والاستبدال في المتجر."
-                    : "Requests customers open from the storefront's return and exchange pages land here."}
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
+              )
+            }
+          />
+        )}
 
         {!loading && <Pagination {...pg} />}
       </Card>

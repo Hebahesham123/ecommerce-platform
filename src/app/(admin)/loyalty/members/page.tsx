@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useI18n, num } from "@/lib/i18n";
 import { PageHeader } from "@/components/page-header";
 import { Card, Avatar, Badge } from "@/components/ui";
+import { DataTable, type Column } from "@/components/data-table";
 import { Toolbar, SearchInput, Pagination, usePagination } from "@/components/dashboard-ui";
 import { IcAlert, IcRefresh, IcSignature } from "@/components/icons";
 import { listLoyaltyMembers, adjustMemberSignatures, type MemberRow } from "../actions";
@@ -45,6 +46,60 @@ export default function LoyaltyMembersPage() {
   }, [rows, q]);
   const pg = usePagination(filtered, { perPage: 25, resetKey: q });
 
+  // Ranked by use: the member names the card, their level and balance sit on
+  // its face, and lifetime signatures wait behind a tap.
+  const columns: Column<(typeof pg.items)[number]>[] = [
+    {
+      key: "customer",
+      header: ar ? "العميل" : "Customer",
+      rank: "title",
+      cell: (m) => (
+        <span className="flex items-center gap-3">
+          <span className="hidden sm:block">
+            <Avatar name={m.name || m.phone} />
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate font-medium text-ink">{m.name || (ar ? "بدون اسم" : "No name")}</span>
+            <span className="block text-xs font-normal text-ink-soft" dir="ltr">
+              {m.phone}
+            </span>
+          </span>
+        </span>
+      ),
+    },
+    {
+      key: "level",
+      header: ar ? "المستوى" : "Level",
+      rank: "primary",
+      cell: (m) => {
+        const lv = LEVEL_LABEL[m.level] ?? LEVEL_LABEL.discovery;
+        return <Badge className={lv.tone}>{ar ? lv.ar : lv.en}</Badge>;
+      },
+    },
+    {
+      key: "balance",
+      header: ar ? "الرصيد" : "Balance",
+      rank: "primary",
+      cell: (m) => <span className="font-medium text-ink">{num(m.balance, lang)} ✦</span>,
+    },
+    {
+      key: "lifetime",
+      header: ar ? "مدى الحياة" : "Lifetime",
+      rank: "secondary",
+      cell: (m) => <span className="text-ink-muted">{num(m.lifetimeEarned, lang)} ✦</span>,
+    },
+    {
+      key: "adjust",
+      header: "",
+      align: "end",
+      cell: (m) => (
+        <button onClick={() => setEditing(m)} className="btn-outline h-8 px-2.5 text-xs">
+          {ar ? "تعديل التواقيع" : "Adjust"}
+        </button>
+      ),
+    },
+  ];
+
   return (
     <>
       <PageHeader
@@ -72,47 +127,16 @@ export default function LoyaltyMembersPage() {
         </Toolbar>
         {loading && rows.length === 0 ? (
           <div className="p-10 text-center text-sm text-ink-soft">{ar ? "جارٍ التحميل…" : "Loading…"}</div>
-        ) : filtered.length === 0 ? (
-          <div className="p-10 text-center text-sm text-ink-soft">{ar ? "لا يوجد أعضاء بعد." : "No members yet."}</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-sm">
-              <thead>
-                <tr className="border-b border-line text-xs text-ink-soft">
-                  <th className="px-4 py-3 text-start font-medium">{ar ? "العميل" : "Customer"}</th>
-                  <th className="px-3 py-3 text-start font-medium">{ar ? "المستوى" : "Level"}</th>
-                  <th className="px-3 py-3 text-start font-medium">{ar ? "الرصيد" : "Balance"}</th>
-                  <th className="px-3 py-3 text-start font-medium">{ar ? "مدى الحياة" : "Lifetime"}</th>
-                  <th className="px-5 py-3 text-end font-medium"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {pg.items.map((m) => {
-                  const lv = LEVEL_LABEL[m.level] ?? LEVEL_LABEL.discovery;
-                  return (
-                    <tr key={m.phone} className="border-b border-line last:border-0 hover:bg-surface-page">
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <Avatar name={m.name || m.phone} />
-                          <div className="min-w-0">
-                            <div className="truncate font-medium text-ink">{m.name || (ar ? "بدون اسم" : "No name")}</div>
-                            <div className="text-xs text-ink-soft" dir="ltr">{m.phone}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-3 py-3"><Badge className={lv.tone}>{ar ? lv.ar : lv.en}</Badge></td>
-                      <td className="px-3 py-3 font-medium text-ink">{num(m.balance, lang)} ✦</td>
-                      <td className="px-3 py-3 text-ink-muted">{num(m.lifetimeEarned, lang)} ✦</td>
-                      <td className="px-5 py-3 text-end">
-                        <button onClick={() => setEditing(m)} className="btn-outline h-8 px-2.5 text-xs">{ar ? "تعديل التواقيع" : "Adjust"}</button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            flush
+            rows={pg.items}
+            columns={columns}
+            getKey={(m) => m.phone}
+            empty={ar ? "لا يوجد أعضاء بعد." : "No members yet."}
+          />
         )}
+
         <Pagination {...pg} />
       </Card>
 

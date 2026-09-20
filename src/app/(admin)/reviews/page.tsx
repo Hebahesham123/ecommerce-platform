@@ -11,6 +11,7 @@ import {
   type StoreReview,
 } from "./actions";
 import { PageHeader } from "@/components/page-header";
+import { DataTable, type Column } from "@/components/data-table";
 import { Card, Avatar } from "@/components/ui";
 import {
   KpiRow,
@@ -153,6 +154,144 @@ export default function ReviewsPage() {
   const fmtDate = (d: string) =>
     new Date(d).toLocaleDateString(ar ? "ar-EG" : "en-GB", { day: "numeric", month: "short" });
 
+  // Ranked by use: who wrote it and what they said, then the moderation
+  // buttons; the three star ratings and the channel wait behind a tap.
+  const columns: Column<(typeof pg.items)[number]>[] = [
+    {
+      key: "reviewer",
+      header: ar ? "العميل" : "Reviewer",
+      rank: "title",
+      cell: (r) => (
+        <span className="flex items-center gap-2.5">
+          <span className="hidden sm:block">
+            <Avatar name={r.reviewerName} />
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate font-medium text-ink">{r.reviewerName}</span>
+            <span className="mt-0.5 flex items-center gap-1.5">
+              {(r.orderNumber || r.phone) && (
+                <span className="truncate text-xs font-normal text-ink-soft" dir="ltr">
+                  {r.orderNumber ? `#${r.orderNumber}` : r.phone}
+                </span>
+              )}
+              <ChannelBadge value={r.channel} />
+            </span>
+          </span>
+        </span>
+      ),
+    },
+    {
+      key: "product",
+      header: ar ? "المنتج" : "Product",
+      rank: "primary",
+      cell: (r) => <Stars value={r.productRating} />,
+    },
+    {
+      key: "status",
+      header: t("col_status"),
+      rank: "primary",
+      cell: (r) => <StatusPill label={statusText[r.status][ar ? "ar" : "en"]} tone={statusTone[r.status]} />,
+    },
+    {
+      key: "comment",
+      header: ar ? "التعليق" : "Comment",
+      rank: "secondary",
+      cell: (r) => (
+        <span className="block max-w-[280px]">
+          <span className="line-clamp-2 block text-ink-muted">{r.comment || "—"}</span>
+          {r.experienceLevel && (
+            <span className="badge mt-1 bg-slate-500/10 text-slate-600 dark:text-slate-300">{r.experienceLevel}</span>
+          )}
+        </span>
+      ),
+    },
+    {
+      key: "shipping",
+      header: ar ? "الشحن" : "Shipping",
+      rank: "secondary",
+      cell: (r) => <Stars value={r.shippingRating} />,
+      hideBelow: "xl",
+    },
+    {
+      key: "support",
+      header: ar ? "الدعم" : "Support",
+      rank: "secondary",
+      cell: (r) => <Stars value={r.supportRating} />,
+      hideBelow: "xl",
+    },
+    {
+      key: "date",
+      header: t("col_date"),
+      rank: "secondary",
+      cell: (r) => <span className="text-ink-muted">{fmtDate(r.createdAt)}</span>,
+      hideBelow: "lg",
+    },
+    {
+      key: "featured",
+      header: "★",
+      rank: "secondary",
+      cell: (r) => (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onFeature(r);
+          }}
+          title={
+            r.featured
+              ? ar ? "إزالة من صفحة العملاء السعداء" : "Remove from Happy Customers"
+              : ar ? "إضافة إلى صفحة العملاء السعداء" : "Add to Happy Customers"
+          }
+          className="rounded-lg p-1 transition-colors hover:bg-surface-hover"
+        >
+          <IcStar
+            className={`h-5 w-5 ${r.featured ? "text-amber-500" : "text-slate-300 hover:text-amber-400 dark:text-slate-600"}`}
+          />
+        </button>
+      ),
+    },
+    {
+      key: "actions",
+      header: "",
+      align: "end",
+      cell: (r) => (
+        <span className={`flex items-center justify-end gap-1 ${busy === r.id ? "opacity-50" : ""}`}>
+          {r.status !== "published" && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onStatus(r, "published");
+              }}
+              className="btn-ghost h-8 px-2 text-xs text-emerald-600 hover:bg-emerald-50"
+            >
+              {ar ? "نشر" : "Publish"}
+            </button>
+          )}
+          {r.status !== "hidden" && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onStatus(r, "hidden");
+              }}
+              className="btn-ghost h-8 px-2 text-xs text-ink-muted"
+            >
+              {ar ? "إخفاء" : "Hide"}
+            </button>
+          )}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(r);
+            }}
+            className="btn-ghost h-8 w-8 p-0 text-rose-600 hover:bg-rose-50"
+            aria-label="delete"
+          >
+            <IcTrash className="h-4 w-4" />
+          </button>
+        </span>
+      ),
+    },
+  ];
+
   return (
     <>
       <PageHeader
@@ -268,123 +407,33 @@ export default function ReviewsPage() {
           </span>
         </Toolbar>
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1000px] text-sm">
-            <thead>
-              <tr className="border-b border-line text-xs text-ink-soft">
-                <th className="w-12 ps-5 pe-2 py-3 text-start font-medium" title={ar ? "العملاء السعداء" : "Happy Customers"}>
-                  ★
-                </th>
-                <th className="px-3 py-3 text-start font-medium">{ar ? "العميل" : "Reviewer"}</th>
-                <th className="px-3 py-3 text-start font-medium">{ar ? "المنتج" : "Product"}</th>
-                <th className="px-3 py-3 text-start font-medium">{ar ? "الشحن" : "Shipping"}</th>
-                <th className="px-3 py-3 text-start font-medium">{ar ? "الدعم" : "Support"}</th>
-                <th className="px-3 py-3 text-start font-medium">{ar ? "التعليق" : "Comment"}</th>
-                <th className="px-3 py-3 text-start font-medium">{t("col_date")}</th>
-                <th className="px-3 py-3 text-start font-medium">{t("col_status")}</th>
-                <th className="px-5 py-3 text-end font-medium" />
-              </tr>
-            </thead>
-            <tbody>
-              {pg.items.map((r) => (
-                <tr key={r.id} className={`group border-b border-line transition-colors last:border-0 hover:bg-surface-page ${busy === r.id ? "opacity-50" : ""}`}>
-                  <td className="ps-5 pe-2 py-3">
-                    <button
-                      onClick={() => onFeature(r)}
-                      title={
-                        r.featured
-                          ? ar ? "إزالة من صفحة العملاء السعداء" : "Remove from Happy Customers"
-                          : ar ? "إضافة إلى صفحة العملاء السعداء" : "Add to Happy Customers"
-                      }
-                      className="rounded-lg p-1 transition-colors hover:bg-surface-hover"
-                    >
-                      <IcStar
-                        className={`h-5 w-5 ${r.featured ? "text-amber-500" : "text-slate-300 hover:text-amber-400 dark:text-slate-600"}`}
-                      />
-                    </button>
-                  </td>
-                  <td className="px-3 py-3">
-                    <div className="flex items-center gap-2.5">
-                      <Avatar name={r.reviewerName} />
-                      <div className="min-w-0">
-                        <div className="truncate font-medium text-ink">{r.reviewerName}</div>
-                        <div className="mt-0.5 flex items-center gap-1.5">
-                          {(r.orderNumber || r.phone) && (
-                            <span className="truncate text-xs text-ink-soft" dir="ltr">
-                              {r.orderNumber ? `#${r.orderNumber}` : r.phone}
-                            </span>
-                          )}
-                          <ChannelBadge value={r.channel} />
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-3 py-3"><Stars value={r.productRating} /></td>
-                  <td className="px-3 py-3"><Stars value={r.shippingRating} /></td>
-                  <td className="px-3 py-3"><Stars value={r.supportRating} /></td>
-                  <td className="max-w-[280px] px-3 py-3">
-                    <p className="line-clamp-2 text-ink-muted">{r.comment || "—"}</p>
-                    {r.experienceLevel && (
-                      <span className="badge mt-1 bg-slate-500/10 text-slate-600 dark:text-slate-300">
-                        {r.experienceLevel}
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-3 py-3 text-ink-muted">{fmtDate(r.createdAt)}</td>
-                  <td className="px-3 py-3">
-                    <StatusPill label={statusText[r.status][ar ? "ar" : "en"]} tone={statusTone[r.status]} />
-                  </td>
-                  <td className="px-5 py-3 text-end">
-                    <div className="flex items-center justify-end gap-1">
-                      {r.status !== "published" && (
-                        <button
-                          onClick={() => onStatus(r, "published")}
-                          className="btn-ghost h-8 px-2 text-xs text-emerald-600 hover:bg-emerald-50"
-                        >
-                          {ar ? "نشر" : "Publish"}
-                        </button>
-                      )}
-                      {r.status !== "hidden" && (
-                        <button
-                          onClick={() => onStatus(r, "hidden")}
-                          className="btn-ghost h-8 px-2 text-xs text-ink-muted"
-                        >
-                          {ar ? "إخفاء" : "Hide"}
-                        </button>
-                      )}
-                      <button
-                        onClick={() => onDelete(r)}
-                        className="btn-ghost h-8 w-8 p-0 text-rose-600 opacity-0 hover:bg-rose-50 group-hover:opacity-100"
-                        aria-label="delete"
-                      >
-                        <IcTrash className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          {loading && <div className="py-14 text-center text-sm text-ink-soft">{t("loading")}</div>}
-          {!loading && filtered.length === 0 && !error && (
-            <div className="flex flex-col items-center gap-3 py-16 text-center">
-              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-brand-600">
-                <IcStar className="h-6 w-6" />
-              </span>
-              <div>
-                <div className="font-semibold text-ink">
-                  {ar ? "لا توجد تقييمات بعد" : "No reviews yet"}
+        {loading ? (
+          <div className="py-14 text-center text-sm text-ink-soft">{t("loading")}</div>
+        ) : (
+          <DataTable
+            flush
+            rows={pg.items}
+            columns={columns}
+            getKey={(r) => r.id}
+            empty={
+              error ? null : (
+                <div className="flex flex-col items-center gap-3 py-8 text-center">
+                  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-surface-page text-ink-muted">
+                    <IcStar className="h-6 w-6" />
+                  </span>
+                  <div>
+                    <div className="font-semibold text-ink">{ar ? "لا توجد تقييمات بعد" : "No reviews yet"}</div>
+                    <p className="mt-1 max-w-sm text-sm text-ink-soft">
+                      {ar
+                        ? "التقييمات المُرسلة من نموذج المتجر تظهر هنا للمراجعة."
+                        : "Reviews submitted from the storefront form land here for moderation."}
+                    </p>
+                  </div>
                 </div>
-                <p className="mt-1 max-w-sm text-sm text-ink-soft">
-                  {ar
-                    ? "التقييمات المُرسلة من نموذج المتجر تظهر هنا للمراجعة."
-                    : "Reviews submitted from the storefront form land here for moderation."}
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
+              )
+            }
+          />
+        )}
 
         {!loading && <Pagination {...pg} />}
       </Card>
