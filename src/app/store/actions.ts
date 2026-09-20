@@ -5,6 +5,7 @@ import { validateDiscount, type DiscountLine } from "@/lib/discount-engine";
 import { normalizePhone, phoneVariants } from "@/lib/phone";
 import { getSessionPhone, setSession } from "@/lib/store-session";
 import { normalizeChannel, type Channel } from "@/lib/channel";
+import { withDeliveryNote } from "@/lib/offers";
 import {
   isBirthdayFor,
   placeOrderCore,
@@ -364,6 +365,28 @@ export async function setOrderExperience(
     if (patch.deliverySlot !== undefined) update.preferred_delivery_slot = patch.deliverySlot;
     if (patch.rating !== undefined) update.rating = patch.rating;
     if (Object.keys(update).length === 0) return { ok: true, data: undefined };
+
+    // A slot picked here is the shopper telling the shop when to come, so it
+    // belongs on the order note as well as in its own column. The note is what
+    // the merchant reads on the order and what travels to the courier; a column
+    // nobody prints would leave the promise invisible to whoever has to keep it.
+    if (patch.deliveryDate !== undefined || patch.deliverySlot !== undefined) {
+      const { data: current } = await supabase
+        .from("store_orders")
+        .select("note,preferred_delivery_date,preferred_delivery_slot")
+        .eq("order_number", orderNumber)
+        .maybeSingle();
+      // Whichever half this call did not carry stays as the order already has it.
+      const date =
+        patch.deliveryDate !== undefined
+          ? patch.deliveryDate
+          : ((current?.preferred_delivery_date as string | null) ?? null);
+      const slot =
+        patch.deliverySlot !== undefined
+          ? patch.deliverySlot
+          : ((current?.preferred_delivery_slot as string | null) ?? null);
+      update.note = withDeliveryNote((current?.note as string | null) ?? null, date, slot);
+    }
     const { error } = await supabase.from("store_orders").update(update).eq("order_number", orderNumber);
     if (error) return { ok: false, error: error.message };
     return { ok: true, data: undefined };

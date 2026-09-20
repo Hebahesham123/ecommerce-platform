@@ -97,6 +97,47 @@ export const DELIVERY_SLOTS: DeliverySlot[] = [
   { id: "night", ar: "مساءً · ٦–٩", en: "Night · 6–9" },
 ];
 
+
+/**
+ * The note segment that records when the shopper wants their order.
+ *
+ * The merchant note is a " | "-separated list written when the order is
+ * placed. The shopper can still pick a day and a slot afterwards, on the
+ * thank-you page, and that choice has to land in the same segment — appending
+ * a second one would leave the order carrying two delivery times with nothing
+ * to say which is current.
+ */
+export const DELIVERY_NOTE_PREFIX = "التوصيل:";
+
+export function deliveryNoteLine(
+  date: string | null | undefined,
+  slot: string | null | undefined,
+): string | null {
+  const label = slotLabel(slot, "ar");
+  if (!date) return label ? `${DELIVERY_NOTE_PREFIX} ${label}` : null;
+  return `${DELIVERY_NOTE_PREFIX} ${date}${label ? ` (${label})` : ""}`;
+}
+
+/** Replace the delivery segment in place, keeping everything else untouched. */
+export function withDeliveryNote(
+  note: string | null | undefined,
+  date: string | null | undefined,
+  slot: string | null | undefined,
+): string | null {
+  const line = deliveryNoteLine(date, slot);
+  const parts = (note ?? "")
+    .split(" | ")
+    .map((x) => x.trim())
+    .filter(Boolean);
+  const at = parts.findIndex((x) => x.startsWith(DELIVERY_NOTE_PREFIX));
+  if (at >= 0) {
+    if (line) parts[at] = line;
+    else parts.splice(at, 1);
+  } else if (line) {
+    parts.push(line);
+  }
+  return parts.join(" | ") || null;
+}
 export function slotLabel(id: string | null | undefined, lang: "ar" | "en" = "ar"): string {
   const s = DELIVERY_SLOTS.find((x) => x.id === id);
   return s ? s[lang] : "";

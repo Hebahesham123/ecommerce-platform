@@ -52,6 +52,9 @@ export type OrderDetail = {
   city: string | null;
   address: string | null;
   note: string | null;
+  /** What the shopper picked on the thank-you page, if anything. */
+  preferredDeliveryDate: string | null;
+  preferredDeliverySlot: string | null;
   subtotal: number;
   shipping: number;
   total: number;
@@ -102,6 +105,8 @@ export async function getOrderDetail(orderNumber: string): Promise<ActionResult<
         city: sn(order.city),
         address: sn(order.address),
         note: sn(order.note),
+        preferredDeliveryDate: sn(order.preferred_delivery_date),
+        preferredDeliverySlot: sn(order.preferred_delivery_slot),
         subtotal: n(order.subtotal),
         shipping: n(order.shipping),
         total,

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { slotLabel } from "@/lib/offers";
 import { useI18n, egp, num } from "@/lib/i18n";
 import {
   labels,
@@ -712,6 +713,44 @@ function OrderDetailDrawer({
             <div className="mt-1 text-sm text-ink-muted">
               {[d?.address, d?.city, d?.governorate ?? o.governorate].filter(Boolean).join("، ")}، {ar ? "مصر" : "Egypt"}
             </div>
+
+            {/* When the shopper asked for it. Picked after checkout, on the
+                thank-you page, so it is missing on most orders — and worth
+                showing loudly on the ones that have it, since it is a promise
+                the shop made about a specific morning. */}
+            {(d?.preferredDeliveryDate || d?.preferredDeliverySlot) && (
+              <>
+                <div className="mt-3 text-xs font-medium uppercase tracking-wide text-ink-soft">
+                  {ar ? "موعد التوصيل المطلوب" : "Requested delivery"}
+                </div>
+                <div className="mt-1 text-sm font-medium text-ink">
+                  {[
+                    d.preferredDeliveryDate
+                      ? new Date(d.preferredDeliveryDate).toLocaleDateString(ar ? "ar-EG" : "en-GB", {
+                          weekday: "long",
+                          day: "numeric",
+                          month: "short",
+                        })
+                      : null,
+                    slotLabel(d.preferredDeliverySlot, ar ? "ar" : "en") || null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </div>
+              </>
+            )}
+
+            {/* The merchant note carries the same choice plus anything else the
+                order was placed with (gift wrap, coupon), which is why it sits
+                with the customer rather than off in its own panel. */}
+            {d?.note && (
+              <>
+                <div className="mt-3 text-xs font-medium uppercase tracking-wide text-ink-soft">
+                  {ar ? "ملاحظات الطلب" : "Order notes"}
+                </div>
+                <div className="mt-1 whitespace-pre-wrap text-sm text-ink-muted">{d.note}</div>
+              </>
+            )}
           </div>
         </div>
 
