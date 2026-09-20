@@ -37,8 +37,8 @@ function Missing({ report }: { report: Report }) {
       <p className="mt-1 text-[13px] leading-relaxed text-amber-900/80 dark:text-amber-200/80">
         {needsTable
           ? ar
-            ? "شغّلي 0032_site_events.sql في Supabase مرة واحدة، وستبدأ الزيارات في الظهور هنا فوراً."
-            : "Run 0032_site_events.sql in Supabase once. Visits start appearing here straight away — nothing else to set up."
+            ? "شغّلي 0033_site_events.sql في Supabase مرة واحدة، وستبدأ الزيارات في الظهور هنا فوراً."
+            : "Run 0033_site_events.sql in Supabase once. Visits start appearing here straight away — nothing else to set up."
           : report.error}
       </p>
     </div>
