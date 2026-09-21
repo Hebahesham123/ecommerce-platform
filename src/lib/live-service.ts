@@ -31,13 +31,27 @@ type LiveInputs = {
   playbackUrl: string;
 };
 
-const CF_ACCOUNT = process.env.CLOUDFLARE_ACCOUNT_ID ?? "";
-const CF_TOKEN = process.env.CLOUDFLARE_STREAM_TOKEN ?? "";
+const CF_ACCOUNT = (process.env.CLOUDFLARE_ACCOUNT_ID ?? "").trim();
+const CF_TOKEN = (process.env.CLOUDFLARE_STREAM_TOKEN ?? "").trim();
 // Optional: only needed if Cloudflare ever stops returning a playback URL to
 // read the subdomain from. Normally left unset.
-const CF_CUSTOMER_CODE = process.env.CLOUDFLARE_STREAM_CUSTOMER_CODE ?? "";
+const CF_CUSTOMER_CODE = (process.env.CLOUDFLARE_STREAM_CUSTOMER_CODE ?? "").trim();
 
 export const providerConfigured = () => Boolean(CF_ACCOUNT && CF_TOKEN);
+
+/**
+ * Which of the two the server cannot see.
+ *
+ * "Not connected" is true but useless: it cannot tell a missing variable from
+ * a typo, from a deployment that was never rebuilt, from Production-only
+ * variables on a preview URL. Names only — never the values.
+ */
+export function providerMissing(): string[] {
+  const missing: string[] = [];
+  if (!CF_ACCOUNT) missing.push("CLOUDFLARE_ACCOUNT_ID");
+  if (!CF_TOKEN) missing.push("CLOUDFLARE_STREAM_TOKEN");
+  return missing;
+}
 
 /**
  * Cloudflare plays video from customer-<code>.cloudflarestream.com, and that

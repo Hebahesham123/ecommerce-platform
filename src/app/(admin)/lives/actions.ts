@@ -9,6 +9,7 @@ import {
   pinLiveProduct,
   prepareLive,
   providerConfigured,
+  providerMissing,
   refreshRecording,
   saveLive,
   setLiveProducts,
@@ -95,6 +96,9 @@ export async function useTestStreamAction(id: string): Promise<Result<LiveStream
 }
 
 /** Whether the streaming account is wired up, so the page can say what to do. */
-export async function providerStatusAction(): Promise<{ configured: boolean }> {
-  return { configured: providerConfigured() };
+export async function providerStatusAction(): Promise<{
+  configured: boolean;
+  missing: string[];
+}> {
+  return { configured: providerConfigured(), missing: providerMissing() };
 }

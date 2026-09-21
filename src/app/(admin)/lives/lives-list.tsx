@@ -67,6 +67,7 @@ export function LivesList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [provider, setProvider] = useState<boolean | null>(null);
+  const [missing, setMissing] = useState<string[]>([]);
   const [status, setStatus] = useState<"all" | LiveStatus>("all");
   const [q, setQ] = useState("");
   const [open, setOpen] = useState<LiveStream | null>(null);
@@ -75,6 +76,7 @@ export function LivesList() {
   async function load() {
     const [res, prov] = await Promise.all([listLivesAction(), providerStatusAction()]);
     setProvider(prov.configured);
+    setMissing(prov.missing ?? []);
     if (res.ok) {
       setRows(res.data);
       setError(null);
@@ -174,8 +176,20 @@ export function LivesList() {
             </div>
             <p className="mt-1 text-sky-800/90">
               {ar
-                ? "يمكنك جدولة البث وتجهيز المنتجات الآن. للبث فعلياً أضيفي CLOUDFLARE_ACCOUNT_ID و CLOUDFLARE_STREAM_TOKEN في إعدادات البيئة."
-                : "You can schedule lives and line up products now. To actually broadcast, add CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_STREAM_TOKEN to your environment variables."}
+                ? "يمكنك جدولة البث وتجهيز المنتجات الآن. للبث فعلياً يحتاج الخادم إلى المتغيّرات التالية:"
+                : "You can schedule lives and line up products now. To actually broadcast, the server needs these variables:"}
+            </p>
+            <ul className="mt-1.5 space-y-0.5">
+              {(missing.length ? missing : ["CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_STREAM_TOKEN"]).map((name) => (
+                <li key={name} className="font-mono text-[11px] text-sky-900">
+                  {name}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-1.5 text-[11px] text-sky-800/80">
+              {ar
+                ? "إن كانت مضافة بالفعل: تأكدي أنها على بيئة Production وأن النشر تم بعد إضافتها."
+                : "If they are already added: check they are on the Production environment and that the deploy happened after adding them."}
             </p>
           </div>
         </Card>
