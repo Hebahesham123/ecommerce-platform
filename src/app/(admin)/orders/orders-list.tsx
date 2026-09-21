@@ -1,28 +1,24 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { slotLabel } from "@/lib/offers";
+import { useCallback, useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent } from "react";
+import { useRouter } from "next/navigation";
 import { useI18n, egp, num } from "@/lib/i18n";
 import {
   labels,
-  salesSeries,
   type Order,
   type PayMethod,
 } from "@/lib/data";
 import { listStoreOrders } from "../../store/actions";
 import {
   getOrderDetail,
-  collectPayment,
-  refundPayment,
   fulfillOrder,
-  undoFulfillment,
   type OrderDetail,
 } from "./actions";
+import { paymentMeta, fulfillMeta, methodLabel } from "./order-ui";
 import { PageHeader } from "@/components/page-header";
 import { DataTable, type Column } from "@/components/data-table";
 import { Card } from "@/components/ui";
 import {
-  KpiStrip,
   StatusPill,
   ViewTabs,
   Checkbox,
@@ -33,7 +29,7 @@ import {
   usePagination,
   type PillTone,
 } from "@/components/dashboard-ui";
-import { IcFile, IcX, IcChevron, IcCash, IcCourier } from "@/components/icons";
+import { IcFile, IcX, IcCash, IcCourier } from "@/components/icons";
 import { ChannelBadge } from "@/components/channel-badge";
 import { CHANNELS, CHANNEL_LABELS, type Channel } from "@/lib/channel";
 
@@ -48,35 +44,15 @@ import { CHANNELS, CHANNEL_LABELS, type Channel } from "@/lib/channel";
  * When `lockChannel` is set the channel stops being a filter and becomes the
  * page's subject — the picker goes away, and clearing the filters cannot
  * escape it.
+ *
+ * A row opens the order's own page (/orders/1007). The payment and fulfillment
+ * pills are their own click: they open a small popover — the items, the history,
+ * and a button through to the full page — so a merchant can glance at "what's in
+ * this" without leaving the list.
  */
 
 type Tab = "all" | "unfulfilled" | "unpaid" | "open" | "attention";
 type SortKey = "newest" | "oldest" | "total_high" | "total_low";
-
-// Status → pill, covering the real Shopify-style vocabulary the order money /
-// fulfillment functions now write (plus the legacy courier values, just in case
-// an old row still carries one).
-type StatusMeta = { tone: PillTone; hollow: boolean; ar: string; en: string };
-
-function paymentMeta(status: string): StatusMeta {
-  switch (status) {
-    case "paid": return { tone: "success", hollow: false, ar: "مدفوع", en: "Paid" };
-    case "partially_paid": return { tone: "warning", hollow: false, ar: "مدفوع جزئياً", en: "Partially paid" };
-    case "partially_refunded": return { tone: "neutral", hollow: false, ar: "مسترجع جزئياً", en: "Partially refunded" };
-    case "refunded": return { tone: "neutral", hollow: false, ar: "مسترجع", en: "Refunded" };
-    case "authorized": return { tone: "info", hollow: false, ar: "محجوز", en: "Authorized" };
-    default: return { tone: "warning", hollow: true, ar: "غير مدفوع", en: "Unpaid" };
-  }
-}
-function fulfillMeta(status: string): StatusMeta {
-  switch (status) {
-    case "fulfilled": return { tone: "success", hollow: false, ar: "مُنفّذ", en: "Fulfilled" };
-    case "partial": return { tone: "warning", hollow: false, ar: "مُنفّذ جزئياً", en: "Partially fulfilled" };
-    case "delivered": return { tone: "success", hollow: false, ar: "تم التسليم", en: "Delivered" };
-    case "returned": return { tone: "critical", hollow: false, ar: "مرتجع", en: "Returned" };
-    default: return { tone: "neutral", hollow: true, ar: "غير مُنفّذ", en: "Unfulfilled" };
-  }
-}
 
 type OrderFlag = NonNullable<Order["flag"]>;
 const flagPill: Record<OrderFlag, PillTone> = {
@@ -88,8 +64,12 @@ const flagPill: Record<OrderFlag, PillTone> = {
 // Table row = an order plus the extra columns the Shopify-style list shows.
 type Row = Order & { itemsCount: number; channel: Channel };
 
+type Pop = { order: Row; kind: "payment" | "fulfillment"; x: number; y: number };
+
 export function OrdersList({ lockChannel }: { lockChannel?: Channel } = {}) {
   const { t, lang } = useI18n();
+  const router = useRouter();
+  const basePath = lockChannel ? "/app/orders" : "/orders";
   const [tab, setTab] = useState<Tab>("all");
   const [q, setQ] = useState("");
   const [payment, setPayment] = useState<string>("all");
@@ -98,7 +78,7 @@ export function OrdersList({ lockChannel }: { lockChannel?: Channel } = {}) {
   const [channel, setChannel] = useState<"all" | Channel>(lockChannel ?? "all");
   const [sort, setSort] = useState<SortKey>("newest");
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [detail, setDetail] = useState<Order | null>(null);
+  const [pop, setPop] = useState<Pop | null>(null);
   const [placed, setPlaced] = useState<Row[]>([]);
 
   const reload = useCallback(async () => {
@@ -127,9 +107,7 @@ export function OrdersList({ lockChannel }: { lockChannel?: Channel } = {}) {
     reload();
   }, [reload]);
 
-  // Orders that were actually placed, and nothing else. This list used to end
-  // with ten invented ones from the days before the store was live; they made
-  // the counts, the revenue and the customer list read as fiction.
+  // Orders that were actually placed, and nothing else.
   const orders = placed;
 
   const ar = lang === "ar";
@@ -152,22 +130,13 @@ export function OrdersList({ lockChannel }: { lockChannel?: Channel } = {}) {
           ? "مرتجع"
           : "Return";
 
-  // ---- KPIs + sparklines ----
-  const kpi = useMemo(() => {
-    const revenue = orders.reduce((s, o) => s + o.total, 0);
-    const cod = orders.filter((o) => o.method === "cod").length;
-    const unfulfilled = orders.filter((o) => o.fulfillment === "unfulfilled").length;
-    const delivered = orders.filter((o) => o.fulfillment === "delivered").length;
-    return {
-      count: orders.length,
-      revenue,
-      codShare: orders.length ? Math.round((cod / orders.length) * 100) : 0,
-      unfulfilled,
-      delivered,
-    };
-  }, [orders]);
-  const ordersSpark = salesSeries.map((s) => s.orders);
-  const salesSpark = salesSeries.map((s) => s.sales);
+  const openPill = (o: Row, kind: "payment" | "fulfillment", e: ReactMouseEvent<HTMLElement>) => {
+    e.stopPropagation();
+    const r = e.currentTarget.getBoundingClientRect();
+    // Clamp so a pill near the right edge doesn't push the card off-screen.
+    const x = Math.min(r.left, window.innerWidth - 340);
+    setPop({ order: o, kind, x: Math.max(8, x), y: r.bottom + 6 });
+  };
 
   const tabs: { key: Tab; label: string }[] = [
     { key: "all", label: t("filter_all") },
@@ -222,7 +191,6 @@ export function OrdersList({ lockChannel }: { lockChannel?: Channel } = {}) {
     fulfillment !== "all" ||
     method !== "all" ||
     (!lockChannel && channel !== "all");
-  // Bulk selection acts on the visible page, the way every list app behaves.
   const allSelected = pg.items.length > 0 && pg.items.every((o) => selected.has(o.id));
   const someSelected = pg.items.some((o) => selected.has(o.id));
 
@@ -241,8 +209,6 @@ export function OrdersList({ lockChannel }: { lockChannel?: Channel } = {}) {
     });
   }
 
-  // Ranked by use. The order number and customer name the card, the money and
-  // the payment state sit on its face, and the rest waits behind the chevron.
   const columns: Column<(typeof pg.items)[number]>[] = [
     {
       key: "order",
@@ -269,7 +235,17 @@ export function OrdersList({ lockChannel }: { lockChannel?: Channel } = {}) {
       rank: "primary",
       cell: (o) => {
         const m = paymentMeta(String(o.payment));
-        return <StatusPill label={ar ? m.ar : m.en} tone={m.tone} hollow={m.hollow} />;
+        return (
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={(e) => openPill(o, "payment", e)}
+            className="inline-flex cursor-pointer rounded-full outline-none ring-brand-500/40 focus-visible:ring-2"
+            title={ar ? "عرض تفاصيل الدفع" : "Payment details"}
+          >
+            <StatusPill label={ar ? m.ar : m.en} tone={m.tone} hollow={m.hollow} />
+          </span>
+        );
       },
     },
     {
@@ -297,7 +273,17 @@ export function OrdersList({ lockChannel }: { lockChannel?: Channel } = {}) {
       rank: "secondary",
       cell: (o) => {
         const m = fulfillMeta(String(o.fulfillment));
-        return <StatusPill label={ar ? m.ar : m.en} tone={m.tone} hollow={m.hollow} />;
+        return (
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={(e) => openPill(o, "fulfillment", e)}
+            className="inline-flex cursor-pointer rounded-full outline-none ring-brand-500/40 focus-visible:ring-2"
+            title={ar ? "عرض تفاصيل التنفيذ" : "Fulfillment details"}
+          >
+            <StatusPill label={ar ? m.ar : m.en} tone={m.tone} hollow={m.hollow} />
+          </span>
+        );
       },
     },
     {
@@ -448,7 +434,7 @@ export function OrdersList({ lockChannel }: { lockChannel?: Channel } = {}) {
           rows={pg.items}
           columns={columns}
           getKey={(o) => o.id}
-          onRowClick={(o) => setDetail(o)}
+          onRowClick={(o) => router.push(`${basePath}/${o.id}`)}
           selectable={(o) => <Checkbox checked={selected.has(o.id)} onChange={() => toggleOne(o.id)} />}
           selectAll={<Checkbox checked={allSelected} indeterminate={someSelected} onChange={toggleAll} />}
           empty={
@@ -464,578 +450,186 @@ export function OrdersList({ lockChannel }: { lockChannel?: Channel } = {}) {
         <Pagination {...pg} />
       </Card>
 
-      {detail && (
-        <OrderDetailDrawer
-          order={detail}
-          onClose={() => setDetail(null)}
-          onChanged={reload}
+      {pop && (
+        <StatusPopover
+          pop={pop}
+          basePath={basePath}
+          ar={ar}
+          lang={lang}
+          onClose={() => setPop(null)}
         />
       )}
     </>
   );
 }
 
-// ---- Order detail drawer (Shopify-style) ------------------------------------
-const PAY_METHODS: { value: string; ar: string; en: string }[] = [
-  { value: "cash", ar: "نقدي", en: "Cash" },
-  { value: "cod", ar: "عند الاستلام", en: "Cash on delivery" },
-  { value: "card", ar: "بطاقة", en: "Card" },
-  { value: "instapay", ar: "إنستاباي", en: "InstaPay" },
-  { value: "wallet", ar: "محفظة", en: "Wallet" },
-  { value: "bank_transfer", ar: "تحويل بنكي", en: "Bank transfer" },
-  { value: "other", ar: "أخرى", en: "Other" },
-];
-function methodLabel(v: string, ar: boolean): string {
-  const m = PAY_METHODS.find((x) => x.value === v);
-  return m ? (ar ? m.ar : m.en) : v;
-}
-function orderErrorText(code: string, ar: boolean): string {
-  const map: Record<string, { ar: string; en: string }> = {
-    migration_missing: { ar: "شغّلي ترحيل قاعدة البيانات 0028.", en: "Run database migration 0028." },
-    refund_exceeds_paid: { ar: "المبلغ أكبر من المدفوع.", en: "Refund exceeds what was paid." },
-    invalid_amount: { ar: "أدخلي مبلغاً صحيحاً.", en: "Enter a valid amount." },
-    nothing_to_fulfill: { ar: "لا يوجد ما يُنفَّذ.", en: "Nothing left to fulfill." },
-    order_not_found: { ar: "الطلب غير موجود.", en: "Order not found." },
-  };
-  const e = map[code];
-  return e ? (ar ? e.ar : e.en) : ar ? "حدث خطأ." : "Something went wrong.";
-}
-
-function OrderDetailDrawer({
-  order: o,
+// ---- Status popover (list "peek", with a way through to the full page) -------
+function StatusPopover({
+  pop,
+  basePath,
+  ar,
+  lang,
   onClose,
-  onChanged,
 }: {
-  order: Order;
+  pop: Pop;
+  basePath: string;
+  ar: boolean;
+  lang: "ar" | "en";
   onClose: () => void;
-  onChanged: () => void;
 }) {
-  const { t, lang } = useI18n();
-  const ar = lang === "ar";
+  const { t } = useI18n();
+  const router = useRouter();
   const [d, setD] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [err, setErr] = useState<string | null>(null);
-  const [modal, setModal] = useState<null | "collect" | "refund" | "fulfill">(null);
+  const o = pop.order;
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    const res = await getOrderDetail(o.id);
-    if (res.ok) {
-      setD(res.data);
-      setErr(null);
-    } else setErr(res.error);
-    setLoading(false);
-  }, [o.id]);
   useEffect(() => {
-    load();
-  }, [load]);
+    let alive = true;
+    (async () => {
+      const res = await getOrderDetail(o.id);
+      if (!alive) return;
+      if (res.ok) setD(res.data);
+      setLoading(false);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [o.id]);
 
-  async function afterChange() {
-    await load();
-    onChanged();
-  }
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
-  const fmt = (s: string) =>
-    new Date(s).toLocaleDateString(ar ? "ar-EG" : "en-US", { year: "numeric", month: "long", day: "numeric" });
   const fmtTime = (s: string) =>
     new Date(s).toLocaleString(ar ? "ar-EG" : "en-US", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
-  const payStatus = d?.paymentStatus ?? String(o.payment);
-  const fulStatus = d?.fulfillmentStatus ?? String(o.fulfillment);
-  const pm = paymentMeta(payStatus);
-  const fm = fulfillMeta(fulStatus);
-  const remainingTotal = d ? d.items.reduce((s, li) => s + (li.quantity - li.fulfilledQuantity), 0) : 0;
+  const pm = paymentMeta(d?.paymentStatus ?? String(o.payment));
+  const fm = fulfillMeta(d?.fulfillmentStatus ?? String(o.fulfillment));
 
   return (
-    <div className="fixed inset-0 z-50 flex">
-      <div className="flex-1 bg-black/30" onClick={onClose} />
-      <div className="flex h-full w-full max-w-lg flex-col bg-surface shadow-xl">
-        {/* Header */}
-        <div className="flex items-start justify-between border-b border-line px-5 py-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg font-bold text-ink">#{o.id}</h2>
-              <StatusPill label={ar ? pm.ar : pm.en} tone={pm.tone} hollow={pm.hollow} />
-              <StatusPill label={ar ? fm.ar : fm.en} tone={fm.tone} hollow={fm.hollow} />
-            </div>
-            <p className="mt-1 text-xs text-ink-soft">{fmt(o.date)}</p>
+    <>
+      {/* Outside-click catcher */}
+      <div className="fixed inset-0 z-40" onClick={onClose} />
+      <div
+        className="fixed z-50 w-[320px] max-w-[calc(100vw-16px)] overflow-hidden rounded-2xl border border-line bg-surface shadow-xl"
+        style={{ left: pop.x, top: Math.min(pop.y, window.innerHeight - 340) }}
+        dir={ar ? "rtl" : "ltr"}
+      >
+        <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
+          <div className="flex items-center gap-2 text-sm font-semibold text-ink">
+            {pop.kind === "payment" ? <IcCash className="h-4 w-4 text-ink-soft" /> : <IcCourier className="h-4 w-4 text-ink-soft" />}
+            #{o.id}
           </div>
-          <button onClick={onClose} className="btn-ghost h-8 w-8 shrink-0 p-0">
-            <IcX className="h-4 w-4" />
-          </button>
+          <StatusPill
+            label={pop.kind === "payment" ? (ar ? pm.ar : pm.en) : ar ? fm.ar : fm.en}
+            tone={pop.kind === "payment" ? pm.tone : fm.tone}
+            hollow={pop.kind === "payment" ? pm.hollow : fm.hollow}
+          />
         </div>
 
-        <div className="flex-1 space-y-4 overflow-y-auto p-5">
-          {err && (
-            <div className="rounded-xl bg-amber-50 px-3 py-2.5 text-sm text-amber-800">{orderErrorText(err, ar)}</div>
-          )}
-
-          {/* Fulfillment card */}
-          <div className="rounded-2xl border border-line">
-            <div className="flex items-center justify-between border-b border-line px-4 py-3">
-              <div className="flex items-center gap-2 text-sm font-semibold text-ink">
-                <IcCourier className="h-4 w-4 text-ink-soft" />
-                {ar ? "التنفيذ" : "Fulfillment"}
+        <div className="max-h-[240px] overflow-y-auto px-4 py-3 text-sm">
+          {loading ? (
+            <div className="py-4 text-center text-ink-soft">{t("loading")}</div>
+          ) : !d ? (
+            <div className="py-4 text-center text-ink-soft">{ar ? "تعذّر التحميل" : "Couldn't load"}</div>
+          ) : pop.kind === "payment" ? (
+            <>
+              <div className="space-y-1.5">
+                <PopRow label={ar ? "الإجمالي" : "Total"} value={egp(d.total, lang)} bold />
+                <PopRow label={ar ? "المدفوع" : "Paid"} value={egp(d.amountPaid, lang)} />
+                <PopRow label={ar ? "المتبقي" : "Balance"} value={egp(d.balance, lang)} bold />
               </div>
-              <StatusPill label={ar ? fm.ar : fm.en} tone={fm.tone} hollow={fm.hollow} />
-            </div>
-            {loading ? (
-              <div className="px-4 py-4 text-sm text-ink-soft">{t("loading")}</div>
-            ) : d && d.items.length ? (
-              <div className="divide-y divide-line">
+              {d.payments.length > 0 && (
+                <div className="mt-3 border-t border-line pt-2">
+                  <div className="mb-1.5 text-xs font-medium uppercase tracking-wide text-ink-soft">
+                    {ar ? "سجل المدفوعات" : "Payment history"}
+                  </div>
+                  <ul className="space-y-1">
+                    {d.payments.map((p) => (
+                      <li key={p.id} className="flex items-center justify-between text-xs">
+                        <span className="text-ink-muted">
+                          {p.kind === "refund" ? (ar ? "استرجاع" : "Refund") : (ar ? "دفعة" : "Payment")} · {methodLabel(p.method, ar)} · {fmtTime(p.createdAt)}
+                        </span>
+                        <span className={p.kind === "refund" ? "font-semibold text-rose-600" : "font-semibold text-emerald-600"}>
+                          {p.kind === "refund" ? "−" : "+"}{egp(p.amount, lang)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <div className="space-y-2">
                 {d.items.map((li) => {
                   const remaining = li.quantity - li.fulfilledQuantity;
                   return (
-                    <div key={li.id} className="flex items-center gap-3 px-4 py-3">
-                      <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg border border-line bg-surface-page">
+                    <div key={li.id} className="flex items-center gap-2">
+                      <div className="h-9 w-9 shrink-0 overflow-hidden rounded-lg border border-line bg-surface-page">
                         {li.imageUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={li.imageUrl} alt="" className="h-full w-full object-cover" />
                         ) : null}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="line-clamp-1 text-sm font-medium text-ink">{li.productName}</div>
-                        <div className="text-xs text-ink-soft">
-                          {li.variantTitle ? `${li.variantTitle} · ` : ""}
-                          {li.sku ? <span dir="ltr">{li.sku}</span> : null}
-                        </div>
-                        <div className="mt-0.5 text-xs">
+                        <div className="line-clamp-1 text-xs font-medium text-ink">{li.productName}</div>
+                        <div className="text-[11px]">
                           {remaining === 0 ? (
                             <span className="text-emerald-600">{ar ? "تم التنفيذ" : "Fulfilled"} ✓</span>
                           ) : (
                             <span className="text-amber-600">
                               {ar
-                                ? `${num(li.fulfilledQuantity, lang)} من ${num(li.quantity, lang)} مُنفّذ`
-                                : `${li.fulfilledQuantity} of ${li.quantity} fulfilled`}
+                                ? `${num(li.fulfilledQuantity, lang)} من ${num(li.quantity, lang)}`
+                                : `${li.fulfilledQuantity} of ${li.quantity}`}
                             </span>
                           )}
                         </div>
                       </div>
-                      <div className="text-end text-sm">
-                        <div className="text-ink-muted">
-                          {egp(li.price, lang)} × {num(li.quantity, lang)}
-                        </div>
-                        <div className="font-semibold text-ink">{egp(li.price * li.quantity, lang)}</div>
-                      </div>
+                      <span className="text-xs text-ink-muted">× {num(li.quantity, lang)}</span>
                     </div>
                   );
                 })}
               </div>
-            ) : (
-              <div className="px-4 py-4 text-sm text-ink-soft">{ar ? "لا توجد أصناف." : "No line items."}</div>
-            )}
-
-            {d && remainingTotal > 0 && (
-              <div className="flex items-center justify-end gap-2 border-t border-line px-4 py-3">
-                <button onClick={() => fulfillAll()} className="btn-outline h-9">
-                  {ar ? "تنفيذ الكل" : "Fulfill all"}
-                </button>
-                <button onClick={() => setModal("fulfill")} className="btn-primary h-9">
-                  {ar ? "تنفيذ أصناف" : "Fulfill items"}
-                </button>
-              </div>
-            )}
-
-            {/* Fulfillment history */}
-            {d && d.fulfillments.length > 0 && (
-              <div className="border-t border-line px-4 py-3">
-                <div className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-soft">
-                  {ar ? "سجل التنفيذ" : "Fulfillment history"}
+              {d.fulfillments.length > 0 && (
+                <div className="mt-3 border-t border-line pt-2">
+                  <div className="mb-1.5 text-xs font-medium uppercase tracking-wide text-ink-soft">
+                    {ar ? "سجل التنفيذ" : "Fulfillment history"}
+                  </div>
+                  <ul className="space-y-1">
+                    {d.fulfillments.map((f) => (
+                      <li key={f.id} className="text-xs text-ink-muted">
+                        {f.items.reduce((s, i) => s + i.quantity, 0)} {ar ? "قطعة" : "items"} · {fmtTime(f.createdAt)}
+                        {f.tracking ? <span className="text-ink-soft" dir="ltr"> · {f.tracking}</span> : null}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-                <ul className="space-y-2">
-                  {d.fulfillments.map((f) => (
-                    <li key={f.id} className="rounded-lg bg-surface-page px-3 py-2 text-xs">
-                      <div className="flex items-center justify-between">
-                        <span className="text-ink">
-                          {f.items.reduce((s, i) => s + i.quantity, 0)} {ar ? "قطعة" : "items"} · {fmtTime(f.createdAt)}
-                        </span>
-                        <button onClick={() => undo(f.id)} className="text-rose-500 hover:underline">
-                          {ar ? "تراجع" : "Undo"}
-                        </button>
-                      </div>
-                      {f.tracking && (
-                        <div className="mt-0.5 text-ink-soft" dir="ltr">
-                          {f.carrier ? `${f.carrier} · ` : ""}{f.tracking}
-                        </div>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-
-          {/* Payment card */}
-          <div className="rounded-2xl border border-line">
-            <div className="flex items-center justify-between border-b border-line px-4 py-3">
-              <div className="flex items-center gap-2 text-sm font-semibold text-ink">
-                <IcCash className="h-4 w-4 text-ink-soft" />
-                {ar ? "الدفع" : "Payment"}
-              </div>
-              <StatusPill label={ar ? pm.ar : pm.en} tone={pm.tone} hollow={pm.hollow} />
-            </div>
-            <div className="space-y-2 px-4 py-3 text-sm">
-              <Row label={ar ? "الإجمالي الفرعي" : "Subtotal"} value={egp(d?.subtotal ?? o.total, lang)} />
-              <Row label={ar ? "الشحن" : "Shipping"} value={egp(d?.shipping ?? 0, lang)} muted />
-              <div className="my-1 border-t border-line" />
-              <Row label={ar ? "الإجمالي" : "Total"} value={egp(d?.total ?? o.total, lang)} bold />
-              <Row label={ar ? "المدفوع" : "Paid"} value={egp(d?.amountPaid ?? 0, lang)} muted />
-              <Row label={ar ? "المتبقي" : "Balance"} value={egp(d?.balance ?? o.total, lang)} bold />
-            </div>
-
-            {/* Payment timeline */}
-            {d && d.payments.length > 0 && (
-              <div className="border-t border-line px-4 py-3">
-                <div className="mb-2 text-xs font-medium uppercase tracking-wide text-ink-soft">
-                  {ar ? "سجل المدفوعات" : "Payment history"}
-                </div>
-                <ul className="space-y-1.5">
-                  {d.payments.map((p) => (
-                    <li key={p.id} className="flex items-center justify-between text-xs">
-                      <span className="text-ink-muted">
-                        {p.kind === "refund" ? (ar ? "استرجاع" : "Refund") : (ar ? "دفعة" : "Payment")} ·{" "}
-                        {methodLabel(p.method, ar)} · {fmtTime(p.createdAt)}
-                        {p.reference ? <span className="text-ink-soft" dir="ltr"> · {p.reference}</span> : null}
-                      </span>
-                      <span className={p.kind === "refund" ? "font-semibold text-rose-600" : "font-semibold text-emerald-600"}>
-                        {p.kind === "refund" ? "−" : "+"}{egp(p.amount, lang)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {d && (
-              <div className="flex items-center justify-end gap-2 border-t border-line px-4 py-3">
-                {d.amountPaid > 0 && (
-                  <button onClick={() => setModal("refund")} className="btn-outline h-9">
-                    {ar ? "استرجاع" : "Refund"}
-                  </button>
-                )}
-                {d.balance > 0 && (
-                  <button onClick={() => setModal("collect")} className="btn-primary h-9">
-                    <IcCash className="h-4 w-4" /> {ar ? "تحصيل الدفع" : "Collect payment"}
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Customer */}
-          <div className="rounded-2xl border border-line px-4 py-3">
-            <div className="mb-2 text-sm font-semibold text-ink">{ar ? "العميل" : "Customer"}</div>
-            <div className="text-sm font-medium text-ink">{d?.customerName || o.customer}</div>
-            <div className="mt-0.5 text-sm text-ink-muted" dir="ltr">{d?.phone || o.phone}</div>
-            <div className="mt-3 text-xs font-medium uppercase tracking-wide text-ink-soft">
-              {ar ? "عنوان الشحن" : "Shipping address"}
-            </div>
-            <div className="mt-1 text-sm text-ink-muted">
-              {[d?.address, d?.city, d?.governorate ?? o.governorate].filter(Boolean).join("، ")}، {ar ? "مصر" : "Egypt"}
-            </div>
-
-            {/* When the shopper asked for it. Picked after checkout, on the
-                thank-you page, so it is missing on most orders — and worth
-                showing loudly on the ones that have it, since it is a promise
-                the shop made about a specific morning. */}
-            {(d?.preferredDeliveryDate || d?.preferredDeliverySlot) && (
-              <>
-                <div className="mt-3 text-xs font-medium uppercase tracking-wide text-ink-soft">
-                  {ar ? "موعد التوصيل المطلوب" : "Requested delivery"}
-                </div>
-                <div className="mt-1 text-sm font-medium text-ink">
-                  {[
-                    d.preferredDeliveryDate
-                      ? new Date(d.preferredDeliveryDate).toLocaleDateString(ar ? "ar-EG" : "en-GB", {
-                          weekday: "long",
-                          day: "numeric",
-                          month: "short",
-                        })
-                      : null,
-                    slotLabel(d.preferredDeliverySlot, ar ? "ar" : "en") || null,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </div>
-              </>
-            )}
-
-            {/* The merchant note carries the same choice plus anything else the
-                order was placed with (gift wrap, coupon), which is why it sits
-                with the customer rather than off in its own panel. */}
-            {d?.note && (
-              <>
-                <div className="mt-3 text-xs font-medium uppercase tracking-wide text-ink-soft">
-                  {ar ? "ملاحظات الطلب" : "Order notes"}
-                </div>
-                <div className="mt-1 whitespace-pre-wrap text-sm text-ink-muted">{d.note}</div>
-              </>
-            )}
-          </div>
+              )}
+            </>
+          )}
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-line px-5 py-4">
-          <button onClick={onClose} className="btn-outline">{ar ? "إغلاق" : "Close"}</button>
-        </div>
-      </div>
-
-      {modal === "collect" && d && (
-        <PaymentModal
-          kind="payment"
-          orderNumber={o.id}
-          defaultAmount={d.balance}
-          maxAmount={d.balance}
-          ar={ar}
-          lang={lang}
-          onClose={() => setModal(null)}
-          onDone={async () => {
-            setModal(null);
-            await afterChange();
-          }}
-        />
-      )}
-      {modal === "refund" && d && (
-        <PaymentModal
-          kind="refund"
-          orderNumber={o.id}
-          defaultAmount={d.amountPaid}
-          maxAmount={d.amountPaid}
-          ar={ar}
-          lang={lang}
-          onClose={() => setModal(null)}
-          onDone={async () => {
-            setModal(null);
-            await afterChange();
-          }}
-        />
-      )}
-      {modal === "fulfill" && d && (
-        <FulfillModal
-          orderNumber={o.id}
-          items={d.items}
-          ar={ar}
-          lang={lang}
-          onClose={() => setModal(null)}
-          onDone={async () => {
-            setModal(null);
-            await afterChange();
-          }}
-        />
-      )}
-    </div>
-  );
-
-  async function fulfillAll() {
-    const res = await fulfillOrder(o.id);
-    if (!res.ok) setErr(res.error);
-    await afterChange();
-  }
-  async function undo(fulfillmentId: string) {
-    await undoFulfillment(fulfillmentId);
-    await afterChange();
-  }
-}
-
-// ---- Collect payment / refund modal -----------------------------------------
-function PaymentModal({
-  kind,
-  orderNumber,
-  defaultAmount,
-  maxAmount,
-  ar,
-  lang,
-  onClose,
-  onDone,
-}: {
-  kind: "payment" | "refund";
-  orderNumber: string;
-  defaultAmount: number;
-  maxAmount: number;
-  ar: boolean;
-  lang: "ar" | "en";
-  onClose: () => void;
-  onDone: () => void;
-}) {
-  const [amount, setAmount] = useState(String(defaultAmount || ""));
-  const [method, setMethod] = useState("cash");
-  const [reference, setReference] = useState("");
-  const [note, setNote] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-
-  async function submit() {
-    const amt = Number(amount);
-    if (!Number.isFinite(amt) || amt <= 0) {
-      setErr(ar ? "أدخلي مبلغاً صحيحاً." : "Enter a valid amount.");
-      return;
-    }
-    setBusy(true);
-    const res =
-      kind === "payment"
-        ? await collectPayment(orderNumber, { amount: amt, method, reference, note })
-        : await refundPayment(orderNumber, { amount: amt, method, note });
-    setBusy(false);
-    if (res.ok) onDone();
-    else setErr(orderErrorText(res.error, ar));
-  }
-
-  const title =
-    kind === "payment" ? (ar ? "تحصيل الدفع" : "Collect payment") : ar ? "استرجاع مبلغ" : "Refund";
-
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className="w-full max-w-sm rounded-2xl bg-surface p-5" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-3 text-base font-semibold text-ink">{title}</div>
-        <label className="mb-2 block">
-          <span className="mb-1 block text-xs font-medium text-ink-muted">
-            {ar ? "المبلغ" : "Amount"}{" "}
-            <span className="text-ink-soft">({ar ? "بحد أقصى" : "max"} {egp(maxAmount, lang)})</span>
-          </span>
-          <input
-            value={amount}
-            onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ""))}
-            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-brand-600"
-            inputMode="decimal"
-          />
-        </label>
-        <label className="mb-2 block">
-          <span className="mb-1 block text-xs font-medium text-ink-muted">{ar ? "طريقة الدفع" : "Payment method"}</span>
-          <select
-            value={method}
-            onChange={(e) => setMethod(e.target.value)}
-            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"
+        <div className="border-t border-line p-2">
+          <button
+            onClick={() => router.push(`${basePath}/${o.id}`)}
+            className="btn-primary h-9 w-full justify-center text-sm"
           >
-            {PAY_METHODS.map((m) => (
-              <option key={m.value} value={m.value}>{ar ? m.ar : m.en}</option>
-            ))}
-          </select>
-        </label>
-        {kind === "payment" && (
-          <label className="mb-2 block">
-            <span className="mb-1 block text-xs font-medium text-ink-muted">{ar ? "مرجع (اختياري)" : "Reference (optional)"}</span>
-            <input
-              value={reference}
-              onChange={(e) => setReference(e.target.value)}
-              placeholder={ar ? "رقم الإيصال / المعاملة" : "Receipt / transaction no."}
-              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-brand-600"
-            />
-          </label>
-        )}
-        <label className="mb-3 block">
-          <span className="mb-1 block text-xs font-medium text-ink-muted">{ar ? "ملاحظة (اختياري)" : "Note (optional)"}</span>
-          <input
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-brand-600"
-          />
-        </label>
-        {err && <p className="mb-2 text-xs text-rose-600">{err}</p>}
-        <div className="flex justify-end gap-2">
-          <button onClick={onClose} className="btn-outline h-9 px-3 text-sm">{ar ? "إلغاء" : "Cancel"}</button>
-          <button onClick={submit} disabled={busy} className="btn-primary h-9 px-4 text-sm disabled:opacity-50">
-            {busy ? "…" : title}
+            {ar ? "عرض تفاصيل الطلب" : "View order details"}
           </button>
         </div>
       </div>
-    </div>
+    </>
   );
 }
 
-// ---- Fulfill items modal ----------------------------------------------------
-function FulfillModal({
-  orderNumber,
-  items,
-  ar,
-  lang,
-  onClose,
-  onDone,
-}: {
-  orderNumber: string;
-  items: { id: string; productName: string; quantity: number; fulfilledQuantity: number }[];
-  ar: boolean;
-  lang: "ar" | "en";
-  onClose: () => void;
-  onDone: () => void;
-}) {
-  const outstanding = items.filter((li) => li.quantity - li.fulfilledQuantity > 0);
-  const [qty, setQty] = useState<Record<string, number>>(
-    Object.fromEntries(outstanding.map((li) => [li.id, li.quantity - li.fulfilledQuantity])),
-  );
-  const [tracking, setTracking] = useState("");
-  const [carrier, setCarrier] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-
-  async function submit() {
-    const chosen = outstanding
-      .map((li) => ({ orderItemId: li.id, quantity: Math.max(0, Math.min(qty[li.id] ?? 0, li.quantity - li.fulfilledQuantity)) }))
-      .filter((x) => x.quantity > 0);
-    if (chosen.length === 0) {
-      setErr(ar ? "اختاري كمية واحدة على الأقل." : "Choose at least one item.");
-      return;
-    }
-    setBusy(true);
-    const res = await fulfillOrder(orderNumber, { items: chosen, tracking, carrier });
-    setBusy(false);
-    if (res.ok) onDone();
-    else setErr(orderErrorText(res.error, ar));
-  }
-
-  return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl bg-surface p-5" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-3 text-base font-semibold text-ink">{ar ? "تنفيذ الأصناف" : "Fulfill items"}</div>
-        <div className="mb-3 space-y-2">
-          {outstanding.map((li) => {
-            const max = li.quantity - li.fulfilledQuantity;
-            return (
-              <div key={li.id} className="flex items-center gap-3 rounded-lg bg-surface-page px-3 py-2">
-                <div className="min-w-0 flex-1">
-                  <div className="line-clamp-1 text-sm text-ink">{li.productName}</div>
-                  <div className="text-xs text-ink-soft">{ar ? `متبقٍ ${num(max, lang)}` : `${max} remaining`}</div>
-                </div>
-                <input
-                  type="number"
-                  min={0}
-                  max={max}
-                  value={qty[li.id] ?? 0}
-                  onChange={(e) =>
-                    setQty((q) => ({ ...q, [li.id]: Math.max(0, Math.min(Number(e.target.value) || 0, max)) }))
-                  }
-                  className="w-16 rounded-lg border border-line bg-surface px-2 py-1.5 text-center text-sm"
-                />
-              </div>
-            );
-          })}
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium text-ink-muted">{ar ? "شركة الشحن" : "Carrier"}</span>
-            <input value={carrier} onChange={(e) => setCarrier(e.target.value)} className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-brand-600" />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium text-ink-muted">{ar ? "رقم التتبّع" : "Tracking no."}</span>
-            <input value={tracking} onChange={(e) => setTracking(e.target.value)} dir="ltr" className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-brand-600" />
-          </label>
-        </div>
-        {err && <p className="mt-2 text-xs text-rose-600">{err}</p>}
-        <div className="mt-3 flex justify-end gap-2">
-          <button onClick={onClose} className="btn-outline h-9 px-3 text-sm">{ar ? "إلغاء" : "Cancel"}</button>
-          <button onClick={submit} disabled={busy} className="btn-primary h-9 px-4 text-sm disabled:opacity-50">
-            {busy ? "…" : ar ? "تنفيذ" : "Fulfill"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Row({ label, value, bold, muted }: { label: string; value: string; bold?: boolean; muted?: boolean }) {
+function PopRow({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
   return (
     <div className="flex items-center justify-between">
-      <span className={muted ? "text-ink-soft" : "text-ink-muted"}>{label}</span>
-      <span className={bold ? "font-semibold text-ink" : muted ? "text-ink-soft" : "text-ink"}>{value}</span>
+      <span className="text-ink-muted">{label}</span>
+      <span className={bold ? "font-semibold text-ink" : "text-ink"}>{value}</span>
     </div>
   );
 }
-

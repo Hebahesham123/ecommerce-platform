@@ -1,6 +1,14 @@
 "use server";
 
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
+import {
+  adminCreateReturn,
+  returnableLinesForOrder,
+  listReturnsForOrder,
+  type AdminReturnPayload,
+  type ReturnableLine,
+} from "@/lib/returns-service";
+import type { ReturnRequest } from "@/lib/returns";
 
 export type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -244,6 +252,99 @@ export async function undoFulfillment(fulfillmentId: string): Promise<ActionResu
     const { error } = await supabase.rpc("order_unfulfill", { p_fulfillment_id: fulfillmentId });
     if (error) return { ok: false, error: mapRpcError(error.message) };
     return { ok: true, data: undefined };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+// ---- Returns & exchanges, from inside the order -----------------------------
+
+/** Line items still returnable on this order (nothing already sent back). */
+export async function getReturnableLines(orderNumber: string): Promise<ActionResult<ReturnableLine[]>> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  try {
+    const supabase = getServerSupabase();
+    const { data: order, error } = await supabase
+      .from("store_orders")
+      .select("id")
+      .eq("order_number", orderNumber)
+      .maybeSingle();
+    if (error) return { ok: false, error: missing(error) ? "migration_missing" : error.message };
+    if (!order) return { ok: false, error: "order_not_found" };
+    return returnableLinesForOrder(String(order.id));
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+/** All returns / exchanges opened against this order. */
+export async function getOrderReturns(orderNumber: string): Promise<ActionResult<ReturnRequest[]>> {
+  return listReturnsForOrder(orderNumber);
+}
+
+export type OrderReturnSummary = {
+  reference: string;
+  kind: "return" | "exchange";
+  returnCount: number;
+  refunded: number;
+  extraDue: number;
+};
+
+/**
+ * Open a return or exchange from the order screen and apply it end to end:
+ * create the request, complete it (returned goods restocked, replacements
+ * pulled from stock under the same locks checkout uses), then refund the paid
+ * portion. A COD order that was never paid restocks with nothing to give back.
+ */
+export async function createOrderReturn(
+  orderNumber: string,
+  payload: AdminReturnPayload,
+): Promise<ActionResult<OrderReturnSummary>> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  try {
+    const created = await adminCreateReturn(orderNumber, payload);
+    if (!created.ok) return { ok: false, error: created.error };
+
+    const supabase = getServerSupabase();
+    // Move stock. If a replacement went out of stock in the meantime this
+    // rejects and the request stays open rather than half-applying.
+    const { error: completeErr } = await supabase.rpc("complete_return_request", { p_request: created.data.id });
+    if (completeErr) return { ok: false, error: mapRpcError(completeErr.message) };
+
+    // Refund the money that was actually collected, capped so it can never
+    // exceed what was paid (a partly-paid or COD order refunds only that much).
+    let refunded = 0;
+    if (created.data.refundAmount > 0) {
+      const { data: order } = await supabase
+        .from("store_orders")
+        .select("amount_paid,payment_method")
+        .eq("order_number", orderNumber)
+        .maybeSingle();
+      const paid = n(order?.amount_paid);
+      const refundable = Math.min(created.data.refundAmount, paid);
+      if (refundable > 0) {
+        const { error: refErr } = await supabase.rpc("order_record_payment", {
+          p_order_number: orderNumber,
+          p_kind: "refund",
+          p_amount: refundable,
+          p_method: s(order?.payment_method) || "cash",
+          p_reference: created.data.reference,
+          p_note: `${created.data.kind === "exchange" ? "Exchange" : "Return"} ${created.data.reference}`,
+        });
+        if (!refErr) refunded = refundable;
+      }
+    }
+
+    return {
+      ok: true,
+      data: {
+        reference: created.data.reference,
+        kind: created.data.kind,
+        returnCount: created.data.returnCount,
+        refunded,
+        extraDue: created.data.extraAmount,
+      },
+    };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }

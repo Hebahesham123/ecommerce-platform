@@ -335,3 +335,258 @@ export async function listMyRequestsFor(
     return { ok: false, error: (e as Error).message };
   }
 }
+
+// =============================================================================
+// Admin side.
+//
+// The shopper functions above are gated by the session phone and the 14-day
+// window on purpose. When a merchant opens a return or exchange from the order
+// screen, neither applies: they act on any order, of any age, on the customer's
+// behalf. These functions are still not Server Actions — orders/actions.ts wraps
+// them behind the admin surface, the same way the website wraps the shopper set.
+// =============================================================================
+
+/**
+ * What is still returnable on a single order, for the admin — no window, no
+ * phone. `returnable` already subtracts anything tied up in an open or
+ * completed request, so the same unit can't be returned twice.
+ */
+export async function returnableLinesForOrder(
+  orderId: string,
+): Promise<ActionResult<ReturnableLine[]>> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  try {
+    const supabase = getServerSupabase();
+    const [{ data: items, error: iErr }, { data: claimed }] = await Promise.all([
+      supabase
+        .from("store_order_items")
+        .select("id,item_id,product_name,variant_title,sku,image_url,price,quantity")
+        .eq("order_id", orderId),
+      supabase
+        .from("return_request_items")
+        .select("order_item_id,quantity,direction,return_requests!inner(order_id,status)")
+        .eq("direction", "return")
+        .eq("return_requests.order_id", orderId),
+    ]);
+    if (iErr) return { ok: false, error: iErr.message };
+
+    const spoken = new Map<string, number>();
+    for (const row of (claimed ?? []) as Row[]) {
+      const req = row.return_requests as Row | null;
+      const status = String(req?.status ?? "");
+      if (status === "rejected" || status === "cancelled") continue;
+      const key = String(row.order_item_id ?? "");
+      if (!key) continue;
+      spoken.set(key, (spoken.get(key) ?? 0) + n(row.quantity));
+    }
+
+    const lines = ((items ?? []) as Row[]).map((it): ReturnableLine => {
+      const id = String(it.id);
+      const already = spoken.get(id) ?? 0;
+      return {
+        orderItemId: id,
+        itemId: it.item_id ? String(it.item_id) : null,
+        productName: String(it.product_name ?? ""),
+        variantTitle: (it.variant_title as string) ?? null,
+        sku: (it.sku as string) ?? null,
+        imageUrl: (it.image_url as string) ?? null,
+        price: n(it.price),
+        quantity: n(it.quantity),
+        returnable: Math.max(0, n(it.quantity) - already),
+      };
+    });
+    return { ok: true, data: lines };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+/** Every return / exchange opened against one order, newest first. */
+export async function listReturnsForOrder(
+  orderNumber: string,
+): Promise<ActionResult<ReturnRequest[]>> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  try {
+    const supabase = getServerSupabase();
+    const { data, error } = await supabase
+      .from("return_requests")
+      .select("*, return_request_items(*)")
+      .eq("order_number", orderNumber)
+      .order("created_at", { ascending: false });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, data: (data ?? []).map(mapRequestRow) };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+export type AdminReturnPayload = {
+  kind: RequestKind;
+  returnLines: { orderItemId: string; quantity: number }[];
+  replacementLines: { itemId: string; quantity: number }[];
+  reason: string;
+  note: string;
+};
+
+export type AdminReturnResult = {
+  id: string;
+  reference: string;
+  kind: RequestKind;
+  returnedValue: number;
+  replacementValue: number;
+  refundAmount: number;
+  extraAmount: number;
+  returnCount: number;
+};
+
+/**
+ * Open a return or exchange against an order as the merchant. Mirrors
+ * submitReturnRequestFor's server-side arithmetic — returnable quantities from
+ * the database, replacements priced from live stock — but drops the shopper
+ * window and ownership checks. The caller (orders/actions.ts) completes the
+ * request afterwards to move stock and settle the money.
+ */
+export async function adminCreateReturn(
+  orderNumber: string,
+  payload: AdminReturnPayload,
+): Promise<ActionResult<AdminReturnResult>> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+
+  const kind: RequestKind = payload.kind === "exchange" ? "exchange" : "return";
+  const wanted = payload.returnLines.filter((l) => l.quantity > 0);
+  if (wanted.length === 0) return { ok: false, error: "no_items" };
+  if (kind === "exchange" && payload.replacementLines.filter((l) => l.quantity > 0).length === 0) {
+    return { ok: false, error: "no_replacement" };
+  }
+
+  try {
+    const supabase = getServerSupabase();
+    const { data: order } = await supabase
+      .from("store_orders")
+      .select("id,order_number,phone,customer_name,created_at,channel")
+      .eq("order_number", orderNumber)
+      .maybeSingle();
+    if (!order) return { ok: false, error: "order_not_found" };
+
+    const returnableRes = await returnableLinesForOrder(String(order.id));
+    if (!returnableRes.ok) return { ok: false, error: returnableRes.error };
+    const returnable = returnableRes.data;
+    if (!returnable.some((l) => l.returnable > 0)) return { ok: false, error: "nothing_returnable" };
+
+    const returnRows: Row[] = [];
+    let returnedValue = 0;
+    let returnCount = 0;
+    for (const req of wanted) {
+      const line = returnable.find((l) => l.orderItemId === req.orderItemId);
+      if (!line) return { ok: false, error: "line_not_found" };
+      const qty = Math.min(Math.max(1, Math.floor(req.quantity)), line.returnable);
+      if (qty <= 0) return { ok: false, error: "already_requested" };
+      returnedValue += line.price * qty;
+      returnCount += qty;
+      returnRows.push({
+        direction: "return",
+        item_id: line.itemId,
+        order_item_id: line.orderItemId,
+        product_name: line.productName,
+        variant_title: line.variantTitle,
+        sku: line.sku,
+        image_url: line.imageUrl,
+        price: line.price,
+        quantity: qty,
+      });
+    }
+
+    // Replacements priced now, from stock — never from what the page sent.
+    const replacementRows: Row[] = [];
+    let replacementValue = 0;
+    if (kind === "exchange") {
+      const ids = payload.replacementLines.filter((l) => l.quantity > 0).map((l) => l.itemId);
+      const { data: stock } = await supabase
+        .from("inventory_items")
+        .select("id,product_name,variant_title,sku,image_url,price,status,inventory_levels(on_hand,committed)")
+        .in("id", ids);
+      const byId = new Map((stock ?? []).map((s: Row) => [String(s.id), s]));
+
+      for (const want of payload.replacementLines) {
+        if (want.quantity <= 0) continue;
+        const it = byId.get(want.itemId);
+        if (!it) return { ok: false, error: "replacement_not_found" };
+        if (String(it.status ?? "active") !== "active") return { ok: false, error: "replacement_not_found" };
+        const levels = Array.isArray(it.inventory_levels) ? (it.inventory_levels as Row[]) : [];
+        const onShelf = levels.reduce((sum, l) => sum + Math.max(0, n(l.on_hand) - n(l.committed)), 0);
+        const qty = Math.min(Math.max(1, Math.floor(want.quantity)), onShelf);
+        if (qty <= 0) return { ok: false, error: "replacement_out_of_stock" };
+        const price = n(it.price);
+        replacementValue += price * qty;
+        replacementRows.push({
+          direction: "replacement",
+          item_id: String(it.id),
+          order_item_id: null,
+          product_name: String(it.product_name ?? ""),
+          variant_title: (it.variant_title as string) ?? null,
+          sku: (it.sku as string) ?? null,
+          image_url: (it.image_url as string) ?? null,
+          price,
+          quantity: qty,
+        });
+      }
+    }
+
+    returnedValue = round2(returnedValue);
+    replacementValue = round2(replacementValue);
+    const money =
+      kind === "return"
+        ? { difference: round2(-returnedValue), refundAmount: returnedValue, extraAmount: 0 }
+        : settle(returnedValue, replacementValue);
+
+    const reference = `RX${Date.now().toString().slice(-8)}`;
+    const { data: created, error: insErr } = await supabase
+      .from("return_requests")
+      .insert({
+        reference,
+        kind,
+        status: "approved", // a merchant-opened request is already decided
+        order_id: String(order.id),
+        order_number: String(order.order_number),
+        phone: String(order.phone),
+        customer_name: (order.customer_name as string) ?? null,
+        reason: payload.reason.trim() || null,
+        note: payload.note.trim() || null,
+        returned_value: returnedValue,
+        replacement_value: replacementValue,
+        difference: money.difference,
+        refund_amount: money.refundAmount,
+        extra_amount: money.extraAmount,
+        order_created_at: String(order.created_at),
+        window_expires_at: windowExpiryOf(String(order.created_at)).toISOString(),
+        channel: normalizeChannel((order.channel as Channel) ?? "web"),
+      })
+      .select("id")
+      .single();
+    if (insErr) return { ok: false, error: insErr.message };
+
+    const { error: linesErr } = await supabase
+      .from("return_request_items")
+      .insert([...returnRows, ...replacementRows].map((r) => ({ ...r, request_id: created.id })));
+    if (linesErr) {
+      await supabase.from("return_requests").delete().eq("id", created.id);
+      return { ok: false, error: linesErr.message };
+    }
+
+    return {
+      ok: true,
+      data: {
+        id: String(created.id),
+        reference,
+        kind,
+        returnedValue,
+        replacementValue,
+        refundAmount: money.refundAmount,
+        extraAmount: money.extraAmount,
+        returnCount,
+      },
+    };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
