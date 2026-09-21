@@ -33,8 +33,25 @@ type LiveInputs = {
 
 const CF_ACCOUNT = process.env.CLOUDFLARE_ACCOUNT_ID ?? "";
 const CF_TOKEN = process.env.CLOUDFLARE_STREAM_TOKEN ?? "";
+// Optional: only needed if Cloudflare ever stops returning a playback URL to
+// read the subdomain from. Normally left unset.
+const CF_CUSTOMER_CODE = process.env.CLOUDFLARE_STREAM_CUSTOMER_CODE ?? "";
 
 export const providerConfigured = () => Boolean(CF_ACCOUNT && CF_TOKEN);
+
+/**
+ * Cloudflare plays video from customer-<code>.cloudflarestream.com, and that
+ * code is NOT the account id — it is a separate per-account subdomain. Every
+ * URL the API hands back carries it, so it is read from one of those rather
+ * than guessed, and never hardcoded.
+ */
+function customerCodeFrom(...urls: (string | undefined)[]): string | null {
+  for (const u of urls) {
+    const m = u?.match(/customer-([a-z0-9]+).cloudflarestream.com/i);
+    if (m) return m[1];
+  }
+  return null;
+}
 
 /**
  * Ask Cloudflare for a live input: an address to broadcast to and a URL to
@@ -64,13 +81,27 @@ async function createCloudflareInput(title: string): Promise<Result<LiveInputs>>
       result?: {
         uid?: string;
         rtmps?: { url?: string; streamKey?: string };
+        rtmpsPlayback?: { url?: string };
+        srtPlayback?: { url?: string };
         webRTC?: { url?: string };
+        webRTCPlayback?: { url?: string };
       };
     };
     if (!res.ok || !body.success || !body.result?.uid) {
       return { ok: false, error: body.errors?.[0]?.message || `cloudflare_${res.status}` };
     }
     const uid = String(body.result.uid);
+    const code =
+      customerCodeFrom(
+        body.result.webRTCPlayback?.url,
+        body.result.rtmpsPlayback?.url,
+        body.result.srtPlayback?.url,
+      ) || CF_CUSTOMER_CODE;
+    if (!code) {
+      // Better to say so now than to store a URL that plays nothing and
+      // have it fail in front of an audience.
+      return { ok: false, error: "cloudflare_no_playback_host" };
+    }
     return {
       ok: true,
       data: {
@@ -80,7 +111,7 @@ async function createCloudflareInput(title: string): Promise<Result<LiveInputs>>
         // does not mean a new stream or a new link to share.
         ingestUrl: String(body.result.rtmps?.url ?? ""),
         streamKey: String(body.result.rtmps?.streamKey ?? ""),
-        playbackUrl: `https://customer-${CF_ACCOUNT}.cloudflarestream.com/${uid}/manifest/video.m3u8`,
+        playbackUrl: `https://customer-${code}.cloudflarestream.com/${uid}/manifest/video.m3u8`,
       },
     };
   } catch (e) {
@@ -97,11 +128,20 @@ async function cloudflareRecording(providerStreamId: string): Promise<string | n
       { headers: { authorization: `Bearer ${CF_TOKEN}` } },
     );
     const body = (await res.json()) as {
-      result?: { uid?: string; status?: { state?: string } }[];
+      result?: {
+        uid?: string;
+        status?: { state?: string };
+        playback?: { hls?: string };
+      }[];
     };
     const ready = (body.result ?? []).find((v) => v.status?.state === "ready" && v.uid);
-    return ready?.uid
-      ? `https://customer-${CF_ACCOUNT}.cloudflarestream.com/${ready.uid}/manifest/video.m3u8`
+    if (!ready?.uid) return null;
+    // Cloudflare returns the finished recording's own playback URL, which
+    // already carries the right host.
+    if (ready.playback?.hls) return ready.playback.hls;
+    const code = customerCodeFrom(ready.playback?.hls) || CF_CUSTOMER_CODE;
+    return code
+      ? `https://customer-${code}.cloudflarestream.com/${ready.uid}/manifest/video.m3u8`
       : null;
   } catch {
     return null;
