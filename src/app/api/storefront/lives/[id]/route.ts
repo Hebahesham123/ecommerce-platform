@@ -1,4 +1,4 @@
-import { getLive, reportViewers } from "@/lib/live-service";
+import { getPublicLive, reportViewers } from "@/lib/live-service";
 import { publicLive } from "@/lib/live";
 import { bodyOf, fail, int, ok } from "@/lib/api/http";
 
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 /** One live: what to play, and what is being sold on it right now. */
 export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
-  const res = await getLive(id);
+  const res = await getPublicLive(id);
   if (!res.ok) return fail(res.error, res.error === "not_found" ? 404 : 400);
   return ok(publicLive(res.data));
 }

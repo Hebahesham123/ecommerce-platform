@@ -164,6 +164,52 @@ export async function listPublicLives(): Promise<Result<LiveStream[]>> {
   };
 }
 
+/**
+ * One live, priced and stocked as a viewer needs it.
+ *
+ * The products were chosen before the live was created, so their stock has
+ * moved since — possibly during the live itself, as other viewers buy. The
+ * quantity stepper has to cap against what is on the shelf now, not what was
+ * there when the host lined the products up.
+ */
+export async function getPublicLive(id: string): Promise<Result<LiveStream>> {
+  const res = await getLive(id);
+  if (!res.ok) return res;
+  return { ok: true, data: await withAvailability(res.data) };
+}
+
+async function withAvailability(live: LiveStream): Promise<LiveStream> {
+  const ids = live.products.map((p) => p.itemId).filter((v): v is string => Boolean(v));
+  if (ids.length === 0) return live;
+  try {
+    const supabase = getServerSupabase();
+    const { data } = await supabase
+      .from("inventory_items")
+      .select("id,tracked,inventory_levels(on_hand,committed)")
+      .in("id", ids);
+    const stock = new Map<string, number>();
+    for (const row of (data ?? []) as Record<string, unknown>[]) {
+      const levels = Array.isArray(row.inventory_levels)
+        ? (row.inventory_levels as Record<string, unknown>[])
+        : [];
+      const onShelf = levels.reduce(
+        (sum, l) => sum + Math.max(0, Number(l.on_hand ?? 0) - Number(l.committed ?? 0)),
+        0,
+      );
+      // An untracked item is not stock-limited, so it never runs out on air.
+      stock.set(String(row.id), row.tracked === false ? 999 : onShelf);
+    }
+    return {
+      ...live,
+      products: live.products.map((p) => ({
+        ...p,
+        available: p.itemId ? (stock.get(p.itemId) ?? 0) : 0,
+      })),
+    };
+  } catch {
+    return live;
+  }
+}
 // ---- Writes -----------------------------------------------------------------
 
 export async function saveLive(input: {

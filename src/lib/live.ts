@@ -19,6 +19,8 @@ export type LiveProduct = {
   /** The one the host is holding up right now. At most one per live. */
   pinned: boolean;
   sortOrder: number;
+  /** Live stock, filled in only on the public payload the app/web reads. */
+  available?: number;
 };
 
 export type LiveStream = {
@@ -176,6 +178,17 @@ export type PublicLive = {
   peakViewers: number;
   products: LiveProduct[];
 };
+
+/**
+ * What the watching page renders: the public payload, plus whether this is a
+ * rehearsal. Deliberately not LiveStream — that carries the stream key, and a
+ * page taking the wider type could spread it into the browser by accident.
+ */
+export type WatchableLive = PublicLive & { provider: string };
+
+export function watchable(s: LiveStream): WatchableLive {
+  return { ...publicLive(s), provider: s.provider };
+}
 
 export function publicLive(s: LiveStream): PublicLive {
   const watchable = watchableState(s);

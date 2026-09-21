@@ -368,6 +368,22 @@ function LiveForm({
   const [replay, setReplay] = useState(live?.replayEnabled ?? true);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [catalog, setCatalog] = useState<StoreProduct[]>([]);
+  const [chosen, setChosen] = useState<Record<string, boolean>>({});
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    listStoreProducts().then((res) => {
+      if (res.ok) setCatalog(res.data);
+    });
+  }, []);
+
+  const picked = catalog.filter((c) => chosen[c.id]);
+  const shownProducts = (() => {
+    const needle = search.trim().toLowerCase();
+    const list = needle ? catalog.filter((c) => c.name.toLowerCase().includes(needle)) : catalog;
+    return list.slice(0, 40);
+  })();
 
   async function save() {
     setErr(null);
@@ -381,12 +397,31 @@ function LiveForm({
       scheduledAt: when ? new Date(when).toISOString() : null,
       replayEnabled: replay,
     });
-    setBusy(false);
     if (!res.ok) {
+      setBusy(false);
       setErr(res.error === "missing_title" ? (ar ? "أدخلي عنواناً" : "Enter a title") : res.error);
       return;
     }
-    onSaved(res.data);
+
+    // A live is advertised by its products, so they are chosen here rather
+    // than left for a second visit: the host picks what she will hold up
+    // before she has a stream key, let alone a camera pointed at her.
+    let saved = res.data;
+    if (picked.length > 0) {
+      const withProducts = await setLiveProductsAction(
+        saved.id,
+        picked.map((c) => ({
+          itemId: c.id,
+          productName: c.name,
+          imageUrl: c.image,
+          price: c.priceMin,
+          discountCode: null as string | null,
+        })),
+      );
+      if (withProducts.ok) saved = withProducts.data;
+    }
+    setBusy(false);
+    onSaved(saved);
   }
 
   const field = "h-11 w-full rounded-xl border border-line bg-surface-page px-3 text-sm text-ink outline-none focus:border-brand-600";
@@ -428,6 +463,47 @@ function LiveForm({
             <input type="checkbox" checked={replay} onChange={(e) => setReplay(e.target.checked)} className="h-4 w-4 rounded border-line accent-brand-600" />
             {ar ? "احفظي التسجيل ليُشاهد بعد البث" : "Keep the replay so it sells afterwards"}
           </label>
+
+          <div>
+            <label className="text-xs font-medium text-ink-muted">
+              {ar ? "المنتجات التي سيعرضها البث" : "Products this live advertises"}
+            </label>
+            <p className="mt-0.5 text-[11px] text-ink-soft">
+              {ar
+                ? "يمكن للمشاهدين إضافة أي منها للسلة أثناء البث وإتمام الطلب."
+                : "Viewers can add any of these to their cart during the live and check out."}
+            </p>
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder={ar ? "ابحثي عن منتج…" : "Search products…"}
+              className={`${field} mt-2`}
+            />
+            <div className="mt-2 max-h-48 divide-y divide-line overflow-y-auto rounded-xl border border-line">
+              {shownProducts.map((c) => (
+                <label key={c.id} className="flex cursor-pointer items-center gap-2.5 px-3 py-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(chosen[c.id])}
+                    onChange={(e) => setChosen((cur) => ({ ...cur, [c.id]: e.target.checked }))}
+                    className="h-4 w-4 rounded border-line accent-brand-600"
+                  />
+                  <span className="min-w-0 flex-1 truncate text-ink">{c.name}</span>
+                  <span className="shrink-0 text-xs text-ink-soft">{c.available}</span>
+                </label>
+              ))}
+              {shownProducts.length === 0 && (
+                <p className="px-3 py-6 text-center text-xs text-ink-soft">
+                  {ar ? "لا توجد نتائج" : "No matches"}
+                </p>
+              )}
+            </div>
+            {picked.length > 0 && (
+              <p className="mt-1.5 text-xs text-ink-muted">
+                {picked.length} {ar ? "منتج مختار" : "selected"}
+              </p>
+            )}
+          </div>
         </div>
 
         {err && <p className="mt-3 text-sm font-medium text-rose-600">{err}</p>}
@@ -468,6 +544,7 @@ function LiveDrawer({
   const [showKey, setShowKey] = useState(false);
   const [picker, setPicker] = useState(false);
   const [checking, setChecking] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   async function run(label: string, fn: () => Promise<{ ok: boolean; error?: string; data?: unknown }>) {
     setErr(null);
@@ -607,6 +684,26 @@ function LiveDrawer({
                   <IcRefresh className="h-4 w-4" /> {ar ? "تحديث التسجيل" : "Check for replay"}
                 </button>
               )}
+              <a
+                href={`/store/live/${live.id}`}
+                target="_blank"
+                rel="noreferrer"
+                className="btn-outline h-10 px-4 text-sm"
+              >
+                <IcEye className="h-4 w-4" /> {ar ? "صفحة المشاهدة" : "Viewer page"}
+              </a>
+              <button
+                onClick={() => {
+                  const url = `${window.location.origin}/store/live/${live.id}`;
+                  navigator.clipboard?.writeText(url);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 1800);
+                }}
+                className="btn-outline h-10 px-4 text-sm"
+              >
+                <IcCopy className="h-4 w-4" />
+                {copied ? (ar ? "تم النسخ" : "Copied") : ar ? "نسخ الرابط" : "Copy link"}
+              </button>
               <button onClick={() => setChecking(true)} className="btn-outline h-10 px-4 text-sm">
                 {ar ? "فحص الكاميرا" : "Camera check"}
               </button>
