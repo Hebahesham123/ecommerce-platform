@@ -194,6 +194,9 @@ export function Preview() {
   // for so tapping the same link twice reopens it.
   const [openProduct, setOpenProduct] = useState<{ id: string; at: number } | null>(null);
   const [openPage, setOpenPage] = useState<{ handle: string; at: number } | null>(null);
+  // Tapping the header's menu asks the shop to open it; the shop owns the menu
+  // because the shop is what knows the merchant's navigation.
+  const [openMenu, setOpenMenu] = useState<{ at: number } | null>(null);
 
   // Where a link goes. The five kinds a merchant can pick in the link
   // picker all land here, so a banner, a chip and a card behave alike.
@@ -304,6 +307,10 @@ export function Preview() {
               if (v) setTab("shop");
             }}
             cartCount={count}
+            onMenu={() => {
+              setTab("shop");
+              setOpenMenu({ at: Date.now() });
+            }}
             onBag={() => setTab("cart")}
             wishlistCount={wishlist.length}
             onWishlist={() => setSheet("wishlist")}
@@ -344,6 +351,7 @@ export function Preview() {
                 openCollection={stripOpen}
                 openProduct={openProduct}
                 openPage={openPage}
+                openMenu={openMenu}
                 onScreen={openScreen}
                 onLeave={(what) => (what === "cart" ? setTab("cart") : setSheet("enquiry"))}
               />

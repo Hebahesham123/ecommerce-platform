@@ -33,6 +33,7 @@ export function AppHeader({
   wishlistCount = 0,
   onWishlist,
   onBag,
+  onMenu,
 }: {
   settings: AppSettings;
   accent: string;
@@ -43,6 +44,8 @@ export function AppHeader({
   wishlistCount?: number;
   onWishlist?: () => void;
   onBag?: () => void;
+  /** Opens the shop's menu. The website keeps this in the header; so does this. */
+  onMenu?: () => void;
 }) {
   const ink = settings.headerInk || "#191614";
   const bg = settings.headerBg || "#ffffff";
@@ -55,6 +58,19 @@ export function AppHeader({
       className="flex items-center gap-2 border-b border-slate-200 px-3 py-2"
       style={{ background: bg }}
     >
+      {onMenu && (
+        <button
+          onClick={onMenu}
+          aria-label={ar ? "القائمة" : "Menu"}
+          className="-ms-1 grid h-8 w-8 shrink-0 place-items-center"
+          style={{ color: ink }}
+        >
+          <svg viewBox="0 0 24 24" className="h-[19px] w-[19px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+            <path d="M4 7h16M4 12h16M4 17h16" />
+          </svg>
+        </button>
+      )}
+
       {settings.logoUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img src={settings.logoUrl} alt="" className="h-5 w-auto shrink-0 object-contain" />

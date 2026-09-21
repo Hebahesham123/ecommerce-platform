@@ -52,6 +52,7 @@ export function Shop({
   openCollection,
   openProduct,
   openPage,
+  openMenu,
   onScreen,
 }: {
   ar: boolean;
@@ -59,6 +60,8 @@ export function Shop({
   /** The saved list and its toggle, owned by the shell so every tab agrees. */
   wishlist?: readonly { id: string }[];
   onToggleWish?: (card: { id: string; name: string; priceMin: number | null; image: string | null }) => void;
+  /** The header asking for the menu, carried with the moment it was asked for. */
+  openMenu?: { at: number } | null;
   /** Targets that belong to another tab or another sheet the shell owns. */
   onLeave: (what: "cart" | "requests") => void;
   /** The shell wears the brand too, and /home is where it arrives. */
@@ -127,6 +130,16 @@ export function Shop({
     const found = home?.collections.find((c) => c.handle === req.handle);
     setView({ kind: "collection", handle: req.handle, title: found?.title ?? req.handle });
   }, [openCollection, home]);
+
+  // The header's menu button, which lives outside this component.
+  const lastMenu = useRef(0);
+  useEffect(() => {
+    const req = openMenu;
+    if (!req || req.at === lastMenu.current) return;
+    lastMenu.current = req.at;
+    if (mainMenu) setMenu(mainMenu);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openMenu]);
 
   const lastProduct = useRef(0);
   useEffect(() => {
@@ -240,26 +253,30 @@ export function Shop({
         </div>
       )}
       <div className="p-4">
-      {/* A collection wears its own banner at the very top. */}
-      <div className={`flex items-center gap-2 ${view.kind === "collection" ? "hidden" : ""}`}>
-        {mainMenu && (
-          <button
-            onClick={() => setMenu(mainMenu)}
-            aria-label={ar ? "القائمة" : "Menu"}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-600"
-          >
-            ☰
-          </button>
-        )}
-        {home?.theme.settings.showSearch !== false && !onQuery && (
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder={ar ? "ابحثي…" : "Search…"}
-            className="h-10 min-w-0 flex-1 rounded-full border border-slate-300 bg-white px-4 text-sm outline-none focus:border-violet-500"
-          />
-        )}
-      </div>
+      {/* The menu and search live in the header now, as they do on the website,
+          so nothing sits between it and the first section. Only a surface that
+          draws no header of its own (the theme editor's phone) needs these. */}
+      {!onQuery && (
+        <div className={`mb-3 flex items-center gap-2 ${view.kind === "collection" ? "hidden" : ""}`}>
+          {mainMenu && (
+            <button
+              onClick={() => setMenu(mainMenu)}
+              aria-label={ar ? "القائمة" : "Menu"}
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-600"
+            >
+              ☰
+            </button>
+          )}
+          {home?.theme.settings.showSearch !== false && (
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder={ar ? "ابحثي…" : "Search…"}
+              className="h-10 min-w-0 flex-1 rounded-full border border-slate-300 bg-white px-4 text-sm outline-none focus:border-violet-500"
+            />
+          )}
+        </div>
+      )}
 
       {homeErr ? (
         <Failed ar={ar} error={homeErr} onRetry={loadHome} />
