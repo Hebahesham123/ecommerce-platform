@@ -70,6 +70,18 @@ body {
   scrollbar-width: thin;
   scrollbar-color: rgb(var(--line)) transparent;
 }
+/* Inside a phone, nothing draws a scrollbar: the rows are swiped. */
+.app-surface,
+.app-surface * {
+  scrollbar-width: none;
+}
+.app-surface::-webkit-scrollbar,
+.app-surface *::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 *::-webkit-scrollbar {
   width: 8px;
   height: 8px;

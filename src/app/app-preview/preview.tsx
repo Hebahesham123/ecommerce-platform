@@ -275,7 +275,7 @@ export function Preview() {
       {/* ------------------------------- the phone ------------------------- */}
       <div className="mx-auto w-full max-w-[400px] shrink-0">
         <div
-          className="relative flex h-[760px] flex-col overflow-hidden rounded-[2rem] border-8 border-slate-900 shadow-2xl"
+          className="app-surface relative flex h-[760px] flex-col overflow-hidden rounded-[2rem] border-8 border-slate-900 shadow-2xl"
           style={
             { background: brand.background, "--app-page": brand.background } as React.CSSProperties
           }

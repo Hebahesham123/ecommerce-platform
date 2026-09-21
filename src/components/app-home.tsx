@@ -1265,7 +1265,7 @@ function LiveNow({
       {offerOn && (offerTitle || offerText) && (
         <button
           onClick={() => go(s, "offer")}
-          className="flex w-full items-center gap-3 px-4 py-3 text-start"
+          className="flex w-full items-center gap-2.5 px-3 py-2 text-start"
           style={{
             background: offerBg,
             borderRadius: bannerRadius,
@@ -1276,7 +1276,7 @@ function LiveNow({
           <span className="min-w-0 flex-1">
             {offerTitle && (
               <span
-                className="block truncate font-bold"
+                className="block truncate font-bold leading-tight"
                 style={{ color: offerFg, fontSize: offerTitleSize }}
               >
                 {offerTitle}
@@ -1284,7 +1284,7 @@ function LiveNow({
             )}
             {offerText && (
               <span
-                className="mt-0.5 block truncate"
+                className="block truncate leading-tight"
                 style={{ color: offerFg, opacity: 0.85, fontSize: offerTextSize }}
               >
                 {offerText}
@@ -1292,7 +1292,7 @@ function LiveNow({
             )}
           </span>
           <span
-            className="shrink-0 px-2.5 py-1.5 font-mono font-bold tabular-nums"
+            className="shrink-0 px-2 py-1 font-mono font-bold leading-tight tabular-nums"
             style={{ background: timerBg, color: timerFg, borderRadius: Math.min(bannerRadius, 10), fontSize: offerTitleSize }}
           >
             {timer}

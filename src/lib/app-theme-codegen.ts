@@ -1620,10 +1620,10 @@ const styles = StyleSheet.create({
   viewers: { color: colors.inkSoft, textAlign: "center" },
   replays: { alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.line, backgroundColor: colors.page },
   replaysIcon: { color: colors.inkSoft },
-  offer: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingHorizontal: 14, paddingVertical: 12 },
+  offer: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingHorizontal: 12, paddingVertical: 8 },
   offerTitle: { fontWeight: "700" },
-  offerText: { marginTop: 2, opacity: 0.85 },
-  timer: { paddingHorizontal: 10, paddingVertical: 6 },
+  offerText: { opacity: 0.85 },
+  timer: { paddingHorizontal: 8, paddingVertical: 4 },
   timerText: { fontWeight: "700" },
 });
 `,
@@ -3655,7 +3655,7 @@ function homeScreenFile(theme: AppTheme): GeneratedFile {
  * The order below is the order of the blocks in the editor. Change it there;
  * anything typed here is replaced the next time a section moves.
  */
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -3689,7 +3689,33 @@ export default function HomeScreen({
 
   useEffect(() => {
     fetchHome().then(setData).catch((e) => setError(String(e.message ?? e)));
-  }, []);${
+  }, []);
+
+  // A shortcut row that ends at the screen's edge looks like it ends there,
+  // and the ones past the fold are never seen - so it drifts, slowly enough
+  // to read, and stops for good the moment a thumb lands on it.
+  const strip = useRef<{ scrollTo: (to: { x: number; animated?: boolean }) => void } | null>(null);
+  const stripSize = useRef({ rail: 0, content: 0 });
+  const [stripHeld, setStripHeld] = useState(false);
+  useEffect(() => {
+    if (stripHeld) return;
+    let at = 0;
+    let way = 1;
+    const drift = setInterval(() => {
+      const far = stripSize.current.content - stripSize.current.rail;
+      if (far <= 1) return;
+      at = at + way * 0.8;
+      if (at >= far) {
+        at = far;
+        way = -1;
+      } else if (at <= 0) {
+        at = 0;
+        way = 1;
+      }
+      if (strip.current) strip.current.scrollTo({ x: at, animated: false });
+    }, 30);
+    return () => clearInterval(drift);
+  }, [stripHeld]);${
     recsUsed
       ? "\n\n  // Asked again whenever someone signs in or out; a failure just hides it.\n  const [recs, setRecs] = useState<Recommendations | null>(null);\n  useEffect(() => {\n    if (!signedIn) return setRecs(null);\n    fetchRecommendations().then(setRecs).catch(() => setRecs(null));\n  }, [signedIn]);"
       : ""
@@ -3709,6 +3735,16 @@ export default function HomeScreen({
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
+          ref={(r) => {
+            strip.current = r;
+          }}
+          onLayout={(e) => {
+            stripSize.current.rail = e.nativeEvent.layout.width;
+          }}
+          onContentSizeChange={(w) => {
+            stripSize.current.content = w;
+          }}
+          onTouchStart={() => setStripHeld(true)}
           style={styles.strip}
           contentContainerStyle={styles.stripRow}
         >
@@ -3764,7 +3800,7 @@ ${rendered}
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.page },
-  content: { padding: spacing.lg, gap: gap.section },
+  content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.lg, gap: gap.section },
   block: {},
   kicker: { marginBottom: 6, fontSize: 10, fontWeight: "700", letterSpacing: 1.8, color: colors.accent },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl },

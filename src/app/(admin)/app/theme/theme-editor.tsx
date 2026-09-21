@@ -981,7 +981,7 @@ export function ThemeEditor() {
             <div
               className={`${
                 device === "mobile" ? "w-[390px]" : "w-full max-w-[900px]"
-              } relative flex min-h-[620px] max-w-full flex-col self-start overflow-hidden rounded-[1.75rem] border-8 border-slate-900 shadow-card`}
+              } app-surface relative flex min-h-[620px] max-w-full flex-col self-start overflow-hidden rounded-[1.75rem] border-8 border-slate-900 shadow-card`}
               style={
                 {
                   background: draft.settings.background,
@@ -1149,7 +1149,7 @@ export function ThemeEditor() {
                   />
                 )
               ) : (
-              <div className="bg-[var(--app-page,#f8fafc)] p-4">
+              <div className={`bg-[var(--app-page,#f8fafc)] px-4 pb-4 ${query.trim() ? "pt-4" : ""}`}>
                 {query.trim() ? (
                   <SearchResults
                     ar={ar}
