@@ -140,7 +140,7 @@ export function Watch({ live: initial }: { live: WatchableLive }) {
                 </span>
               )}
               <span className="rounded-full bg-black/40 px-2 py-0.5 text-[11px] font-medium backdrop-blur">
-                {viewers} {ar ? "يشاهدون" : "watching"}
+                {Math.max(1, viewers)} {ar ? "يشاهدون" : "watching"}
               </span>
               {isTestStream(live) && (
                 <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold uppercase">

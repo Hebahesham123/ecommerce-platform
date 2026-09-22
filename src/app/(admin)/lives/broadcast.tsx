@@ -142,8 +142,9 @@ export function Broadcast({
   // The same chat the viewers are in, so what she reads is what they said.
   // Her own comments go through an admin action, which is the only path
   // allowed to mark a message as the host speaking.
-  const { messages, send: sendComment } = useLiveChat(liveId, {
+  const { messages, viewers, send: sendComment } = useLiveChat(liveId, {
     keep: 8,
+    role: "host",
     postVia: async ({ authorName, body }) => {
       const res = await postHostMessageAction(liveId, authorName, body);
       return res.ok ? res.data : null;
@@ -281,6 +282,9 @@ export function Broadcast({
               </span>
               <span className="rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-medium text-white" dir="ltr">
                 {mmss}
+              </span>
+              <span className="rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-medium text-white">
+                👁 {viewers}
               </span>
             </div>
           )}

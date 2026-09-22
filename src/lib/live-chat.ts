@@ -33,6 +33,12 @@ type Options = {
    * can carry the host mark; the public route never accepts that claim.
    */
   postVia?: (input: { authorName: string; body: string }) => Promise<LiveMessage | null>;
+  /**
+   * Who is holding this connection. The host is in the room but is not an
+   * audience of one: counting her would mean every live opens on 1 watching
+   * and a host with the dashboard open on two screens reads as a crowd.
+   */
+  role?: "viewer" | "host";
 };
 
 export type LiveChat = {
@@ -45,10 +51,10 @@ export type LiveChat = {
 
 export function useLiveChat(
   liveId: string,
-  { enabled = true, keep = 60, postVia }: Options = {},
+  { enabled = true, keep = 60, postVia, role = "viewer" }: Options = {},
 ): LiveChat {
   const [messages, setMessages] = useState<LiveMessage[]>([]);
-  const [viewers, setViewers] = useState(1);
+  const [viewers, setViewers] = useState(0);
   const [connected, setConnected] = useState(false);
   const channelRef = useRef<ReturnType<ReturnType<typeof getBrowserSupabase>["channel"]> | null>(null);
 
@@ -93,12 +99,18 @@ export function useLiveChat(
           if (m?.id) merge([m]);
         })
         .on("presence", { event: "sync" }, () => {
-          setViewers(Math.max(1, Object.keys(channel?.presenceState() ?? {}).length));
+          const state = channel?.presenceState() ?? {};
+          // Count the room, not the people running it.
+          const watching = Object.values(state).filter((metas) => {
+            const meta = (metas as { role?: string }[])[0];
+            return meta?.role !== "host";
+          }).length;
+          setViewers(watching);
         })
         .subscribe((status) => {
           if (status === "SUBSCRIBED") {
             setConnected(true);
-            channel?.track({ at: Date.now() });
+            channel?.track({ at: Date.now(), role });
           } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
             setConnected(false);
           }
@@ -110,7 +122,7 @@ export function useLiveChat(
       channel?.unsubscribe();
       channelRef.current = null;
     };
-  }, [liveId, enabled, merge]);
+  }, [liveId, enabled, merge, role]);
 
   // A broadcast is not guaranteed to arrive, and a phone that slept missed
   // everything sent while it was away. This is the safety net, not the path.

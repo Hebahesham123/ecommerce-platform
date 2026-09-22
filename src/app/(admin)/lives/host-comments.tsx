@@ -23,7 +23,11 @@ export function HostComments({
   live: boolean;
   ar: boolean;
 }) {
-  const { messages, connected, send } = useLiveChat(liveId, { enabled: live, keep: 100 });
+  const { messages, viewers, connected, send } = useLiveChat(liveId, {
+    enabled: live,
+    keep: 100,
+    role: "host",
+  });
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -31,6 +35,18 @@ export function HostComments({
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
   }, [messages.length]);
+
+  useEffect(() => {
+    if (!live || viewers <= 0) return;
+    const t = setTimeout(() => {
+      fetch(`/api/storefront/lives/${liveId}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ viewers }),
+      }).catch(() => {});
+    }, 3000);
+    return () => clearTimeout(t);
+  }, [viewers, live, liveId]);
 
   async function reply() {
     const body = draft.trim();
@@ -48,6 +64,19 @@ export function HostComments({
 
   return (
     <section className="rounded-2xl border border-line p-4">
+      {/* How many are in the room, right now. The peak on the results card
+          is the number the bill is based on; this is the one she watches
+          while deciding whether to hold something up again. */}
+      {live && (
+        <div className="mb-3 flex items-center gap-2 rounded-xl bg-rose-50 px-3 py-2">
+          <span className="flex h-2 w-2 rounded-full bg-rose-500" />
+          <span className="text-sm font-bold text-ink">{viewers}</span>
+          <span className="text-sm text-ink-muted">
+            {ar ? "يشاهدون الآن" : viewers === 1 ? "person watching now" : "people watching now"}
+          </span>
+        </div>
+      )}
+
       <div className="mb-2 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-ink">
           {ar ? "التعليقات" : "Comments"}
