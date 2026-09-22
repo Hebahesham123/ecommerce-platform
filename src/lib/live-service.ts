@@ -495,9 +495,14 @@ export async function listLiveCollections(): Promise<Result<LiveCollection[]>> {
     const { data, error } = await supabase
       .from("collections")
       .select("id,title,rule_type,rule_value,collection_products(item_id)")
-      .order("position", { ascending: true });
+      .order("sort_order", { ascending: true });
     if (error) {
-      if (error.message.includes("collections")) return { ok: true, data: [] };
+      // Only an absent table means "nothing to offer". Anything else is a
+      // fault worth showing: swallowing it hid a wrong column name behind an
+      // empty list that looked like a shop with no collections.
+      const missing =
+        error.code === "PGRST205" || error.message.includes("Could not find the table");
+      if (missing) return { ok: true, data: [] };
       return { ok: false, error: error.message };
     }
 

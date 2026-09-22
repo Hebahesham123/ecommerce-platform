@@ -561,6 +561,13 @@ function LiveForm({
                 : "Viewers can add any of these to their cart during the live and check out."}
             </p>
 
+            {collections.length === 0 && (
+              <p className="mt-2 text-[11px] text-ink-soft">
+                {ar
+                  ? "لا توجد تصنيفات لإضافتها."
+                  : "No collections available to add."}
+              </p>
+            )}
             {collections.length > 0 && (
               <div className="mt-2">
                 <select
