@@ -35,6 +35,7 @@ export type BlockType =
   | "countdown_deals"
   | "info_rows"
   | "shipping_goal"
+  | "free_shipping"
   | "payment_plans"
   | "price_slider"
   | "offer_cards"
@@ -423,6 +424,37 @@ export type AppSettings = {
    */
   stripEnabled: boolean;
   strip: StripItem[];
+
+  /**
+   * The picture the app opens on.
+   *
+   * A campaign only a shopper who scrolls will see is a campaign most shoppers
+   * miss, so this one is held in front of the app for a moment and then gets
+   * out of the way on its own. It is a picture rather than a designed screen
+   * because the thing a merchant already has, the morning a sale starts, is a
+   * picture.
+   *
+   * Everything about it is the merchant's: whether it runs at all, the image,
+   * how long it holds, how it leaves, how often a shopper is shown it, and
+   * where it goes if it is tapped. Nobody is ever trapped behind it - it
+   * always leaves by itself, and a tap anywhere skips it.
+   */
+  splashEnabled: boolean;
+  splashImageUrl: string;
+  splashBg: string;
+  /** How long it holds before it starts leaving, in seconds. */
+  splashSeconds: number;
+  /** "fade" | "zoom" | "up" | "curtain" */
+  splashExit: string;
+  /** "cover" fills the screen; "contain" shows the whole picture. */
+  splashFit: string;
+  /** "open" every time, "session" once a visit, "day" once a day. */
+  splashShow: string;
+  splashSkipLabel: string;
+  splashHandle: string;
+  splashUrl: string;
+  splashProductId: string;
+  splashScreen: string;
   /**
    * What section titles are set in. "serif" is the face the website already
    * uses, which is most of why the site reads as more expensive than the app.
@@ -748,6 +780,18 @@ export const DEFAULT_SETTINGS: AppSettings = {
   showBag: true,
   headerBg: "",
   headerInk: "",
+  splashEnabled: false,
+  splashImageUrl: "",
+  splashBg: "#2b1b10",
+  splashSeconds: 2.5,
+  splashExit: "curtain",
+  splashFit: "cover",
+  splashShow: "session",
+  splashSkipLabel: "Skip",
+  splashHandle: "",
+  splashUrl: "",
+  splashProductId: "",
+  splashScreen: "",
   stripEnabled: false,
   strip: [],
   titleFont: "system",
@@ -868,6 +912,12 @@ export const BLOCK_META: Record<
     en: "Info rows",
     hintAr: "الشحن، الاسترجاع، طرق الدفع — أيقونة وسطران ورقم على اليسار",
     hintEn: "Delivery, returns, ways to pay — an icon, two lines and a note on the end",
+  },
+  free_shipping: {
+    ar: "بانر الشحن المجاني",
+    en: "Free shipping banner",
+    hintAr: "بانر عريض يعلن الشحن المجاني، بخط متحرّك يسير عبره",
+    hintEn: "A wide banner announcing free delivery, with a line that travels across it",
   },
   shipping_goal: {
     ar: "شريط الشحن المجاني",
@@ -1172,6 +1222,27 @@ export function newBlock(type: BlockType): Block {
       radius: 14,
       items: shape ? [shape.blank()] : [],
     },
+    free_shipping: {
+      /** "banner" is the tall card; "strip" is the one-line ribbon. */
+      style: "banner",
+      kicker: "Delivered on us",
+      title: "Free shipping",
+      subtitle: "on every order over EGP 2,000",
+      note: "Anywhere we ship, no code needed",
+      buttonLabel: "",
+      // Empty colours follow the brand, as everywhere else.
+      bg: "",
+      bg2: "",
+      inkColor: "#ffffff",
+      dashColor: "",
+      radius: 18,
+      height: 0,
+      // Where the banner goes when it is tapped.
+      handle: "",
+      url: "",
+      productId: "",
+      screen: "",
+    },
     shipping_goal: {
       title: "Free delivery unlocked",
       subtitle: "",
@@ -1435,6 +1506,23 @@ export function normalizeTheme(raw: unknown): AppTheme {
     titleFont: str(s.titleFont) === "serif" ? "serif" : "system",
     sectionGap: size(s.sectionGap, 12, 0, 40),
     itemGap: size(s.itemGap, 8, 0, 24),
+    splashEnabled: Boolean(s.splashEnabled),
+    splashImageUrl: str(s.splashImageUrl).slice(0, 500),
+    splashBg: colour(s.splashBg, DEFAULT_SETTINGS.splashBg),
+    // Half a second is long enough to register, eight is long enough to annoy.
+    splashSeconds: Math.min(8, Math.max(0.5, Number(s.splashSeconds) || DEFAULT_SETTINGS.splashSeconds)),
+    splashExit: ["fade", "zoom", "up", "curtain"].includes(str(s.splashExit))
+      ? str(s.splashExit)
+      : DEFAULT_SETTINGS.splashExit,
+    splashFit: str(s.splashFit) === "contain" ? "contain" : "cover",
+    splashShow: ["open", "session", "day"].includes(str(s.splashShow))
+      ? str(s.splashShow)
+      : DEFAULT_SETTINGS.splashShow,
+    splashSkipLabel: str(s.splashSkipLabel, DEFAULT_SETTINGS.splashSkipLabel).slice(0, 24),
+    splashHandle: str(s.splashHandle).slice(0, 60),
+    splashUrl: str(s.splashUrl).slice(0, 300),
+    splashProductId: str(s.splashProductId).slice(0, 60),
+    splashScreen: str(s.splashScreen).slice(0, 40),
     stripEnabled: Boolean(s.stripEnabled),
     strip: Array.isArray(s.strip)
       ? (s.strip as unknown[])

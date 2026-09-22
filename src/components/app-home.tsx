@@ -821,6 +821,12 @@ function BlockView({
       );
     }
 
+    case "free_shipping":
+      if (!str(s.title) && !str(s.subtitle)) {
+        return <Placeholder ar={ar} label={ar ? "بانر بلا نص" : "Banner with no wording yet"} />;
+      }
+      return <FreeShipping block={block} data={data} ar={ar} accent={accent} handlers={handlers} />;
+
     case "moments": {
       const moments = itemsOf(block).filter((i) => str(i.imageUrl) || str(i.label));
       if (!moments.length) return <Placeholder ar={ar} label={ar ? "لا صور بعد" : "No pictures yet"} />;
@@ -2700,6 +2706,164 @@ function StyleProfile({
 }
 
 /**
+ * Free delivery, said out loud.
+ *
+ * The store already has a bar that counts a basket up to free delivery, which
+ * is the right thing once there is a basket. This is the other half: the
+ * promise, before anyone has put anything in one. It is a banner rather than a
+ * line of small print because free shipping is the single most persuasive
+ * thing most shops can say, and small print is where it usually goes.
+ *
+ * The art is a dashed road travelling under a parcel - delivery, drawn with
+ * two rectangles - so it costs nothing to load and reads at any size, and the
+ * phone can draw the same thing without a picture library.
+ */
+function FreeShipping({
+  block,
+  data,
+  ar,
+  accent,
+  handlers,
+}: {
+  block: Block;
+  data: HomeData;
+  ar: boolean;
+  accent: string;
+  handlers: HomeHandlers;
+}) {
+  const s = block.settings ?? {};
+  const go = opener(data, handlers);
+  const strip = str(s.style) === "strip";
+  const bg = str(s.bg) || "#2b1b10";
+  const bg2 = str(s.bg2) || accent;
+  const ink = str(s.inkColor, "#ffffff");
+  const dash = str(s.dashColor) || "#e0b877";
+  const radius = int(s.radius, 18);
+  const height = int(s.height, 0);
+  const opens = Boolean(str(s.handle) || str(s.url) || str(s.productId) || str(s.screen));
+
+  const road = (
+    <span
+      aria-hidden
+      className="app-ship-road block h-px w-full"
+      style={{
+        backgroundImage: `repeating-linear-gradient(to right, ${dash} 0 14px, transparent 14px 28px)`,
+        backgroundSize: "28px 1px",
+        opacity: 0.85,
+      }}
+    />
+  );
+
+  const parcel = (
+    <span aria-hidden className="app-ship-parcel relative block h-5 w-5 shrink-0">
+      <span
+        className="absolute inset-0 rounded-[4px]"
+        style={{ background: dash, opacity: 0.95 }}
+      />
+      <span
+        className="absolute inset-y-0 start-1/2 w-[3px] -translate-x-1/2"
+        style={{ background: bg, opacity: 0.55 }}
+      />
+    </span>
+  );
+
+  if (strip) {
+    return (
+      <section>
+        <button
+          onClick={() => opens && go(s)}
+          className={`flex w-full items-center gap-2.5 px-3 py-2.5 text-start ${opens ? "" : "cursor-default"}`}
+          style={{ background: bg, borderRadius: radius, minHeight: height || undefined }}
+        >
+          {parcel}
+          <span className="min-w-0 flex-1">
+            <span dir="auto" className="block truncate text-[12px] font-bold" style={{ color: ink }}>
+              {str(s.title)}
+            </span>
+            {str(s.subtitle) && (
+              <span dir="auto" className="block truncate text-[11px]" style={{ color: ink, opacity: 0.8 }}>
+                {str(s.subtitle)}
+              </span>
+            )}
+          </span>
+          {opens && (
+            <span aria-hidden className="shrink-0 text-[13px]" style={{ color: dash }}>
+              {ar ? "←" : "→"}
+            </span>
+          )}
+        </button>
+      </section>
+    );
+  }
+
+  return (
+    <section>
+      <button
+        onClick={() => opens && go(s)}
+        className={`relative w-full overflow-hidden px-4 py-4 text-start ${opens ? "" : "cursor-default"}`}
+        style={{
+          background: `linear-gradient(135deg, ${bg} 0%, ${bg} 42%, ${bg2} 100%)`,
+          borderRadius: radius,
+          minHeight: height || undefined,
+        }}
+      >
+        <span
+          aria-hidden
+          className="pointer-events-none absolute -end-12 -top-14 block h-40 w-40 rounded-full blur-2xl"
+          style={{ background: dash, opacity: 0.16 }}
+        />
+
+        {str(s.kicker) && (
+          <span
+            dir="auto"
+            className="relative block text-[9px] font-bold uppercase tracking-[0.2em]"
+            style={{ color: dash }}
+          >
+            ✦ {str(s.kicker)}
+          </span>
+        )}
+        {str(s.title) && (
+          <span
+            dir="auto"
+            className="app-display relative mt-1 block text-[24px] font-bold leading-tight"
+            style={{ color: ink }}
+          >
+            {str(s.title)}
+          </span>
+        )}
+        {str(s.subtitle) && (
+          <span dir="auto" className="relative mt-0.5 block text-[12px]" style={{ color: ink, opacity: 0.85 }}>
+            {str(s.subtitle)}
+          </span>
+        )}
+
+        <span className="relative mt-3 flex items-center gap-2">
+          {road}
+          {parcel}
+        </span>
+
+        <span className="relative mt-3 flex flex-wrap items-center gap-2">
+          {str(s.buttonLabel) && (
+            <span
+              dir="auto"
+              className="rounded-full px-3.5 py-1.5 text-[12px] font-bold"
+              style={{ background: dash, color: bg }}
+            >
+              {str(s.buttonLabel)} {ar ? "←" : "→"}
+            </span>
+          )}
+          {str(s.note) && (
+            <span dir="auto" className="text-[10px]" style={{ color: ink, opacity: 0.7 }}>
+              {str(s.note)}
+            </span>
+          )}
+        </span>
+      </button>
+    </section>
+  );
+}
+
+/**
  * The mystery box as a banner: a night-sky gradient with a glowing gift box
  * whose lid floats open and lets a question mark out. Everything the shopper
  * reads - the tag, the price, what it is worth, how many are left - is the
@@ -3617,6 +3781,8 @@ function isPlaceholder(node: React.ReactElement): boolean {
     }
     case "hero":
     case "cards":
+    case "free_shipping":
+      return !str(s.title) && !str(s.subtitle);
     case "moments":
       return itemsOf(block).filter((i) => str(i.imageUrl) || str(i.label)).length === 0;
     case "tiers":

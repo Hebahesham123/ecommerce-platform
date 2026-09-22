@@ -20,6 +20,7 @@ import {
 import { AppHome, type HomeData } from "@/components/app-home";
 import { CollectionPage, ProductPage, type ScreenHandlers } from "@/components/app-screens";
 import { AppStrip } from "@/components/app-strip";
+import { AppSplash } from "@/components/app-splash";
 import { AppLive } from "@/components/app-live";
 import { AppHeader } from "@/components/app-header";
 import { ColorPicker, ImageUpload, LinkPicker } from "@/components/pickers";
@@ -134,6 +135,8 @@ export function ThemeEditor() {
   // Which screen the editor is on. Home is blocks; the rest are settings.
   const [page, setPage] = useState<ScreenKey | "home" | "live">("home");
   const [stripIndex, setStripIndex] = useState(0);
+  // Bumping this plays the opening picture again in the phone.
+  const [splashPlay, setSplashPlay] = useState(0);
   const [stack, setStack] = useState<Screen[]>([]);
   const screen = stack[stack.length - 1] ?? null;
   const push = useCallback((next: Screen) => setStack((s) => [...s, next]), []);
@@ -645,6 +648,136 @@ export function ThemeEditor() {
                   />
                 </span>
               </Field>
+              <Field label={ar ? "صورة الافتتاح" : "Opening picture"} type="checkbox">
+                <label className="flex items-center gap-2 text-sm text-ink">
+                  <input
+                    type="checkbox"
+                    checked={draft.settings.splashEnabled}
+                    onChange={(e) => patchSettings({ splashEnabled: e.target.checked })}
+                  />
+                  {ar ? "يفتح التطبيق على صورة" : "Open the app on a picture"}
+                </label>
+                <p className="mt-1 text-[11px] text-ink-soft">
+                  {ar
+                    ? "تظهر لثوانٍ ثم تنصرف وحدها — واللمس في أي مكان يتخطّاها."
+                    : "It holds for a few seconds, then leaves by itself; a tap anywhere sends it early."}
+                </p>
+              </Field>
+              {draft.settings.splashEnabled && (
+                <>
+                  <Field label={ar ? "الصورة" : "Picture"} type="image_picker">
+                    <span className="flex items-center gap-2">
+                      {draft.settings.splashImageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={draft.settings.splashImageUrl}
+                          alt=""
+                          className="h-9 w-9 shrink-0 rounded-lg border border-line object-cover"
+                        />
+                      ) : null}
+                      <ImageUpload onUploaded={(url) => patchSettings({ splashImageUrl: url })} ar={ar} />
+                      <input
+                        value={draft.settings.splashImageUrl}
+                        onChange={(e) => patchSettings({ splashImageUrl: e.target.value })}
+                        placeholder="https://…"
+                        className={input}
+                        dir="ltr"
+                      />
+                    </span>
+                  </Field>
+                  <Field label={ar ? "كم تبقى (ثوانٍ)" : "How long it holds (seconds)"} type="range">
+                    <input
+                      type="number"
+                      min={0.5}
+                      max={8}
+                      step={0.5}
+                      value={draft.settings.splashSeconds}
+                      onChange={(e) => patchSettings({ splashSeconds: Number(e.target.value) })}
+                      className={input}
+                    />
+                  </Field>
+                  <Field label={ar ? "طريقة الخروج" : "How it leaves"} type="select">
+                    <select
+                      value={draft.settings.splashExit}
+                      onChange={(e) => patchSettings({ splashExit: e.target.value })}
+                      className={input}
+                    >
+                      <option value="curtain">{ar ? "ستارة تنفتح" : "Curtain parts"}</option>
+                      <option value="fade">{ar ? "تلاشٍ" : "Fade"}</option>
+                      <option value="zoom">{ar ? "تكبير وتلاشٍ" : "Zoom and fade"}</option>
+                      <option value="up">{ar ? "تنزلق لأعلى" : "Slide up"}</option>
+                    </select>
+                  </Field>
+                  <Field label={ar ? "ملء الشاشة" : "Picture fit"} type="select">
+                    <select
+                      value={draft.settings.splashFit}
+                      onChange={(e) => patchSettings({ splashFit: e.target.value })}
+                      className={input}
+                    >
+                      <option value="cover">{ar ? "تملأ الشاشة" : "Fill the screen"}</option>
+                      <option value="contain">{ar ? "الصورة كاملة" : "Show the whole picture"}</option>
+                    </select>
+                  </Field>
+                  <Field label={ar ? "كم مرة تظهر" : "How often"} type="select">
+                    <select
+                      value={draft.settings.splashShow}
+                      onChange={(e) => patchSettings({ splashShow: e.target.value })}
+                      className={input}
+                    >
+                      <option value="session">{ar ? "مرة كل زيارة" : "Once a visit"}</option>
+                      <option value="day">{ar ? "مرة كل يوم" : "Once a day"}</option>
+                      <option value="open">{ar ? "كل مرة يُفتح فيها" : "Every time the app opens"}</option>
+                    </select>
+                  </Field>
+                  <Field label={ar ? "لون الخلفية خلفها" : "Colour behind it"} type="color">
+                    <ColorPicker
+                      value={draft.settings.splashBg}
+                      onChange={(v) => patchSettings({ splashBg: v })}
+                      fallback="#2b1b10"
+                      brand={[draft.settings.accent, draft.settings.background]}
+                      input={input}
+                      ar={ar}
+                    />
+                  </Field>
+                  <Field label={ar ? "زر التخطّي" : "Skip button"} type="text">
+                    <input
+                      value={draft.settings.splashSkipLabel}
+                      onChange={(e) => patchSettings({ splashSkipLabel: e.target.value })}
+                      placeholder={ar ? "تخطّي" : "Skip"}
+                      className={input}
+                    />
+                  </Field>
+                  <Field label={ar ? "اللمس يفتح" : "A tap opens"} type="link">
+                    <LinkPicker
+                      value={{
+                        handle: draft.settings.splashHandle,
+                        url: draft.settings.splashUrl,
+                        productId: draft.settings.splashProductId,
+                        screen: draft.settings.splashScreen,
+                      }}
+                      onChange={(next) =>
+                        patchSettings({
+                          splashHandle: next.handle ?? "",
+                          splashUrl: next.url ?? "",
+                          splashProductId: next.productId ?? "",
+                          splashScreen: next.screen ?? "",
+                        })
+                      }
+                      collections={data.collections}
+                      input={input}
+                      ar={ar}
+                    />
+                  </Field>
+                  <Field label={ar ? "معاينة" : "Preview"} type="button">
+                    <button
+                      onClick={() => setSplashPlay((n) => n + 1)}
+                      className="btn-outline w-full justify-center"
+                    >
+                      {ar ? "شغّلي الصورة الآن" : "Play it in the phone"}
+                    </button>
+                  </Field>
+                </>
+              )}
               <Field label={ar ? "الاسم في الهيدر" : "Wordmark"} type="text">
                 <span className="flex items-center gap-2">
                   <input
@@ -990,6 +1123,11 @@ export function ThemeEditor() {
                 } as React.CSSProperties
               }
             >
+              {/* The editor plays it on demand: once a shopper has seen it,
+                  it would not come back until tomorrow, and a merchant needs
+                  to watch it as many times as it takes to get it right. */}
+              <AppSplash settings={draft.settings} ar={ar} replay={splashPlay} rehearsal />
+
               <div className="flex items-center justify-between bg-slate-900 px-4 pb-2 pt-1.5 text-[11px] font-medium text-white">
                 <span className="flex items-center gap-1.5">
                   {draft.settings.logoUrl ? (
@@ -2814,6 +2952,55 @@ function BlockGroup({
           <ColorRow label={ar ? "نص البانر" : "Banner text"} value={text("offerTextColor")} fallback="#ffffff" onChange={(v) => onPatch({ offerTextColor: v })} input={input} ar={ar} />
           <ColorRow label={ar ? "خلفية العدّاد" : "Timer background"} value={text("timerBg")} fallback="#ffffff" onChange={(v) => onPatch({ timerBg: v })} input={input} ar={ar} />
           <ColorRow label={ar ? "نص العدّاد" : "Timer text"} value={text("timerTextColor")} fallback="#ffffff" onChange={(v) => onPatch({ timerTextColor: v })} input={input} ar={ar} />
+        </>
+      )}
+
+      {block.type === "free_shipping" && (
+        <>
+          <Field label={ar ? "الشكل" : "Look"} type="select">
+            <select value={text("style") || "banner"} onChange={(e) => onPatch({ style: e.target.value })} className={input}>
+              <option value="banner">{ar ? "بانر كبير" : "Tall banner"}</option>
+              <option value="strip">{ar ? "شريط سطر واحد" : "One-line strip"}</option>
+            </select>
+          </Field>
+          <Field label={ar ? "السطر العلوي" : "Small line above"} type="text">
+            <input value={text("kicker")} onChange={(e) => onPatch({ kicker: e.target.value })} placeholder="Delivered on us" className={input} />
+          </Field>
+          <Field label={ar ? "العنوان" : "Title"} type="text">
+            <input value={text("title")} onChange={(e) => onPatch({ title: e.target.value })} placeholder="Free shipping" className={input} />
+          </Field>
+          <Field label={ar ? "السطر تحته" : "Line underneath"} type="text">
+            <input value={text("subtitle")} onChange={(e) => onPatch({ subtitle: e.target.value })} placeholder="on every order over EGP 2,000" className={input} />
+          </Field>
+          <Field label={ar ? "الزر" : "Button"} type="text">
+            <input value={text("buttonLabel")} onChange={(e) => onPatch({ buttonLabel: e.target.value })} className={input} />
+          </Field>
+          <Field label={ar ? "السطر الأخير" : "Small print"} type="text">
+            <input value={text("note")} onChange={(e) => onPatch({ note: e.target.value })} className={input} />
+          </Field>
+          <ColorRow label={ar ? "الخلفية من" : "Background from"} value={text("bg")} fallback="#2b1b10" onChange={(v) => onPatch({ bg: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "الخلفية إلى" : "Background to"} value={text("bg2")} fallback="#9d6540" onChange={(v) => onPatch({ bg2: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "لون النص" : "Text"} value={text("inkColor")} fallback="#ffffff" onChange={(v) => onPatch({ inkColor: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "لون الطريق" : "Road and parcel"} value={text("dashColor")} fallback="#e0b877" onChange={(v) => onPatch({ dashColor: v })} input={input} ar={ar} />
+          <Field label={ar ? "استدارة الحواف" : "Corner radius"} type="range">
+            <input type="number" min={0} max={32} value={num("radius", 18)} onChange={(e) => onPatch({ radius: Number(e.target.value) })} className={input} />
+          </Field>
+          <Field label={ar ? "يفتح" : "Opens"} type="link">
+            <LinkPicker
+              value={{ handle: text("handle"), url: text("url"), productId: text("productId"), screen: text("screen") }}
+              onChange={(next) =>
+                onPatch({
+                  handle: next.handle ?? "",
+                  url: next.url ?? "",
+                  productId: next.productId ?? "",
+                  screen: next.screen ?? "",
+                })
+              }
+              collections={collections}
+              input={input}
+              ar={ar}
+            />
+          </Field>
         </>
       )}
 

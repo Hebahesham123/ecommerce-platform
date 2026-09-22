@@ -18,6 +18,7 @@ import { Enquiry, Orders, Returns, SignIn } from "./screens";
 import { Shop } from "./shop";
 import { AppNudge } from "@/components/app-nudge";
 import { AppStrip } from "@/components/app-strip";
+import { AppSplash } from "@/components/app-splash";
 import { AppHeader } from "@/components/app-header";
 import { AppLive } from "@/components/app-live";
 import { liveSessionsOf, liveSessionsFromLives } from "@/lib/app-theme";
@@ -325,6 +326,19 @@ export function Preview({
             { background: brand.background, "--app-page": brand.background } as React.CSSProperties
           }
         >
+          {/* Whatever the merchant is running this week, held in front of the
+              app for a moment. It leaves on its own. */}
+          <AppSplash
+            settings={brand}
+            ar={ar}
+            onOpen={(t) => {
+              if (t.url) return window.open(t.url, "_blank", "noopener,noreferrer");
+              if (t.productId) return openProductLink(t.productId);
+              if (t.screen) return openScreen(t.screen);
+              if (t.handle) openCollectionLink(t.handle);
+            }}
+          />
+
           {/* status bar — the store's own name and mark, from the theme */}
           <div className="flex items-center justify-between bg-slate-900 px-4 pb-2 pt-1.5 text-[11px] font-medium text-white">
             <span className="flex items-center gap-1.5">

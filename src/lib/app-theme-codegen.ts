@@ -96,6 +96,22 @@ export const theme = {
   accent: ${q(t.accent)},
   background: ${q(t.background)},
   menuHandle: ${q(t.menuHandle)},
+  /** The picture the app opens on, and how it leaves. */
+  splash: {
+    enabled: ${t.splashEnabled && t.splashImageUrl ? "true" : "false"},
+    imageUrl: ${q(t.splashImageUrl)},
+    bg: ${q(t.splashBg)},
+    seconds: ${t.splashSeconds},
+    /** Widened on purpose: the component compares it with every option. */
+    exit: ${q(t.splashExit)} as string,
+    fit: ${q(t.splashFit)} as string,
+    show: ${q(t.splashShow)} as string,
+    skipLabel: ${q(t.splashSkipLabel)},
+    handle: ${q(t.splashHandle)},
+    url: ${q(t.splashUrl)},
+    productId: ${q(t.splashProductId)},
+    screen: ${q(t.splashScreen)},
+  },
   showSearch: ${t.showSearch},
   announcement: {
     enabled: ${t.announcementEnabled},
@@ -478,6 +494,121 @@ export const placeOrder = (payload: OrderRequest) =>
 }
 
 // ------------------------------------------------------------- shared bits --
+/** The picture the app opens on. Chrome, so it ships whether or not the
+ *  merchant has switched it on: the theme decides at runtime. */
+function splashFile(): GeneratedFile {
+  return {
+    path: "components/Splash.tsx",
+    language: "tsx",
+    contents: `import React, { useEffect, useRef, useState } from "react";
+import { Animated, Dimensions, Easing, Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { theme } from "../theme";
+import { openLink } from "./Pieces";
+
+/**
+ * The picture the app opens on.
+ *
+ * It holds for the merchant's few seconds and then leaves the way they chose,
+ * and a tap sends it early - so it is the first thing a shopper sees and never
+ * the thing in the way. The app behind it has already started loading while it
+ * was up, which is the other half of why it is worth having.
+ */
+export function Splash({
+  onOpenCollection,
+  onOpenProduct,
+  onOpenScreen,
+}: {
+  onOpenCollection?: (handle: string) => void;
+  onOpenProduct?: (id: string) => void;
+  onOpenScreen?: (screen: string) => void;
+}) {
+  const s = theme.splash;
+  const [gone, setGone] = useState(!s.enabled || !s.imageUrl);
+  const go = useRef(new Animated.Value(0)).current;
+  const leaving = useRef(false);
+
+  const leave = (then?: () => void) => {
+    if (leaving.current) return;
+    leaving.current = true;
+    Animated.timing(go, { toValue: 1, duration: 620, easing: Easing.bezier(0.65, 0, 0.35, 1), useNativeDriver: true }).start(
+      () => {
+        setGone(true);
+        if (then) then();
+      },
+    );
+  };
+
+  useEffect(() => {
+    if (gone) return;
+    const hold = setTimeout(() => leave(), Math.max(500, s.seconds * 1000));
+    return () => clearTimeout(hold);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (gone) return null;
+
+  const screen = Dimensions.get("window");
+  const opens = Boolean(s.handle || s.url || s.productId || s.screen);
+  const take = () =>
+    leave(() => {
+      if (opens) openLink(s, { onOpenCollection, onOpenProduct, onOpenScreen });
+    });
+
+  const fade = go.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
+  const zoom = go.interpolate({ inputRange: [0, 1], outputRange: [1, 1.18] });
+  const slide = go.interpolate({ inputRange: [0, 1], outputRange: [0, -screen.height] });
+  const half = screen.height / 2;
+  const partUp = go.interpolate({ inputRange: [0, 1], outputRange: [0, -half] });
+  const partDown = go.interpolate({ inputRange: [0, 1], outputRange: [0, half] });
+  const fit = s.fit === "contain" ? "contain" : "cover";
+
+  return (
+    <Pressable style={[styles.wrap, { backgroundColor: s.bg }]} onPress={take}>
+      {s.exit === "curtain" ? (
+        <>
+          <Animated.View style={[styles.half, { height: half, top: 0, transform: [{ translateY: partUp }] }]}>
+            <Image source={{ uri: s.imageUrl }} style={[styles.whole, { height: screen.height, top: 0 }]} resizeMode={fit} />
+          </Animated.View>
+          <Animated.View style={[styles.half, { height: half, top: half, transform: [{ translateY: partDown }] }]}>
+            <Image source={{ uri: s.imageUrl }} style={[styles.whole, { height: screen.height, top: -half }]} resizeMode={fit} />
+          </Animated.View>
+        </>
+      ) : (
+        <Animated.Image
+          source={{ uri: s.imageUrl }}
+          resizeMode={fit}
+          style={[
+            styles.whole,
+            { height: screen.height, top: 0 },
+            s.exit === "up"
+              ? { transform: [{ translateY: slide }] }
+              : s.exit === "zoom"
+                ? { opacity: fade, transform: [{ scale: zoom }] }
+                : { opacity: fade },
+          ]}
+        />
+      )}
+
+      {s.skipLabel ? (
+        <Pressable style={styles.skip} onPress={() => leave()} hitSlop={8}>
+          <Text style={styles.skipText}>{s.skipLabel}</Text>
+        </Pressable>
+      ) : null}
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  wrap: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, zIndex: 50, overflow: "hidden" },
+  half: { position: "absolute", left: 0, right: 0, overflow: "hidden" },
+  whole: { position: "absolute", left: 0, right: 0, width: "100%" },
+  skip: { position: "absolute", right: 14, top: 44, borderRadius: 999, backgroundColor: "rgba(0,0,0,0.35)", paddingHorizontal: 12, paddingVertical: 5 },
+  skipText: { color: "#fff", fontSize: 11, fontWeight: "600" },
+});
+`,
+  };
+}
+
 function piecesFile(): GeneratedFile {
   return {
     path: "components/Pieces.tsx",
@@ -1245,6 +1376,140 @@ const styles = StyleSheet.create({
   image: { width: 144, height: 180, backgroundColor: colors.page },
   title: { fontSize: 12, fontWeight: "600", color: colors.ink },
   sub: { fontSize: 10, color: colors.inkSoft },
+});
+`,
+
+    free_shipping: `import React, { useEffect, useRef } from "react";
+import { Animated, Easing, Pressable, StyleSheet, Text, View } from "react-native";
+import { colors, spacing } from "../theme";
+import { openLink, type LinkTo } from "./Pieces";
+
+export type FreeShippingSettings = {
+  style?: string;
+  kicker?: string;
+  title?: string;
+  subtitle?: string;
+  note?: string;
+  buttonLabel?: string;
+  bg?: string;
+  bg2?: string;
+  inkColor?: string;
+  dashColor?: string;
+  radius?: number;
+  height?: number;
+} & LinkTo;
+
+/** The dashes travel one dash-width and start again, which reads as a road
+ *  going past rather than a line that ends. */
+function useRoad() {
+  const shift = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.timing(shift, { toValue: 1, duration: 1100, easing: Easing.linear, useNativeDriver: true }),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [shift]);
+  return shift.interpolate({ inputRange: [0, 1], outputRange: [0, -28] });
+}
+
+export function FreeShipping({
+  settings,
+  onOpenCollection,
+  onOpenProduct,
+  onOpenScreen,
+}: {
+  settings: FreeShippingSettings;
+  onOpenCollection?: (handle: string) => void;
+  onOpenProduct?: (id: string) => void;
+  onOpenScreen?: (screen: string) => void;
+}) {
+  const travel = useRoad();
+  if (!settings.title && !settings.subtitle) return null;
+
+  const strip = settings.style === "strip";
+  const bg = settings.bg || "#2b1b10";
+  const ink = settings.inkColor || "#ffffff";
+  const dash = settings.dashColor || "#e0b877";
+  const r = settings.radius && settings.radius >= 0 ? settings.radius : 18;
+  const opens = Boolean(settings.handle || settings.url || settings.productId || settings.screen);
+  const go = () => openLink(settings, { onOpenCollection, onOpenProduct, onOpenScreen });
+
+  const parcel = (
+    <View style={[styles.parcel, { backgroundColor: dash }]}>
+      <View style={[styles.tape, { backgroundColor: bg }]} />
+    </View>
+  );
+
+  if (strip) {
+    return (
+      <Pressable disabled={!opens} onPress={go} style={[styles.strip, { backgroundColor: bg, borderRadius: r }]}>
+        {parcel}
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.stripTitle, { color: ink }]} numberOfLines={1}>{settings.title}</Text>
+          {settings.subtitle ? (
+            <Text style={[styles.stripSub, { color: ink }]} numberOfLines={1}>{settings.subtitle}</Text>
+          ) : null}
+        </View>
+      </Pressable>
+    );
+  }
+
+  return (
+    <Pressable disabled={!opens} onPress={go} style={[styles.banner, { backgroundColor: bg, borderRadius: r, minHeight: settings.height || undefined }]}>
+      <View style={[styles.wash, { backgroundColor: settings.bg2 || colors.accent }]} />
+      {settings.kicker ? (
+        <Text style={[styles.kicker, { color: dash }]}>{"\u2726 " + settings.kicker.toUpperCase()}</Text>
+      ) : null}
+      {settings.title ? (
+        <Text style={[styles.title, { color: ink }]}>{settings.title}</Text>
+      ) : null}
+      {settings.subtitle ? (
+        <Text style={[styles.sub, { color: ink }]}>{settings.subtitle}</Text>
+      ) : null}
+
+      <View style={styles.roadRow}>
+        <View style={styles.roadClip}>
+          <Animated.View style={[styles.road, { transform: [{ translateX: travel }] }]}>
+            {Array.from({ length: 24 }).map((_, i) => (
+              <View key={i} style={[styles.dash, { backgroundColor: dash }]} />
+            ))}
+          </Animated.View>
+        </View>
+        {parcel}
+      </View>
+
+      <View style={styles.footRow}>
+        {settings.buttonLabel ? (
+          <View style={[styles.cta, { backgroundColor: dash }]}>
+            <Text style={[styles.ctaText, { color: bg }]}>{settings.buttonLabel}</Text>
+          </View>
+        ) : null}
+        {settings.note ? <Text style={[styles.note, { color: ink }]}>{settings.note}</Text> : null}
+      </View>
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  banner: { overflow: "hidden", paddingHorizontal: 16, paddingVertical: 16 },
+  wash: { position: "absolute", right: -48, top: -56, height: 160, width: 160, borderRadius: 80, opacity: 0.35 },
+  kicker: { fontSize: 9, fontWeight: "700", letterSpacing: 1.9 },
+  title: { marginTop: 4, fontSize: 24, fontWeight: "700" },
+  sub: { marginTop: 2, fontSize: 12, opacity: 0.85 },
+  roadRow: { marginTop: 12, flexDirection: "row", alignItems: "center", gap: 8 },
+  roadClip: { flex: 1, height: 1, overflow: "hidden" },
+  road: { flexDirection: "row", gap: 14, width: 672 },
+  dash: { height: 1, width: 14, opacity: 0.85 },
+  parcel: { height: 20, width: 20, borderRadius: 4, alignItems: "center", justifyContent: "center" },
+  tape: { width: 3, height: 20, opacity: 0.55 },
+  footRow: { marginTop: 12, flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 },
+  cta: { borderRadius: 999, paddingHorizontal: 14, paddingVertical: 6 },
+  ctaText: { fontSize: 12, fontWeight: "700" },
+  note: { fontSize: 10, opacity: 0.7 },
+  strip: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12, paddingVertical: 10 },
+  stripTitle: { fontSize: 12, fontWeight: "700" },
+  stripSub: { fontSize: 11, opacity: 0.8 },
 });
 `,
 
@@ -4033,6 +4298,7 @@ function renderCall(block: Block, indent: number): string {
     promo_bar: [],
     collection_tabs: ["rows={data.rows}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}"],
     cards: ["collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
+    free_shipping: ["onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     moments: ["onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     tiers: ["onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     split: ["collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
@@ -4119,6 +4385,24 @@ function settingsLiteral(block: Block): string {
       "imageFit",
     ],
     cards: ["kicker", "title"],
+    free_shipping: [
+      "style",
+      "kicker",
+      "title",
+      "subtitle",
+      "note",
+      "buttonLabel",
+      "bg",
+      "bg2",
+      "inkColor",
+      "dashColor",
+      "radius",
+      "height",
+      "handle",
+      "url",
+      "productId",
+      "screen",
+    ],
     moments: ["title", "subtitle", "cardWidth", "cardHeight", "radius", "labelColor"],
     tiers: ["title", "cardBg", "lineColor", "inkColor", "mutedColor"],
     split: ["title"],
@@ -6239,6 +6523,7 @@ function appFile(theme: AppTheme): GeneratedFile {
  */
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, SafeAreaView, StatusBar, StyleSheet, Text, View } from "react-native";
+import { Splash } from "./components/Splash";
 import { colors, spacing, theme } from "./theme";
 import { screens, say } from "./screens";
 import {
@@ -6524,6 +6809,19 @@ export default function App() {
       ) : null}
 
       <TabBar active={tab} cartCount={count} onSelect={goTab} />
+
+      {/* Above everything, and gone by itself a moment later. */}
+      <Splash
+        onOpenCollection={(handle) => {
+          setTab("shop");
+          push({ kind: "collection", handle, title: handle });
+        }}
+        onOpenProduct={(id) => {
+          setTab("shop");
+          push({ kind: "product", id });
+        }}
+        onOpenScreen={(screen) => goScreen(screen)}
+      />
     </SafeAreaView>
   );
 }
@@ -6555,6 +6853,7 @@ export function generateApp(theme: AppTheme, baseUrl: string): GeneratedFile[] {
     apiFile(baseUrl),
     homeScreenFile(theme),
     piecesFile(),
+    splashFile(),
     tabBarFile(theme),
     appFile(theme),
     collectionScreenFile(),
