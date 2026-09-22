@@ -1,6 +1,7 @@
 import "server-only";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
 import { mapLiveMessage, mapLiveStream, type LiveMessage, type LiveStream } from "@/lib/live";
+import { matchesRule, type CollectionRuleType } from "@/lib/collections";
 
 /**
  * Live shopping, server side.
@@ -470,6 +471,138 @@ export async function reportViewers(id: string, viewers: number): Promise<void> 
     await supabase.from(TABLE).update({ peak_viewers: viewers }).eq("id", id);
   } catch {
     /* a missed peak is not worth failing a viewer's request over */
+  }
+}
+
+// ---- Collections ------------------------------------------------------------
+
+export type LiveCollection = { id: string; title: string; productCount: number };
+
+/**
+ * The shop's collections, with how many products each would put on air.
+ *
+ * A live is usually about a group the merchant already curates — the new
+ * arrivals, the bags — and rebuilding that group by ticking twenty boxes is
+ * work she has already done once.
+ */
+export async function listLiveCollections(): Promise<Result<LiveCollection[]>> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  try {
+    const supabase = getServerSupabase();
+    const { data, error } = await supabase
+      .from("collections")
+      .select("id,title,rule_type,rule_value,collection_products(item_id)")
+      .order("position", { ascending: true });
+    if (error) {
+      if (error.message.includes("collections")) return { ok: true, data: [] };
+      return { ok: false, error: error.message };
+    }
+
+    // A rule-based collection has no rows to count, so its size has to be
+    // worked out against the catalogue the same way the storefront does.
+    const catalogue = await matchableCatalogue();
+    const out: LiveCollection[] = (data ?? []).map((row: Record<string, unknown>) => {
+      const ruleType = String(row.rule_type ?? "manual") as CollectionRuleType;
+      const manual = Array.isArray(row.collection_products)
+        ? (row.collection_products as Record<string, unknown>[]).length
+        : 0;
+      const count =
+        ruleType === "manual"
+          ? manual
+          : catalogue.filter((c) =>
+              matchesRule(c, ruleType, (row.rule_value as string) ?? null),
+            ).length;
+      return {
+        id: String(row.id),
+        title: String(row.title ?? ""),
+        productCount: count,
+      };
+    });
+    return { ok: true, data: out };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+type Matchable = {
+  itemId: string;
+  productName: string;
+  imageUrl: string | null;
+  price: number | null;
+  category: string | null;
+  vendor: string | null;
+  tags: string[];
+};
+
+/** One row per sellable item, carrying what a collection rule asks about. */
+async function matchableCatalogue(): Promise<Matchable[]> {
+  try {
+    const supabase = getServerSupabase();
+    const { data } = await supabase
+      .from("inventory_items")
+      .select("id,product_name,image_url,price,category,vendor,tags");
+    return (data ?? []).map((r: Record<string, unknown>) => ({
+      itemId: String(r.id),
+      productName: String(r.product_name ?? ""),
+      imageUrl: (r.image_url as string) ?? null,
+      price: r.price == null ? null : Number(r.price),
+      category: (r.category as string) ?? null,
+      vendor: (r.vendor as string) ?? null,
+      tags: Array.isArray(r.tags) ? (r.tags as string[]) : [],
+    }));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Everything a collection would put on air, as live products.
+ *
+ * Resolved at the moment it is chosen rather than kept as a link: a live is a
+ * fixed event with a fixed shelf, and a collection edited next month should
+ * not quietly rewrite what last month's replay was selling.
+ */
+export async function collectionProducts(collectionId: string): Promise<Result<LiveProductInput[]>> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  try {
+    const supabase = getServerSupabase();
+    const { data: collection, error } = await supabase
+      .from("collections")
+      .select("id,rule_type,rule_value,collection_products(item_id,product_name,position)")
+      .eq("id", collectionId)
+      .maybeSingle();
+    if (error) return { ok: false, error: error.message };
+    if (!collection) return { ok: false, error: "not_found" };
+
+    const catalogue = await matchableCatalogue();
+    const byId = new Map(catalogue.map((c) => [c.itemId, c]));
+    const ruleType = String(collection.rule_type ?? "manual") as CollectionRuleType;
+
+    const chosen: Matchable[] =
+      ruleType === "manual"
+        ? (Array.isArray(collection.collection_products)
+            ? (collection.collection_products as Record<string, unknown>[])
+            : []
+          )
+            .sort((a, b) => Number(a.position ?? 0) - Number(b.position ?? 0))
+            .map((row) => byId.get(String(row.item_id)))
+            .filter((c): c is Matchable => Boolean(c))
+        : catalogue.filter((c) =>
+            matchesRule(c, ruleType, (collection.rule_value as string) ?? null),
+          );
+
+    return {
+      ok: true,
+      data: chosen.map((c) => ({
+        itemId: c.itemId,
+        productName: c.productName,
+        imageUrl: c.imageUrl,
+        price: c.price,
+        discountCode: null,
+      })),
+    };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
   }
 }
 

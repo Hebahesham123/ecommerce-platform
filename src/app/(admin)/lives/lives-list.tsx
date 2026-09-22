@@ -18,14 +18,18 @@ import {
   providerStatusAction,
   refreshRecordingAction,
   saveLiveAction,
+  collectionProductsAction,
+  listLiveCollectionsAction,
   setLiveProductsAction,
   setLiveStatusAction,
   useTestStreamAction,
 } from "./actions";
 import { listStoreProducts, type StoreProduct } from "../../store/actions";
+import type { LiveCollection } from "@/lib/live-service";
 import { CameraCheck } from "./camera-check";
 import { Broadcast } from "./broadcast";
 import { HostComments } from "./host-comments";
+import { ImagePicker } from "@/components/image-picker";
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui";
 import {
@@ -387,12 +391,44 @@ function LiveForm({
   const [catalog, setCatalog] = useState<StoreProduct[]>([]);
   const [chosen, setChosen] = useState<Record<string, boolean>>({});
   const [search, setSearch] = useState("");
+  const [collections, setCollections] = useState<LiveCollection[]>([]);
+  const [picking, setPicking] = useState(false);
+  const [addingCollection, setAddingCollection] = useState<string | null>(null);
+  // Products pulled in from a collection, kept apart from the ticked ones so
+  // a collection can be added without losing a hand-picked item.
+  const [fromCollection, setFromCollection] = useState<
+    { itemId: string; productName: string; imageUrl: string | null; price: number | null }[]
+  >([]);
 
   useEffect(() => {
     listStoreProducts().then((res) => {
       if (res.ok) setCatalog(res.data);
     });
+    listLiveCollectionsAction().then((res) => {
+      if (res.ok) setCollections(res.data);
+    });
   }, []);
+
+  async function addCollection(id: string) {
+    if (!id) return;
+    setAddingCollection(id);
+    const res = await collectionProductsAction(id);
+    setAddingCollection(null);
+    if (!res.ok) return;
+    setFromCollection((cur) => {
+      const byId = new Map(cur.map((c) => [c.itemId, c]));
+      for (const prod of res.data) {
+        if (!prod.itemId) continue;
+        byId.set(prod.itemId, {
+          itemId: prod.itemId,
+          productName: prod.productName,
+          imageUrl: prod.imageUrl,
+          price: prod.price,
+        });
+      }
+      return [...byId.values()];
+    });
+  }
 
   const picked = catalog.filter((c) => chosen[c.id]);
   const shownProducts = (() => {
@@ -423,17 +459,25 @@ function LiveForm({
     // than left for a second visit: the host picks what she will hold up
     // before she has a stream key, let alone a camera pointed at her.
     let saved = res.data;
-    if (picked.length > 0) {
-      const withProducts = await setLiveProductsAction(
-        saved.id,
-        picked.map((c) => ({
-          itemId: c.id,
-          productName: c.name,
-          imageUrl: c.image,
-          price: c.priceMin,
-          discountCode: null as string | null,
-        })),
-      );
+    // Ticked products and whole collections end up in one list, with an item
+    // that appears in both counted once.
+    const byItem = new Map<string, { itemId: string; productName: string; imageUrl: string | null; price: number | null; discountCode: string | null }>();
+    for (const c of picked) {
+      byItem.set(c.id, {
+        itemId: c.id,
+        productName: c.name,
+        imageUrl: c.image,
+        price: c.priceMin,
+        discountCode: null,
+      });
+    }
+    for (const c of fromCollection) {
+      if (!byItem.has(c.itemId)) {
+        byItem.set(c.itemId, { ...c, discountCode: null });
+      }
+    }
+    if (byItem.size > 0) {
+      const withProducts = await setLiveProductsAction(saved.id, [...byItem.values()]);
       if (withProducts.ok) saved = withProducts.data;
     }
     setBusy(false);
@@ -472,8 +516,33 @@ function LiveForm({
             </div>
           </div>
           <div>
-            <label className="text-xs font-medium text-ink-muted">{ar ? "صورة الغلاف (رابط)" : "Cover image URL"}</label>
-            <input value={coverUrl} onChange={(e) => setCoverUrl(e.target.value)} className={`${field} mt-1`} dir="ltr" />
+            <label className="text-xs font-medium text-ink-muted">
+              {ar ? "صورة الغلاف" : "Cover image"}
+            </label>
+            <div className="mt-1 flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setPicking(true)}
+                className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-dashed border-line bg-surface-page"
+              >
+                {coverUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={coverUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <IcImage className="h-5 w-5 text-ink-soft" />
+                )}
+              </button>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" onClick={() => setPicking(true)} className="btn-outline h-9 px-3 text-xs">
+                  {coverUrl ? (ar ? "تغيير" : "Change") : ar ? "اختاري صورة" : "Choose image"}
+                </button>
+                {coverUrl && (
+                  <button type="button" onClick={() => setCoverUrl("")} className="btn-ghost h-9 px-2 text-xs text-ink-muted">
+                    {ar ? "إزالة" : "Remove"}
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
           <label className="flex items-center gap-2 text-sm text-ink">
             <input type="checkbox" checked={replay} onChange={(e) => setReplay(e.target.checked)} className="h-4 w-4 rounded border-line accent-brand-600" />
@@ -489,6 +558,43 @@ function LiveForm({
                 ? "يمكن للمشاهدين إضافة أي منها للسلة أثناء البث وإتمام الطلب."
                 : "Viewers can add any of these to their cart during the live and check out."}
             </p>
+
+            {collections.length > 0 && (
+              <div className="mt-2">
+                <select
+                  value=""
+                  onChange={(e) => addCollection(e.target.value)}
+                  disabled={Boolean(addingCollection)}
+                  className={field}
+                >
+                  <option value="">
+                    {addingCollection
+                      ? (ar ? "جارٍ الإضافة…" : "Adding…")
+                      : ar ? "أضيفي تصنيفاً كاملاً…" : "Add a whole collection…"}
+                  </option>
+                  {collections.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.title} ({c.productCount})
+                    </option>
+                  ))}
+                </select>
+                {fromCollection.length > 0 && (
+                  <div className="mt-1.5 flex items-center gap-2 text-xs text-ink-muted">
+                    <span>
+                      {fromCollection.length}{" "}
+                      {ar ? "منتج من التصنيفات" : "added from collections"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setFromCollection([])}
+                      className="text-rose-600 hover:underline"
+                    >
+                      {ar ? "إزالة" : "Clear"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -521,6 +627,16 @@ function LiveForm({
             )}
           </div>
         </div>
+
+        {picking && (
+          <ImagePicker
+            value={coverUrl}
+            onChange={setCoverUrl}
+            onClose={() => setPicking(false)}
+            ar={ar}
+            title={ar ? "صورة غلاف البث" : "Live cover image"}
+          />
+        )}
 
         {err && <p className="mt-3 text-sm font-medium text-rose-600">{err}</p>}
 

@@ -5,6 +5,8 @@ import {
   getLive,
   hideMessage,
   listLives,
+  collectionProducts,
+  listLiveCollections,
   listMessages,
   postMessage,
   pinLiveProduct,
@@ -16,6 +18,7 @@ import {
   setLiveProducts,
   setLiveStatus,
   useTestStream,
+  type LiveCollection,
   type LiveProductInput,
   type Result,
 } from "@/lib/live-service";
@@ -85,6 +88,18 @@ export async function deleteLiveAction(id: string): Promise<Result<void>> {
 
 export async function listLiveMessagesAction(liveId: string): Promise<Result<LiveMessage[]>> {
   return listMessages(liveId);
+}
+
+/** The shop's collections, so a live can be stocked from one she curates. */
+export async function listLiveCollectionsAction(): Promise<Result<LiveCollection[]>> {
+  return listLiveCollections();
+}
+
+/** Everything in a collection, resolved to products for this live. */
+export async function collectionProductsAction(
+  collectionId: string,
+): Promise<Result<LiveProductInput[]>> {
+  return collectionProducts(collectionId);
 }
 
 /** The host speaking in her own chat, marked as the host. */
