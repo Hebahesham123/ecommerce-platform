@@ -25,6 +25,7 @@ import {
 import { listStoreProducts, type StoreProduct } from "../../store/actions";
 import { CameraCheck } from "./camera-check";
 import { Broadcast } from "./broadcast";
+import { HostComments } from "./host-comments";
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui";
 import {
@@ -813,6 +814,8 @@ function LiveDrawer({
               </ul>
             )}
           </section>
+
+          <HostComments liveId={live.id} live={live.status === "live"} ar={ar} />
 
           {/* After the fact */}
           <section className="rounded-2xl border border-line p-4 text-sm">
