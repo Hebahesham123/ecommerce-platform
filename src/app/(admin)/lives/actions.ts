@@ -6,6 +6,7 @@ import {
   hideMessage,
   listLives,
   listMessages,
+  postMessage,
   pinLiveProduct,
   prepareLive,
   providerConfigured,
@@ -84,6 +85,15 @@ export async function deleteLiveAction(id: string): Promise<Result<void>> {
 
 export async function listLiveMessagesAction(liveId: string): Promise<Result<LiveMessage[]>> {
   return listMessages(liveId);
+}
+
+/** The host speaking in her own chat, marked as the host. */
+export async function postHostMessageAction(
+  liveId: string,
+  authorName: string,
+  body: string,
+): Promise<Result<LiveMessage>> {
+  return postMessage({ liveId, authorName, body, isHost: true });
 }
 
 export async function hideLiveMessageAction(id: string, hidden: boolean): Promise<Result<void>> {

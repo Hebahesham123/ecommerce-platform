@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useI18n, egp } from "@/lib/i18n";
-import { getBrowserSupabase } from "@/lib/supabase/client";
-import { isTestStream, type LiveMessage, type LiveProduct, type WatchableLive } from "@/lib/live";
+import { useLiveChat } from "@/lib/live-chat";
+import { isTestStream, type LiveProduct, type WatchableLive } from "@/lib/live";
 import { useCart } from "../../cart";
 
 /**
@@ -24,18 +24,17 @@ export function Watch({ live: initial }: { live: WatchableLive }) {
   const { add, count, setOpen } = useCart();
 
   const [live, setLive] = useState(initial);
-  const [messages, setMessages] = useState<LiveMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [name, setName] = useState("");
   const [sending, setSending] = useState(false);
-  const [viewers, setViewers] = useState(1);
-  const [chatLive, setChatLive] = useState(true);
   const [added, setAdded] = useState<string | null>(null);
   const [sheet, setSheet] = useState(false);
   const [composing, setComposing] = useState(false);
 
   const onAir = live.status === "live";
   const pinned = live.products.find((p) => p.pinned) ?? null;
+
+  const { messages, viewers, send: sendComment } = useLiveChat(live.id, { enabled: onAir });
 
   useEffect(() => {
     try {
@@ -45,65 +44,6 @@ export function Watch({ live: initial }: { live: WatchableLive }) {
     }
   }, []);
 
-  useEffect(() => {
-    fetch(`/api/storefront/lives/${live.id}/messages`)
-      .then((r) => r.json())
-      .then((r) => {
-        if (r?.ok && Array.isArray(r.data)) setMessages(r.data);
-      })
-      .catch(() => {});
-  }, [live.id]);
-
-  // One subscription per viewer beats 500 phones polling a route.
-  useEffect(() => {
-    if (!onAir) return;
-    let channel: ReturnType<ReturnType<typeof getBrowserSupabase>["channel"]> | null = null;
-    try {
-      const supabase = getBrowserSupabase();
-      channel = supabase
-        .channel(`live:${live.id}`, { config: { presence: { key: crypto.randomUUID() } } })
-        .on(
-          "postgres_changes",
-          { event: "INSERT", schema: "public", table: "live_stream_messages", filter: `live_id=eq.${live.id}` },
-          (payload) => {
-            const row = payload.new as Record<string, unknown>;
-            if (row.hidden) return;
-            setMessages((cur) =>
-              cur.some((m) => m.id === String(row.id))
-                ? cur
-                : [
-                    ...cur,
-                    {
-                      id: String(row.id),
-                      liveId: String(row.live_id),
-                      authorName: String(row.author_name ?? ""),
-                      body: String(row.body ?? ""),
-                      isHost: Boolean(row.is_host),
-                      offsetMs: row.offset_ms == null ? null : Number(row.offset_ms),
-                      createdAt: String(row.created_at ?? ""),
-                    },
-                  ].slice(-60),
-            );
-          },
-        )
-        .on("presence", { event: "sync" }, () => {
-          setViewers(Math.max(1, Object.keys(channel?.presenceState() ?? {}).length));
-        })
-        .subscribe((status) => {
-          if (status === "SUBSCRIBED") {
-            setChatLive(true);
-            channel?.track({ at: Date.now() });
-          } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-            setChatLive(false);
-          }
-        });
-    } catch {
-      setChatLive(false);
-    }
-    return () => {
-      channel?.unsubscribe();
-    };
-  }, [live.id, onAir]);
 
   useEffect(() => {
     if (!onAir || viewers <= 1) return;
@@ -141,18 +81,11 @@ export function Watch({ live: initial }: { live: WatchableLive }) {
     } catch {
       /* private browsing */
     }
-    const res = await fetch(`/api/storefront/lives/${live.id}/messages`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ authorName: who, body }),
-    })
-      .then((r) => r.json())
-      .catch(() => null);
+    const ok = await sendComment({ authorName: who, body });
     setSending(false);
-    if (res?.ok) {
+    if (ok) {
       setDraft("");
       setComposing(false);
-      if (!chatLive) setMessages((cur) => [...cur, res.data].slice(-60));
     }
   }
 
@@ -335,11 +268,23 @@ export function Watch({ live: initial }: { live: WatchableLive }) {
               </button>
 
               {live.products.length > 0 && (
+                // A bag glyph and a number meant nothing to half the people
+                // who saw it. A photograph of the first item and the word
+                // for what it opens needs no explaining.
                 <button
                   onClick={() => setSheet(true)}
-                  className="relative h-11 shrink-0 rounded-full bg-white/15 px-4 text-sm font-semibold backdrop-blur"
+                  className="flex h-11 shrink-0 items-center gap-2 rounded-full bg-white/95 ps-1.5 pe-3.5 text-ink shadow-lg"
                 >
-                  🛍 {live.products.length}
+                  <span className="h-8 w-8 shrink-0 overflow-hidden rounded-full bg-slate-100">
+                    {live.products[0]?.imageUrl && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={live.products[0].imageUrl} alt="" className="h-full w-full object-cover" />
+                    )}
+                  </span>
+                  <span className="text-sm font-bold">
+                    {ar ? "المنتجات" : "Products"}
+                    <span className="ms-1 text-ink-soft">{live.products.length}</span>
+                  </span>
                 </button>
               )}
 

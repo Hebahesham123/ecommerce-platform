@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { IcX, IcVideo, IcAlert } from "@/components/icons";
-import { getBrowserSupabase } from "@/lib/supabase/client";
-import type { LiveMessage } from "@/lib/live";
+import { useLiveChat } from "@/lib/live-chat";
+import { postHostMessageAction } from "./actions";
 
 /**
  * Going live from this phone, the way a live is normally done: open it, see
@@ -48,7 +48,8 @@ export function Broadcast({
   const [elapsed, setElapsed] = useState(0);
   const [micLevel, setMicLevel] = useState(0);
   const [micOn, setMicOn] = useState(true);
-  const [messages, setMessages] = useState<LiveMessage[]>([]);
+  const [draft, setDraft] = useState("");
+  const [sendingComment, setSendingComment] = useState(false);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const rafRef = useRef<number | null>(null);
 
@@ -138,50 +139,25 @@ export function Broadcast({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // The host has to see what is being said: answering questions on air is
-  // most of what a live is for.
-  useEffect(() => {
-    fetch(`/api/storefront/lives/${liveId}/messages`)
-      .then((r) => r.json())
-      .then((r) => {
-        if (r?.ok && Array.isArray(r.data)) setMessages(r.data.slice(-6));
-      })
-      .catch(() => {});
+  // The same chat the viewers are in, so what she reads is what they said.
+  // Her own comments go through an admin action, which is the only path
+  // allowed to mark a message as the host speaking.
+  const { messages, send: sendComment } = useLiveChat(liveId, {
+    keep: 8,
+    postVia: async ({ authorName, body }) => {
+      const res = await postHostMessageAction(liveId, authorName, body);
+      return res.ok ? res.data : null;
+    },
+  });
 
-    let channel: ReturnType<ReturnType<typeof getBrowserSupabase>["channel"]> | null = null;
-    try {
-      channel = getBrowserSupabase()
-        .channel(`live-host:${liveId}`)
-        .on(
-          "postgres_changes",
-          { event: "INSERT", schema: "public", table: "live_stream_messages", filter: `live_id=eq.${liveId}` },
-          (payload) => {
-            const row = payload.new as Record<string, unknown>;
-            if (row.hidden) return;
-            setMessages((cur) =>
-              [
-                ...cur,
-                {
-                  id: String(row.id),
-                  liveId: String(row.live_id),
-                  authorName: String(row.author_name ?? ""),
-                  body: String(row.body ?? ""),
-                  isHost: Boolean(row.is_host),
-                  offsetMs: null,
-                  createdAt: String(row.created_at ?? ""),
-                },
-              ].slice(-6),
-            );
-          },
-        )
-        .subscribe();
-    } catch {
-      /* comments simply do not stream in; the broadcast is unaffected */
-    }
-    return () => {
-      channel?.unsubscribe();
-    };
-  }, [liveId]);
+  async function replyOnAir() {
+    const body = draft.trim();
+    if (!body || sendingComment) return;
+    setSendingComment(true);
+    const ok = await sendComment({ authorName: ar ? "المضيفة" : "Host", body });
+    setSendingComment(false);
+    if (ok) setDraft("");
+  }
 
   useEffect(() => {
     if (phase !== "live") return;
@@ -315,6 +291,11 @@ export function Broadcast({
           )}
           {/* What the room is saying, over your own picture. */}
           <div className="pointer-events-none absolute inset-x-3 bottom-3 flex flex-col gap-1">
+            {messages.length === 0 && (
+              <div className="w-fit rounded-2xl bg-black/40 px-2.5 py-1 text-[12px] text-white/70 backdrop-blur">
+                {ar ? "لا توجد تعليقات بعد" : "No comments yet"}
+              </div>
+            )}
             {messages.map((m, i) => (
               <div
                 key={m.id}
@@ -344,6 +325,24 @@ export function Broadcast({
             <span>{error}</span>
           </div>
         )}
+
+        <div className="flex items-center gap-2 border-b border-line px-4 py-2.5">
+          <input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && replyOnAir()}
+            maxLength={240}
+            placeholder={ar ? "ردّي على المشاهدين…" : "Reply to viewers…"}
+            className="h-10 min-w-0 flex-1 rounded-full border border-line bg-surface-page px-3.5 text-sm text-ink outline-none focus:border-brand-600"
+          />
+          <button
+            onClick={replyOnAir}
+            disabled={sendingComment || !draft.trim()}
+            className="h-10 shrink-0 rounded-full bg-brand px-4 text-sm font-semibold text-white disabled:opacity-40"
+          >
+            {ar ? "إرسال" : "Send"}
+          </button>
+        </div>
 
         <div className="flex items-center gap-3 border-b border-line px-4 py-2.5">
           <button
