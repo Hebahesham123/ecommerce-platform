@@ -26,6 +26,7 @@ export type BlockType =
   | "collection_tabs"
   | "new_arrivals"
   | "cards"
+  | "moments"
   | "tiers"
   | "split"
   | "trust_badges"
@@ -167,6 +168,11 @@ export const ITEM_SHAPE: Partial<Record<BlockType, { ar: string; en: string; bla
     ar: "دائرة",
     en: "Circle",
     blank: () => ({ id: itemId(), imageUrl: "", label: "", note: "", handle: "", url: "" }),
+  },
+  moments: {
+    ar: "لحظة",
+    en: "Moment",
+    blank: () => ({ id: itemId(), imageUrl: "", label: "", focal: "", handle: "", url: "" }),
   },
   pick_colour: {
     ar: "لون",
@@ -322,6 +328,12 @@ export const ITEM_FIELDS: Partial<Record<BlockType, FieldSpec[]>> = {
     { key: "imageUrl", kind: "image", ar: "الصورة", en: "Photo" },
     { key: "label", kind: "text", ar: "الاسم", en: "Label" },
     { key: "note", kind: "text", ar: "تحت الاسم", en: "Under the label" },
+    { key: "handle", kind: "link", ar: "يفتح", en: "Opens" },
+  ],
+  moments: [
+    { key: "imageUrl", kind: "image", ar: "الصورة", en: "Photo" },
+    { key: "label", kind: "text", ar: "الكلمة", en: "Word" },
+    { key: "focal", kind: "text", ar: "موضع الصورة (مثل 50% 25%)", en: "Picture position (e.g. 50% 25%)" },
     { key: "handle", kind: "link", ar: "يفتح", en: "Opens" },
   ],
   pick_colour: [
@@ -887,6 +899,12 @@ export const BLOCK_META: Record<
     hintAr: "منتجات مع سبب اقتراح كل واحد، وسعره وتقييمه وزر إضافة",
     hintEn: "Products with the reason each is being shown, its price, rating and an add button",
   },
+  moments: {
+    ar: "لحظات",
+    en: "Moments",
+    hintAr: "صور طويلة بكلمة واحدة على كل منها — مثل «كل خطوة تحكي قصة» على الموقع",
+    hintEn: "Tall pictures with one word on each — the footwear edit the website opens with",
+  },
   circle_row: {
     ar: "صف دائري",
     en: "Circle row",
@@ -1072,6 +1090,19 @@ export function newBlock(type: BlockType): Block {
       items: shape ? [shape.blank()] : [],
     },
     cards: { kicker: "", title: "", items: shape ? [shape.blank()] : [] },
+    moments: {
+      kicker: "",
+      title: "",
+      subtitle: "",
+      // The card's shape, in pixels, and how much of the picture it shows.
+      cardWidth: 150,
+      cardHeight: 210,
+      radius: 14,
+      // Empty is the page's own ink; the words on the pictures are white.
+      inkColor: "",
+      labelColor: "#ffffff",
+      items: shape ? [shape.blank()] : [],
+    },
     tiers: {
       title: "",
       // Empty is "the store's own paper and ink"; a merchant who wants a

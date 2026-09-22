@@ -1248,6 +1248,89 @@ const styles = StyleSheet.create({
 });
 `,
 
+    moments: `import React from "react";
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { colors, gap, spacing } from "../theme";
+import { SectionHeading, openLink, type LinkTo } from "./Pieces";
+
+export type Moment = { id: string; imageUrl?: string; label?: string; focal?: string } & LinkTo;
+export type MomentsSettings = {
+  title?: string;
+  subtitle?: string;
+  cardWidth?: number;
+  cardHeight?: number;
+  radius?: number;
+  labelColor?: string;
+  items?: Moment[];
+};
+
+/** "50% 25%" is where the website puts the eye; React Native can only meet it
+ *  half way, so the picture is anchored top, centre or bottom. */
+function anchor(focal?: string): "top" | "center" | "bottom" {
+  const y = Number(String(focal ?? "").trim().split(/\s+/)[1]?.replace("%", ""));
+  if (!Number.isFinite(y)) return "center";
+  if (y <= 33) return "top";
+  if (y >= 67) return "bottom";
+  return "center";
+}
+
+export function Moments({
+  settings,
+  onOpenCollection,
+  onOpenProduct,
+  onOpenScreen,
+}: {
+  settings: MomentsSettings;
+  onOpenCollection?: (handle: string) => void;
+  onOpenProduct?: (id: string) => void;
+  onOpenScreen?: (screen: string) => void;
+}) {
+  const items = (settings.items ?? []).filter((i) => i.imageUrl || i.label);
+  if (!items.length) return null;
+  const w = settings.cardWidth && settings.cardWidth > 0 ? settings.cardWidth : 150;
+  const h = settings.cardHeight && settings.cardHeight > 0 ? settings.cardHeight : 210;
+  const r = settings.radius && settings.radius >= 0 ? settings.radius : 14;
+  const word = settings.labelColor || "#ffffff";
+
+  return (
+    <View>
+      {settings.title ? <SectionHeading title={settings.title} /> : null}
+      {settings.subtitle ? <Text style={styles.subtitle}>{settings.subtitle}</Text> : null}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+        {items.map((m) => (
+          <Pressable
+            key={m.id}
+            style={[styles.card, { width: w, height: h, borderRadius: r }]}
+            onPress={() => openLink(m, { onOpenCollection, onOpenProduct, onOpenScreen })}
+          >
+            {m.imageUrl ? (
+              <Image source={{ uri: m.imageUrl }} style={styles.img} resizeMode="cover" resizeMethod="resize" />
+            ) : (
+              <View style={[styles.img, { backgroundColor: colors.line }]} />
+            )}
+            <View style={styles.scrim} />
+            {m.label ? (
+              <Text style={[styles.word, { color: word }]} numberOfLines={1}>
+                {m.label}
+              </Text>
+            ) : null}
+          </Pressable>
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  subtitle: { marginTop: 2, fontSize: 11, lineHeight: 16, color: colors.inkSoft },
+  row: { gap: gap.itemTight, paddingVertical: spacing.sm },
+  card: { overflow: "hidden", backgroundColor: colors.line },
+  img: { position: "absolute", left: 0, top: 0, right: 0, bottom: 0 },
+  scrim: { position: "absolute", left: 0, right: 0, bottom: 0, height: "50%", backgroundColor: "rgba(0,0,0,0.34)" },
+  word: { position: "absolute", left: 12, right: 12, bottom: 10, fontSize: 13, fontWeight: "600" },
+});
+`,
+
     tiers: `import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { colors, gap, radius, spacing, theme } from "../theme";
@@ -1700,7 +1783,7 @@ export function ComingUpLive({
 }) {
   // The lives actually scheduled, soonest first.
   const upcoming = (lives ?? []).filter((l) => l.status === "scheduled");
-  const items: LiveSession[] = [...upcoming]
+  const items: Session[] = [...upcoming]
         .sort((a, b) => String(a.scheduledAt ?? "").localeCompare(String(b.scheduledAt ?? "")))
         .map((l) => ({
           id: l.id,
@@ -3950,6 +4033,7 @@ function renderCall(block: Block, indent: number): string {
     promo_bar: [],
     collection_tabs: ["rows={data.rows}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}"],
     cards: ["collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
+    moments: ["onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     tiers: ["onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     split: ["collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     trust_badges: [],
@@ -4035,6 +4119,7 @@ function settingsLiteral(block: Block): string {
       "imageFit",
     ],
     cards: ["kicker", "title"],
+    moments: ["title", "subtitle", "cardWidth", "cardHeight", "radius", "labelColor"],
     tiers: ["title", "cardBg", "lineColor", "inkColor", "mutedColor"],
     split: ["title"],
     trust_badges: [],
@@ -4394,6 +4479,7 @@ function itemsLiteral(type: BlockType, items: Item[]): string {
       "screen",
     ],
     circle_row: ["imageUrl", "label", "note", "handle", "url", "productId", "screen"],
+    moments: ["imageUrl", "label", "focal", "handle", "url", "productId", "screen"],
     pick_colour: ["color", "label", "imageUrl", "line1", "line2", "handle", "url", "productId", "screen"],
     brand_timeline: ["logoText", "label", "title", "description", "imageUrl", "focal", "handle", "url", "productId", "screen"],
     price_drop: ["imageUrl"],

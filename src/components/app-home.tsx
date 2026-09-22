@@ -821,6 +821,70 @@ function BlockView({
       );
     }
 
+    case "moments": {
+      const moments = itemsOf(block).filter((i) => str(i.imageUrl) || str(i.label));
+      if (!moments.length) return <Placeholder ar={ar} label={ar ? "لا صور بعد" : "No pictures yet"} />;
+      // The website's footwear edit: tall pictures with one word on each. The
+      // word sits on the picture rather than under it, so the row reads as a
+      // set of moments instead of a list of categories.
+      const w = int(s.cardWidth, 150);
+      const h = int(s.cardHeight, 210);
+      const shape = int(s.radius, 14);
+      const word = str(s.labelColor, "#ffffff");
+      return (
+        <section>
+          {str(s.title) && <Heading title={str(s.title)} ar={ar} accent={accent} />}
+          {str(s.subtitle) && (
+            <p dir="auto" className="mt-0.5 text-[11px] leading-relaxed text-slate-500">
+              {str(s.subtitle)}
+            </p>
+          )}
+          <div
+            className="-mx-4 mt-2.5 flex overflow-x-auto px-4 pb-1"
+            style={{ gap: "calc(var(--app-item-gap, 8px) * 0.67)" }}
+          >
+            {moments.map((m) => (
+              <button
+                key={m.id}
+                onClick={() => opener(data, handlers)(m)}
+                className="relative shrink-0 overflow-hidden text-start"
+                style={{ width: w, height: h, borderRadius: shape }}
+              >
+                {str(m.imageUrl) ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={str(m.imageUrl)}
+                    alt=""
+                    className="absolute inset-0 h-full w-full object-cover"
+                    style={{ objectPosition: str(m.focal) || "50% 30%" }}
+                  />
+                ) : (
+                  <div className="absolute inset-0 bg-slate-200" />
+                )}
+                <div
+                  aria-hidden
+                  className="absolute inset-x-0 bottom-0 h-1/2"
+                  style={{
+                    background:
+                      "linear-gradient(to top, rgba(0,0,0,0.58) 0%, rgba(0,0,0,0.22) 45%, rgba(0,0,0,0) 100%)",
+                  }}
+                />
+                {str(m.label) && (
+                  <span
+                    dir="auto"
+                    className="absolute bottom-2.5 start-3 end-3 truncate text-[13px] font-semibold"
+                    style={{ color: word }}
+                  >
+                    {str(m.label)}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </section>
+      );
+    }
+
     case "tiers": {
       const tiers = itemsOf(block);
       if (!tiers.length) return <Placeholder ar={ar} label={ar ? "لا توجد فئات" : "No tiers yet"} />;
@@ -3553,6 +3617,8 @@ function isPlaceholder(node: React.ReactElement): boolean {
     }
     case "hero":
     case "cards":
+    case "moments":
+      return itemsOf(block).filter((i) => str(i.imageUrl) || str(i.label)).length === 0;
     case "tiers":
     case "split":
     case "trust_badges":

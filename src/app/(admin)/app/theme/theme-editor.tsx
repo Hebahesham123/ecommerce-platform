@@ -2817,6 +2817,27 @@ function BlockGroup({
         </>
       )}
 
+      {block.type === "moments" && (
+        <>
+          <Field label={ar ? "العنوان" : "Title"} type="text">
+            <input value={text("title")} onChange={(e) => onPatch({ title: e.target.value })} className={input} />
+          </Field>
+          <Field label={ar ? "السطر تحته" : "Line underneath"} type="text">
+            <input value={text("subtitle")} onChange={(e) => onPatch({ subtitle: e.target.value })} className={input} />
+          </Field>
+          <Field label={ar ? "عرض البطاقة" : "Card width"} type="range">
+            <input type="number" min={110} max={260} value={num("cardWidth", 150)} onChange={(e) => onPatch({ cardWidth: Number(e.target.value) })} className={input} />
+          </Field>
+          <Field label={ar ? "ارتفاع البطاقة" : "Card height"} type="range">
+            <input type="number" min={140} max={360} value={num("cardHeight", 210)} onChange={(e) => onPatch({ cardHeight: Number(e.target.value) })} className={input} />
+          </Field>
+          <Field label={ar ? "استدارة الحواف" : "Corner radius"} type="range">
+            <input type="number" min={0} max={32} value={num("radius", 14)} onChange={(e) => onPatch({ radius: Number(e.target.value) })} className={input} />
+          </Field>
+          <ColorRow label={ar ? "لون الكلمة" : "Word colour"} value={text("labelColor")} fallback="#ffffff" onChange={(v) => onPatch({ labelColor: v })} input={input} ar={ar} />
+        </>
+      )}
+
       {block.type === "tiers" && (
         <>
           <ColorRow label={ar ? "خلفية البطاقة" : "Card background"} value={text("cardBg")} fallback="#fffaf3" onChange={(v) => onPatch({ cardBg: v })} input={input} ar={ar} />
