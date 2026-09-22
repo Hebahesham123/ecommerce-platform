@@ -975,6 +975,57 @@ export type LiveSession = {
   live: boolean;
 };
 
+/**
+ * The Live tab, from the shop's real lives.
+ *
+ * The tab used to draw whatever the two home blocks had typed into them,
+ * which is how it went on listing people who were not broadcasting. Given
+ * actual lives it lists those instead, on air first, then what is coming.
+ */
+export function liveSessionsFromLives(
+  lives: {
+    id: string;
+    title: string;
+    hostName: string | null;
+    coverUrl: string | null;
+    status: string;
+    scheduledAt: string | null;
+    peakViewers: number;
+    href: string;
+  }[],
+): LiveSession[] {
+  const rank = (s: string) => (s === "live" ? 0 : s === "scheduled" ? 1 : 2);
+  return lives
+    .filter((l) => rank(l.status) < 2)
+    .sort(
+      (a, b) =>
+        rank(a.status) - rank(b.status) ||
+        String(a.scheduledAt ?? "").localeCompare(String(b.scheduledAt ?? "")),
+    )
+    .map((l) => ({
+      id: l.id,
+      name: l.hostName || l.title,
+      detail:
+        l.status === "live"
+          ? l.peakViewers ? String(l.peakViewers) : ""
+          : l.scheduledAt
+            ? new Date(l.scheduledAt).toLocaleString(undefined, {
+                weekday: "short",
+                day: "numeric",
+                month: "short",
+                hour: "2-digit",
+                minute: "2-digit",
+              })
+            : "",
+      imageUrl: l.coverUrl ?? "",
+      url: l.href,
+      handle: "",
+      productId: "",
+      screen: "",
+      live: l.status === "live",
+    }));
+}
+
 export function liveSessionsOf(theme: AppTheme): LiveSession[] {
   const out: LiveSession[] = [];
   for (const block of theme.blocks ?? []) {

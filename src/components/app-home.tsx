@@ -602,7 +602,7 @@ function BlockView({
             name: l.hostName || l.title,
             imageUrl: l.coverUrl ?? "",
             viewers: l.peakViewers ? String(l.peakViewers) : "",
-            handle: l.href,
+            url: l.href,
           }))
         : [];
       const offerOn = s.offerEnabled !== false;
@@ -745,7 +745,7 @@ function BlockView({
               minute: "2-digit",
             })
           : "",
-        handle: l.href,
+        url: l.href,
       }));
       if (!sessions.length) {
         return <Placeholder ar={ar} label={ar ? "لا مواعيد بعد" : "Nothing scheduled yet"} />;

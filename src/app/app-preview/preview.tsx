@@ -20,7 +20,7 @@ import { AppNudge } from "@/components/app-nudge";
 import { AppStrip } from "@/components/app-strip";
 import { AppHeader } from "@/components/app-header";
 import { AppLive } from "@/components/app-live";
-import { liveSessionsOf } from "@/lib/app-theme";
+import { liveSessionsOf, liveSessionsFromLives } from "@/lib/app-theme";
 import type { NudgeCampaign } from "@/lib/nudge";
 import {
   DEFAULT_SCREENS,
@@ -136,6 +136,17 @@ export function Preview({
   // The theme arrives with /home, which the Shop tab fetches. Until it does,
   // the shell wears the defaults rather than flashing a different brand.
   const [theme, setTheme] = useState<AppTheme | null>(null);
+  // The Live tab lists what is really on air, so it asks for the lives
+  // rather than reading a list typed into the home blocks.
+  const [lives, setLives] = useState<Parameters<typeof liveSessionsFromLives>[0]>([]);
+  useEffect(() => {
+    fetch("/api/storefront/lives")
+      .then((r) => r.json())
+      .then((r) => {
+        if (r?.ok && Array.isArray(r.data)) setLives(r.data);
+      })
+      .catch(() => {});
+  }, []);
   const brand = theme?.settings ?? DEFAULT_SETTINGS;
   const accent = brand.accent;
   const screens: ScreenSettings = theme?.screens ?? DEFAULT_SCREENS;
@@ -392,7 +403,13 @@ export function Preview({
             )}
             {activeTab === "live" && (
               <AppLive
-                sessions={theme ? liveSessionsOf(theme) : []}
+                sessions={
+                  lives.length
+                    ? liveSessionsFromLives(lives)
+                    : theme
+                      ? liveSessionsOf(theme)
+                      : []
+                }
                 ar={ar}
                 accent={accent}
                 onOpen={(s) => {

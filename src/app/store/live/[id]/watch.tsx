@@ -395,10 +395,18 @@ function Player({ live, ar }: { live: WatchableLive; ar: boolean }) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const playerRef = useRef<{ muted: boolean; play: () => Promise<void> } | null>(null);
-  const pcRef = useRef<RTCPeerConnection | null>(null);
   const [muted, setMuted] = useState(true);
-  // Start on WebRTC while on air; fall back the moment it does not work out.
-  const [mode, setMode] = useState<"webrtc" | "hls">(onAir && live.whepUrl ? "webrtc" : "hls");
+  /**
+   * WebRTC is an improvement on HLS, and an improvement has to earn its place.
+   *
+   * Preferring it outright meant a viewer whose connection could not carry it
+   * — or a live prepared before the address existed — watched a black
+   * rectangle, which is worse than being fifteen seconds behind. So HLS plays
+   * from the first moment and WebRTC runs behind it, unseen, until it is
+   * actually producing pictures. Only then does it take over, and if it stops
+   * it hands back.
+   */
+  const [webrtcReady, setWebrtcReady] = useState(false);
 
   const cloudflare = useMemo(() => {
     if (!hls) return null;
@@ -406,17 +414,10 @@ function Player({ live, ar }: { live: WatchableLive; ar: boolean }) {
     return m ? { host: m[1], uid: m[2] } : null;
   }, [hls]);
 
-  /**
-   * Play over WebRTC (WHEP): our offer for their answer, the same exchange the
-   * host's camera makes in reverse. Sub-second, where HLS holds a few segments
-   * before it starts and puts the room twenty seconds behind the question it
-   * is answering.
-   */
   useEffect(() => {
-    if (mode !== "webrtc" || !live.whepUrl) return;
+    if (!onAir || !live.whepUrl) return;
     let cancelled = false;
     const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.cloudflare.com:3478" }] });
-    pcRef.current = pc;
 
     (async () => {
       try {
@@ -454,25 +455,27 @@ function Player({ live, ar }: { live: WatchableLive; ar: boolean }) {
         await pc.setRemoteDescription({ type: "answer", sdp: answer });
 
         pc.addEventListener("connectionstatechange", () => {
-          if (pc.connectionState === "failed") setMode("hls");
+          if (pc.connectionState === "failed" || pc.connectionState === "disconnected") {
+            setWebrtcReady(false);
+          }
         });
       } catch {
-        // Any refusal at all — a network that blocks WebRTC, a browser that
-        // will not, the feature being off — and HLS still works everywhere.
-        if (!cancelled) setMode("hls");
+        // Any refusal at all and HLS simply carries on, which it has been
+        // doing since the page opened.
+        if (!cancelled) setWebrtcReady(false);
       }
     })();
 
     return () => {
       cancelled = true;
       pc.close();
-      pcRef.current = null;
+      setWebrtcReady(false);
     };
-  }, [mode, live.whepUrl]);
+  }, [onAir, live.whepUrl]);
 
   // Cloudflare's HLS player is cross-origin, so unmuting it needs their SDK.
   useEffect(() => {
-    if (mode !== "hls" || !cloudflare) return;
+    if (!cloudflare) return;
     const existing = document.querySelector<HTMLScriptElement>("script[data-cf-stream-sdk]");
     const attach = () => {
       if (iframeRef.current && window.Stream) playerRef.current = window.Stream(iframeRef.current);
@@ -488,7 +491,7 @@ function Player({ live, ar }: { live: WatchableLive; ar: boolean }) {
     script.dataset.cfStreamSdk = "1";
     script.addEventListener("load", attach);
     document.body.appendChild(script);
-  }, [mode, cloudflare]);
+  }, [cloudflare]);
 
   function unmute() {
     setMuted(false);
@@ -503,7 +506,7 @@ function Player({ live, ar }: { live: WatchableLive; ar: boolean }) {
     }
   }
 
-  const nothing = mode === "hls" && !hls;
+  const nothing = !hls && !onAir;
 
   return (
     <div className="absolute inset-0">
@@ -513,21 +516,48 @@ function Player({ live, ar }: { live: WatchableLive; ar: boolean }) {
             ? ar ? "لم يبدأ البث بعد" : "The live has not started yet"
             : ar ? "لا يوجد فيديو" : "No video"}
         </div>
-      ) : mode === "webrtc" ? (
-        // eslint-disable-next-line jsx-a11y/media-has-caption
-        <video ref={videoRef} autoPlay playsInline muted className="h-full w-full object-cover" />
-      ) : cloudflare ? (
-        <iframe
-          ref={iframeRef}
-          src={`https://${cloudflare.host}/${cloudflare.uid}/iframe?autoplay=true&muted=true&controls=false&preload=auto`}
-          allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
-          allowFullScreen
-          className="h-full w-full border-0"
-          title={live.title}
-        />
       ) : (
-        // eslint-disable-next-line jsx-a11y/media-has-caption
-        <video ref={videoRef} src={hls ?? undefined} autoPlay playsInline muted loop className="h-full w-full object-cover" />
+        <>
+          {/* HLS: what is actually watched until WebRTC proves itself. */}
+          {hls &&
+            (cloudflare ? (
+              <iframe
+                ref={iframeRef}
+                src={`https://${cloudflare.host}/${cloudflare.uid}/iframe?autoplay=true&muted=true&controls=false&preload=auto`}
+                allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
+                allowFullScreen
+                className={`h-full w-full border-0 ${webrtcReady ? "invisible" : ""}`}
+                title={live.title}
+              />
+            ) : (
+              // eslint-disable-next-line jsx-a11y/media-has-caption
+              <video
+                src={hls}
+                autoPlay
+                playsInline
+                muted
+                loop
+                className={`h-full w-full object-cover ${webrtcReady ? "invisible" : ""}`}
+              />
+            ))}
+
+          {/* WebRTC: hidden until it has frames, so it can never be a black
+              rectangle over a working stream. */}
+          {onAir && live.whepUrl && (
+            // eslint-disable-next-line jsx-a11y/media-has-caption
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              onPlaying={(e) => {
+                if (e.currentTarget.videoWidth > 0) setWebrtcReady(true);
+              }}
+              onEmptied={() => setWebrtcReady(false)}
+              className={`absolute inset-0 h-full w-full object-cover ${webrtcReady ? "" : "invisible"}`}
+            />
+          )}
+        </>
       )}
 
       {!nothing && muted && (

@@ -29,7 +29,7 @@ import {
   ITEM_SHAPE,
   itemId,
   itemsOf,
-  liveSessionsOf,
+  liveSessionsOf, liveSessionsFromLives,
   newBlock,
   normalizeTheme,
   type AppTheme,
@@ -1054,7 +1054,11 @@ export function ThemeEditor() {
               <div className="flex flex-1 flex-col">
               {page === "live" ? (
                 <AppLive
-                  sessions={liveSessionsOf(draft)}
+                  sessions={
+                    home?.lives?.length
+                      ? liveSessionsFromLives(home.lives)
+                      : liveSessionsOf(draft)
+                  }
                   ar={ar}
                   accent={draft.settings.accent}
                   onOpen={(s) => {
