@@ -617,8 +617,8 @@ function LiveDrawer({
               <>
                 <p className="mt-1 text-sm text-ink-muted">
                   {ar
-                    ? "جهّزي البث للحصول على عنوان ومفتاح تضعينهما في تطبيق البث على الهاتف."
-                    : "Prepare the live to get the address and key you paste into the broadcasting app on your phone."}
+                    ? "جهّزي البث أولاً، ثم يظهر زر البدء والكاميرا تفتح هنا مباشرة."
+                    : "Prepare the live first — then the camera opens right here and one button starts it."}
                 </p>
                 <button
                   onClick={() => run("prepare", () => prepareLiveAction(live.id))}
@@ -645,7 +645,31 @@ function LiveDrawer({
                 )}
               </>
             ) : (
-              <div className="mt-3 space-y-2 text-sm">
+              <>
+                {live.whipUrl && live.status !== "ended" && (
+                  <>
+                    <button
+                      onClick={() => setBroadcasting(true)}
+                      className="mt-3 h-12 w-full rounded-xl bg-rose-600 text-base font-semibold text-white transition hover:bg-rose-700"
+                    >
+                      {ar ? "ابدئي البث من هذا الهاتف" : "Go live from this phone"}
+                    </button>
+                    <p className="mt-1.5 text-center text-xs text-ink-soft">
+                      {ar
+                        ? "الكاميرا تفتح هنا — لا حاجة لأي تطبيق آخر."
+                        : "The camera opens right here — no other app needed."}
+                    </p>
+                  </>
+                )}
+
+                {/* Kept, not pushed: a broadcasting app is one way to reach
+                    the same input, and some hosts prefer one. It is not the
+                    way this shop broadcasts, so it waits behind a line. */}
+                <details className="mt-3">
+                  <summary className="cursor-pointer text-xs text-ink-soft">
+                    {ar ? "أو استخدمي تطبيق بث خارجي" : "Or use an external broadcasting app"}
+                  </summary>
+                  <div className="mt-2 space-y-2 text-sm">
                 {/* A phone app wants one address with the key on the end —
                     its URL schema is server/application/streamkey. Asking
                     someone to copy two fields and join them by hand, on a
@@ -674,22 +698,16 @@ function LiveDrawer({
                   onCopy={() => copy(live.streamKey ?? "")}
                   ar={ar}
                 />
-                <p className="pt-1 text-xs text-ink-soft">
-                  {ar
-                    ? "على الهاتف (مثل Larix Broadcaster): الصقي «الرابط الكامل» في خانة URL وحدها. الحقلان الآخران لبرامج الكمبيوتر التي تطلبهما منفصلين."
-                    : "On the phone (Larix Broadcaster): paste the full URL into its URL field — that one line is all it needs. The two below are for desktop apps that ask for them separately."}
-                </p>
-              </div>
+                    <p className="pt-1 text-xs text-ink-soft">
+                      {ar
+                        ? "الصقي «الرابط الكامل» في خانة URL بتطبيق الهاتف. الحقلان الآخران لبرامج الكمبيوتر التي تطلبهما منفصلين."
+                        : "Paste the full URL into the phone app's URL field. The two below are for desktop software that asks for them separately."}
+                    </p>
+                  </div>
+                </details>
+              </>
             )}
 
-            {live.whipUrl && live.status !== "ended" && (
-              <button
-                onClick={() => setBroadcasting(true)}
-                className="mt-4 h-12 w-full rounded-xl bg-rose-600 text-base font-semibold text-white transition hover:bg-rose-700"
-              >
-                {ar ? "ابدئي البث من هذا الهاتف" : "Go live from this phone"}
-              </button>
-            )}
 
             <div className="mt-4 flex flex-wrap gap-2">
               {live.status !== "live" && live.status !== "ended" && (
