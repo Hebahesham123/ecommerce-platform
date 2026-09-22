@@ -10,6 +10,32 @@ import type { LiveSession } from "@/lib/app-theme";
  * sections are not on the home screen this tab is empty, and says why instead
  * of looking broken.
  */
+/** A link when it has somewhere to go, a button when the caller decides. */
+function Tile({
+  href,
+  onClick,
+  className,
+  children,
+}: {
+  href?: string;
+  onClick: () => void;
+  className: string;
+  children: React.ReactNode;
+}) {
+  if (href) {
+    return (
+      <a href={href} className={className}>
+        {children}
+      </a>
+    );
+  }
+  return (
+    <button onClick={onClick} className={className}>
+      {children}
+    </button>
+  );
+}
+
 export function AppLive({
   sessions,
   ar,
@@ -34,8 +60,9 @@ export function AppLive({
   return (
     <div className="space-y-3 p-4">
       {sessions.map((s) => (
-        <button
+        <Tile
           key={s.id}
+          href={s.url}
           onClick={() => onOpen?.(s)}
           className="flex w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 text-start"
         >
@@ -67,7 +94,7 @@ export function AppLive({
           >
             {s.live ? (ar ? "شاهدي" : "Watch") : (ar ? "ذكّريني" : "Remind me")}
           </span>
-        </button>
+        </Tile>
       ))}
     </div>
   );

@@ -1382,7 +1382,11 @@ function opener(data: HomeData, handlers: HomeHandlers) {
       prefix ? prefix + name.charAt(0).toUpperCase() + name.slice(1) : name;
     const url = str(from[key("url")]);
     if (url) {
-      if (typeof window !== "undefined") window.open(url, "_blank", "noopener,noreferrer");
+      if (typeof window === "undefined") return;
+      // Somewhere in this shop is a navigation; a popup can be blocked and
+      // then the tap has simply done nothing.
+      if (url.startsWith("/")) window.location.assign(url);
+      else window.open(url, "_blank", "noopener,noreferrer");
       return;
     }
     const productId = str(from[key("productId")]);
