@@ -1021,7 +1021,16 @@ export function newBlock(type: BlockType): Block {
       items: shape ? [shape.blank()] : [],
     },
     cards: { kicker: "", title: "", items: shape ? [shape.blank()] : [] },
-    tiers: { title: "", items: shape ? [shape.blank()] : [] },
+    tiers: {
+      title: "",
+      // Empty is "the store's own paper and ink"; a merchant who wants a
+      // different card can say so without touching the ones that are right.
+      cardBg: "",
+      lineColor: "",
+      inkColor: "",
+      mutedColor: "",
+      items: shape ? [shape.blank()] : [],
+    },
     split: { title: "", items: shape ? [shape.blank(), shape.blank()] : [] },
     trust_badges: { items: shape ? [shape.blank()] : [] },
     live_now: {
@@ -1223,6 +1232,23 @@ export function newBlock(type: BlockType): Block {
       footNote: "",
       cardBg: "",
       radius: 14,
+      /**
+       * "society" is the card in the loyalty club's own colours - deep roast
+       * and gold, the way a member's status card looks. "plain" is the white
+       * card it used to be, for a store with no club.
+       */
+      style: "society",
+      kicker: "Your society",
+      glyph: "✦",
+      deepFrom: "",
+      deepTo: "",
+      gold: "",
+      onDeep: "",
+      onDeepSoft: "",
+      // Where the card itself goes - the Society screen, usually.
+      handle: "",
+      screen: "",
+      url: "",
       items: shape ? [shape.blank()] : [],
     },
     showcase: {

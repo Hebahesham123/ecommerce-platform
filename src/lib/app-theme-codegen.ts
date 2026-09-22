@@ -1250,11 +1250,18 @@ const styles = StyleSheet.create({
 
     tiers: `import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { colors, gap, radius, spacing } from "../theme";
+import { colors, gap, radius, spacing, theme } from "../theme";
 import { SectionHeading, openLink, type LinkTo } from "./Pieces";
 
 export type Tier = { id: string; prefix?: string; amount?: string; label?: string } & LinkTo;
-export type TiersSettings = { title?: string; items?: Tier[] };
+export type TiersSettings = {
+  title?: string;
+  cardBg?: string;
+  lineColor?: string;
+  inkColor?: string;
+  mutedColor?: string;
+  items?: Tier[];
+};
 
 export function Tiers({
   settings,
@@ -1269,15 +1276,24 @@ export function Tiers({
 }) {
   const tiers = settings.items ?? [];
   if (!tiers.length) return null;
+  const cardBg = settings.cardBg || "#fffaf3";
+  const line = settings.lineColor || "#e7d8c4";
+  const ink = settings.inkColor || "#2b1b10";
+  const muted = settings.mutedColor || "#8a6e57";
   return (
     <View>
       <SectionHeading title={settings.title ?? ""} />
       <View style={styles.grid}>
         {tiers.map((t) => (
-          <Pressable key={t.id} style={styles.card} onPress={() => openLink(t, { onOpenCollection, onOpenProduct, onOpenScreen })}>
-            {t.prefix ? <Text style={styles.prefix}>{t.prefix}</Text> : null}
-            <Text style={styles.amount}>{t.amount}</Text>
-            <Text style={styles.label} numberOfLines={1}>{t.label}</Text>
+          <Pressable
+            key={t.id}
+            style={[styles.card, { backgroundColor: cardBg, borderColor: line }]}
+            onPress={() => openLink(t, { onOpenCollection, onOpenProduct, onOpenScreen })}
+          >
+            {t.prefix ? <Text style={[styles.prefix, { color: muted }]}>{t.prefix.toUpperCase()}</Text> : null}
+            <Text style={[styles.amount, { color: ink, fontFamily: theme.titleFont }]}>{t.amount}</Text>
+            <View style={[styles.rule, { backgroundColor: colors.accent }]} />
+            <Text style={[styles.label, { color: muted }]} numberOfLines={1}>{t.label}</Text>
           </Pressable>
         ))}
       </View>
@@ -1287,10 +1303,11 @@ export function Tiers({
 
 const styles = StyleSheet.create({
   grid: { flexDirection: "row", flexWrap: "wrap", gap: gap.itemTight, paddingVertical: spacing.sm },
-  card: { flexGrow: 1, flexBasis: "46%", borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, padding: spacing.md },
-  prefix: { fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: colors.inkSoft },
-  amount: { fontSize: 15, fontWeight: "700", color: colors.accent },
-  label: { fontSize: 11, color: colors.inkMuted },
+  card: { flexGrow: 1, flexBasis: "46%", borderRadius: radius.lg, borderWidth: 1, padding: 14 },
+  prefix: { fontSize: 9, letterSpacing: 1.6, fontWeight: "600" },
+  amount: { marginTop: 4, fontSize: 19, fontWeight: "700" },
+  rule: { marginTop: 8, height: 1, width: 24 },
+  label: { marginTop: 8, fontSize: 11 },
 });
 `,
 
@@ -2844,7 +2861,7 @@ const styles = StyleSheet.create({
 
     style_profile: `import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { colors, spacing } from "../theme";
+import { colors, spacing, theme } from "../theme";
 import { SectionHeading, openLink, type LinkTo } from "./Pieces";
 
 export type Tag = { id: string; label?: string; color?: string; handle?: string; url?: string };
@@ -2856,8 +2873,16 @@ export type StyleProfileSettings = {
   footNote?: string;
   cardBg?: string;
   radius?: number;
+  style?: string;
+  kicker?: string;
+  glyph?: string;
+  deepFrom?: string;
+  deepTo?: string;
+  gold?: string;
+  onDeep?: string;
+  onDeepSoft?: string;
   items?: Tag[];
-};
+} & LinkTo;
 
 /** Put the shopper name in, or take the token out. */
 function personalise(template: string, name: string | null): string {
@@ -2890,26 +2915,68 @@ export function StyleProfile({
   if (!items.length && !cardTitle) return null;
   const go = (to: LinkTo) => openLink(to, { onOpenCollection, onOpenProduct, onOpenScreen });
   const r = settings.radius && settings.radius > 0 ? settings.radius : 14;
+  // The club's own colours, so a shopper's taste sits on the same card her
+  // status does rather than on a settings panel.
+  const society = settings.style !== "plain";
+  const deep = settings.deepFrom || "#2b2119";
+  const deepTo = settings.deepTo || "#43301f";
+  const gold = settings.gold || "#e0b877";
+  const onDeep = settings.onDeep || "#f0e6d8";
+  const onDeepSoft = settings.onDeepSoft || "#c9b79f";
+  const opens = Boolean(settings.handle || settings.url || settings.productId || settings.screen);
+  const kicker = settings.kicker === undefined ? "Your society" : settings.kicker;
+  const glyph = settings.glyph === undefined ? "✦" : settings.glyph;
 
   return (
     <>
       {settings.title ? <SectionHeading title={settings.title} /> : null}
       {settings.subtitle ? <Text style={styles.subtitle}>{settings.subtitle}</Text> : null}
-      <View style={[styles.card, { backgroundColor: settings.cardBg || colors.surface, borderRadius: r }]}>
-        {cardTitle ? <Text style={styles.cardTitle}>{cardTitle}</Text> : null}
-        {settings.cardSubtitle ? <Text style={styles.cardSubtitle}>{settings.cardSubtitle}</Text> : null}
+      <View
+        style={[
+          styles.card,
+          society
+            ? { backgroundColor: deep, borderColor: gold + "3d", borderRadius: r }
+            : { backgroundColor: settings.cardBg || colors.surface, borderColor: colors.line, borderRadius: r },
+        ]}
+      >
+        {society ? <View style={[styles.wash, { backgroundColor: deepTo }]} /> : null}
+        {society && kicker ? (
+          <Text style={[styles.kicker, { color: gold }]}>{(glyph ? glyph + " " : "") + kicker.toUpperCase()}</Text>
+        ) : null}
+        {cardTitle ? (
+          <Pressable disabled={!opens} onPress={() => go(settings)}>
+            <Text
+              style={[
+                styles.cardTitle,
+                society ? { color: onDeep, fontSize: 17, fontFamily: theme.titleFont } : null,
+              ]}
+            >
+              {cardTitle}
+            </Text>
+          </Pressable>
+        ) : null}
+        {settings.cardSubtitle ? (
+          <Text style={[styles.cardSubtitle, society ? { color: onDeepSoft } : null]}>{settings.cardSubtitle}</Text>
+        ) : null}
         <View style={styles.tags}>
           {items.map((i) => (
             <Pressable
               key={i.id}
-              style={[styles.tag, { borderColor: i.color || colors.line }]}
+              style={[
+                styles.tag,
+                society
+                  ? { borderColor: i.color ? i.color + "aa" : gold + "59", backgroundColor: i.color ? i.color + "1f" : gold + "14" }
+                  : { borderColor: i.color || colors.line },
+              ]}
               onPress={() => go(i)}
             >
-              <Text style={[styles.tagText, { color: i.color || colors.inkMuted }]}>{i.label}</Text>
+              <Text style={[styles.tagText, { color: i.color || (society ? onDeep : colors.inkMuted) }]}>{i.label}</Text>
             </Pressable>
           ))}
         </View>
-        {settings.footNote ? <Text style={styles.foot}>{settings.footNote}</Text> : null}
+        {settings.footNote ? (
+          <Text style={[styles.foot, society ? { color: onDeepSoft } : null]}>{settings.footNote}</Text>
+        ) : null}
       </View>
     </>
   );
@@ -2917,8 +2984,10 @@ export function StyleProfile({
 
 const styles = StyleSheet.create({
   subtitle: { fontSize: 11, color: colors.inkSoft },
-  card: { marginTop: spacing.sm, borderWidth: 1, borderColor: colors.line, padding: spacing.md },
-  cardTitle: { fontSize: 12, fontWeight: "700", color: colors.ink },
+  card: { marginTop: spacing.sm, borderWidth: 1, padding: 16, overflow: "hidden" },
+  wash: { position: "absolute", right: -40, bottom: -60, height: 170, width: 170, borderRadius: 85, opacity: 0.55 },
+  kicker: { fontSize: 9, fontWeight: "700", letterSpacing: 1.8 },
+  cardTitle: { marginTop: 4, fontSize: 12, fontWeight: "700", color: colors.ink },
   cardSubtitle: { fontSize: 11, color: colors.inkSoft },
   tags: { marginTop: spacing.sm, flexDirection: "row", flexWrap: "wrap", gap: 6 },
   tag: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
@@ -2991,9 +3060,9 @@ export function PromoCard({
 
 /** The mystery box as a banner: a night gradient and a glowing gift box. */
 function MysteryBanner({ settings, onOpen }: { settings: PromoCardSettings; onOpen: () => void }) {
-  const bg = settings.bg || "#2a1433";
-  const bg2 = settings.bg2 || "#8a3b5c";
-  const glow = settings.glow || "#f6c453";
+  const bg = settings.bg || "#2b1b10";
+  const bg2 = settings.bg2 || colors.accent;
+  const glow = settings.glow || "#e0b877";
   const ink = settings.textColor || "#ffffff";
   const r = settings.radius && settings.radius > 0 ? settings.radius : 20;
   const h = settings.height && settings.height > 0 ? settings.height : 196;
@@ -3969,7 +4038,7 @@ function settingsLiteral(block: Block): string {
       "imageFit",
     ],
     cards: ["kicker", "title"],
-    tiers: ["title"],
+    tiers: ["title", "cardBg", "lineColor", "inkColor", "mutedColor"],
     split: ["title"],
     trust_badges: [],
     live_now: [
@@ -4156,6 +4225,18 @@ function settingsLiteral(block: Block): string {
       "footNote",
       "cardBg",
       "radius",
+      "style",
+      "kicker",
+      "glyph",
+      "deepFrom",
+      "deepTo",
+      "gold",
+      "onDeep",
+      "onDeepSoft",
+      "handle",
+      "url",
+      "productId",
+      "screen",
     ],
     promo_card: [
       "style",

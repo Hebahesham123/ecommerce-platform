@@ -1753,7 +1753,58 @@ function BlockGroup({
           <Field label={ar ? "السطر الأخير" : "Foot note"} type="text">
             <input value={text("footNote")} onChange={(e) => onPatch({ footNote: e.target.value })} className={input} />
           </Field>
-          <ColorRow label={ar ? "خلفية البطاقة" : "Card background"} value={text("cardBg")} fallback="#ffffff" onChange={(v) => onPatch({ cardBg: v })} input={input} ar={ar} />
+          <Field label={ar ? "الشكل" : "Look"} type="select">
+            <select
+              value={text("style") || "society"}
+              onChange={(e) => onPatch({ style: e.target.value })}
+              className={input}
+            >
+              <option value="society">{ar ? "بطاقة النادي (داكنة وذهبية)" : "Society card (deep and gold)"}</option>
+              <option value="plain">{ar ? "بطاقة بيضاء بسيطة" : "Plain white card"}</option>
+            </select>
+            <p className="mt-1 text-[11px] text-ink-soft">
+              {ar
+                ? "بطاقة النادي تأخذ ألوان برنامج الولاء نفسها."
+                : "The Society card wears the loyalty club's own colours."}
+            </p>
+          </Field>
+          {(text("style") || "society") === "society" ? (
+            <>
+              <Field label={ar ? "السطر العلوي" : "Small line above"} type="text">
+                <input value={text("kicker")} onChange={(e) => onPatch({ kicker: e.target.value })} placeholder="Your society" className={input} />
+              </Field>
+              <Field label={ar ? "الرمز" : "Glyph"} type="text">
+                <input value={text("glyph")} onChange={(e) => onPatch({ glyph: e.target.value })} placeholder="✦" className={input} />
+              </Field>
+              <ColorRow label={ar ? "الداكن من" : "Deep from"} value={text("deepFrom")} fallback="#2b2119" onChange={(v) => onPatch({ deepFrom: v })} input={input} ar={ar} />
+              <ColorRow label={ar ? "الداكن إلى" : "Deep to"} value={text("deepTo")} fallback="#43301f" onChange={(v) => onPatch({ deepTo: v })} input={input} ar={ar} />
+              <ColorRow label={ar ? "الذهبي" : "Gold"} value={text("gold")} fallback="#e0b877" onChange={(v) => onPatch({ gold: v })} input={input} ar={ar} />
+              <ColorRow label={ar ? "النص على الداكن" : "Text on the deep"} value={text("onDeep")} fallback="#f0e6d8" onChange={(v) => onPatch({ onDeep: v })} input={input} ar={ar} />
+              <Field label={ar ? "البطاقة تفتح" : "The card opens"} type="link">
+                <LinkPicker
+                  value={{
+                    handle: text("handle"),
+                    url: text("url"),
+                    productId: text("productId"),
+                    screen: text("screen"),
+                  }}
+                  onChange={(next) =>
+                    onPatch({
+                      handle: next.handle ?? "",
+                      url: next.url ?? "",
+                      productId: next.productId ?? "",
+                      screen: next.screen ?? "",
+                    })
+                  }
+                  collections={collections}
+                  input={input}
+                  ar={ar}
+                />
+              </Field>
+            </>
+          ) : (
+            <ColorRow label={ar ? "خلفية البطاقة" : "Card background"} value={text("cardBg")} fallback="#ffffff" onChange={(v) => onPatch({ cardBg: v })} input={input} ar={ar} />
+          )}
           <Field label={ar ? "استدارة الحواف" : "Corner radius"} type="range">
             <input type="number" min={0} max={32} value={num("radius", 14)} onChange={(e) => onPatch({ radius: Number(e.target.value) })} className={input} />
           </Field>
@@ -2763,6 +2814,15 @@ function BlockGroup({
           <ColorRow label={ar ? "نص البانر" : "Banner text"} value={text("offerTextColor")} fallback="#ffffff" onChange={(v) => onPatch({ offerTextColor: v })} input={input} ar={ar} />
           <ColorRow label={ar ? "خلفية العدّاد" : "Timer background"} value={text("timerBg")} fallback="#ffffff" onChange={(v) => onPatch({ timerBg: v })} input={input} ar={ar} />
           <ColorRow label={ar ? "نص العدّاد" : "Timer text"} value={text("timerTextColor")} fallback="#ffffff" onChange={(v) => onPatch({ timerTextColor: v })} input={input} ar={ar} />
+        </>
+      )}
+
+      {block.type === "tiers" && (
+        <>
+          <ColorRow label={ar ? "خلفية البطاقة" : "Card background"} value={text("cardBg")} fallback="#fffaf3" onChange={(v) => onPatch({ cardBg: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "لون الحد" : "Border"} value={text("lineColor")} fallback="#e7d8c4" onChange={(v) => onPatch({ lineColor: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "لون السعر" : "Price"} value={text("inkColor")} fallback="#2b1b10" onChange={(v) => onPatch({ inkColor: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "لون الوصف" : "Label"} value={text("mutedColor")} fallback="#8a6e57" onChange={(v) => onPatch({ mutedColor: v })} input={input} ar={ar} />
         </>
       )}
 

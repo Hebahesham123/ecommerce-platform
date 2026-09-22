@@ -824,6 +824,13 @@ function BlockView({
     case "tiers": {
       const tiers = itemsOf(block);
       if (!tiers.length) return <Placeholder ar={ar} label={ar ? "لا توجد فئات" : "No tiers yet"} />;
+      // The website prices things in a serif and labels them in small caps.
+      // A price set in the same bold sans as everything else reads as a number
+      // in a form, which is the opposite of what a price tier is selling.
+      const cardBg = str(s.cardBg) || "#fffaf3";
+      const line = str(s.lineColor) || "#e7d8c4";
+      const ink = str(s.inkColor) || "#2b1b10";
+      const muted = str(s.mutedColor) || "#8a6e57";
       return (
         <section>
           <Heading title={str(s.title)} ar={ar} accent={accent} />
@@ -832,17 +839,29 @@ function BlockView({
               <button
                 key={t.id}
                 onClick={() => str(t.handle) && handlers.onOpenCollection?.(str(t.handle), str(t.label))}
-                className="rounded-2xl border border-slate-200 bg-white p-3 text-start"
+                className="rounded-2xl border p-3.5 text-start"
+                style={{ background: cardBg, borderColor: line }}
               >
                 {str(t.prefix) && (
-                  <div className="text-[10px] uppercase tracking-wide text-slate-400">
+                  <div
+                    dir="auto"
+                    className="text-[9px] font-semibold uppercase tracking-[0.18em]"
+                    style={{ color: muted }}
+                  >
                     {str(t.prefix)}
                   </div>
                 )}
-                <div className="text-sm font-bold" style={{ color: accent }}>
+                <div
+                  dir="auto"
+                  className="app-display mt-1 text-[19px] font-bold leading-none"
+                  style={{ color: ink }}
+                >
                   {str(t.amount)}
                 </div>
-                <div className="truncate text-[11px] text-slate-600">{str(t.label)}</div>
+                <div className="mt-2 h-px w-6" style={{ background: accent }} />
+                <div dir="auto" className="mt-2 truncate text-[11px]" style={{ color: muted }}>
+                  {str(t.label)}
+                </div>
               </button>
             ))}
           </div>
@@ -2472,31 +2491,128 @@ function StyleProfile({
   const go = opener(data, handlers);
   const radius = int(s.radius, 14);
   const cardTitle = personalise(str(s.cardTitle), data.shopperName);
+  // The Society's own colours, so the card a shopper's taste lives on belongs
+  // to the same world as her level and her signatures rather than looking
+  // like a settings panel that wandered onto the home screen.
+  const plain = str(s.style) === "plain";
+  const deep = str(s.deepFrom) || "#2b2119";
+  const deepTo = str(s.deepTo) || "#43301f";
+  const gold = str(s.gold) || "#e0b877";
+  const onDeep = str(s.onDeep) || "#f0e6d8";
+  const onDeepSoft = str(s.onDeepSoft) || "#c9b79f";
+  const glyph = str(s.glyph, "✦");
+  const kicker = str(s.kicker, "Your society");
+  const opens = Boolean(str(s.handle) || str(s.screen) || str(s.url) || str(s.productId));
+
+  if (plain) {
+    return (
+      <section>
+        {str(s.title) && <Heading title={str(s.title)} ar={ar} accent={accent} />}
+        {str(s.subtitle) && <p className="text-[11px] text-slate-500">{str(s.subtitle)}</p>}
+        <div
+          className="mt-2 border border-slate-200 p-3"
+          style={{ background: str(s.cardBg, "#ffffff"), borderRadius: radius }}
+        >
+          {cardTitle && <div className="text-[12px] font-bold text-slate-900">{cardTitle}</div>}
+          {str(s.cardSubtitle) && (
+            <div className="text-[11px] text-slate-500">{str(s.cardSubtitle)}</div>
+          )}
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {items.map((item) => {
+              const colour = str(item.color);
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => go(item)}
+                  className="rounded-full border px-2.5 py-1 text-[11px] font-medium"
+                  style={{
+                    borderColor: colour || "#e2e8f0",
+                    color: colour || "#475569",
+                    background: colour ? `${colour}0f` : "#ffffff",
+                  }}
+                >
+                  {str(item.label)}
+                </button>
+              );
+            })}
+          </div>
+          {str(s.footNote) && (
+            <div className="mt-2 text-[11px] text-slate-500">{str(s.footNote)}</div>
+          )}
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section>
       {str(s.title) && <Heading title={str(s.title)} ar={ar} accent={accent} />}
       {str(s.subtitle) && <p className="text-[11px] text-slate-500">{str(s.subtitle)}</p>}
       <div
-        className="mt-2 border border-slate-200 p-3"
-        style={{ background: str(s.cardBg, "#ffffff"), borderRadius: radius }}
+        className="relative mt-2 overflow-hidden border p-4"
+        style={{
+          background: `linear-gradient(135deg, ${deep} 0%, ${deep} 45%, ${deepTo} 100%)`,
+          borderColor: `${gold}3d`,
+          borderRadius: radius,
+        }}
       >
-        {cardTitle && <div className="text-[12px] font-bold text-slate-900">{cardTitle}</div>}
-        {str(s.cardSubtitle) && (
-          <div className="text-[11px] text-slate-500">{str(s.cardSubtitle)}</div>
-        )}
-        <div className="mt-2 flex flex-wrap gap-1.5">
+        {/* The same faint gold wash the Society card wears. */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute -end-10 -top-12 h-32 w-32 rounded-full blur-2xl"
+          style={{ background: gold, opacity: 0.16 }}
+        />
+
+        <button
+          onClick={() => opens && go(s)}
+          className={`relative flex w-full items-start gap-2 text-start ${opens ? "" : "cursor-default"}`}
+        >
+          <span className="min-w-0 flex-1">
+            {kicker && (
+              <span
+                dir="auto"
+                className="block text-[9px] font-bold uppercase tracking-[0.2em]"
+                style={{ color: gold }}
+              >
+                {glyph ? `${glyph} ` : ""}
+                {kicker}
+              </span>
+            )}
+            {cardTitle && (
+              <span
+                dir="auto"
+                className="app-display mt-1 block text-[17px] font-bold leading-tight"
+                style={{ color: onDeep }}
+              >
+                {cardTitle}
+              </span>
+            )}
+            {str(s.cardSubtitle) && (
+              <span dir="auto" className="mt-0.5 block text-[11px]" style={{ color: onDeepSoft }}>
+                {str(s.cardSubtitle)}
+              </span>
+            )}
+          </span>
+          {opens && (
+            <span aria-hidden className="shrink-0 text-[13px]" style={{ color: gold }}>
+              {ar ? "←" : "→"}
+            </span>
+          )}
+        </button>
+
+        <div className="relative mt-3 flex flex-wrap gap-1.5">
           {items.map((item) => {
             const colour = str(item.color);
             return (
               <button
                 key={item.id}
                 onClick={() => go(item)}
+                dir="auto"
                 className="rounded-full border px-2.5 py-1 text-[11px] font-medium"
                 style={{
-                  borderColor: colour || "#e2e8f0",
-                  color: colour || "#475569",
-                  background: colour ? `${colour}0f` : "#ffffff",
+                  borderColor: colour ? `${colour}aa` : `${gold}59`,
+                  color: colour || onDeep,
+                  background: colour ? `${colour}1f` : `${gold}14`,
                 }}
               >
                 {str(item.label)}
@@ -2504,8 +2620,11 @@ function StyleProfile({
             );
           })}
         </div>
+
         {str(s.footNote) && (
-          <div className="mt-2 text-[11px] text-slate-500">{str(s.footNote)}</div>
+          <div dir="auto" className="relative mt-3 text-[10px]" style={{ color: onDeepSoft }}>
+            {str(s.footNote)}
+          </div>
         )}
       </div>
     </section>
@@ -2520,14 +2639,20 @@ function StyleProfile({
  */
 function PromoBanner({
   s,
+  accent,
   onOpen,
 }: {
   s: Record<string, unknown>;
+  /** What the store is built around: the banner follows it unless told not to. */
+  accent: string;
   onOpen: () => void;
 }) {
-  const bg = str(s.bg, "#2a1433");
-  const bg2 = str(s.bg2, "#8a3b5c");
-  const glow = str(s.glow, "#f6c453");
+  // Empty means "follow the brand", the way the live row's colours do. A
+  // banner painted in somebody else's purple is the one section on the home
+  // screen that looks like it was bought from another shop.
+  const bg = str(s.bg) || "#2b1b10";
+  const bg2 = str(s.bg2) || accent;
+  const glow = str(s.glow) || "#e0b877";
   const ink = str(s.textColor, "#ffffff");
   const radius = int(s.radius, 20);
   const height = int(s.height, 0) || 196;
@@ -3159,7 +3284,7 @@ function PromoCard({
   const ink = str(s.textColor, "#ffffff");
   const button = str(s.buttonLabel);
 
-  if (str(s.style) === "banner") return <PromoBanner s={s} onOpen={() => go(s)} />;
+  if (str(s.style) === "banner") return <PromoBanner s={s} accent={accent} onOpen={() => go(s)} />;
 
   return (
     <section
