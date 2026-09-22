@@ -93,11 +93,12 @@ function SignupForm({ copy }: { copy: Copy }) {
     "h-12 w-full rounded-xl border border-line bg-white px-3.5 text-[15px] text-ink outline-none transition placeholder:text-ink-soft focus:border-brand-500 focus:ring-1 focus:ring-brand-500";
 
   return (
-    <div className="mx-auto max-w-md py-10">
-      <h1 className="text-2xl font-bold tracking-tight text-ink">
+    <div className="mx-auto w-full max-w-md px-4 py-10 sm:py-14">
+      <div className="rounded-3xl border border-line bg-surface p-6 shadow-[0_1px_2px_rgba(43,27,16,0.04)] sm:p-8">
+      <h1 className="store-display text-[28px] font-bold leading-tight text-ink">
         {say(copy, "heading", ar) || (ar ? "إنشاء حساب" : "Create an account")}
       </h1>
-      <p className="mt-1.5 text-sm text-ink-muted">
+      <p className="mt-2 text-sm leading-relaxed text-ink-muted">
         {step === "details"
           ? say(copy, "subtitle", ar) ||
             (ar ? "سنرسل لك كود تحقق لتأكيد رقمك." : "We'll send you a code to confirm your number.")
@@ -193,12 +194,13 @@ function SignupForm({ copy }: { copy: Copy }) {
 
       {err && <p className="mt-3 text-sm font-medium text-rose-600">{err}</p>}
 
-      <p className="mt-6 text-center text-sm text-ink-muted">
+      <p className="mt-6 border-t border-line pt-5 text-center text-sm text-ink-muted">
         {say(copy, "loginPrompt", ar) || (ar ? "لديك حساب بالفعل؟" : "Already have an account?")}{" "}
         <Link href="/store/login" className="font-semibold text-brand-600 hover:underline">
           {ar ? "تسجيل الدخول" : "Log in"}
         </Link>
       </p>
+      </div>
     </div>
   );
 }

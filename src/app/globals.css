@@ -40,16 +40,43 @@
   --brand-ink: 255 255 255; /* white text on the violet button */
 }
 
-/* The storefront keeps the pink/crimson BeautyBar brand (the admin uses violet).
-   Scoped via .store-theme on the store layout root so `bg-brand`, `text-brand`,
-   `btn-primary`, etc. resolve to pink only inside the shop. */
+/* The storefront wears Beauty Bar's own colours - cream paper, roast-brown
+   ink, caramel buttons - while the admin stays on its violet greys. Scoped
+   via .store-theme on the store layout root, so every page served inside the
+   shop (login, sign up, requests, the returns forms) inherits the brand
+   instead of each one being painted by hand.
+
+   The values are the account app's, to the hex: the account is embedded in
+   the theme beside these pages, and two cream palettes that disagree look
+   like a mistake. */
 .store-theme {
-  --brand-50: 255 241 242;
-  --brand-100: 255 228 230;
-  --brand-500: 244 63 94;
-  --brand-600: 225 29 72;
-  --brand-700: 190 18 60;
+  --surface: 251 247 241;        /* #FBF7F1 cards */
+  --surface-page: 242 232 218;   /* #F2E8DA the paper the theme prints on */
+  --surface-hover: 243 233 220;  /* #F3E9DC */
+  --ink: 43 27 16;               /* #2B1B10 roast */
+  --ink-muted: 124 100 80;       /* #7C6450 */
+  --ink-soft: 160 137 114;       /* #A08972 */
+  --line: 228 215 197;           /* #E4D7C5 */
+  --brand-50: 246 237 227;       /* #F6EDE3 */
+  --brand-100: 234 219 200;      /* #EADBC8 */
+  --brand-500: 164 108 60;       /* #A46C3C caramel */
+  --brand-600: 142 90 47;        /* #8E5A2F */
+  --brand-700: 122 75 39;        /* #7A4B27 */
   --brand-ink: 255 255 255;
+
+  /* The tokens are overridden here rather than on the body, so the paper has
+     to be painted here too - otherwise a store page sits on the admin's grey
+     with a cream card floating on it. */
+  background: rgb(var(--surface-page));
+  color: rgb(var(--ink));
+}
+
+/* The one serif line a page is allowed: the website sets its headings in
+   Playfair, and a sign-in that opens in the admin's sans reads as a
+   different company's. */
+.store-display {
+  font-family: var(--font-display), "Playfair Display", Georgia, serif;
+  letter-spacing: -0.01em;
 }
 
 html,
@@ -200,15 +227,20 @@ body {
    the storefront or the admin. Logical properties keep it RTL-correct.
    ================================================================== */
 .co-root {
-  --co-bg: #ece8f3;          /* page gutters */
-  --co-summary: #f2f0f7;     /* order-summary surface */
-  --co-line: #d9d9d9;        /* field borders */
-  --co-line-soft: #e5e5e5;   /* dividers */
-  --co-text: #1a1a1a;
-  --co-muted: #6b7177;
-  --co-accent: #c8134e;
-  --co-accent-hover: #a80f41;
-  --co-accent-soft: #fdf1f5;
+  /* Shopify's checkout, printed in Beauty Bar's colours. The layout is still
+     the one shoppers know - two columns, floating labels, a summary on the
+     right - but the lavender gutters and crimson button belonged to nobody:
+     arriving from a cream-and-caramel store at a pink checkout is the moment
+     a shopper wonders whether they are still on the same site. */
+  --co-bg: #ede2d2;          /* page gutters */
+  --co-summary: #f6efe5;     /* order-summary surface */
+  --co-line: #ddcdb8;        /* field borders */
+  --co-line-soft: #e8dbc8;   /* dividers */
+  --co-text: #2b1b10;
+  --co-muted: #7c6450;
+  --co-accent: #a46c3c;
+  --co-accent-hover: #7a4b27;
+  --co-accent-soft: #f6ede3;
   --co-radius: 8px;
 
   background: var(--co-bg);

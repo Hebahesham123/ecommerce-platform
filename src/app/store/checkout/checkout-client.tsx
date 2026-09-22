@@ -458,21 +458,21 @@ export default function CheckoutClient({
       {items.map((i) => (
         <li key={i.itemId} className="flex items-center gap-4">
           <div className="relative h-16 w-16 shrink-0">
-            <div className="h-16 w-16 overflow-hidden rounded-lg border border-[#d9d9d9] bg-white">
+            <div className="h-16 w-16 overflow-hidden rounded-lg border border-[var(--co-line)] bg-white">
               {i.imageUrl && (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={i.imageUrl} alt="" className="h-full w-full object-cover" />
               )}
             </div>
-            <span className="absolute -end-2 -top-2 grid h-[22px] min-w-[22px] place-items-center rounded-full bg-[#6b7177] px-1 text-[12px] font-semibold text-white">
+            <span className="absolute -end-2 -top-2 grid h-[22px] min-w-[22px] place-items-center rounded-full bg-[var(--co-muted)] px-1 text-[12px] font-semibold text-white">
               {i.quantity}
             </span>
           </div>
           <div className="min-w-0 flex-1">
-            <div className="line-clamp-2 text-[14px] font-medium leading-5 text-[#1a1a1a]">{i.productName}</div>
-            {i.variantTitle && <div className="mt-0.5 text-[13px] text-[#6b7177]">{i.variantTitle}</div>}
+            <div className="line-clamp-2 text-[14px] font-medium leading-5 text-[var(--co-text)]">{i.productName}</div>
+            {i.variantTitle && <div className="mt-0.5 text-[13px] text-[var(--co-muted)]">{i.variantTitle}</div>}
           </div>
-          <div className="text-[14px] font-medium text-[#1a1a1a]">{money(i.price * i.quantity, ar)}</div>
+          <div className="text-[14px] font-medium text-[var(--co-text)]">{money(i.price * i.quantity, ar)}</div>
         </li>
       ))}
     </ul>
@@ -482,9 +482,9 @@ export default function CheckoutClient({
     <div>
       <div className="flex gap-2">
         {appliedCoupon ? (
-          <div className="flex flex-1 items-center justify-between rounded-[8px] border border-[#d9d9d9] bg-white px-3 py-2.5">
-            <span className="flex items-center gap-2 text-[14px] font-medium text-[#1a1a1a]">
-              <IcTag className="h-4 w-4 text-[#6b7177]" />
+          <div className="flex flex-1 items-center justify-between rounded-[8px] border border-[var(--co-line)] bg-white px-3 py-2.5">
+            <span className="flex items-center gap-2 text-[14px] font-medium text-[var(--co-text)]">
+              <IcTag className="h-4 w-4 text-[var(--co-muted)]" />
               {appliedCoupon}
             </span>
             <button
@@ -511,7 +511,7 @@ export default function CheckoutClient({
               type="button"
               onClick={applyCoupon}
               disabled={!couponInput.trim() || couponBusy}
-              className="h-[52px] shrink-0 rounded-[8px] border border-[#d9d9d9] bg-[#f0f0f0] px-6 text-[15px] font-medium text-[#6b7177] transition hover:bg-[#e8e8e8] disabled:opacity-60"
+              className="h-[52px] shrink-0 rounded-[8px] border border-[var(--co-line)] bg-[var(--co-summary)] px-6 text-[15px] font-medium text-[var(--co-muted)] transition hover:bg-[var(--co-line-soft)] disabled:opacity-60"
             >
               {couponBusy ? (ar ? "…" : "…") : ar ? "تطبيق" : "Apply"}
             </button>
@@ -525,24 +525,24 @@ export default function CheckoutClient({
   const totals = (
     <div className="space-y-3 text-[14px]">
       <div className="flex items-center justify-between">
-        <span className="text-[#1a1a1a]">{ar ? "الإجمالي الفرعي" : "Subtotal"}</span>
-        <span className="font-medium text-[#1a1a1a]">{money(subtotal, ar)}</span>
+        <span className="text-[var(--co-text)]">{ar ? "الإجمالي الفرعي" : "Subtotal"}</span>
+        <span className="font-medium text-[var(--co-text)]">{money(subtotal, ar)}</span>
       </div>
       {discount > 0 && (
         <div className="flex items-center justify-between">
-          <span className="text-[#1a1a1a]">{ar ? "الخصم" : "Discount"}</span>
-          <span className="font-medium text-[#1a1a1a]">−{money(discount, ar)}</span>
+          <span className="text-[var(--co-text)]">{ar ? "الخصم" : "Discount"}</span>
+          <span className="font-medium text-[var(--co-text)]">−{money(discount, ar)}</span>
         </div>
       )}
       <div className="flex items-center justify-between">
-        <span className="text-[#1a1a1a]">{ar ? "الشحن" : "Shipping"}</span>
-        <span className="font-medium text-[#1a1a1a]">{ar ? "مجاني" : "FREE"}</span>
+        <span className="text-[var(--co-text)]">{ar ? "الشحن" : "Shipping"}</span>
+        <span className="font-medium text-[var(--co-text)]">{ar ? "مجاني" : "FREE"}</span>
       </div>
-      <div className="flex items-center justify-between border-t border-[#e5e5e5] pt-4">
-        <span className="text-[17px] font-semibold text-[#1a1a1a]">{ar ? "الإجمالي" : "Total"}</span>
+      <div className="flex items-center justify-between border-t border-[var(--co-line-soft)] pt-4">
+        <span className="text-[17px] font-semibold text-[var(--co-text)]">{ar ? "الإجمالي" : "Total"}</span>
         <span className="flex items-baseline gap-2">
-          <span className="text-[13px] text-[#6b7177]">EGP</span>
-          <span className="text-[21px] font-semibold text-[#1a1a1a]">{money(total, ar)}</span>
+          <span className="text-[13px] text-[var(--co-muted)]">EGP</span>
+          <span className="text-[21px] font-semibold text-[var(--co-text)]">{money(total, ar)}</span>
         </span>
       </div>
     </div>
@@ -558,7 +558,7 @@ export default function CheckoutClient({
       <div className="co-root bb-checkout min-h-screen" dir="ltr">
         <CheckoutHeader ar={ar} />
         <div className="mx-auto w-full max-w-[600px] bg-white px-5 py-20 text-center">
-          <div className="mx-auto h-3 w-40 animate-pulse rounded bg-[#ececec]" />
+          <div className="mx-auto h-3 w-40 animate-pulse rounded bg-[var(--co-line-soft)]" />
         </div>
       </div>
     );
@@ -569,7 +569,7 @@ export default function CheckoutClient({
       <div className="co-root bb-checkout min-h-screen" dir="ltr">
         <CheckoutHeader ar={ar} />
         <div className="mx-auto w-full max-w-[600px] bg-white px-5 py-20 text-center">
-          <p className="text-[15px] text-[#6b7177]">{ar ? "سلتك فارغة" : "Your cart is empty"}</p>
+          <p className="text-[15px] text-[var(--co-muted)]">{ar ? "سلتك فارغة" : "Your cart is empty"}</p>
           <Link
             href={STOREFRONT_HOME}
             className="mt-5 inline-flex h-[52px] items-center rounded-[8px] bg-[var(--co-accent)] px-7 text-[16px] font-semibold text-white hover:bg-[var(--co-accent-hover)]"
@@ -590,10 +590,10 @@ export default function CheckoutClient({
       <div className="lg:grid lg:grid-cols-2">
         {/* ORDER SUMMARY — first in the DOM (so it sits under the header on
             mobile), second column on desktop. */}
-        <aside className="lg:col-start-2 lg:row-start-1 lg:min-h-[calc(100vh-73px)] lg:border-s lg:border-[#e5e5e5] lg:bg-[var(--co-summary)]">
+        <aside className="lg:col-start-2 lg:row-start-1 lg:min-h-[calc(100vh-73px)] lg:border-s lg:border-[var(--co-line-soft)] lg:bg-[var(--co-summary)]">
           {/* mobile: collapsible "Order summary" bar */}
           <div className="lg:hidden">
-            <div className="mx-auto w-full max-w-[600px] border-y border-[#e5e5e5] bg-[var(--co-summary)]">
+            <div className="mx-auto w-full max-w-[600px] border-y border-[var(--co-line-soft)] bg-[var(--co-summary)]">
               <button
                 type="button"
                 onClick={() => setSummaryOpen((v) => !v)}
@@ -603,10 +603,10 @@ export default function CheckoutClient({
                   {ar ? "ملخص الطلب" : "Order summary"}
                   <IcChevron className={`h-4 w-4 transition-transform ${summaryOpen ? "rotate-180" : ""}`} />
                 </span>
-                <span className="text-[19px] font-semibold text-[#1a1a1a]">{money(total, ar)}</span>
+                <span className="text-[19px] font-semibold text-[var(--co-text)]">{money(total, ar)}</span>
               </button>
               {summaryOpen && (
-                <div className="space-y-6 border-t border-[#e5e5e5] px-5 py-5">
+                <div className="space-y-6 border-t border-[var(--co-line-soft)] px-5 py-5">
                   {lineItems}
                   {discountRow}
                   {totals}
@@ -631,7 +631,7 @@ export default function CheckoutClient({
             {/* Contact */}
             <section>
               <div className="mb-4 flex items-baseline justify-between gap-4">
-                <h2 className="text-[19px] font-semibold text-[#1a1a1a]">{say(copy, "contactHeading", ar) || (ar ? "معلومات التواصل" : "Contact")}</h2>
+                <h2 className="text-[19px] font-semibold text-[var(--co-text)]">{say(copy, "contactHeading", ar) || (ar ? "معلومات التواصل" : "Contact")}</h2>
                 {identity ? (
                   <Link href="/store/account" className="co-link text-[15px]">
                     {ar ? "حسابي" : "My account"}
@@ -641,9 +641,9 @@ export default function CheckoutClient({
                 )}
               </div>
               {identity && (
-                <p className="mb-3 text-[14px] text-[#6b7177]">
+                <p className="mb-3 text-[14px] text-[var(--co-muted)]">
                   {ar ? "مسجّلة الدخول باسم" : "Signed in as"}{" "}
-                  <span className="font-medium text-[#1a1a1a]" dir="ltr">
+                  <span className="font-medium text-[var(--co-text)]" dir="ltr">
                     {known?.name ? `${known.name} · ${identity.phone}` : identity.phone}
                   </span>
                 </p>
@@ -658,7 +658,7 @@ export default function CheckoutClient({
 
             {/* Delivery */}
             <section className="mt-8">
-              <h2 className="mb-4 text-[19px] font-semibold text-[#1a1a1a]">{say(copy, "deliveryHeading", ar) || (ar ? "التوصيل" : "Delivery")}</h2>
+              <h2 className="mb-4 text-[19px] font-semibold text-[var(--co-text)]">{say(copy, "deliveryHeading", ar) || (ar ? "التوصيل" : "Delivery")}</h2>
               <div className="space-y-3">
                 <SelectField label={ar ? "الدولة / المنطقة" : "Country/Region"} value="EG" disabled>
                   <option value="EG">{ar ? "مصر" : "Egypt"}</option>
@@ -707,33 +707,33 @@ export default function CheckoutClient({
 
             {/* Shipping method */}
             <section className="mt-8">
-              <h2 className="mb-3 text-[17px] font-semibold text-[#1a1a1a]">{ar ? "طريقة الشحن" : "Shipping method"}</h2>
+              <h2 className="mb-3 text-[17px] font-semibold text-[var(--co-text)]">{ar ? "طريقة الشحن" : "Shipping method"}</h2>
               <div className="flex items-center justify-between rounded-[8px] border border-[var(--co-accent)] bg-[var(--co-accent-soft)] px-4 py-[18px]">
-                <span className="text-[15px] text-[#1a1a1a]">{ar ? "شحن مجاني" : "Free shipping"}</span>
-                <span className="text-[15px] font-semibold text-[#1a1a1a]">{ar ? "مجاني" : "FREE"}</span>
+                <span className="text-[15px] text-[var(--co-text)]">{ar ? "شحن مجاني" : "Free shipping"}</span>
+                <span className="text-[15px] font-semibold text-[var(--co-text)]">{ar ? "مجاني" : "FREE"}</span>
               </div>
             </section>
 
             {/* Payment */}
             <section className="mt-8">
-              <h2 className="text-[19px] font-semibold text-[#1a1a1a]">{say(copy, "paymentHeading", ar) || (ar ? "الدفع" : "Payment")}</h2>
-              <p className="mb-4 mt-1 text-[14px] text-[#6b7177]">
+              <h2 className="text-[19px] font-semibold text-[var(--co-text)]">{say(copy, "paymentHeading", ar) || (ar ? "الدفع" : "Payment")}</h2>
+              <p className="mb-4 mt-1 text-[14px] text-[var(--co-muted)]">
                 {ar ? "جميع المعاملات آمنة ومشفّرة." : "All transactions are secure and encrypted."}
               </p>
               <div className="co-list co-single">
                 <div className="co-row co-on">
                   <input type="radio" className="co-radio" checked readOnly name="payment" />
-                  <span className="flex-1 font-medium text-[#1a1a1a]">
+                  <span className="flex-1 font-medium text-[var(--co-text)]">
                     {say(copy, "codLabel", ar) || (ar ? "الدفع عند الاستلام (COD)" : "Cash on Delivery (COD)")}
                   </span>
-                  <IcCash className="h-6 w-6 text-[#6b7177]" />
+                  <IcCash className="h-6 w-6 text-[var(--co-muted)]" />
                 </div>
               </div>
             </section>
 
             {/* Billing address */}
             <section className="mt-8">
-              <h2 className="mb-3 text-[17px] font-semibold text-[#1a1a1a]">{ar ? "عنوان الفوترة" : "Billing address"}</h2>
+              <h2 className="mb-3 text-[17px] font-semibold text-[var(--co-text)]">{ar ? "عنوان الفوترة" : "Billing address"}</h2>
               <div className="co-list">
                 {[
                   { id: true, label: ar ? "نفس عنوان الشحن" : "Same as shipping address" },
@@ -746,7 +746,7 @@ export default function CheckoutClient({
                     className={`co-row ${billingSame === b.id ? "co-on" : ""}`}
                   >
                     <input type="radio" className="co-radio" checked={billingSame === b.id} readOnly name="billing" />
-                    <span className="text-[#1a1a1a]">{b.label}</span>
+                    <span className="text-[var(--co-text)]">{b.label}</span>
                   </button>
                 ))}
               </div>
@@ -763,9 +763,9 @@ export default function CheckoutClient({
                 <button
                   type="button"
                   onClick={() => setDiscountOpen(true)}
-                  className="inline-flex h-11 items-center gap-2 rounded-[8px] border border-[#d9d9d9] bg-white px-4 text-[14px] text-[#1a1a1a] hover:bg-[#fafafa]"
+                  className="inline-flex h-11 items-center gap-2 rounded-[8px] border border-[var(--co-line)] bg-white px-4 text-[14px] text-[var(--co-text)] hover:bg-[var(--co-accent-soft)]"
                 >
-                  <IcTag className="h-4 w-4 text-[#6b7177]" />
+                  <IcTag className="h-4 w-4 text-[var(--co-muted)]" />
                   {ar ? "إضافة خصم" : "Add discount"}
                 </button>
               )}
@@ -775,22 +775,22 @@ export default function CheckoutClient({
                 onClick={() => setSummaryOpen((v) => !v)}
                 className="mt-6 flex w-full items-center gap-4"
               >
-                <div className="h-11 w-11 shrink-0 overflow-hidden rounded-lg border border-[#d9d9d9] bg-white">
+                <div className="h-11 w-11 shrink-0 overflow-hidden rounded-lg border border-[var(--co-line)] bg-white">
                   {items[0]?.imageUrl && (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img src={items[0].imageUrl} alt="" className="h-full w-full object-cover" />
                   )}
                 </div>
                 <div className="flex-1 text-start">
-                  <div className="text-[17px] font-semibold leading-tight text-[#1a1a1a]">{ar ? "الإجمالي" : "Total"}</div>
-                  <div className="text-[13px] text-[#6b7177]">
+                  <div className="text-[17px] font-semibold leading-tight text-[var(--co-text)]">{ar ? "الإجمالي" : "Total"}</div>
+                  <div className="text-[13px] text-[var(--co-muted)]">
                     {ar ? `${itemCount} منتج` : `${itemCount} item${itemCount === 1 ? "" : "s"}`}
                   </div>
                 </div>
                 <span className="flex items-center gap-2">
-                  <span className="text-[12px] text-[#6b7177]">EGP</span>
-                  <span className="text-[20px] font-semibold text-[#1a1a1a]">{money(total, ar)}</span>
-                  <IcChevron className={`h-4 w-4 text-[#6b7177] transition-transform ${summaryOpen ? "rotate-180" : ""}`} />
+                  <span className="text-[12px] text-[var(--co-muted)]">EGP</span>
+                  <span className="text-[20px] font-semibold text-[var(--co-text)]">{money(total, ar)}</span>
+                  <IcChevron className={`h-4 w-4 text-[var(--co-muted)] transition-transform ${summaryOpen ? "rotate-180" : ""}`} />
                 </span>
               </button>
             </div>
@@ -807,7 +807,7 @@ export default function CheckoutClient({
                 : say(copy, "submit", ar) || (ar ? "إتمام الطلب" : "Complete order")}
             </button>
 
-            <div className="mt-6 flex flex-wrap gap-x-5 gap-y-2 border-t border-[#e5e5e5] pt-5 text-[13px]">
+            <div className="mt-6 flex flex-wrap gap-x-5 gap-y-2 border-t border-[var(--co-line-soft)] pt-5 text-[13px]">
               <Link href="/shop/policies/refund-policy" className="co-link">{ar ? "سياسة الاسترجاع" : "Refund policy"}</Link>
               <Link href="/shop/policies/shipping-policy" className="co-link">{ar ? "الشحن" : "Shipping"}</Link>
               <Link href="/shop/policies/privacy-policy" className="co-link">{ar ? "سياسة الخصوصية" : "Privacy policy"}</Link>
@@ -823,12 +823,12 @@ export default function CheckoutClient({
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={closeOtp} role="dialog" aria-modal="true">
           <div className="w-full max-w-sm rounded-[10px] bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-[17px] font-semibold text-[#1a1a1a]">{ar ? "تأكيد رقم الهاتف" : "Verify your phone"}</h3>
-              <button onClick={closeOtp} className="text-lg text-[#6b7177] hover:text-[#1a1a1a]">✕</button>
+              <h3 className="text-[17px] font-semibold text-[var(--co-text)]">{ar ? "تأكيد رقم الهاتف" : "Verify your phone"}</h3>
+              <button onClick={closeOtp} className="text-lg text-[var(--co-muted)] hover:text-[var(--co-text)]">✕</button>
             </div>
             {step === "code_sent" ? (
               <>
-                <p className="mb-4 text-[14px] text-[#6b7177]">
+                <p className="mb-4 text-[14px] text-[var(--co-muted)]">
                   {ar ? `أدخلي الكود المرسل عبر ${channel === "whatsapp" ? "واتساب" : "الرسائل"} إلى ${phone}` : `Enter the code sent via ${channel === "whatsapp" ? "WhatsApp" : "SMS"} to ${phone}`}
                 </p>
                 <input
@@ -836,7 +836,7 @@ export default function CheckoutClient({
                   onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
                   onKeyDown={(e) => { if (e.key === "Enter" && code.length >= 4) submitCode(); }}
                   placeholder="000000"
-                  className="h-[52px] w-full rounded-[8px] border border-[#d9d9d9] bg-white text-center text-lg tracking-[0.4em] outline-none focus:border-[var(--co-accent)] focus:shadow-[0_0_0_1px_var(--co-accent)]"
+                  className="h-[52px] w-full rounded-[8px] border border-[var(--co-line)] bg-white text-center text-lg tracking-[0.4em] outline-none focus:border-[var(--co-accent)] focus:shadow-[0_0_0_1px_var(--co-accent)]"
                   dir="ltr"
                   inputMode="numeric"
                   maxLength={6}
@@ -849,7 +849,7 @@ export default function CheckoutClient({
                 >
                   {placing ? (ar ? "جارٍ إتمام الطلب…" : "Placing order…") : (ar ? "تحقق وإتمام الطلب" : "Confirm & place order")}
                 </button>
-                <div className="mt-4 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[13px] text-[#6b7177]">
+                <div className="mt-4 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[13px] text-[var(--co-muted)]">
                   <span>{ar ? "لم يصلك الكود؟" : "Didn't get it?"}</span>
                   <button onClick={() => resend("whatsapp")} className="co-link">{ar ? "عبر واتساب" : "WhatsApp"}</button>
                   <span>·</span>
@@ -858,20 +858,20 @@ export default function CheckoutClient({
               </>
             ) : (
               <>
-                <p className="mb-4 text-[14px] text-[#6b7177]">
+                <p className="mb-4 text-[14px] text-[var(--co-muted)]">
                   {ar ? `اختاري طريقة استلام كود التحقق على ${phone}` : `Choose how to receive the code on ${phone}`}
                 </p>
                 <div className="grid grid-cols-2 gap-3">
-                  <button onClick={() => chooseChannel("whatsapp")} disabled={step === "sending"} className="flex flex-col items-center gap-2 rounded-[8px] border border-[#d9d9d9] p-4 hover:border-[var(--co-accent)] disabled:opacity-50">
+                  <button onClick={() => chooseChannel("whatsapp")} disabled={step === "sending"} className="flex flex-col items-center gap-2 rounded-[8px] border border-[var(--co-line)] p-4 hover:border-[var(--co-accent)] disabled:opacity-50">
                     <span className="text-2xl">💬</span>
-                    <span className="text-[14px] font-medium text-[#1a1a1a]">{ar ? "واتساب" : "WhatsApp"}</span>
+                    <span className="text-[14px] font-medium text-[var(--co-text)]">{ar ? "واتساب" : "WhatsApp"}</span>
                   </button>
-                  <button onClick={() => chooseChannel("sms")} disabled={step === "sending"} className="flex flex-col items-center gap-2 rounded-[8px] border border-[#d9d9d9] p-4 hover:border-[var(--co-accent)] disabled:opacity-50">
+                  <button onClick={() => chooseChannel("sms")} disabled={step === "sending"} className="flex flex-col items-center gap-2 rounded-[8px] border border-[var(--co-line)] p-4 hover:border-[var(--co-accent)] disabled:opacity-50">
                     <span className="text-2xl">✉️</span>
-                    <span className="text-[14px] font-medium text-[#1a1a1a]">SMS</span>
+                    <span className="text-[14px] font-medium text-[var(--co-text)]">SMS</span>
                   </button>
                 </div>
-                {step === "sending" && <p className="mt-3 text-center text-[14px] text-[#6b7177]">{ar ? "جارٍ إرسال الكود…" : "Sending the code…"}</p>}
+                {step === "sending" && <p className="mt-3 text-center text-[14px] text-[var(--co-muted)]">{ar ? "جارٍ إرسال الكود…" : "Sending the code…"}</p>}
               </>
             )}
             {err && <p className="mt-3 text-center text-[14px] text-[#d72c0d]">{err}</p>}
@@ -892,12 +892,12 @@ function CheckoutHeader({ ar }: { ar: boolean }) {
   // The cart drawer lives in the shop layout, which checkout deliberately
   // skips — so the bag goes to the cart page rather than opening a dead drawer.
   return (
-    <header className="border-b border-[#e5e5e5] bg-white">
+    <header className="border-b border-[var(--co-line-soft)] bg-white">
       <div className="mx-auto flex w-full max-w-[600px] items-center justify-between px-5 py-5 lg:max-w-[1120px] lg:px-10">
         <Link
           href={STOREFRONT_HOME}
           aria-label={ar ? "الصفحة الرئيسية" : "Home"}
-          className="text-[22px] font-bold uppercase tracking-[0.01em] text-[#1a1a1a] transition hover:opacity-70"
+          className="text-[22px] font-bold uppercase tracking-[0.01em] text-[var(--co-text)] transition hover:opacity-70"
         >
           {ar ? "بيوتي بار" : "Beauty Bar"}
         </Link>

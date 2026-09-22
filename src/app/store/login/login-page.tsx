@@ -63,11 +63,12 @@ function LoginForm({ copy }: { copy: Copy }) {
   }
 
   return (
-    <div className="mx-auto max-w-md py-10">
-      <h1 className="text-2xl font-bold tracking-tight text-ink">
+    <div className="mx-auto w-full max-w-md px-4 py-10 sm:py-14">
+      <div className="rounded-3xl border border-line bg-surface p-6 shadow-[0_1px_2px_rgba(43,27,16,0.04)] sm:p-8">
+      <h1 className="store-display text-[28px] font-bold leading-tight text-ink">
         {say(copy, "heading", ar) || (ar ? "تسجيل الدخول" : "Log in")}
       </h1>
-      <p className="mt-1.5 text-sm text-ink-muted">
+      <p className="mt-2 text-sm leading-relaxed text-ink-muted">
         {say(copy, "subtitle", ar) ||
           (ar ? "أدخلي رقم هاتفك للدخول إلى حسابك." : "Enter your phone number to access your account.")}
       </p>
@@ -99,12 +100,13 @@ function LoginForm({ copy }: { copy: Copy }) {
 
       {err && <p className="mt-3 text-sm font-medium text-rose-600">{err}</p>}
 
-      <p className="mt-6 text-center text-sm text-ink-muted">
+      <p className="mt-6 border-t border-line pt-5 text-center text-sm text-ink-muted">
         {say(copy, "signupPrompt", ar) || (ar ? "ليس لديك حساب؟" : "No account yet?")}{" "}
         <Link href="/store/signup" className="font-semibold text-brand-600 hover:underline">
           {say(copy, "signupLink", ar) || (ar ? "إنشاء حساب" : "Sign up")}
         </Link>
       </p>
+      </div>
     </div>
   );
 }
