@@ -1,7 +1,7 @@
 "use client";
 
 import type { HomeData } from "@/components/app-home";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useI18n } from "@/lib/i18n";
 import {
   api,
@@ -110,7 +110,18 @@ export function readCart(): CartLine[] {
   }
 }
 
-export function Preview() {
+export function Preview({
+  start,
+  bare = false,
+}: {
+  /**
+   * Which screen to open on. The Pages hub frames this preview once per app
+   * screen, so each frame has to land somewhere different.
+   */
+  start?: { screen?: string; collection?: string; product?: string };
+  /** Drop the call log and the surrounding width, for framing. */
+  bare?: boolean;
+} = {}) {
   const { lang } = useI18n();
   const ar = lang === "ar";
 
@@ -219,6 +230,12 @@ export function Preview() {
       setTab(screen);
       return;
     }
+    // Not a screen the app navigates to, but the Pages hub frames it like one.
+    if (screen === "menu") {
+      setTab("shop");
+      setOpenMenu({ at: Date.now() });
+      return;
+    }
     // The rest are this shop's own pages, which the shop tab draws.
     setTab("shop");
     setQuery("");
@@ -236,6 +253,19 @@ export function Preview() {
     setQuery("");
     setOpenProduct({ id, at: Date.now() });
   };
+
+  // Opening screen, applied once. It waits for the theme, because which tabs
+  // exist is the merchant's arrangement and a tab that is hidden cannot be
+  // the one we select.
+  const started = useRef(false);
+  useEffect(() => {
+    if (started.current || !start || !ready) return;
+    started.current = true;
+    if (start.product) return openProductLink(start.product);
+    if (start.collection) return openCollectionLink(start.collection);
+    if (start.screen) openScreen(start.screen);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, start?.screen, start?.collection, start?.product]);
 
   const signedIn = Boolean(phone);
   const count = cart.reduce((s, l) => s + l.quantity, 0);
@@ -271,7 +301,11 @@ export function Preview() {
   const activeTab = tabs.some((t) => t.key === tab) ? tab : (tabs[0]?.key ?? "shop");
 
   return (
-    <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+    <div
+      className={
+        bare ? "flex justify-center" : "flex flex-col gap-6 lg:flex-row lg:items-start"
+      }
+    >
       {/* ------------------------------- the phone ------------------------- */}
       <div className="mx-auto w-full max-w-[400px] shrink-0">
         <div
@@ -495,7 +529,7 @@ export function Preview() {
       </div>
 
       {/* ------------------------------- the log --------------------------- */}
-      <div className="min-w-0 flex-1">
+      <div className={bare ? "hidden" : "min-w-0 flex-1"}>
         <button
           onClick={() => setShowLog((v) => !v)}
           className="mb-2 text-xs font-semibold text-ink-muted lg:pointer-events-none"

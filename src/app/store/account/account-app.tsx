@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useI18n, egp } from "@/lib/i18n";
+import { say, type Copy } from "@/lib/page-copy";
 import type { Account } from "@/lib/account-service";
 import type { LoyaltySummary, RewardView, VaultView } from "@/lib/loyalty/types";
 import { getMyLoyalty, redeemMyReward, openMyVault } from "../loyalty-actions";
@@ -36,11 +37,14 @@ export default function AccountApp({
   loyalty: initialLoyalty,
   section,
   orderNumber,
+  copy = {},
 }: {
   account: Account;
   loyalty: LoyaltySummary | null;
   section: PageKey;
   orderNumber?: string;
+  /** The merchant's wording for this page, from the Pages screen. */
+  copy?: Copy;
 }) {
   const { lang } = useI18n();
   const ar = lang === "ar";
@@ -209,7 +213,7 @@ export default function AccountApp({
             <OrderDetail orderNumber={orderNumber} ar={ar} money={money} onBack={() => router.push("/store/account/orders")} />
           ) : (
             <>
-              {page === "overview" && <Overview account={account} loyalty={loyalty} ar={ar} money={money} go={go} openOrderFn={openOrderNav} onOpenVault={onOpenVault} pending={pending} />}
+              {page === "overview" && <Overview account={account} loyalty={loyalty} ar={ar} money={money} go={go} openOrderFn={openOrderNav} onOpenVault={onOpenVault} pending={pending} copy={copy} />}
               {page === "orders" && <Orders account={account} ar={ar} money={money} open={openOrderNav} />}
               {page === "returns" && <Returns ar={ar} />}
               {page === "wishlist" && <Wishlist ar={ar} money={money} />}
@@ -303,14 +307,18 @@ function orderStatus(o: { lifecycle: string; fulfillmentStatus: string }, ar: bo
 }
 
 // ---- Overview ---------------------------------------------------------------
-function Overview({ account, loyalty, ar, money, go, openOrderFn, onOpenVault, pending }: {
+function Overview({ account, loyalty, ar, money, go, openOrderFn, onOpenVault, pending, copy }: {
   account: Account; loyalty: LoyaltySummary | null; ar: boolean; money: (n: number) => string;
   go: (p: PageKey) => void; openOrderFn: (n: string) => void; onOpenVault: (v: VaultView) => void; pending: boolean;
+  copy: Copy;
 }) {
   const v = loyalty?.primaryVault;
   return (
     <>
-      <PageHead title={ar ? `أهلاً، ${account.name?.split(" ")[0] || ""}` : `Hello, ${account.name?.split(" ")[0] || "there"}`} sub={ar ? "نظرة سريعة على حسابك وعضويتك" : "A quick look at your account and membership"} />
+      <PageHead
+        title={`${say(copy, "greeting", ar) || (ar ? "أهلاً" : "Hello")}، ${account.name?.split(" ")[0] || (ar ? "" : "there")}`.replace("، ", ar ? "، " : ", ")}
+        sub={say(copy, "welcome", ar) || (ar ? "نظرة سريعة على حسابك وعضويتك" : "A quick look at your account and membership")}
+      />
 
       {v && !v.locked && (
         <div className="mb-5 flex flex-wrap items-center gap-5 rounded-2xl border border-[#4A3120] bg-gradient-to-br from-[#3E2716] to-[#150D07] p-6 text-[#F5E9DA]">

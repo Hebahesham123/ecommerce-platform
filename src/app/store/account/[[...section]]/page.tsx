@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { getAccount } from "../../auth-actions";
 import { getMyLoyalty } from "../../loyalty-actions";
+import { getPageCopy } from "@/lib/page-copy-server";
+import { PAGE_COPY } from "@/lib/page-copy";
 import AccountApp, { type PageKey } from "../account-app";
 
 // The session lives in a cookie, so this can never be static.
@@ -25,8 +27,19 @@ export default async function AccountSectionPage({ params }: { params: Promise<{
   const account = await getAccount();
   if (!account) redirect("/store/login?next=/store/account");
 
-  const loyaltyRes = await getMyLoyalty();
+  const [loyaltyRes, copy] = await Promise.all([
+    getMyLoyalty(),
+    getPageCopy(PAGE_COPY["web-account"].section),
+  ]);
   const loyalty = loyaltyRes.ok ? loyaltyRes.data : null;
 
-  return <AccountApp account={account} loyalty={loyalty} section={key} orderNumber={orderNumber} />;
+  return (
+    <AccountApp
+      account={account}
+      loyalty={loyalty}
+      section={key}
+      orderNumber={orderNumber}
+      copy={copy}
+    />
+  );
 }

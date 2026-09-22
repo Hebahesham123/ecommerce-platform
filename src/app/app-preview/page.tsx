@@ -8,8 +8,31 @@ export const dynamic = "force-dynamic";
  * This page sits outside the admin layout, so it has none of the dashboard's
  * chrome — which is right for something pretending to be a phone, and wrong
  * for someone who now has no sidebar and no way back. Hence the bar.
+ *
+ * `?bare=1` drops all of that: the Pages hub frames this page once per app
+ * screen, and a frame wants the phone and nothing else. `?screen=`,
+ * `?collection=` and `?product=` say which screen to open on, so each frame
+ * lands somewhere different.
  */
-export default function Page() {
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: Promise<{ bare?: string; screen?: string; collection?: string; product?: string }>;
+}) {
+  const sp = await searchParams;
+  const start = { screen: sp.screen, collection: sp.collection, product: sp.product };
+  const asked = Boolean(start.screen || start.collection || start.product);
+
+  if (sp.bare === "1") {
+    // Framed for a preview, so no beacon: a merchant looking at their own app
+    // in the Pages hub is not a session to count.
+    return (
+      <main className="min-h-screen bg-surface-page p-3">
+        <Preview bare start={asked ? start : undefined} />
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-surface-page">
       {/* The preview is the app: its visits belong to Analytics → App. */}
@@ -42,7 +65,7 @@ export default function Page() {
             </span>
           </p>
         </header>
-        <Preview />
+        <Preview start={asked ? start : undefined} />
       </div>
     </main>
   );

@@ -52,6 +52,14 @@ export function AnalyticsBeacon({
   const pathname = usePathname();
 
   useEffect(() => {
+    // A page being previewed in the dashboard is not a shopper's visit, and
+    // counting it would inflate the merchant's own figures every time they
+    // opened the Pages hub.
+    try {
+      if (new URLSearchParams(window.location.search).get("bbpreview") === "1") return;
+    } catch {
+      /* no search params, no preview */
+    }
     const who = ids();
     if (!who) return;
     const body = JSON.stringify({

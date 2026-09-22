@@ -8,6 +8,7 @@ import {
   sendOtp, verifyOtp, placeOrder, getCustomer, previewCoupon,
   type CustomerProfile, type CouponPreview,
 } from "../actions";
+import { say, type Copy } from "@/lib/page-copy";
 import { normalizePhone } from "@/lib/phone";
 import { STOREFRONT_HOME } from "@/lib/storefront";
 
@@ -147,9 +148,12 @@ export type CheckoutIdentity = { phone: string; profile: CustomerProfile | null 
 export default function CheckoutClient({
   initialItems,
   identity = null,
+  copy = {},
 }: {
   initialItems: CartItem[];
   identity?: CheckoutIdentity | null;
+  /** The merchant's wording for this page, from the Pages screen. */
+  copy?: Copy;
 }) {
   // Checkout always renders in English by default, regardless of the store's
   // Arabic-first language setting.
@@ -627,7 +631,7 @@ export default function CheckoutClient({
             {/* Contact */}
             <section>
               <div className="mb-4 flex items-baseline justify-between gap-4">
-                <h2 className="text-[19px] font-semibold text-[#1a1a1a]">{ar ? "معلومات التواصل" : "Contact"}</h2>
+                <h2 className="text-[19px] font-semibold text-[#1a1a1a]">{say(copy, "contactHeading", ar) || (ar ? "معلومات التواصل" : "Contact")}</h2>
                 {identity ? (
                   <Link href="/store/account" className="co-link text-[15px]">
                     {ar ? "حسابي" : "My account"}
@@ -654,7 +658,7 @@ export default function CheckoutClient({
 
             {/* Delivery */}
             <section className="mt-8">
-              <h2 className="mb-4 text-[19px] font-semibold text-[#1a1a1a]">{ar ? "التوصيل" : "Delivery"}</h2>
+              <h2 className="mb-4 text-[19px] font-semibold text-[#1a1a1a]">{say(copy, "deliveryHeading", ar) || (ar ? "التوصيل" : "Delivery")}</h2>
               <div className="space-y-3">
                 <SelectField label={ar ? "الدولة / المنطقة" : "Country/Region"} value="EG" disabled>
                   <option value="EG">{ar ? "مصر" : "Egypt"}</option>
@@ -712,7 +716,7 @@ export default function CheckoutClient({
 
             {/* Payment */}
             <section className="mt-8">
-              <h2 className="text-[19px] font-semibold text-[#1a1a1a]">{ar ? "الدفع" : "Payment"}</h2>
+              <h2 className="text-[19px] font-semibold text-[#1a1a1a]">{say(copy, "paymentHeading", ar) || (ar ? "الدفع" : "Payment")}</h2>
               <p className="mb-4 mt-1 text-[14px] text-[#6b7177]">
                 {ar ? "جميع المعاملات آمنة ومشفّرة." : "All transactions are secure and encrypted."}
               </p>
@@ -720,7 +724,7 @@ export default function CheckoutClient({
                 <div className="co-row co-on">
                   <input type="radio" className="co-radio" checked readOnly name="payment" />
                   <span className="flex-1 font-medium text-[#1a1a1a]">
-                    {ar ? "الدفع عند الاستلام (COD)" : "Cash on Delivery (COD)"}
+                    {say(copy, "codLabel", ar) || (ar ? "الدفع عند الاستلام (COD)" : "Cash on Delivery (COD)")}
                   </span>
                   <IcCash className="h-6 w-6 text-[#6b7177]" />
                 </div>
@@ -796,7 +800,11 @@ export default function CheckoutClient({
               disabled={placing}
               className="mt-6 h-[56px] w-full rounded-[8px] bg-[var(--co-accent)] text-[17px] font-semibold text-white transition hover:bg-[var(--co-accent-hover)] disabled:opacity-60"
             >
-              {placing ? (ar ? "جارٍ إتمام الطلب…" : "Placing order…") : (ar ? "إتمام الطلب" : "Complete order")}
+              {placing
+                ? ar
+                  ? "جارٍ إتمام الطلب…"
+                  : "Placing order…"
+                : say(copy, "submit", ar) || (ar ? "إتمام الطلب" : "Complete order")}
             </button>
 
             <div className="mt-6 flex flex-wrap gap-x-5 gap-y-2 border-t border-[#e5e5e5] pt-5 text-[13px]">

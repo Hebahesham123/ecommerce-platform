@@ -910,7 +910,12 @@ async function storefrontGet(req: Request, config: MountConfig): Promise<Respons
   // The account icon is identical for every shopper, so it stays cache-safe.
   // navLinksScript adds Reviews & Requests into the store menu (both cache-safe).
   // Counting the visit: the same figures the Website analytics page shows.
-  const inject = `${mountPathScript(mount)}${stockGuard}${localizationScript(mount)}${cartSync}${accountLinkScript(mount)}${navLinksScript(mount)}${nudge}${analyticsScript(mount)}`;
+  // A page framed in the dashboard's Pages hub is not a visit: counting it
+  // would add a dozen pageviews to the merchant's own figures every time they
+  // looked at their own store.
+  const previewing = new URL(req.url).searchParams.get("bbpreview") === "1";
+  const counter = previewing ? "" : analyticsScript(mount);
+  const inject = `${mountPathScript(mount)}${stockGuard}${localizationScript(mount)}${cartSync}${accountLinkScript(mount)}${navLinksScript(mount)}${nudge}${counter}`;
   const withLoc = res.html.includes("</body>")
     ? res.html.replace(/<\/body>/i, `${inject}</body>`)
     : res.html + inject;
