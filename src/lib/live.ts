@@ -40,6 +40,8 @@ export type LiveStream = {
   streamKey: string | null;
   /** WebRTC ingest, for going live straight from a browser. */
   whipUrl: string | null;
+  /** WebRTC playback: what a viewer plays to be a second behind, not twenty. */
+  whepUrl: string | null;
   playbackUrl: string | null;
   recordingUrl: string | null;
   replayEnabled: boolean;
@@ -137,6 +139,7 @@ export function mapLiveStream(r: Row): LiveStream {
     ingestUrl: s(r.ingest_url),
     streamKey: s(r.stream_key),
     whipUrl: s(r.whip_url),
+    whepUrl: s(r.whep_url),
     playbackUrl: s(r.playback_url),
     recordingUrl: s(r.recording_url),
     replayEnabled: r.replay_enabled == null ? true : Boolean(r.replay_enabled),
@@ -177,6 +180,8 @@ export type PublicLive = {
   scheduledAt: string | null;
   startedAt: string | null;
   playbackUrl: string | null;
+  /** Low-latency playback, while on air. */
+  whepUrl: string | null;
   recordingUrl: string | null;
   peakViewers: number;
   products: LiveProduct[];
@@ -206,6 +211,7 @@ export function publicLive(s: LiveStream): PublicLive {
     startedAt: s.startedAt,
     // Only hand over a URL the viewer may actually play right now.
     playbackUrl: watchable === "live" ? s.playbackUrl : null,
+    whepUrl: watchable === "live" ? s.whepUrl : null,
     recordingUrl: watchable === "replay" ? s.recordingUrl : null,
     peakViewers: s.peakViewers,
     products: s.products,

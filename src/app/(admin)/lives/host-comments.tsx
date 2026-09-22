@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useLiveChat } from "@/lib/live-chat";
-import { postHostMessageAction } from "./actions";
+import type { LiveChat } from "@/lib/live-chat";
 
 /**
  * The comments, in the live's own drawer.
@@ -14,20 +13,21 @@ import { postHostMessageAction } from "./actions";
  * actually looking, which is the whole point of showing it at all.
  */
 export function HostComments({
-  liveId,
+  chat,
   live,
   ar,
 }: {
-  liveId: string;
+  /**
+   * The one chat the drawer holds. Opening a second connection to the same
+   * channel is refused by Realtime, which is how the viewer count sat at
+   * zero and the comments quietly fell back to polling.
+   */
+  chat: LiveChat;
   /** Chat is only open while the stream is on air. */
   live: boolean;
   ar: boolean;
 }) {
-  const { messages, viewers, connected, send } = useLiveChat(liveId, {
-    enabled: live,
-    keep: 100,
-    role: "host",
-  });
+  const { messages, viewers, connected, send } = chat;
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -35,18 +35,6 @@ export function HostComments({
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
   }, [messages.length]);
-
-  useEffect(() => {
-    if (!live || viewers <= 0) return;
-    const t = setTimeout(() => {
-      fetch(`/api/storefront/lives/${liveId}`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ viewers }),
-      }).catch(() => {});
-    }, 3000);
-    return () => clearTimeout(t);
-  }, [viewers, live, liveId]);
 
   async function reply() {
     const body = draft.trim();

@@ -14,6 +14,7 @@ import {
   deleteLiveAction,
   listLivesAction,
   pinLiveProductAction,
+  postHostMessageAction,
   prepareLiveAction,
   providerStatusAction,
   refreshRecordingAction,
@@ -29,6 +30,7 @@ import type { LiveCollection } from "@/lib/live-service";
 import { CameraCheck } from "./camera-check";
 import { Broadcast } from "./broadcast";
 import { HostComments } from "./host-comments";
+import { useLiveChat } from "@/lib/live-chat";
 import { ImagePicker } from "@/components/image-picker";
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui";
@@ -677,6 +679,32 @@ function LiveDrawer({
   const [picker, setPicker] = useState(false);
   const [checking, setChecking] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // One chat for the drawer and the broadcast panel together. Realtime
+  // refuses a second connection to the same channel, and the refusal is
+  // silent: the count stops at zero and comments fall back to polling.
+  const chat = useLiveChat(live.id, {
+    enabled: live.status === "live",
+    keep: 100,
+    role: "host",
+    postVia: async ({ authorName, body }) => {
+      const res = await postHostMessageAction(live.id, authorName, body);
+      return res.ok ? res.data : null;
+    },
+  });
+
+  // The host is the observer always present, so the peak is reported here.
+  useEffect(() => {
+    if (live.status !== "live" || chat.viewers <= 0) return;
+    const t = setTimeout(() => {
+      fetch(`/api/storefront/lives/${live.id}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ viewers: chat.viewers }),
+      }).catch(() => {});
+    }, 3000);
+    return () => clearTimeout(t);
+  }, [chat.viewers, live.status, live.id]);
   const [broadcasting, setBroadcasting] = useState(false);
 
   async function run(label: string, fn: () => Promise<{ ok: boolean; error?: string; data?: unknown }>) {
@@ -931,7 +959,7 @@ function LiveDrawer({
             )}
           </section>
 
-          <HostComments liveId={live.id} live={live.status === "live"} ar={ar} />
+          <HostComments chat={chat} live={live.status === "live"} ar={ar} />
 
           {/* After the fact */}
           <section className="rounded-2xl border border-line p-4 text-sm">
@@ -992,7 +1020,7 @@ function LiveDrawer({
 
       {broadcasting && live.whipUrl && (
         <Broadcast
-          liveId={live.id}
+          chat={chat}
           whipUrl={live.whipUrl}
           title={live.title}
           ar={ar}

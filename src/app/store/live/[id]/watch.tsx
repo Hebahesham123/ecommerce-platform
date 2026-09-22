@@ -385,23 +385,89 @@ declare global {
  * also how the apps people are used to behave.
  */
 function Player({ live, ar }: { live: WatchableLive; ar: boolean }) {
-  const src = live.status === "live" ? live.playbackUrl : live.recordingUrl;
-  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const onAir = live.status === "live";
+  const hls = onAir ? live.playbackUrl : live.recordingUrl;
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const playerRef = useRef<{ muted: boolean; play: () => Promise<void> } | null>(null);
+  const pcRef = useRef<RTCPeerConnection | null>(null);
   const [muted, setMuted] = useState(true);
+  // Start on WebRTC while on air; fall back the moment it does not work out.
+  const [mode, setMode] = useState<"webrtc" | "hls">(onAir && live.whepUrl ? "webrtc" : "hls");
 
   const cloudflare = useMemo(() => {
-    if (!src) return null;
-    const m = src.match(/^https:\/\/(customer-[^.]+\.cloudflarestream\.com)\/([^/]+)\//);
+    if (!hls) return null;
+    const m = hls.match(/^https:\/\/(customer-[^.]+\.cloudflarestream\.com)\/([^/]+)\//);
     return m ? { host: m[1], uid: m[2] } : null;
-  }, [src]);
+  }, [hls]);
 
-  // Cloudflare's player is cross-origin, so unmuting it needs their SDK: a
-  // postMessage bridge to the iframe. Without it the speaker button in our UI
-  // could do nothing at all.
+  /**
+   * Play over WebRTC (WHEP): our offer for their answer, the same exchange the
+   * host's camera makes in reverse. Sub-second, where HLS holds a few segments
+   * before it starts and puts the room twenty seconds behind the question it
+   * is answering.
+   */
   useEffect(() => {
-    if (!cloudflare) return;
+    if (mode !== "webrtc" || !live.whepUrl) return;
+    let cancelled = false;
+    const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.cloudflare.com:3478" }] });
+    pcRef.current = pc;
+
+    (async () => {
+      try {
+        pc.addTransceiver("video", { direction: "recvonly" });
+        pc.addTransceiver("audio", { direction: "recvonly" });
+        pc.ontrack = (e) => {
+          const el = videoRef.current;
+          if (!el) return;
+          el.srcObject = e.streams[0];
+          el.muted = true;
+          el.play().catch(() => {});
+        };
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        await new Promise<void>((resolve) => {
+          if (pc.iceGatheringState === "complete") return resolve();
+          const done = () => {
+            if (pc.iceGatheringState === "complete") {
+              pc.removeEventListener("icegatheringstatechange", done);
+              resolve();
+            }
+          };
+          pc.addEventListener("icegatheringstatechange", done);
+          setTimeout(resolve, 2500);
+        });
+
+        const res = await fetch(live.whepUrl!, {
+          method: "POST",
+          headers: { "content-type": "application/sdp" },
+          body: pc.localDescription?.sdp ?? "",
+        });
+        if (!res.ok) throw new Error(String(res.status));
+        const answer = await res.text();
+        if (cancelled) return;
+        await pc.setRemoteDescription({ type: "answer", sdp: answer });
+
+        pc.addEventListener("connectionstatechange", () => {
+          if (pc.connectionState === "failed") setMode("hls");
+        });
+      } catch {
+        // Any refusal at all — a network that blocks WebRTC, a browser that
+        // will not, the feature being off — and HLS still works everywhere.
+        if (!cancelled) setMode("hls");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      pc.close();
+      pcRef.current = null;
+    };
+  }, [mode, live.whepUrl]);
+
+  // Cloudflare's HLS player is cross-origin, so unmuting it needs their SDK.
+  useEffect(() => {
+    if (mode !== "hls" || !cloudflare) return;
     const existing = document.querySelector<HTMLScriptElement>("script[data-cf-stream-sdk]");
     const attach = () => {
       if (iframeRef.current && window.Stream) playerRef.current = window.Stream(iframeRef.current);
@@ -417,7 +483,7 @@ function Player({ live, ar }: { live: WatchableLive; ar: boolean }) {
     script.dataset.cfStreamSdk = "1";
     script.addEventListener("load", attach);
     document.body.appendChild(script);
-  }, [cloudflare]);
+  }, [mode, cloudflare]);
 
   function unmute() {
     setMuted(false);
@@ -425,20 +491,26 @@ function Player({ live, ar }: { live: WatchableLive; ar: boolean }) {
       playerRef.current.muted = false;
       playerRef.current.play().catch(() => {});
     }
-    if (videoRef.current) {
-      videoRef.current.muted = false;
-      videoRef.current.play().catch(() => {});
+    const el = videoRef.current;
+    if (el) {
+      el.muted = false;
+      el.play().catch(() => {});
     }
   }
 
+  const nothing = mode === "hls" && !hls;
+
   return (
     <div className="absolute inset-0">
-      {!src ? (
+      {nothing ? (
         <div className="flex h-full items-center justify-center px-6 text-center text-sm text-white/70">
           {live.status === "scheduled"
             ? ar ? "لم يبدأ البث بعد" : "The live has not started yet"
             : ar ? "لا يوجد فيديو" : "No video"}
         </div>
+      ) : mode === "webrtc" ? (
+        // eslint-disable-next-line jsx-a11y/media-has-caption
+        <video ref={videoRef} autoPlay playsInline muted className="h-full w-full object-cover" />
       ) : cloudflare ? (
         <iframe
           ref={iframeRef}
@@ -450,18 +522,10 @@ function Player({ live, ar }: { live: WatchableLive; ar: boolean }) {
         />
       ) : (
         // eslint-disable-next-line jsx-a11y/media-has-caption
-        <video
-          ref={videoRef}
-          src={src}
-          autoPlay
-          playsInline
-          muted
-          loop
-          className="h-full w-full object-cover"
-        />
+        <video ref={videoRef} src={hls ?? undefined} autoPlay playsInline muted loop className="h-full w-full object-cover" />
       )}
 
-      {src && muted && (
+      {!nothing && muted && (
         <button
           onClick={unmute}
           className="absolute inset-x-0 top-1/2 z-10 mx-auto flex w-fit -translate-y-1/2 items-center gap-2 rounded-full bg-black/70 px-5 py-3 text-sm font-semibold text-white backdrop-blur"
@@ -473,7 +537,6 @@ function Player({ live, ar }: { live: WatchableLive; ar: boolean }) {
     </div>
   );
 }
-
 /* --------------------------------- icons ---------------------------------- */
 
 const ShareIcon = () => (

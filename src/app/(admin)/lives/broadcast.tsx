@@ -2,8 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { IcX, IcVideo, IcAlert } from "@/components/icons";
-import { useLiveChat } from "@/lib/live-chat";
-import { postHostMessageAction } from "./actions";
+import type { LiveChat } from "@/lib/live-chat";
 
 /**
  * Going live from this phone, the way a live is normally done: open it, see
@@ -20,7 +19,7 @@ import { postHostMessageAction } from "./actions";
 type Phase = "idle" | "starting" | "live" | "ended" | "error";
 
 export function Broadcast({
-  liveId,
+  chat,
   whipUrl,
   title,
   ar,
@@ -28,7 +27,8 @@ export function Broadcast({
   onEnded,
   onClose,
 }: {
-  liveId: string;
+  /** Shared with the drawer: one connection per live. */
+  chat: LiveChat;
   whipUrl: string;
   title: string;
   ar: boolean;
@@ -139,17 +139,8 @@ export function Broadcast({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // The same chat the viewers are in, so what she reads is what they said.
-  // Her own comments go through an admin action, which is the only path
-  // allowed to mark a message as the host speaking.
-  const { messages, viewers, send: sendComment } = useLiveChat(liveId, {
-    keep: 8,
-    role: "host",
-    postVia: async ({ authorName, body }) => {
-      const res = await postHostMessageAction(liveId, authorName, body);
-      return res.ok ? res.data : null;
-    },
-  });
+  // The drawer owns the connection; this reads from it.
+  const { messages, viewers, send: sendComment } = chat;
 
   async function replyOnAir() {
     const body = draft.trim();
