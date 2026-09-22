@@ -3,6 +3,7 @@ import { getAppTheme } from "@/lib/app-theme-service";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
 import { fail, ok } from "@/lib/api/http";
 import { itemsOf, type Block } from "@/lib/app-theme";
+import { listPublicLives } from "@/lib/live-service";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -39,6 +40,31 @@ const int = (v: unknown, fallback: number, max: number) => {
   return Number.isFinite(n) && n > 0 ? Math.min(Math.trunc(n), max) : fallback;
 };
 
+/**
+ * The lives themselves, for the Live now and Coming up rows.
+ *
+ * These rows used to be typed in by hand — a name, a photo, a number of
+ * viewers — which meant the app could advertise a live that was not running
+ * and stay silent about one that was. They now come from the lives the shop
+ * actually scheduled, with the cover chosen when the live was created.
+ */
+async function homeLives() {
+  const res = await listPublicLives();
+  if (!res.ok) return [];
+  return res.data.map((l) => ({
+    id: l.id,
+    title: l.title,
+    hostName: l.hostName,
+    coverUrl: l.coverUrl,
+    status: l.status,
+    scheduledAt: l.scheduledAt,
+    peakViewers: l.peakViewers,
+    // Where a tap goes. The watching page is a real URL, so it opens the
+    // same way from the app, from a share, or from a message.
+    href: `/store/live/${l.id}`,
+  }));
+}
+
 async function featuredReviews(limit: number) {
   if (!isSupabaseConfigured()) return [];
   const { data, error } = await getServerSupabase()
@@ -73,6 +99,7 @@ export async function GET() {
     let wantsAll = 0;
     let newArrivalsLimit = 0;
     let reviewsLimit = 0;
+    let wantsLives = false;
 
     for (const block of theme.blocks as Block[]) {
       const s = block.settings ?? {};
@@ -101,6 +128,10 @@ export async function GET() {
           break;
         case "reviews":
           reviewsLimit = Math.max(reviewsLimit, int(s.limit, 6, 20));
+          break;
+        case "live_now":
+        case "coming_up_live":
+          wantsLives = true;
           break;
         default:
           // hero, banner, cards, tiers, split, categories, trust_badges and
@@ -134,6 +165,7 @@ export async function GET() {
       rows,
       newArrivals,
       reviews: reviewsLimit ? await featuredReviews(reviewsLimit) : [],
+      lives: wantsLives ? await homeLives() : [],
       productCount: catalog.products.length,
     });
   } catch (e) {

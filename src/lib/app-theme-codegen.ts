@@ -247,6 +247,16 @@ export type HomePayload = {
   rows: Record<string, Card[]>;
   newArrivals: Card[];
   reviews: { id: string; name: string; productRating: number | null; comment: string | null }[];
+  lives: {
+    id: string;
+    title: string;
+    hostName: string | null;
+    coverUrl: string | null;
+    status: string;
+    scheduledAt: string | null;
+    peakViewers: number;
+    href: string;
+  }[];
 };
 
 /** Everything the front page needs, in one request. */
@@ -1452,18 +1462,32 @@ const pad = (n: number) => (n < 10 ? "0" + n : String(n));
 
 export function LiveNow({
   settings,
+  lives,
   collections,
   onOpenCollection,
   onOpenProduct,
   onOpenScreen,
 }: {
   settings: LiveNowSettings;
+  lives?: HomePayload["lives"];
   collections: HomePayload["collections"];
   onOpenCollection?: (handle: string) => void;
   onOpenProduct?: (id: string) => void;
   onOpenScreen?: (screen: string) => void;
 }) {
-  const people = (settings.items ?? []).filter((i) => i.name || i.imageUrl || i.handle);
+  // Whoever is genuinely on air, with the cover chosen when the live was
+  // created. The typed-in list survives only as a fallback for a store that
+  // has never used the Lives section.
+  const onAir = (lives ?? []).filter((l) => l.status === "live");
+  const people: LivePerson[] = onAir.length
+    ? onAir.map((l) => ({
+        id: l.id,
+        imageUrl: l.coverUrl ?? undefined,
+        name: l.hostName || l.title,
+        viewers: l.peakViewers ? String(l.peakViewers) : undefined,
+        url: l.href,
+      }))
+    : (settings.items ?? []).filter((i) => i.name || i.imageUrl || i.handle);
   const showReplays = settings.showReplays !== false;
   const liveLabel = settings.liveLabel || "LIVE";
 
@@ -1646,18 +1670,40 @@ export type ComingUpLiveSettings = {
 
 export function ComingUpLive({
   settings,
+  lives,
   collections,
   onOpenCollection,
   onOpenProduct,
   onOpenScreen,
 }: {
   settings: ComingUpLiveSettings;
+  lives?: HomePayload["lives"];
   collections: HomePayload["collections"];
   onOpenCollection?: (handle: string) => void;
   onOpenProduct?: (id: string) => void;
   onOpenScreen?: (screen: string) => void;
 }) {
-  const items = (settings.items ?? []).filter((i) => i.title || i.imageUrl || i.handle);
+  // The lives actually scheduled, soonest first.
+  const upcoming = (lives ?? []).filter((l) => l.status === "scheduled");
+  const items: LiveSession[] = upcoming.length
+    ? [...upcoming]
+        .sort((a, b) => String(a.scheduledAt ?? "").localeCompare(String(b.scheduledAt ?? "")))
+        .map((l) => ({
+          id: l.id,
+          imageUrl: l.coverUrl ?? undefined,
+          title: l.title,
+          when: l.scheduledAt
+            ? new Date(l.scheduledAt).toLocaleString(undefined, {
+                weekday: "short",
+                day: "numeric",
+                month: "short",
+                hour: "2-digit",
+                minute: "2-digit",
+              })
+            : undefined,
+          url: l.href,
+        }))
+    : (settings.items ?? []).filter((i) => i.title || i.imageUrl || i.handle);
   // Remind me sets a reminder and stays put; the session itself opens its collection.
   const [reminded, setReminded] = useState<string[]>([]);
   if (!items.length) return null;
@@ -3841,8 +3887,8 @@ function renderCall(block: Block, indent: number): string {
     tiers: ["onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     split: ["collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     trust_badges: [],
-    live_now: ["collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
-    coming_up_live: ["collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
+    live_now: ["lives={data.lives}", "collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
+    coming_up_live: ["lives={data.lives}", "collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     countdown_deals: ["collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     info_rows: ["onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     shipping_goal: [],

@@ -44,12 +44,25 @@ export type HomeReview = {
   comment: string | null;
 };
 
+export type HomeLive = {
+  id: string;
+  title: string;
+  hostName: string | null;
+  coverUrl: string | null;
+  status: "scheduled" | "live" | "ended" | "cancelled";
+  scheduledAt: string | null;
+  peakViewers: number;
+  href: string;
+};
+
 export type HomeData = {
   collections: HomeCollection[];
   /** Products by collection handle — two blocks on one collection cost one copy. */
   rows: Record<string, Card[]>;
   newArrivals: Card[];
   reviews: HomeReview[];
+  /** The shop's real lives — on air first, then what is scheduled. */
+  lives?: HomeLive[];
   /**
    * The signed-in shopper first name, when the surface drawing this knows it.
    * Only the live-now offer uses it, and it degrades to an unnamed greeting,
@@ -579,7 +592,19 @@ function BlockView({
     }
 
     case "live_now": {
-      const people = itemsOf(block).filter((i) => str(i.name) || str(i.imageUrl) || str(i.handle));
+      // Only lives that are genuinely on air, with the cover the host chose
+      // when she created them. A row that advertises a live nobody can watch
+      // costs more than an empty row does.
+      const onAir = (data.lives ?? []).filter((l) => l.status === "live");
+      const people = onAir.length
+        ? onAir.map((l) => ({
+            id: l.id,
+            name: l.hostName || l.title,
+            imageUrl: l.coverUrl ?? "",
+            viewers: l.peakViewers ? String(l.peakViewers) : "",
+            handle: l.href,
+          }))
+        : [];
       const offerOn = s.offerEnabled !== false;
       const offerTitle = personalise(str(s.offerTitle), data.shopperName);
       const offerText = str(s.offerText);
@@ -704,7 +729,24 @@ function BlockView({
     }
 
     case "coming_up_live": {
-      const sessions = itemsOf(block).filter((i) => str(i.title) || str(i.imageUrl) || str(i.handle));
+      const upcoming = (data.lives ?? [])
+        .filter((l) => l.status === "scheduled")
+        .sort((a, b) => String(a.scheduledAt ?? "").localeCompare(String(b.scheduledAt ?? "")));
+      const sessions = upcoming.map((l) => ({
+        id: l.id,
+        title: l.title,
+        imageUrl: l.coverUrl ?? "",
+        when: l.scheduledAt
+          ? new Date(l.scheduledAt).toLocaleString(ar ? "ar-EG" : "en-GB", {
+              weekday: "short",
+              day: "numeric",
+              month: "short",
+              hour: "2-digit",
+              minute: "2-digit",
+            })
+          : "",
+        handle: l.href,
+      }));
       if (!sessions.length) {
         return <Placeholder ar={ar} label={ar ? "لا مواعيد بعد" : "Nothing scheduled yet"} />;
       }

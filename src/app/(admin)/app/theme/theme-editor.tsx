@@ -2419,6 +2419,16 @@ function BlockGroup({
         </>
       )}
 
+      {(block.type === "live_now" || block.type === "coming_up_live") && (
+        // The items below are no longer what the app shows: these two rows
+        // read the shop's real lives, so a row can never advertise a live
+        // nobody can watch or stay silent about one that is running.
+        <p className="mb-3 rounded-xl bg-sky-50 p-3 text-xs leading-relaxed text-sky-900">
+          {ar
+            ? "يعرض هذا القسم البثوث الحقيقية من صفحة «البث المباشر» — بالصورة التي تختارينها عند إنشاء البث. لا حاجة لكتابتها هنا."
+            : "This section shows your real lives from the Lives page, with the cover you choose when creating each one. Nothing needs typing here."}
+        </p>
+      )}
       {(block.type === "coming_up_live" ||
         block.type === "countdown_deals" ||
         block.type === "info_rows") && (
