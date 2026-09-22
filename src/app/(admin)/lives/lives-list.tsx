@@ -873,6 +873,7 @@ function LiveDrawer({
 
       {broadcasting && live.whipUrl && (
         <Broadcast
+          liveId={live.id}
           whipUrl={live.whipUrl}
           title={live.title}
           ar={ar}

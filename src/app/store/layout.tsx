@@ -39,7 +39,11 @@ export default function StoreLayout({ children }: { children: ReactNode }) {
   // requests, happy-customers, and now the account + its auth pages (served at
   // /shop/account). A second header inside the frame would stack two navs.
   const bare =
-    (pathname?.startsWith("/store/checkout") ||
+    // A live takes the whole screen — the video is the page, the way it is
+    // on every app people already watch lives in. A header above it would
+    // be a band of nothing during the one thing they came for.
+    (pathname?.startsWith("/store/live") ||
+      pathname?.startsWith("/store/checkout") ||
       pathname?.startsWith("/store/requests") ||
       pathname?.startsWith("/store/happy-customers") ||
       pathname?.startsWith("/store/account") ||

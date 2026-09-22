@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { IcX, IcVideo, IcAlert } from "@/components/icons";
+import { getBrowserSupabase } from "@/lib/supabase/client";
+import type { LiveMessage } from "@/lib/live";
 
 /**
  * Going live from this phone, the way a live is normally done: open it, see
@@ -18,6 +20,7 @@ import { IcX, IcVideo, IcAlert } from "@/components/icons";
 type Phase = "idle" | "starting" | "live" | "ended" | "error";
 
 export function Broadcast({
+  liveId,
   whipUrl,
   title,
   ar,
@@ -25,6 +28,7 @@ export function Broadcast({
   onEnded,
   onClose,
 }: {
+  liveId: string;
   whipUrl: string;
   title: string;
   ar: boolean;
@@ -42,8 +46,17 @@ export function Broadcast({
   const [error, setError] = useState<string | null>(null);
   const [facing, setFacing] = useState<"user" | "environment">("user");
   const [elapsed, setElapsed] = useState(0);
+  const [micLevel, setMicLevel] = useState(0);
+  const [micOn, setMicOn] = useState(true);
+  const [messages, setMessages] = useState<LiveMessage[]>([]);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const rafRef = useRef<number | null>(null);
 
   const stopEverything = useCallback(() => {
+    if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+    rafRef.current = null;
+    audioCtxRef.current?.close().catch(() => {});
+    audioCtxRef.current = null;
     pcRef.current?.close();
     pcRef.current = null;
     streamRef.current?.getTracks().forEach((t) => t.stop());
@@ -69,6 +82,26 @@ export function Broadcast({
           el.playsInline = true;
           await el.play().catch(() => {});
         }
+        // A level that moves is the only proof the microphone is working.
+        // Without it, silence at the far end is indistinguishable from a
+        // muted mic, a dead mic, or a viewer who never tapped unmute.
+        if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+        audioCtxRef.current?.close().catch(() => {});
+        const ctx = new AudioContext();
+        audioCtxRef.current = ctx;
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 512;
+        ctx.createMediaStreamSource(stream).connect(analyser);
+        const data = new Uint8Array(analyser.frequencyBinCount);
+        const tick = () => {
+          analyser.getByteTimeDomainData(data);
+          let peak = 0;
+          for (const v of data) peak = Math.max(peak, Math.abs(v - 128));
+          setMicLevel(Math.min(100, Math.round((peak / 128) * 140)));
+          rafRef.current = requestAnimationFrame(tick);
+        };
+        tick();
+
         // Swapping camera mid-broadcast: hand the new track to the open
         // connection rather than tearing the whole thing down.
         const pc = pcRef.current;
@@ -104,6 +137,51 @@ export function Broadcast({
     return stopEverything;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // The host has to see what is being said: answering questions on air is
+  // most of what a live is for.
+  useEffect(() => {
+    fetch(`/api/storefront/lives/${liveId}/messages`)
+      .then((r) => r.json())
+      .then((r) => {
+        if (r?.ok && Array.isArray(r.data)) setMessages(r.data.slice(-6));
+      })
+      .catch(() => {});
+
+    let channel: ReturnType<ReturnType<typeof getBrowserSupabase>["channel"]> | null = null;
+    try {
+      channel = getBrowserSupabase()
+        .channel(`live-host:${liveId}`)
+        .on(
+          "postgres_changes",
+          { event: "INSERT", schema: "public", table: "live_stream_messages", filter: `live_id=eq.${liveId}` },
+          (payload) => {
+            const row = payload.new as Record<string, unknown>;
+            if (row.hidden) return;
+            setMessages((cur) =>
+              [
+                ...cur,
+                {
+                  id: String(row.id),
+                  liveId: String(row.live_id),
+                  authorName: String(row.author_name ?? ""),
+                  body: String(row.body ?? ""),
+                  isHost: Boolean(row.is_host),
+                  offsetMs: null,
+                  createdAt: String(row.created_at ?? ""),
+                },
+              ].slice(-6),
+            );
+          },
+        )
+        .subscribe();
+    } catch {
+      /* comments simply do not stream in; the broadcast is unaffected */
+    }
+    return () => {
+      channel?.unsubscribe();
+    };
+  }, [liveId]);
 
   useEffect(() => {
     if (phase !== "live") return;
@@ -186,6 +264,13 @@ export function Broadcast({
     onEnded();
   }
 
+  function toggleMic() {
+    const track = streamRef.current?.getAudioTracks()[0];
+    if (!track) return;
+    track.enabled = !track.enabled;
+    setMicOn(track.enabled);
+  }
+
   const mmss = `${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(elapsed % 60).padStart(2, "0")}`;
 
   return (
@@ -228,6 +313,19 @@ export function Broadcast({
               {ar ? "جارٍ الاتصال…" : "Connecting…"}
             </div>
           )}
+          {/* What the room is saying, over your own picture. */}
+          <div className="pointer-events-none absolute inset-x-3 bottom-3 flex flex-col gap-1">
+            {messages.map((m, i) => (
+              <div
+                key={m.id}
+                style={{ opacity: 0.4 + (0.6 * (i + 1)) / messages.length }}
+                className="w-fit max-w-[85%] rounded-2xl bg-black/50 px-2.5 py-1 text-[12px] leading-snug text-white backdrop-blur"
+              >
+                <span className="font-semibold text-white/80">{m.authorName}</span> {m.body}
+              </div>
+            ))}
+          </div>
+
           <button
             onClick={() => {
               const next = facing === "user" ? "environment" : "user";
@@ -246,6 +344,26 @@ export function Broadcast({
             <span>{error}</span>
           </div>
         )}
+
+        <div className="flex items-center gap-3 border-b border-line px-4 py-2.5">
+          <button
+            onClick={toggleMic}
+            className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${
+              micOn ? "bg-surface-page text-ink" : "bg-rose-100 text-rose-700"
+            }`}
+          >
+            {micOn ? (ar ? "الميكروفون يعمل" : "Mic on") : ar ? "الميكروفون مكتوم" : "Mic muted"}
+          </button>
+          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-page">
+            <div
+              className={`h-full rounded-full transition-[width] duration-75 ${
+                !micOn ? "bg-rose-400" : micLevel > 8 ? "bg-emerald-500" : "bg-slate-300"
+              }`}
+              style={{ width: `${micOn ? micLevel : 100}%` }}
+            />
+          </div>
+          <span className="shrink-0 text-[11px] text-ink-soft">{ar ? "تحدثي" : "Speak"}</span>
+        </div>
 
         <div className="p-4">
           {phase === "live" ? (
