@@ -105,6 +105,8 @@ export function Shop({
   // their size, and exactly when it is worth the round trip.
   const [open, setOpen] = useState<string | null>(null);
   const [menu, setMenu] = useState<Menu | null>(null);
+  // How far into the menu the shopper has walked: one item per screen down.
+  const [trail, setTrail] = useState<MenuItem[]>([]);
   const [page, setPage] = useState<"reviews" | "happy-customers" | null>(null);
   const [unsupported, setUnsupported] = useState<string | null>(null);
 
@@ -137,7 +139,10 @@ export function Shop({
     const req = openMenu;
     if (!req || req.at === lastMenu.current) return;
     lastMenu.current = req.at;
-    if (mainMenu) setMenu(mainMenu);
+    if (mainMenu) {
+      setTrail([]);
+      setMenu(mainMenu);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openMenu]);
 
@@ -302,8 +307,20 @@ export function Shop({
         />
       )}
 
-      <Sheet open={Boolean(menu)} onClose={() => setMenu(null)} title={menu?.title ?? ""}>
-        <MenuTree items={menu?.items ?? []} onPick={go} ar={ar} />
+      <Sheet
+        open={Boolean(menu)}
+        onClose={() => setMenu(null)}
+        title={trail.length ? trail[trail.length - 1].title : (menu?.title ?? "")}
+      >
+        <MenuPanel
+          items={trail.length ? trail[trail.length - 1].children : (menu?.items ?? [])}
+          parent={trail.length ? trail[trail.length - 1] : null}
+          under={trail.length > 1 ? trail[trail.length - 2].title : (menu?.title ?? "")}
+          ar={ar}
+          onPick={go}
+          onInto={(item) => setTrail((t) => [...t, item])}
+          onBack={() => setTrail((t) => t.slice(0, -1))}
+        />
       </Sheet>
 
       <Sheet
@@ -510,39 +527,95 @@ function ListView({
 }
 
 // ------------------------------------------------------------------ menu ---
-function MenuTree({
+/**
+ * The menu, one level at a time.
+ *
+ * Opened whole, this tree is a wall: Bags alone brings eleven children and
+ * three grandchildren, so Footwear — the second section of six — began four
+ * screens down. The drawer now shows the sections and nothing else, and the
+ * plus beside one opens its contents as a screen of their own, the way the
+ * website's does.
+ *
+ * The wording is still a link in its own right. Someone who wants Bags rather
+ * than a choice of bags taps the name; the plus is a separate target for
+ * going deeper, which also keeps the two apart under a thumb.
+ */
+function MenuPanel({
   items,
-  onPick,
+  parent,
+  under,
   ar,
-  depth = 0,
+  onPick,
+  onInto,
+  onBack,
 }: {
   items: MenuItem[];
-  onPick: (t: LinkTarget) => void;
+  /** The item whose children these are, or null at the top of the menu. */
+  parent: MenuItem | null;
+  /** What the screen behind this one is called, for the way back. */
+  under: string;
   ar: boolean;
-  depth?: number;
+  onPick: (t: LinkTarget) => void;
+  onInto: (item: MenuItem) => void;
+  onBack: () => void;
 }) {
   if (!items.length) return <Empty>{ar ? "القائمة فارغة" : "This menu is empty"}</Empty>;
   return (
-    <ul className={depth ? "ms-4 border-s border-slate-200 ps-3" : "space-y-1"}>
-      {items.map((item, i) => (
-        <li key={`${item.title}-${i}`}>
-          <button
-            onClick={() => onPick(item.target)}
-            className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-start text-sm text-slate-800 hover:bg-slate-50"
-          >
-            <span className="min-w-0 truncate">{item.title}</span>
-            {item.target.type === "url" && (
-              <span className="shrink-0 text-[10px] font-medium text-slate-400">
-                {ar ? "رابط خارجي" : "external link"}
-              </span>
+    <div>
+      {parent && (
+        <button
+          onClick={onBack}
+          className="mb-2 flex w-full items-center gap-1.5 text-start text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500"
+        >
+          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 shrink-0 rtl:rotate-180" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M15 5l-7 7 7 7" />
+          </svg>
+          <span className="min-w-0 truncate">{under}</span>
+        </button>
+      )}
+
+      {/* The hairlines run to the drawer's edges, as the website's do. */}
+      <ul className="-mx-4 divide-y divide-slate-200 border-y border-slate-200 px-4">
+        {/* The section you walked into is a destination too, and losing it
+            would mean no way to see everything in it. */}
+        {parent && parent.target.type !== "home" && (
+          <li>
+            <button
+              onClick={() => onPick(parent.target)}
+              className="w-full truncate py-3.5 text-start text-[13px] font-semibold text-slate-900"
+            >
+              {ar ? `كل ${parent.title}` : `All ${parent.title}`}
+            </button>
+          </li>
+        )}
+        {items.map((item, i) => (
+          <li key={`${item.title}-${i}`} className="flex items-center gap-2">
+            <button
+              onClick={() => onPick(item.target)}
+              className="flex min-w-0 flex-1 items-center gap-2 py-3.5 text-start text-[13px] text-slate-800"
+            >
+              <span className="min-w-0 truncate">{item.title}</span>
+              {item.target.type === "url" && (
+                <span className="shrink-0 text-[10px] font-medium text-slate-400">
+                  {ar ? "رابط خارجي" : "external link"}
+                </span>
+              )}
+            </button>
+            {item.children.length > 0 && (
+              <button
+                onClick={() => onInto(item)}
+                aria-label={ar ? `افتحي ${item.title}` : `Open ${item.title}`}
+                className="my-1.5 grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-slate-200 bg-slate-50 text-slate-600"
+              >
+                <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+              </button>
             )}
-          </button>
-          {item.children.length > 0 && (
-            <MenuTree items={item.children} onPick={onPick} ar={ar} depth={depth + 1} />
-          )}
-        </li>
-      ))}
-    </ul>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
