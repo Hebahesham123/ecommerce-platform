@@ -644,8 +644,21 @@ function LiveDrawer({
               </>
             ) : (
               <div className="mt-3 space-y-2 text-sm">
+                {/* A phone app wants one address with the key on the end —
+                    its URL schema is server/application/streamkey. Asking
+                    someone to copy two fields and join them by hand, on a
+                    phone, is how the first attempt fails. */}
                 <KeyRow
-                  label={ar ? "عنوان البث" : "Server URL"}
+                  label={ar ? "الرابط الكامل (لتطبيق الهاتف)" : "Full URL (for the phone app)"}
+                  value={showKey ? fullIngestUrl(live) : "•".repeat(30)}
+                  secret
+                  revealed={showKey}
+                  onReveal={() => setShowKey((v) => !v)}
+                  onCopy={() => copy(fullIngestUrl(live))}
+                  ar={ar}
+                />
+                <KeyRow
+                  label={ar ? "عنوان البث (لبرامج الكمبيوتر)" : "Server URL (for desktop apps)"}
                   value={live.ingestUrl ?? ""}
                   onCopy={copy}
                   ar={ar}
@@ -661,8 +674,8 @@ function LiveDrawer({
                 />
                 <p className="pt-1 text-xs text-ink-soft">
                   {ar
-                    ? "افتحي تطبيق بث (مثل Larix Broadcaster) على الهاتف، والصقي العنوان والمفتاح."
-                    : "Open a broadcasting app on the phone (Larix Broadcaster works well) and paste both."}
+                    ? "على الهاتف (مثل Larix Broadcaster): الصقي «الرابط الكامل» في خانة URL وحدها. الحقلان الآخران لبرامج الكمبيوتر التي تطلبهما منفصلين."
+                    : "On the phone (Larix Broadcaster): paste the full URL into its URL field — that one line is all it needs. The two below are for desktop apps that ask for them separately."}
                 </p>
               </div>
             )}
@@ -843,6 +856,14 @@ function LiveDrawer({
       )}
     </div>
   );
+}
+
+/** Server URL + key, as a phone broadcasting app expects to receive it. */
+function fullIngestUrl(live: LiveStream): string {
+  const base = live.ingestUrl ?? "";
+  const key = live.streamKey ?? "";
+  if (!base || !key) return base || key;
+  return base.endsWith("/") ? `${base}${key}` : `${base}/${key}`;
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
