@@ -1496,15 +1496,13 @@ export function LiveNow({
   // created. The typed-in list survives only as a fallback for a store that
   // has never used the Lives section.
   const onAir = (lives ?? []).filter((l) => l.status === "live");
-  const people: LivePerson[] = onAir.length
-    ? onAir.map((l) => ({
-        id: l.id,
-        imageUrl: l.coverUrl ?? undefined,
-        name: l.hostName || l.title,
-        viewers: l.peakViewers ? String(l.peakViewers) : undefined,
-        url: l.href,
-      }))
-    : (settings.items ?? []).filter((i) => i.name || i.imageUrl || i.handle);
+  const people: LivePerson[] = onAir.map((l) => ({
+    id: l.id,
+    imageUrl: l.coverUrl ?? undefined,
+    name: l.hostName || l.title,
+    viewers: l.peakViewers ? String(l.peakViewers) : undefined,
+    url: l.href,
+  }));
   const showReplays = settings.showReplays !== false;
   const liveLabel = settings.liveLabel || "LIVE";
 
@@ -1702,8 +1700,7 @@ export function ComingUpLive({
 }) {
   // The lives actually scheduled, soonest first.
   const upcoming = (lives ?? []).filter((l) => l.status === "scheduled");
-  const items: LiveSession[] = upcoming.length
-    ? [...upcoming]
+  const items: LiveSession[] = [...upcoming]
         .sort((a, b) => String(a.scheduledAt ?? "").localeCompare(String(b.scheduledAt ?? "")))
         .map((l) => ({
           id: l.id,
@@ -1720,7 +1717,7 @@ export function ComingUpLive({
             : undefined,
           url: l.href,
         }))
-    : (settings.items ?? []).filter((i) => i.title || i.imageUrl || i.handle);
+
   // Remind me sets a reminder and stays put; the session itself opens its collection.
   const [reminded, setReminded] = useState<string[]>([]);
   if (!items.length) return null;

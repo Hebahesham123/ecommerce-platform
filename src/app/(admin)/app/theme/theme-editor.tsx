@@ -1054,11 +1054,7 @@ export function ThemeEditor() {
               <div className="flex flex-1 flex-col">
               {page === "live" ? (
                 <AppLive
-                  sessions={
-                    home?.lives?.length
-                      ? liveSessionsFromLives(home.lives)
-                      : liveSessionsOf(draft)
-                  }
+                  sessions={liveSessionsFromLives(home?.lives ?? [])}
                   ar={ar}
                   accent={draft.settings.accent}
                   onOpen={(s) => {

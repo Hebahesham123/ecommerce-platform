@@ -403,13 +403,7 @@ export function Preview({
             )}
             {activeTab === "live" && (
               <AppLive
-                sessions={
-                  lives.length
-                    ? liveSessionsFromLives(lives)
-                    : theme
-                      ? liveSessionsOf(theme)
-                      : []
-                }
+                sessions={liveSessionsFromLives(lives)}
                 ar={ar}
                 accent={accent}
                 onOpen={(s) => {
