@@ -187,6 +187,8 @@ export type PublicLive = {
   recordingUrl: string | null;
   peakViewers: number;
   watching: number;
+  /** Where tapping it goes. Part of the payload so no caller has to invent it. */
+  href: string;
   products: LiveProduct[];
 };
 
@@ -218,6 +220,7 @@ export function publicLive(s: LiveStream): PublicLive {
     recordingUrl: watchable === "replay" ? s.recordingUrl : null,
     peakViewers: s.peakViewers,
     watching: s.watching ?? 0,
+    href: `/store/live/${s.id}`,
     products: s.products,
   };
 }

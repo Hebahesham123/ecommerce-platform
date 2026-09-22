@@ -991,7 +991,7 @@ export function liveSessionsFromLives(
     status: string;
     scheduledAt: string | null;
     peakViewers: number;
-    href: string;
+    href?: string;
   }[],
 ): LiveSession[] {
   const rank = (s: string) => (s === "live" ? 0 : s === "scheduled" ? 1 : 2);
@@ -1018,7 +1018,7 @@ export function liveSessionsFromLives(
               })
             : "",
       imageUrl: l.coverUrl ?? "",
-      url: l.href,
+      url: l.href || `/store/live/${l.id}`,
       handle: "",
       productId: "",
       screen: "",
