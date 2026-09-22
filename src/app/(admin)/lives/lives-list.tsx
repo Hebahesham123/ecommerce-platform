@@ -700,18 +700,22 @@ function LiveDrawer({
     },
   });
 
-  // The host is the observer always present, so the peak is reported here.
+  // How many are watching, counted from their beats rather than from a
+  // channel that may not be connected. The peak follows it server-side.
+  const [watching, setWatching] = useState(0);
   useEffect(() => {
-    if (live.status !== "live" || chat.viewers <= 0) return;
-    const t = setTimeout(() => {
-      fetch(`/api/storefront/lives/${live.id}`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ viewers: chat.viewers }),
-      }).catch(() => {});
-    }, 3000);
-    return () => clearTimeout(t);
-  }, [chat.viewers, live.status, live.id]);
+    if (live.status !== "live") return;
+    const read = () =>
+      fetch(`/api/storefront/lives/${live.id}`)
+        .then((r) => r.json())
+        .then((r) => {
+          if (r?.ok && r.data) setWatching(Number(r.data.watching ?? 0));
+        })
+        .catch(() => {});
+    read();
+    const t = setInterval(read, 10000);
+    return () => clearInterval(t);
+  }, [live.status, live.id]);
   const [broadcasting, setBroadcasting] = useState(false);
 
   async function run(label: string, fn: () => Promise<{ ok: boolean; error?: string; data?: unknown }>) {
@@ -966,7 +970,7 @@ function LiveDrawer({
             )}
           </section>
 
-          <HostComments chat={chat} live={live.status === "live"} ar={ar} />
+          <HostComments chat={chat} watching={watching} live={live.status === "live"} ar={ar} />
 
           {/* After the fact */}
           <section className="rounded-2xl border border-line p-4 text-sm">
@@ -1028,6 +1032,7 @@ function LiveDrawer({
       {broadcasting && live.whipUrl && (
         <Broadcast
           chat={chat}
+          watching={watching}
           whipUrl={live.whipUrl}
           title={live.title}
           ar={ar}

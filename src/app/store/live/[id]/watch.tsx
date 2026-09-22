@@ -45,17 +45,22 @@ export function Watch({ live: initial }: { live: WatchableLive }) {
   }, []);
 
 
+  // Say we are still here, so the shop can count the room without relying
+  // on a channel that may never connect. The key is per tab, so two phones
+  // count twice and one phone counts once however long it watches.
   useEffect(() => {
-    if (!onAir || viewers <= 1) return;
-    const t = setTimeout(() => {
+    if (!onAir) return;
+    const key = crypto.randomUUID();
+    const beat = () =>
       fetch(`/api/storefront/lives/${live.id}`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ viewers }),
+        body: JSON.stringify({ key }),
       }).catch(() => {});
-    }, 4000);
-    return () => clearTimeout(t);
-  }, [viewers, onAir, live.id]);
+    beat();
+    const t = setInterval(beat, 15000);
+    return () => clearInterval(t);
+  }, [onAir, live.id]);
 
   // Pick up a newly pinned product without a reload.
   useEffect(() => {
@@ -140,7 +145,7 @@ export function Watch({ live: initial }: { live: WatchableLive }) {
                 </span>
               )}
               <span className="rounded-full bg-black/40 px-2 py-0.5 text-[11px] font-medium backdrop-blur">
-                {Math.max(1, viewers)} {ar ? "يشاهدون" : "watching"}
+                {Math.max(1, live.watching ?? 0, viewers)} {ar ? "يشاهدون" : "watching"}
               </span>
               {isTestStream(live) && (
                 <span className="rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold uppercase">

@@ -234,7 +234,11 @@ export async function listPublicLives(): Promise<Result<LiveStream[]>> {
 export async function getPublicLive(id: string): Promise<Result<LiveStream>> {
   const res = await getLive(id);
   if (!res.ok) return res;
-  return { ok: true, data: await withAvailability(res.data) };
+  const [stocked, watching] = await Promise.all([
+    withAvailability(res.data),
+    res.data.status === "live" ? watchingNow(id) : Promise.resolve(0),
+  ]);
+  return { ok: true, data: { ...stocked, watching } };
 }
 
 async function withAvailability(live: LiveStream): Promise<LiveStream> {
@@ -474,6 +478,52 @@ export async function reportViewers(id: string, viewers: number): Promise<void> 
     await supabase.from(TABLE).update({ peak_viewers: viewers }).eq("id", id);
   } catch {
     /* a missed peak is not worth failing a viewer's request over */
+  }
+}
+
+// ---- Who is watching --------------------------------------------------------
+
+/** A viewer is counted while they have been seen this recently. */
+const WATCHING_WINDOW_SECONDS = 40;
+
+/** One watching page saying it is still here. */
+export async function recordHeartbeat(liveId: string, viewerKey: string): Promise<void> {
+  if (!isSupabaseConfigured() || !viewerKey) return;
+  try {
+    const supabase = getServerSupabase();
+    await supabase
+      .from("live_viewers")
+      .upsert(
+        { live_id: liveId, viewer_key: viewerKey.slice(0, 64), last_seen: new Date().toISOString() },
+        { onConflict: "live_id,viewer_key" },
+      );
+  } catch {
+    /* a missed beat costs one viewer for a few seconds */
+  }
+}
+
+/**
+ * How many are watching now, and the peak kept up to date with it.
+ *
+ * Counted from the beats rather than from anyone reporting a number: a
+ * viewer who closed the tab stops beating, where a viewer who reported a
+ * count never corrects it.
+ */
+export async function watchingNow(liveId: string): Promise<number> {
+  if (!isSupabaseConfigured()) return 0;
+  try {
+    const supabase = getServerSupabase();
+    const since = new Date(Date.now() - WATCHING_WINDOW_SECONDS * 1000).toISOString();
+    const { count } = await supabase
+      .from("live_viewers")
+      .select("viewer_key", { count: "exact", head: true })
+      .eq("live_id", liveId)
+      .gte("last_seen", since);
+    const watching = count ?? 0;
+    if (watching > 0) void reportViewers(liveId, watching);
+    return watching;
+  } catch {
+    return 0;
   }
 }
 

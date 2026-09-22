@@ -408,6 +408,7 @@ function HomeView({
           rows: home.rows,
           newArrivals: home.newArrivals,
           reviews: home.reviews,
+          lives: home.lives,
           shopperName,
           // Never undefined here: undefined is the editor's "draw a sample".
           recommended: recommended ?? null,

@@ -20,6 +20,7 @@ type Phase = "idle" | "starting" | "live" | "ended" | "error";
 
 export function Broadcast({
   chat,
+  watching,
   whipUrl,
   title,
   ar,
@@ -29,6 +30,8 @@ export function Broadcast({
 }: {
   /** Shared with the drawer: one connection per live. */
   chat: LiveChat;
+  /** Counted from viewer heartbeats. */
+  watching: number;
   whipUrl: string;
   title: string;
   ar: boolean;
@@ -275,7 +278,7 @@ export function Broadcast({
                 {mmss}
               </span>
               <span className="rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-medium text-white">
-                👁 {viewers}
+                👁 {Math.max(watching, viewers)}
               </span>
             </div>
           )}

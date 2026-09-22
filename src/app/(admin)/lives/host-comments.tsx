@@ -14,6 +14,7 @@ import type { LiveChat } from "@/lib/live-chat";
  */
 export function HostComments({
   chat,
+  watching,
   live,
   ar,
 }: {
@@ -23,6 +24,8 @@ export function HostComments({
    * zero and the comments quietly fell back to polling.
    */
   chat: LiveChat;
+  /** Counted from viewer heartbeats, not from the channel. */
+  watching: number;
   /** Chat is only open while the stream is on air. */
   live: boolean;
   ar: boolean;
@@ -58,7 +61,7 @@ export function HostComments({
       {live && (
         <div className="mb-3 flex items-center gap-2 rounded-xl bg-rose-50 px-3 py-2">
           <span className="flex h-2 w-2 rounded-full bg-rose-500" />
-          <span className="text-sm font-bold text-ink">{viewers}</span>
+          <span className="text-sm font-bold text-ink">{Math.max(watching, viewers)}</span>
           <span className="text-sm text-ink-muted">
             {ar ? "يشاهدون الآن" : viewers === 1 ? "person watching now" : "people watching now"}
           </span>

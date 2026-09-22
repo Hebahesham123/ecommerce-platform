@@ -46,6 +46,8 @@ export type LiveStream = {
   recordingUrl: string | null;
   replayEnabled: boolean;
   peakViewers: number;
+  /** Watching right now, when the caller asked for a live one. */
+  watching?: number;
   notes: string | null;
   products: LiveProduct[];
   createdAt: string;
@@ -184,6 +186,7 @@ export type PublicLive = {
   whepUrl: string | null;
   recordingUrl: string | null;
   peakViewers: number;
+  watching: number;
   products: LiveProduct[];
 };
 
@@ -214,6 +217,7 @@ export function publicLive(s: LiveStream): PublicLive {
     whepUrl: watchable === "live" ? s.whepUrl : null,
     recordingUrl: watchable === "replay" ? s.recordingUrl : null,
     peakViewers: s.peakViewers,
+    watching: s.watching ?? 0,
     products: s.products,
   };
 }

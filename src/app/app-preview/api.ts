@@ -235,6 +235,17 @@ export type Home = {
   rows: Record<string, ProductCard[]>;
   newArrivals: ProductCard[];
   reviews: HomeReview[];
+  /** The shop's real lives, for the Live now and Coming up rows. */
+  lives?: {
+    id: string;
+    title: string;
+    hostName: string | null;
+    coverUrl: string | null;
+    status: "scheduled" | "live" | "ended" | "cancelled";
+    scheduledAt: string | null;
+    peakViewers: number;
+    href: string;
+  }[];
   productCount: number;
 };
 export type PricedLine = {

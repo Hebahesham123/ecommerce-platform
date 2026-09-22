@@ -299,6 +299,7 @@ export function ThemeEditor() {
                 rows: j.data.rows ?? {},
                 newArrivals: j.data.newArrivals ?? [],
                 reviews: j.data.reviews ?? [],
+                lives: j.data.lives ?? [],
               }
             : { collections: [], rows: {}, newArrivals: [], reviews: [] },
         ),
