@@ -24,6 +24,7 @@ import {
 } from "./actions";
 import { listStoreProducts, type StoreProduct } from "../../store/actions";
 import { CameraCheck } from "./camera-check";
+import { Broadcast } from "./broadcast";
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui";
 import {
@@ -559,6 +560,7 @@ function LiveDrawer({
   const [picker, setPicker] = useState(false);
   const [checking, setChecking] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [broadcasting, setBroadcasting] = useState(false);
 
   async function run(label: string, fn: () => Promise<{ ok: boolean; error?: string; data?: unknown }>) {
     setErr(null);
@@ -678,6 +680,15 @@ function LiveDrawer({
                     : "On the phone (Larix Broadcaster): paste the full URL into its URL field — that one line is all it needs. The two below are for desktop apps that ask for them separately."}
                 </p>
               </div>
+            )}
+
+            {live.whipUrl && live.status !== "ended" && (
+              <button
+                onClick={() => setBroadcasting(true)}
+                className="mt-4 h-12 w-full rounded-xl bg-rose-600 text-base font-semibold text-white transition hover:bg-rose-700"
+              >
+                {ar ? "ابدئي البث من هذا الهاتف" : "Go live from this phone"}
+              </button>
             )}
 
             <div className="mt-4 flex flex-wrap gap-2">
@@ -841,6 +852,17 @@ function LiveDrawer({
       )}
 
       {checking && <CameraCheck ar={ar} onClose={() => setChecking(false)} />}
+
+      {broadcasting && live.whipUrl && (
+        <Broadcast
+          whipUrl={live.whipUrl}
+          title={live.title}
+          ar={ar}
+          onLive={() => run("live", () => setLiveStatusAction(live.id, "live"))}
+          onEnded={() => run("end", () => setLiveStatusAction(live.id, "ended"))}
+          onClose={() => setBroadcasting(false)}
+        />
+      )}
 
       {picker && (
         <ProductPicker

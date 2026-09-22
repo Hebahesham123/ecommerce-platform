@@ -38,6 +38,8 @@ export type LiveStream = {
   /** Where the phone broadcasts to. Dashboard only — never sent to the app. */
   ingestUrl: string | null;
   streamKey: string | null;
+  /** WebRTC ingest, for going live straight from a browser. */
+  whipUrl: string | null;
   playbackUrl: string | null;
   recordingUrl: string | null;
   replayEnabled: boolean;
@@ -134,6 +136,7 @@ export function mapLiveStream(r: Row): LiveStream {
     endedAt: s(r.ended_at),
     ingestUrl: s(r.ingest_url),
     streamKey: s(r.stream_key),
+    whipUrl: s(r.whip_url),
     playbackUrl: s(r.playback_url),
     recordingUrl: s(r.recording_url),
     replayEnabled: r.replay_enabled == null ? true : Boolean(r.replay_enabled),

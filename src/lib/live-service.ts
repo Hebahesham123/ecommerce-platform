@@ -26,6 +26,7 @@ const missingTable = (msg: string) => msg.includes("live_stream");
 /** What any streaming provider has to give us. Cloudflare is one implementation. */
 type LiveInputs = {
   providerStreamId: string;
+  whipUrl: string;
   ingestUrl: string;
   streamKey: string;
   playbackUrl: string;
@@ -120,6 +121,7 @@ async function createCloudflareInput(title: string): Promise<Result<LiveInputs>>
       ok: true,
       data: {
         providerStreamId: uid,
+        whipUrl: String(body.result.webRTC?.url ?? ""),
         // RTMPS for a phone app today; the WebRTC URL on the same input is what
         // broadcasting from inside our own app will use later, so switching
         // does not mean a new stream or a new link to share.
@@ -325,6 +327,7 @@ export async function prepareLive(id: string): Promise<Result<LiveStream>> {
         provider: "cloudflare",
         provider_stream_id: input.data.providerStreamId,
         ingest_url: input.data.ingestUrl,
+        whip_url: input.data.whipUrl || null,
         stream_key: input.data.streamKey,
         playback_url: input.data.playbackUrl,
       })
