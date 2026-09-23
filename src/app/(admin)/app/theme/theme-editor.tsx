@@ -2955,6 +2955,75 @@ function BlockGroup({
         </>
       )}
 
+      {block.type === "sale_seal" && (
+        <>
+          <Field label={ar ? "الترتيب" : "Layout"} type="select">
+            <select value={text("layout") || "split"} onChange={(e) => onPatch({ layout: e.target.value })} className={input}>
+              <option value="split">{ar ? "الصورة بجانب اللوح" : "Picture beside the panel"}</option>
+              <option value="stacked">{ar ? "الصورة تحت اللوح" : "Picture under the panel"}</option>
+            </select>
+          </Field>
+          <Field label={ar ? "النص حول الختم" : "Words around the seal"} type="text">
+            <input value={text("ringText")} onChange={(e) => onPatch({ ringText: e.target.value })} placeholder="Shop now · Summer sale · Luxury for less" className={input} />
+          </Field>
+          <Field label={ar ? "الرقم" : "The number"} type="text">
+            <span className="flex items-center gap-2">
+              <input value={text("bigText")} onChange={(e) => onPatch({ bigText: e.target.value })} placeholder="70%" className={input} />
+              <input value={text("smallText")} onChange={(e) => onPatch({ smallText: e.target.value })} placeholder="off" className={input} />
+            </span>
+          </Field>
+          <Field label={ar ? "السطر تحته" : "Line underneath"} type="text">
+            <input value={text("tagline")} onChange={(e) => onPatch({ tagline: e.target.value })} placeholder="Luxury you love, now for less." className={input} />
+          </Field>
+          <Field label={ar ? "الزر" : "Button"} type="text">
+            <input value={text("buttonLabel")} onChange={(e) => onPatch({ buttonLabel: e.target.value })} placeholder="Shop now" className={input} />
+          </Field>
+          <Field label={ar ? "الصورة" : "Picture"} type="image_picker">
+            <span className="flex items-center gap-2">
+              {text("imageUrl") ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={text("imageUrl")} alt="" className="h-9 w-9 shrink-0 rounded-lg border border-line object-cover" />
+              ) : null}
+              <ImageUpload onUploaded={(url) => onPatch({ imageUrl: url })} ar={ar} />
+              <input value={text("imageUrl")} onChange={(e) => onPatch({ imageUrl: e.target.value })} placeholder="https://…" className={input} dir="ltr" />
+            </span>
+          </Field>
+          <Field label={ar ? "موضع الصورة" : "Picture position"} type="text">
+            <input value={text("focal")} onChange={(e) => onPatch({ focal: e.target.value })} placeholder="50% 50%" className={input} dir="ltr" />
+          </Field>
+          <Field label={ar ? "الشارة على الصورة" : "Chip on the picture"} type="text">
+            <input value={text("badge")} onChange={(e) => onPatch({ badge: e.target.value })} placeholder="-46%" className={input} />
+          </Field>
+          <ColorRow label={ar ? "خلفية الشارة" : "Chip background"} value={text("badgeBg")} fallback="#2b1b10" onChange={(v) => onPatch({ badgeBg: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "اللوح من" : "Panel from"} value={text("bg")} fallback="#7a4b27" onChange={(v) => onPatch({ bg: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "اللوح إلى" : "Panel to"} value={text("bg2")} fallback="#9d6540" onChange={(v) => onPatch({ bg2: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "لون النص" : "Text"} value={text("inkColor")} fallback="#ffffff" onChange={(v) => onPatch({ inkColor: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "لون الختم" : "Seal"} value={text("ringColor")} fallback="#ffffff" onChange={(v) => onPatch({ ringColor: v })} input={input} ar={ar} />
+          <Field label={ar ? "الارتفاع" : "Height"} type="range">
+            <input type="number" min={160} max={360} value={num("height", 230)} onChange={(e) => onPatch({ height: Number(e.target.value) })} className={input} />
+          </Field>
+          <Field label={ar ? "استدارة الحواف" : "Corner radius"} type="range">
+            <input type="number" min={0} max={32} value={num("radius", 18)} onChange={(e) => onPatch({ radius: Number(e.target.value) })} className={input} />
+          </Field>
+          <Field label={ar ? "يفتح" : "Opens"} type="link">
+            <LinkPicker
+              value={{ handle: text("handle"), url: text("url"), productId: text("productId"), screen: text("screen") }}
+              onChange={(next) =>
+                onPatch({
+                  handle: next.handle ?? "",
+                  url: next.url ?? "",
+                  productId: next.productId ?? "",
+                  screen: next.screen ?? "",
+                })
+              }
+              collections={collections}
+              input={input}
+              ar={ar}
+            />
+          </Field>
+        </>
+      )}
+
       {block.type === "free_shipping" && (
         <>
           <Field label={ar ? "الشكل" : "Look"} type="select">

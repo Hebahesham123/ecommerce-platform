@@ -470,6 +470,26 @@ body {
   }
 }
 
+/* App theme: the sale banner's seal, turning once a minute. Slow enough to
+   be noticed rather than watched. */
+@keyframes app-seal-turn {
+  to { transform: rotate(360deg); }
+}
+.app-seal-turn { animation: app-seal-turn 60s linear infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .app-seal-turn { animation: none; }
+}
+
+/* App theme: the sale banner's seal, turning once a minute. Slow enough to
+   be noticed rather than watched. */
+@keyframes app-seal-turn {
+  to { transform: rotate(360deg); }
+}
+.app-seal-turn { animation: app-seal-turn 60s linear infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .app-seal-turn { animation: none; }
+}
+
 /* App theme: the free shipping banner - a dashed road that travels under a
    parcel, so the banner reads as delivery without drawing a van. */
 @keyframes app-ship-road {

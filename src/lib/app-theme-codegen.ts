@@ -1403,6 +1403,154 @@ const styles = StyleSheet.create({
 });
 `,
 
+    sale_seal: `import React, { useEffect, useRef } from "react";
+import { Animated, Easing, Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { colors, theme } from "../theme";
+import { openLink, type LinkTo } from "./Pieces";
+
+export type SaleSealSettings = {
+  layout?: string;
+  ringText?: string;
+  bigText?: string;
+  smallText?: string;
+  tagline?: string;
+  buttonLabel?: string;
+  imageUrl?: string;
+  focal?: string;
+  badge?: string;
+  badgeBg?: string;
+  badgeColor?: string;
+  bg?: string;
+  bg2?: string;
+  inkColor?: string;
+  ringColor?: string;
+  height?: number;
+  radius?: number;
+} & LinkTo;
+
+/** A minute a turn: noticed rather than watched. */
+function useTurn() {
+  const spin = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.timing(spin, { toValue: 1, duration: 60000, easing: Easing.linear, useNativeDriver: true }),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [spin]);
+  return spin.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
+}
+
+export function SaleSeal({
+  settings,
+  onOpenCollection,
+  onOpenProduct,
+  onOpenScreen,
+}: {
+  settings: SaleSealSettings;
+  onOpenCollection?: (handle: string) => void;
+  onOpenProduct?: (id: string) => void;
+  onOpenScreen?: (screen: string) => void;
+}) {
+  const turn = useTurn();
+  if (!settings.bigText && !settings.tagline && !settings.imageUrl) return null;
+
+  const stacked = settings.layout === "stacked";
+  const bg = settings.bg || "#7a4b27";
+  const ink = settings.inkColor || "#ffffff";
+  const ring = settings.ringColor || ink;
+  const h = settings.height && settings.height > 0 ? settings.height : 230;
+  const r = settings.radius && settings.radius >= 0 ? settings.radius : 18;
+  const seal = Math.min(150, Math.round(h * 0.62));
+  const reach = seal / 2 - 9;
+  const opens = Boolean(settings.handle || settings.url || settings.productId || settings.screen);
+
+  const line = String(settings.ringText || "").replace(/\s*·\s*/g, " · ").trim();
+  const letters = (line + " · " + line + " · ").split("");
+
+  const panel = (
+    <View style={[styles.panel, { backgroundColor: bg }]}>
+      <View style={[styles.seal, { width: seal, height: seal }]}>
+        <Animated.View style={[styles.ring, { transform: [{ rotate: turn }] }]}>
+          {letters.map((ch, i) => (
+            <Text
+              key={i}
+              style={[
+                styles.letter,
+                {
+                  color: ring,
+                  transform: [
+                    { rotate: String((i / letters.length) * 360) + "deg" },
+                    { translateY: -reach },
+                  ],
+                },
+              ]}
+            >
+              {ch === " " ? " " : ch.toUpperCase()}
+            </Text>
+          ))}
+        </Animated.View>
+        <View style={[styles.inner, { borderColor: ring }]}>
+          {settings.smallText ? (
+            <Text style={[styles.small, { color: ring, fontFamily: theme.titleFont }]}>{settings.smallText}</Text>
+          ) : null}
+          {settings.bigText ? (
+            <Text style={[styles.big, { color: ink, fontFamily: theme.titleFont }]}>{settings.bigText}</Text>
+          ) : null}
+        </View>
+      </View>
+
+      {settings.tagline ? <Text style={[styles.tagline, { color: ink }]}>{settings.tagline}</Text> : null}
+      {settings.buttonLabel ? (
+        <View style={[styles.cta, { backgroundColor: ink }]}>
+          <Text style={[styles.ctaText, { color: bg }]}>{settings.buttonLabel.toUpperCase()}</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+
+  const picture = settings.imageUrl ? (
+    <View style={stacked ? { width: "100%", height: Math.round(h * 0.55) } : { width: "42%" }}>
+      <Image source={{ uri: settings.imageUrl }} style={styles.photo} resizeMode="cover" />
+      {settings.badge ? (
+        <View style={[styles.badge, { backgroundColor: settings.badgeBg || "#2b1b10" }]}>
+          <Text style={[styles.badgeText, { color: settings.badgeColor || "#ffffff" }]}>{settings.badge}</Text>
+        </View>
+      ) : null}
+    </View>
+  ) : null;
+
+  return (
+    <Pressable
+      disabled={!opens}
+      onPress={() => openLink(settings, { onOpenCollection, onOpenProduct, onOpenScreen })}
+      style={[styles.wrap, { borderRadius: r, minHeight: stacked ? undefined : h }, stacked ? styles.column : null]}
+    >
+      {panel}
+      {picture}
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  wrap: { flexDirection: "row", overflow: "hidden", backgroundColor: colors.surface },
+  column: { flexDirection: "column" },
+  panel: { flex: 1, alignItems: "center", justifyContent: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 16 },
+  seal: { alignItems: "center", justifyContent: "center" },
+  ring: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, alignItems: "center", justifyContent: "center" },
+  letter: { position: "absolute", fontSize: 8, fontWeight: "700" },
+  inner: { position: "absolute", left: 13, right: 13, top: 13, bottom: 13, borderRadius: 999, borderWidth: 1, opacity: 0.95, alignItems: "center", justifyContent: "center" },
+  small: { fontSize: 13, fontStyle: "italic" },
+  big: { fontSize: 30, fontWeight: "700" },
+  tagline: { textAlign: "center", fontSize: 11, lineHeight: 15, opacity: 0.9 },
+  cta: { marginTop: 2, borderRadius: 999, paddingHorizontal: 16, paddingVertical: 6 },
+  ctaText: { fontSize: 11, fontWeight: "700", letterSpacing: 1.2 },
+  photo: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, width: "100%", height: "100%" },
+  badge: { position: "absolute", right: 8, top: 8, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
+  badgeText: { fontSize: 10, fontWeight: "700" },
+});
+`,
+
     free_shipping: `import React, { useEffect, useRef } from "react";
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from "react-native";
 import { colors, spacing } from "../theme";
@@ -4322,6 +4470,7 @@ function renderCall(block: Block, indent: number): string {
     promo_bar: [],
     collection_tabs: ["rows={data.rows}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}"],
     cards: ["collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
+    sale_seal: ["onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     free_shipping: ["onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     moments: ["onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     tiers: ["onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
@@ -4409,6 +4558,29 @@ function settingsLiteral(block: Block): string {
       "imageFit",
     ],
     cards: ["kicker", "title"],
+    sale_seal: [
+      "layout",
+      "ringText",
+      "bigText",
+      "smallText",
+      "tagline",
+      "buttonLabel",
+      "imageUrl",
+      "focal",
+      "badge",
+      "badgeBg",
+      "badgeColor",
+      "bg",
+      "bg2",
+      "inkColor",
+      "ringColor",
+      "height",
+      "radius",
+      "handle",
+      "url",
+      "productId",
+      "screen",
+    ],
     free_shipping: [
       "style",
       "kicker",

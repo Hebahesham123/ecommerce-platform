@@ -36,6 +36,7 @@ export type BlockType =
   | "info_rows"
   | "shipping_goal"
   | "free_shipping"
+  | "sale_seal"
   | "payment_plans"
   | "price_slider"
   | "offer_cards"
@@ -913,6 +914,12 @@ export const BLOCK_META: Record<
     hintAr: "الشحن، الاسترجاع، طرق الدفع — أيقونة وسطران ورقم على اليسار",
     hintEn: "Delivery, returns, ways to pay — an icon, two lines and a note on the end",
   },
+  sale_seal: {
+    ar: "بانر التخفيضات بالختم",
+    en: "Sale banner with a seal",
+    hintAr: "لوح بلون العلامة مع ختم دائري يدور بجانب صورة — بانر التخفيضات على الموقع",
+    hintEn: "A brand-coloured panel with a turning seal beside a picture — the sale banner from the website",
+  },
   free_shipping: {
     ar: "بانر الشحن المجاني",
     en: "Free shipping banner",
@@ -1221,6 +1228,34 @@ export function newBlock(type: BlockType): Block {
       cardBg: "",
       radius: 14,
       items: shape ? [shape.blank()] : [],
+    },
+    sale_seal: {
+      /** "split" puts the picture beside the panel; "stacked" puts it under. */
+      layout: "split",
+      /** The words that run round the seal. A dot between each is added. */
+      ringText: "Shop now · Summer sale · Luxury for less",
+      /** The two halves of the number in the middle: big, and small above it. */
+      bigText: "70%",
+      smallText: "off",
+      tagline: "Luxury you love, now for less.",
+      buttonLabel: "Shop now",
+      imageUrl: "",
+      focal: "",
+      /** The chip on the picture, for the discount a shopper can see. */
+      badge: "",
+      badgeBg: "",
+      badgeColor: "#ffffff",
+      // Empty colours follow the brand.
+      bg: "",
+      bg2: "",
+      inkColor: "#ffffff",
+      ringColor: "",
+      height: 230,
+      radius: 18,
+      handle: "",
+      url: "",
+      productId: "",
+      screen: "",
     },
     free_shipping: {
       /** "banner" is the tall card; "strip" is the one-line ribbon. */

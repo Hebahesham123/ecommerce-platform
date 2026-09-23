@@ -821,6 +821,12 @@ function BlockView({
       );
     }
 
+    case "sale_seal":
+      if (!str(s.bigText) && !str(s.tagline) && !str(s.imageUrl)) {
+        return <Placeholder ar={ar} label={ar ? "بانر بلا محتوى" : "Banner with nothing in it yet"} />;
+      }
+      return <SaleSeal block={block} data={data} ar={ar} accent={accent} handlers={handlers} />;
+
     case "free_shipping":
       if (!str(s.title) && !str(s.subtitle)) {
         return <Placeholder ar={ar} label={ar ? "بانر بلا نص" : "Banner with no wording yet"} />;
@@ -2706,6 +2712,180 @@ function StyleProfile({
 }
 
 /**
+ * A sale, stamped.
+ *
+ * The website opens its sale with a wax-seal of a thing: the number in the
+ * middle, the shop's own words running round it, a picture beside it. It
+ * works because a seal reads as *marked down by somebody*, where a red
+ * rectangle reads as a computer doing it — and because the words turning
+ * slowly are the only motion on a page of still cards.
+ *
+ * The letters are placed round the circle one at a time rather than drawn on
+ * a path, because the phone has no SVG library to draw a path with and the
+ * two have to look the same.
+ */
+function SealRing({
+  text,
+  size,
+  colour,
+  ar,
+}: {
+  text: string;
+  size: number;
+  colour: string;
+  ar: boolean;
+}) {
+  // A dot between the phrases, and the whole thing repeated until it closes.
+  const line = text.replace(/\s*·\s*/g, " · ").trim();
+  const letters = `${line} · `.repeat(2).split("");
+  const radius = size / 2 - 9;
+  return (
+    <span
+      aria-hidden
+      className="app-seal-turn pointer-events-none absolute inset-0 block"
+      style={{ width: size, height: size }}
+    >
+      {letters.map((ch, i) => {
+        const turn = (i / letters.length) * 360;
+        return (
+          <span
+            key={i}
+            className="absolute start-1/2 top-1/2 block text-[8px] font-bold uppercase"
+            style={{
+              color: colour,
+              letterSpacing: "0.02em",
+              transform: `translate(-50%, -50%) rotate(${turn}deg) translateY(-${radius}px)`,
+            }}
+          >
+            {ch === " " ? "\u00a0" : ch}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
+function SaleSeal({
+  block,
+  data,
+  ar,
+  accent,
+  handlers,
+}: {
+  block: Block;
+  data: HomeData;
+  ar: boolean;
+  accent: string;
+  handlers: HomeHandlers;
+}) {
+  const s = block.settings ?? {};
+  const go = opener(data, handlers);
+  const stacked = str(s.layout) === "stacked";
+  const bg = str(s.bg) || "#7a4b27";
+  const bg2 = str(s.bg2) || accent;
+  const ink = str(s.inkColor, "#ffffff");
+  const ring = str(s.ringColor) || ink;
+  const height = int(s.height, 230);
+  const radius = int(s.radius, 18);
+  const image = str(s.imageUrl);
+  const badge = str(s.badge);
+  const badgeBg = str(s.badgeBg) || "#2b1b10";
+  const opens = Boolean(str(s.handle) || str(s.url) || str(s.productId) || str(s.screen));
+  const seal = Math.min(150, Math.round(height * 0.62));
+
+  const panel = (
+    <span
+      className="relative flex min-w-0 flex-1 flex-col items-center justify-center gap-2 px-3 py-4"
+      style={{ background: `linear-gradient(150deg, ${bg} 0%, ${bg2} 100%)` }}
+    >
+      <span className="relative block" style={{ width: seal, height: seal }}>
+        <SealRing text={str(s.ringText)} size={seal} colour={ring} ar={ar} />
+        {/* The ring it sits in, and the number it is about. */}
+        <span
+          className="absolute inset-[13px] grid place-items-center rounded-full border"
+          style={{ borderColor: `${ring}59` }}
+        >
+          <span className="flex flex-col items-center leading-none">
+            {str(s.smallText) && (
+              <span className="app-display text-[13px] italic" style={{ color: ring }}>
+                {str(s.smallText)}
+              </span>
+            )}
+            {str(s.bigText) && (
+              <span className="app-display text-[30px] font-bold leading-none" style={{ color: ink }}>
+                {str(s.bigText)}
+              </span>
+            )}
+          </span>
+        </span>
+      </span>
+
+      {str(s.tagline) && (
+        <span dir="auto" className="block text-center text-[11px] leading-snug" style={{ color: ink, opacity: 0.9 }}>
+          {str(s.tagline)}
+        </span>
+      )}
+      {str(s.buttonLabel) && (
+        <span
+          dir="auto"
+          className="mt-0.5 rounded-full px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.12em]"
+          style={{ background: ink, color: bg }}
+        >
+          {str(s.buttonLabel)}
+        </span>
+      )}
+    </span>
+  );
+
+  const picture = image ? (
+    <span className={`relative block shrink-0 overflow-hidden ${stacked ? "w-full" : "w-[42%]"}`}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={image}
+        alt=""
+        className="absolute inset-0 h-full w-full object-cover"
+        style={{ objectPosition: str(s.focal) || "50% 50%" }}
+      />
+      {badge && (
+        <span
+          dir="auto"
+          className="absolute end-2 top-2 rounded-full px-2 py-0.5 text-[10px] font-bold"
+          style={{ background: badgeBg, color: str(s.badgeColor, "#ffffff") }}
+        >
+          {badge}
+        </span>
+      )}
+    </span>
+  ) : null;
+
+  return (
+    <section>
+      <button
+        onClick={() => opens && go(s)}
+        className={`flex w-full overflow-hidden text-start ${stacked ? "flex-col" : ""} ${opens ? "" : "cursor-default"}`}
+        style={{ borderRadius: radius, minHeight: stacked ? undefined : height }}
+      >
+        {stacked ? (
+          <>
+            <span className="flex w-full" style={{ minHeight: Math.round(height * 0.78) }}>
+              {panel}
+            </span>
+            <span className="block w-full" style={{ height: Math.round(height * 0.55) }}>
+              {picture}
+            </span>
+          </>
+        ) : (
+          <>
+            {panel}
+            {picture}
+          </>
+        )}
+      </button>
+    </section>
+  );
+}
+
+/**
  * Free delivery, said out loud.
  *
  * The store already has a bar that counts a basket up to free delivery, which
@@ -3781,6 +3961,8 @@ function isPlaceholder(node: React.ReactElement): boolean {
     }
     case "hero":
     case "cards":
+    case "sale_seal":
+      return !str(s.bigText) && !str(s.tagline) && !str(s.imageUrl);
     case "free_shipping":
       return !str(s.title) && !str(s.subtitle);
     case "moments":
