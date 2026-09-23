@@ -19,6 +19,7 @@ import {
   setLiveStatus,
   useTestStream,
   type LiveCollection,
+  type ReplayState,
   type LiveProductInput,
   type Result,
 } from "@/lib/live-service";
@@ -78,7 +79,7 @@ export async function pinLiveProductAction(
   return pinLiveProduct(liveId, productId);
 }
 
-export async function refreshRecordingAction(id: string): Promise<Result<string | null>> {
+export async function refreshRecordingAction(id: string): Promise<Result<ReplayState>> {
   return refreshRecording(id);
 }
 

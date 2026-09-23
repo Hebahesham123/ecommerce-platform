@@ -139,31 +139,63 @@ async function createCloudflareInput(title: string): Promise<Result<LiveInputs>>
 }
 
 /** The recording, once Cloudflare has finished making it. */
-async function cloudflareRecording(providerStreamId: string): Promise<string | null> {
-  if (!providerConfigured()) return null;
+/**
+ * What the provider has for this live input.
+ *
+ * Every outcome used to collapse into null, which the dashboard then showed
+ * as "Preparing" forever: a recording still processing, a live that was
+ * never recorded, and a request that failed all looked identical. They need
+ * different things done about them, so they are told apart here.
+ */
+type RecordingLookup =
+  | { state: "ready"; url: string }
+  | { state: "processing"; detail: string }
+  | { state: "none" }
+  | { state: "unavailable"; detail: string };
+
+async function cloudflareRecording(providerStreamId: string): Promise<RecordingLookup> {
+  if (!providerConfigured()) return { state: "unavailable", detail: "provider_not_configured" };
   try {
     const res = await fetch(
       `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT}/stream/live_inputs/${providerStreamId}/videos`,
       { headers: { authorization: `Bearer ${CF_TOKEN}` } },
     );
     const body = (await res.json()) as {
+      success?: boolean;
+      errors?: { message?: string }[];
       result?: {
         uid?: string;
-        status?: { state?: string };
+        status?: { state?: string; errorReasonText?: string };
+        readyToStream?: boolean;
         playback?: { hls?: string };
       }[];
     };
-    const ready = (body.result ?? []).find((v) => v.status?.state === "ready" && v.uid);
-    if (!ready?.uid) return null;
-    // Cloudflare returns the finished recording's own playback URL, which
-    // already carries the right host.
-    if (ready.playback?.hls) return ready.playback.hls;
-    const code = customerCodeFrom(ready.playback?.hls) || CF_CUSTOMER_CODE;
-    return code
-      ? `https://customer-${code}.cloudflarestream.com/${ready.uid}/manifest/video.m3u8`
-      : null;
-  } catch {
-    return null;
+    if (!res.ok || body.success === false) {
+      return {
+        state: "unavailable",
+        detail: body.errors?.[0]?.message || `cloudflare_${res.status}`,
+      };
+    }
+
+    const videos = body.result ?? [];
+    if (!videos.length) return { state: "none" };
+
+    const ready = videos.find((v) => v.uid && (v.readyToStream || v.status?.state === "ready"));
+    if (ready?.uid) {
+      if (ready.playback?.hls) return { state: "ready", url: ready.playback.hls };
+      const code = customerCodeFrom(ready.playback?.hls) || CF_CUSTOMER_CODE;
+      return code
+        ? { state: "ready", url: `https://customer-${code}.cloudflarestream.com/${ready.uid}/manifest/video.m3u8` }
+        : { state: "unavailable", detail: "no_playback_host" };
+    }
+
+    const first = videos[0];
+    return {
+      state: "processing",
+      detail: first?.status?.errorReasonText || first?.status?.state || "processing",
+    };
+  } catch (e) {
+    return { state: "unavailable", detail: (e as Error).message };
   }
 }
 
@@ -444,7 +476,7 @@ async function healRecording(live: LiveStream): Promise<LiveStream> {
     live.status === "ended" && live.replayEnabled && !live.recordingUrl && providerConfigured();
   if (!wanted) return live;
   const res = await refreshRecording(live.id);
-  return res.ok && res.data ? { ...live, recordingUrl: res.data } : live;
+  return res.ok && res.data.state === "ready" ? { ...live, recordingUrl: res.data.url } : live;
 }
 
 /** The same, for a list — and only for the few that could plausibly have one. */
@@ -469,16 +501,23 @@ async function healRecordings(lives: LiveStream[], max = 4): Promise<LiveStream[
 }
 
 /** Ask the provider whether the replay exists yet, and store it if it does. */
-export async function refreshRecording(id: string): Promise<Result<string | null>> {
-  const providerId = await providerIdOf(id);
-  if (!providerId) return { ok: true, data: null };
+export type ReplayState =
+  | { state: "ready"; url: string }
+  | { state: "processing"; detail: string }
+  | { state: "none" }
+  | { state: "unavailable"; detail: string };
 
-  const url = await cloudflareRecording(providerId);
-  if (!url) return { ok: true, data: null };
+/** Ask the provider for the replay, store it if it is there, say so if not. */
+export async function refreshRecording(id: string): Promise<Result<ReplayState>> {
+  const providerId = await providerIdOf(id);
+  if (!providerId) return { ok: true, data: { state: "unavailable", detail: "never_prepared" } };
+
+  const found = await cloudflareRecording(providerId);
+  if (found.state !== "ready") return { ok: true, data: found };
   try {
     const supabase = getServerSupabase();
-    await supabase.from(TABLE).update({ recording_url: url }).eq("id", id);
-    return { ok: true, data: url };
+    await supabase.from(TABLE).update({ recording_url: found.url }).eq("id", id);
+    return { ok: true, data: found };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }

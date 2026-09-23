@@ -690,6 +690,7 @@ function LiveDrawer({
   const [picker, setPicker] = useState(false);
   const [checking, setChecking] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [replayNote, setReplayNote] = useState<string | null>(null);
 
   // One chat for the drawer and the broadcast panel together. Realtime
   // refuses a second connection to the same channel, and the refusal is
@@ -806,7 +807,13 @@ function LiveDrawer({
               </>
             ) : (
               <>
-                {live.whipUrl && live.status !== "ended" && (
+                {replayNote && (
+              <p className="mt-2 rounded-xl bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">
+                {replayNote}
+              </p>
+            )}
+
+            {live.whipUrl && live.status !== "ended" && (
                   <>
                     <button
                       onClick={() => setBroadcasting(true)}
@@ -890,10 +897,34 @@ function LiveDrawer({
               )}
               {live.status === "ended" && live.replayEnabled && (
                 <button
-                  onClick={() => run("rec", async () => {
+                  onClick={async () => {
+                    setBusy("rec");
+                    setReplayNote(null);
                     const r = await refreshRecordingAction(live.id);
-                    return r.ok ? { ok: true } : r;
-                  })}
+                    setBusy(null);
+                    if (!r.ok) {
+                      setReplayNote(r.error);
+                      return;
+                    }
+                    if (r.data.state === "ready") {
+                      onChanged({ ...live, recordingUrl: r.data.url });
+                      setReplayNote(null);
+                      return;
+                    }
+                    setReplayNote(
+                      r.data.state === "processing"
+                        ? ar
+                          ? "التسجيل ما زال قيد المعالجة لدى المزوّد. جرّبي بعد دقيقة."
+                          : "The provider is still processing the recording. Try again in a minute."
+                        : r.data.state === "none"
+                          ? ar
+                            ? "لا يوجد تسجيل لهذا البث. التسجيل يبدأ مع البث، فإن لم يصل فيديو للمزوّد فلا يوجد ما يُحفظ."
+                            : "There is no recording for this live. Recording starts with the broadcast, so if no video ever reached the provider there is nothing to save."
+                          : ar
+                            ? `تعذّر السؤال عن التسجيل: ${r.data.detail}`
+                            : `Could not ask for the recording: ${r.data.detail}`,
+                    );
+                  }}
                   disabled={busy === "rec"}
                   className="btn-outline h-10 px-4 text-sm"
                 >
