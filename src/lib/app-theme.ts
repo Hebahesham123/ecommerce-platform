@@ -108,7 +108,7 @@ export const ITEM_SHAPE: Partial<Record<BlockType, { ar: string; en: string; bla
   live_now: {
     ar: "بث",
     en: "Live",
-    blank: () => ({ id: itemId(), imageUrl: "", name: "", viewers: "", handle: "", url: "" }),
+    blank: () => ({ id: itemId(), imageUrl: "", name: "", viewers: "", videoUrl: "", handle: "", url: "" }),
   },
   coming_up_live: {
     ar: "موعد",
@@ -270,6 +270,7 @@ export const ITEM_FIELDS: Partial<Record<BlockType, FieldSpec[]>> = {
     { key: "imageUrl", kind: "image", ar: "الصورة", en: "Photo" },
     { key: "name", kind: "text", ar: "الاسم", en: "Name" },
     { key: "viewers", kind: "text", ar: "المشاهدون", en: "Viewers" },
+    { key: "videoUrl", kind: "text", ar: "رابط البث المسجّل", en: "Recorded video link" },
     { key: "handle", kind: "link", ar: "يفتح", en: "Opens" },
   ],
   coming_up_live: [
@@ -1178,6 +1179,8 @@ export function newBlock(type: BlockType): Block {
       showReplays: true,
       replaysLabel: "Replays",
       replaysHandle: "",
+      /** What a circle says when it is a recording rather than a live. */
+      replayBadge: "Replay",
       offerEnabled: true,
       offerTitle: "{name}, your private offer is live",
       offerText: "",
@@ -1259,12 +1262,16 @@ export function newBlock(type: BlockType): Block {
     },
     free_shipping: {
       /**
-       * Five ways to say it: over a photograph, a ribbon of type crossing the
-       * screen, a quiet editorial line, the air-mail envelope, or one quiet
-       * row. The first is the default because this shop is a photographed
-       * one - a section of type alone reads as flat between the pictures.
+       * Six ways to say it, smallest first: a rule between two hairlines, one
+       * line over a photograph, a ribbon of type crossing the screen, a quiet
+       * editorial line, the air-mail envelope, or a single row.
+       *
+       * The rule is the default because free delivery is a fact a shopper
+       * wants to know and then stop thinking about - like a price, or a size.
+       * A section-sized answer to a one-line promise was what was wrong with
+       * every larger version of this.
        */
-      style: "photo",
+      style: "rule",
       kicker: "Delivered on us",
       title: "Free shipping",
       subtitle: "on every order over EGP 2,000",

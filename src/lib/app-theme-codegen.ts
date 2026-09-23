@@ -1991,7 +1991,7 @@ const styles = StyleSheet.create({
 `,
 
     live_now: `import React, { useEffect, useState } from "react";
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { colors, gap, radius, spacing } from "../theme";
 import { SectionHeading, inherit, openLink, type LinkTo } from "./Pieces";
 import { fetchAccount, type HomePayload } from "../api";
@@ -2001,6 +2001,10 @@ export type LivePerson = {
   imageUrl?: string;
   name?: string;
   viewers?: string;
+  /** A recording, if this circle is one. */
+  videoUrl?: string;
+  /** False for a recording, true for a live that is on air now. */
+  onAir?: boolean;
   handle?: string;
   productId?: string;
   screen?: string;
@@ -2010,6 +2014,7 @@ export type LivePerson = {
 export type LiveNowSettings = {
   title?: string;
   liveLabel?: string;
+  replayBadge?: string;
   showReplays?: boolean;
   replaysLabel?: string;
   replaysHandle?: string;
@@ -2080,19 +2085,26 @@ export function LiveNow({
   onOpenProduct?: (id: string) => void;
   onOpenScreen?: (screen: string) => void;
 }) {
-  // Whoever is genuinely on air, with the cover chosen when the live was
-  // created. The typed-in list survives only as a fallback for a store that
-  // has never used the Lives section.
+  // Whoever is genuinely on air comes first, with the cover chosen when the
+  // live was created. Behind them stand the recordings the merchant keeps in
+  // this section, so the row is never empty between shows.
   const onAir = (lives ?? []).filter((l) => l.status === "live");
-  const people: LivePerson[] = onAir.map((l) => ({
-    id: l.id,
-    imageUrl: l.coverUrl ?? undefined,
-    name: l.hostName || l.title,
-    viewers: l.peakViewers ? String(l.peakViewers) : undefined,
-    url: l.href,
-  }));
+  const people: LivePerson[] = [
+    ...onAir.map((l) => ({
+      id: l.id,
+      imageUrl: l.coverUrl ?? undefined,
+      name: l.hostName || l.title,
+      viewers: l.peakViewers ? String(l.peakViewers) : undefined,
+      url: l.href,
+      onAir: true,
+    })),
+    ...(settings.items ?? [])
+      .filter((i) => i.videoUrl || i.imageUrl || i.name)
+      .map((i) => ({ ...i, onAir: false })),
+  ];
   const showReplays = settings.showReplays !== false;
   const liveLabel = settings.liveLabel || "LIVE";
+  const replayBadge = settings.replayBadge || "Replay";
 
   // An empty colour means "follow the brand", so the section keeps up with the
   // accent instead of stranding a hex somebody typed once and forgot.
@@ -2160,8 +2172,13 @@ export function LiveNow({
           {people.map((p) => {
             const borrowed = inherit(p, collections);
             const photo = p.imageUrl || borrowed.image;
+            const onAirNow = p.onAir !== false;
             return (
-              <Pressable key={p.id} style={[styles.person, { width: cell }]} onPress={() => go(p)}>
+              <Pressable
+                key={p.id}
+                style={[styles.person, { width: cell }]}
+                onPress={() => (p.videoUrl ? Linking.openURL(p.videoUrl) : go(p))}
+              >
                 <View
                   style={{
                     backgroundColor: ringW > 0 ? ringColor : "transparent",
@@ -2175,9 +2192,18 @@ export function LiveNow({
                     <View style={{ width: size, height: size, borderRadius: photoRadius, backgroundColor: colors.page }} />
                   )}
                 </View>
-                {liveLabel ? (
-                  <View style={[styles.badge, { backgroundColor: badgeBg }]}>
-                    <Text style={[styles.badgeText, { color: badgeFg }]}>{liveLabel}</Text>
+                {!onAirNow && p.videoUrl ? (
+                  <View style={[styles.play, { width: size, height: size, borderRadius: photoRadius }]}>
+                    <View style={styles.playDot}>
+                      <Text style={styles.playMark}>{"\u25B6"}</Text>
+                    </View>
+                  </View>
+                ) : null}
+                {(onAirNow ? liveLabel : replayBadge) ? (
+                  <View style={[styles.badge, { backgroundColor: onAirNow ? badgeBg : "#2b1b10" }]}>
+                    <Text style={[styles.badgeText, { color: badgeFg }]}>
+                      {onAirNow ? liveLabel : replayBadge}
+                    </Text>
                   </View>
                 ) : null}
                 {p.name || borrowed.title ? (
@@ -2241,6 +2267,9 @@ export function LiveNow({
 const styles = StyleSheet.create({
   row: { gap: gap.item, paddingVertical: spacing.sm },
   person: { alignItems: "center" },
+  play: { position: "absolute", top: 0, alignItems: "center", justifyContent: "center" },
+  playDot: { height: 28, width: 28, borderRadius: 14, backgroundColor: "rgba(0,0,0,0.45)", alignItems: "center", justifyContent: "center" },
+  playMark: { color: "#fff", fontSize: 10 },
   badge: { marginTop: -9, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 },
   badgeText: { fontSize: 8, fontWeight: "700", letterSpacing: 0.5 },
   name: { marginTop: 7, fontWeight: "600", color: colors.ink, textAlign: "center" },
@@ -4681,6 +4710,7 @@ function settingsLiteral(block: Block): string {
     live_now: [
       "title",
       "liveLabel",
+      "replayBadge",
       "showReplays",
       "replaysLabel",
       "replaysHandle",
@@ -5002,7 +5032,7 @@ function itemsLiteral(type: BlockType, items: Item[]): string {
     tiers: ["prefix", "amount", "label", "handle", "url", "productId", "screen"],
     split: ["imageUrl", "label", "buttonLabel", "handle", "url", "productId", "screen"],
     trust_badges: ["emoji", "title", "subtitle"],
-    live_now: ["imageUrl", "name", "viewers", "handle", "url", "productId", "screen"],
+    live_now: ["imageUrl", "name", "viewers", "videoUrl", "handle", "url", "productId", "screen"],
     coming_up_live: ["imageUrl", "title", "when", "handle", "url", "productId", "screen"],
     countdown_deals: [
       "imageUrl",

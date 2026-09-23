@@ -592,19 +592,25 @@ function BlockView({
     }
 
     case "live_now": {
-      // Only lives that are genuinely on air, with the cover the host chose
-      // when she created them. A row that advertises a live nobody can watch
-      // costs more than an empty row does.
+      // Whoever is genuinely on air comes first, with the cover the host chose
+      // when she created them — a row that advertises a live nobody can watch
+      // costs more than an empty row does. Behind them stand the recordings
+      // the merchant keeps here, so the row is never empty between shows:
+      // this is the one section that is about the shop being a place rather
+      // than a catalogue, and a place is never shut.
       const onAir = (data.lives ?? []).filter((l) => l.status === "live");
-      const people = onAir.length
-        ? onAir.map((l) => ({
-            id: l.id,
-            name: l.hostName || l.title,
-            imageUrl: l.coverUrl ?? "",
-            viewers: l.peakViewers ? String(l.peakViewers) : "",
-            url: l.href,
-          }))
-        : [];
+      const live = onAir.map((l) => ({
+        id: l.id,
+        name: l.hostName || l.title,
+        imageUrl: l.coverUrl ?? "",
+        viewers: l.peakViewers ? String(l.peakViewers) : "",
+        url: l.href,
+        onAir: true,
+      }));
+      const replays = itemsOf(block)
+        .filter((i) => str(i.videoUrl) || str(i.imageUrl) || str(i.name))
+        .map((i) => ({ ...i, onAir: false }));
+      const people = [...live, ...replays];
       const offerOn = s.offerEnabled !== false;
       const offerTitle = personalise(str(s.offerTitle), data.shopperName);
       const offerText = str(s.offerText);
@@ -1252,6 +1258,86 @@ function useCountdown(minutes: number): string {
  * row draws people in, the offer underneath is what it draws them into. A
  * merchant who wants only the row turns the offer off, and vice versa.
  */
+/**
+ * A recording, played where it was tapped.
+ *
+ * Three kinds of link arrive here and all three have to work, because a
+ * merchant pastes whatever their recording lives behind: a file the browser
+ * can play, a YouTube or Vimeo page, or something else entirely. The first
+ * two play in place; the third opens where it lives, which is better than a
+ * black rectangle and an apology.
+ */
+function playerFor(url: string): { kind: "video" | "embed" | "away"; src: string } {
+  const clean = url.trim();
+  if (/\.(mp4|webm|ogg|m3u8|mov)(\?|$)/i.test(clean)) return { kind: "video", src: clean };
+  const yt = clean.match(/(?:youtube\.com\/(?:watch\?v=|live\/|embed\/)|youtu\.be\/)([\w-]{6,})/i);
+  if (yt) return { kind: "embed", src: `https://www.youtube.com/embed/${yt[1]}?autoplay=1&rel=0` };
+  const vi = clean.match(/vimeo\.com\/(?:video\/)?(\d+)/i);
+  if (vi) return { kind: "embed", src: `https://player.vimeo.com/video/${vi[1]}?autoplay=1` };
+  return { kind: "away", src: clean };
+}
+
+function ReplayPlayer({
+  url,
+  title,
+  ar,
+  onClose,
+}: {
+  url: string;
+  title: string;
+  ar: boolean;
+  onClose: () => void;
+}) {
+  const player = playerFor(url);
+  return (
+    <div className="absolute inset-0 z-40 flex flex-col justify-end bg-black/70" onClick={onClose}>
+      <div
+        className="relative w-full overflow-hidden rounded-t-2xl bg-black"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-2 px-3 py-2">
+          <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-white">{title}</span>
+          <button
+            onClick={onClose}
+            aria-label={ar ? "إغلاق" : "Close"}
+            className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white/15 text-white"
+          >
+            ✕
+          </button>
+        </div>
+        {player.kind === "video" ? (
+          // eslint-disable-next-line jsx-a11y/media-has-caption
+          <video src={player.src} controls autoPlay playsInline className="block aspect-[9/16] w-full bg-black" />
+        ) : player.kind === "embed" ? (
+          <iframe
+            src={player.src}
+            title={title}
+            allow="autoplay; fullscreen; picture-in-picture"
+            allowFullScreen
+            className="block aspect-video w-full border-0 bg-black"
+          />
+        ) : (
+          <div className="p-5 text-center">
+            <p className="text-[12px] leading-relaxed text-white/80">
+              {ar
+                ? "هذا التسجيل محفوظ خارج التطبيق."
+                : "This recording lives outside the app."}
+            </p>
+            <a
+              href={player.src}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-3 inline-block rounded-full bg-white px-4 py-2 text-[12px] font-bold text-slate-900"
+            >
+              {ar ? "مشاهدة" : "Watch it"}
+            </a>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function LiveNow({
   block,
   people,
@@ -1270,6 +1356,9 @@ function LiveNow({
   const s = block.settings ?? {};
   const title = str(s.title);
   const liveLabel = str(s.liveLabel, ar ? "مباشر" : "LIVE");
+  const replayBadge = str(s.replayBadge, ar ? "مسجّل" : "Replay");
+  // The recording a shopper asked to watch, if any.
+  const [playing, setPlaying] = useState<{ url: string; title: string } | null>(null);
   const showReplays = s.showReplays !== false;
   const replaysLabel = str(s.replaysLabel, ar ? "المسجّلة" : "Replays");
   const offerOn = s.offerEnabled !== false;
@@ -1320,10 +1409,14 @@ function LiveNow({
             const borrowed = inherit(person, data);
             const name = str(person.name, borrowed.title);
             const viewers = str(person.viewers);
+            const onAir = person.onAir !== false;
+            const video = str(person.videoUrl);
             return (
               <button
                 key={person.id}
-                onClick={() => go(person)}
+                onClick={() =>
+                  video ? setPlaying({ url: video, title: name || replayBadge }) : go(person)
+                }
                 className="flex shrink-0 flex-col items-center"
                 style={{ width: cell }}
               >
@@ -1342,17 +1435,32 @@ function LiveNow({
                       style={{ width: size, height: size, borderRadius: photoRadius }}
                     />
                   </span>
-                  {liveLabel && (
+                  {/* Red for what is happening now; quiet for what already
+                      happened. A shopper should be able to tell from the
+                      colour alone which one is worth interrupting herself for. */}
+                  {(onAir ? liveLabel : replayBadge) && (
                     <span
                       className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap px-1 py-px text-[8px] font-bold uppercase tracking-wide"
                       style={{
-                        background: badgeBg,
+                        background: onAir ? badgeBg : "#2b1b10",
                         color: badgeFg,
                         borderRadius: 4,
                         bottom: -6,
                       }}
                     >
-                      {liveLabel}
+                      {onAir ? liveLabel : replayBadge}
+                    </span>
+                  )}
+                  {/* A recording says so before it is tapped. */}
+                  {!onAir && video && (
+                    <span
+                      aria-hidden
+                      className="absolute inset-0 grid place-items-center"
+                      style={{ borderRadius: photoRadius }}
+                    >
+                      <span className="grid h-7 w-7 place-items-center rounded-full bg-black/45 text-[10px] text-white">
+                        ▶
+                      </span>
                     </span>
                   )}
                 </span>
@@ -1397,6 +1505,15 @@ function LiveNow({
             </button>
           )}
         </div>
+      )}
+
+      {playing && (
+        <ReplayPlayer
+          url={playing.url}
+          title={playing.title}
+          ar={ar}
+          onClose={() => setPlaying(null)}
+        />
       )}
 
       {offerOn && (offerTitle || offerText) && (
@@ -2940,6 +3057,50 @@ function FreeShipping({
       }}
     />
   );
+
+  // ---- a rule, not a banner --------------------------------------------
+  //
+  // Five designs in, the thing every one of them had in common was size: a
+  // section-sized answer to a one-line promise. Free delivery is a fact a
+  // shopper wants to know and then stop thinking about, like a price or a
+  // size — so it is a line between two hairlines, the width of the page, and
+  // it takes eight percent of the screen instead of a third.
+  if (look === "rule") {
+    return (
+      <section>
+        <button
+          onClick={() => opens && go(s)}
+          className={`block w-full border-y py-3 text-center ${opens ? "" : "cursor-default"}`}
+          style={{ borderColor: `${ink}1f` }}
+        >
+          <span className="flex items-center justify-center gap-2.5">
+            <span aria-hidden className="text-[10px]" style={{ color: air }}>
+              ✦
+            </span>
+            <span
+              dir="auto"
+              className="text-[10px] font-bold uppercase tracking-[0.16em]"
+              style={{ color: ink }}
+            >
+              {str(s.title)}
+            </span>
+            <span aria-hidden className="text-[10px]" style={{ color: air }}>
+              ✦
+            </span>
+          </span>
+          {str(s.subtitle) && (
+            <span
+              dir="auto"
+              className="mt-1 block text-[9px] font-semibold uppercase tracking-[0.14em]"
+              style={{ color: ink, opacity: 0.55 }}
+            >
+              {str(s.subtitle)}
+            </span>
+          )}
+        </button>
+      </section>
+    );
+  }
 
   // ---- over a photograph, like everything else that works here ----------
   if (look === "photo") {

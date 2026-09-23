@@ -2721,6 +2721,14 @@ function BlockGroup({
               className={input}
             />
           </Field>
+          <Field label={ar ? "كلمة المسجّل" : "Replay label"} type="text">
+            <input value={text("replayBadge")} onChange={(e) => onPatch({ replayBadge: e.target.value })} placeholder={ar ? "مسجّل" : "Replay"} className={input} />
+            <p className="mt-1 text-[11px] text-ink-soft">
+              {ar
+                ? "الدوائر التي تحمل رابط فيديو تظهر دائمًا؛ ومن يبثّ الآن يتقدّمها."
+                : "Circles with a video link are always there; whoever is on air now goes in front of them."}
+            </p>
+          </Field>
           <Field label={ar ? "كلمة الشارة" : "Live badge word"} type="text">
             <input
               value={text("liveLabel")}
@@ -3028,6 +3036,7 @@ function BlockGroup({
         <>
           <Field label={ar ? "الشكل" : "Look"} type="select">
             <select value={text("style") || "photo"} onChange={(e) => onPatch({ style: e.target.value })} className={input}>
+              <option value="rule">{ar ? "سطر بين خطين (الأصغر)" : "A rule, not a banner (smallest)"}</option>
               <option value="photo">{ar ? "فوق صورة" : "Over a photograph"}</option>
               <option value="ribbon">{ar ? "شريط متحرك عبر الشاشة" : "Ribbon of type across the screen"}</option>
               <option value="editorial">{ar ? "سطر هادئ بلا زخرفة" : "Quiet editorial line"}</option>
