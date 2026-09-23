@@ -27,9 +27,12 @@ Peak viewer load test
 
   node scripts/live-load-test.mjs --site <url> --live <id> [options]
 
-Required
-  --site <url>        Where the shop is deployed, e.g. https://yourshop.com
-  --live <id>         The id of a live that is currently on air
+Required — either one of these
+  --url <link>        The live's own viewer link, exactly as the dashboard's
+                      "Copy link" button gives it. The simplest way in:
+                        npm run loadtest -- --url https://yourshop.com/store/live/abc123
+  --site <url> --live <id>
+                      Or the two halves separately.
 
 Size and shape
   --viewers <n>       How many at once (default 500)
@@ -60,6 +63,7 @@ function parseArgs(argv) {
     const a = argv[i];
     const next = () => argv[(i += 1)];
     if (a === "--help" || a === "-h") args.help = true;
+    else if (a === "--url") args.url = next();
     else if (a === "--site") args.site = next();
     else if (a === "--live") args.live = next();
     else if (a === "--viewers") args.viewers = Number(next());
@@ -80,9 +84,46 @@ function parseArgs(argv) {
 }
 
 const args = parseArgs(process.argv.slice(2));
+
+// One pasted link is easier to get right than two values typed out, so it is
+// split here rather than by the person running this.
+if (args.url) {
+  try {
+    const link = new URL(args.url);
+    args.site = args.site ?? link.origin;
+    args.live = args.live ?? link.pathname.split("/").filter(Boolean).pop();
+  } catch {
+    console.error(`Not a link: ${args.url}\nPaste the live's viewer link, e.g. https://yourshop.com/store/live/abc123`);
+    process.exit(2);
+  }
+}
+
 if (args.help || !args.site || !args.live) {
   console.log(HELP);
   process.exit(args.help ? 0 : 2);
+}
+
+/**
+ * The example from the instructions, run as if it were real.
+ *
+ * It fails in an unhelpful way — PowerShell objects to the angle brackets
+ * before the script is even reached — so the real values are asked for by
+ * name, rather than leaving a stray "Unknown option" to be puzzled over.
+ */
+const placeholder = (v) => /^[<{]|[>}]$|your-?shop|yourshop|example\.com|live-?id/i.test(String(v));
+if (placeholder(args.site) || placeholder(args.live)) {
+  console.error(
+    [
+      "That is still the example, not your shop.",
+      "",
+      "  --site   your deployed address, e.g. https://form-rpcx.vercel.app",
+      "  --live   the id of a live that is on air",
+      "",
+      'Easiest: open the live in the dashboard, press "Copy link", and pass the whole thing:',
+      "  npm run loadtest -- --url <paste it here, no angle brackets> --viewers 500",
+    ].join("\n"),
+  );
+  process.exit(2);
 }
 
 const SITE = String(args.site).replace(/\/+$/, "");
