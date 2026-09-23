@@ -388,10 +388,34 @@ export function Watch({ live: initial }: { live: WatchableLive }) {
 
 /* --------------------------------- player --------------------------------- */
 
+type StreamPlayer = {
+  muted: boolean;
+  play: () => Promise<void>;
+  addEventListener?: (type: string, listener: () => void) => void;
+};
+
 declare global {
   interface Window {
-    Stream?: (el: HTMLIFrameElement) => { muted: boolean; play: () => Promise<void> };
+    Stream?: (el: HTMLIFrameElement) => StreamPlayer;
   }
+}
+
+type NetworkInfo = { effectiveType?: string; downlink?: number; saveData?: boolean };
+
+/**
+ * Whether this viewer is on a connection that cannot afford to be clever.
+ *
+ * Not every browser will say, and the ones that do are guessing. But a wrong
+ * guess here only costs a few seconds of delay, while the right one is the
+ * difference between watching the live and watching nothing.
+ */
+function onASlowConnection(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const net = (navigator as Navigator & { connection?: NetworkInfo }).connection;
+  if (!net) return false;
+  if (net.saveData) return true;
+  if (net.effectiveType && /2g|3g/.test(net.effectiveType)) return true;
+  return typeof net.downlink === "number" && net.downlink > 0 && net.downlink < 1.5;
 }
 
 /**
@@ -401,25 +425,39 @@ declare global {
  * refusal would leave the viewer staring at a still frame. So it plays
  * immediately without sound and asks for one tap to turn it on — which is
  * also how the apps people are used to behave.
+ *
+ * Its first duty is to show something. A viewer on a poor connection would
+ * rather watch a soft, stuttering picture than a black rectangle, so nothing
+ * here is allowed to fail silently: HLS carries the stream at whatever quality
+ * the line can bear, WebRTC is only ever an upgrade on top of it, and while
+ * neither is producing pictures the screen says so instead of going dark.
  */
 function Player({ live, ar }: { live: WatchableLive; ar: boolean }) {
   const onAir = live.status === "live";
   const hls = onAir ? live.playbackUrl : live.recordingUrl;
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
-  const playerRef = useRef<{ muted: boolean; play: () => Promise<void> } | null>(null);
+  const playerRef = useRef<StreamPlayer | null>(null);
   const [muted, setMuted] = useState(true);
+
   /**
-   * WebRTC is an improvement on HLS, and an improvement has to earn its place.
+   * WebRTC is an improvement on HLS, and an improvement has to earn its place
+   * and keep earning it.
    *
    * Preferring it outright meant a viewer whose connection could not carry it
-   * — or a live prepared before the address existed — watched a black
-   * rectangle, which is worse than being fifteen seconds behind. So HLS plays
-   * from the first moment and WebRTC runs behind it, unseen, until it is
-   * actually producing pictures. Only then does it take over, and if it stops
-   * it hands back.
+   * watched a black rectangle, which is worse than being fifteen seconds
+   * behind. So HLS plays from the first moment and WebRTC runs behind it,
+   * unseen, until it is actually producing pictures — and the moment it stops
+   * producing them it is dropped for good and HLS, which never went away, is
+   * visible again. HLS drops its own quality as the connection worsens; WebRTC
+   * simply freezes, which is why it can never be the only thing playing.
    */
   const [webrtcReady, setWebrtcReady] = useState(false);
+  const [webrtcOff, setWebrtcOff] = useState(false);
+
+  /** What the viewer is actually seeing, which decides what we tell them. */
+  const [playing, setPlaying] = useState(false);
+  const [waited, setWaited] = useState(false);
 
   const cloudflare = useMemo(() => {
     if (!hls) return null;
@@ -427,8 +465,23 @@ function Player({ live, ar }: { live: WatchableLive; ar: boolean }) {
     return m ? { host: m[1], uid: m[2] } : null;
   }, [hls]);
 
+  // Say something after a few seconds of nothing, rather than leaving the
+  // viewer to decide for themselves whether it is broken.
   useEffect(() => {
-    if (!onAir || !live.whepUrl) return;
+    if (playing) {
+      setWaited(false);
+      return;
+    }
+    const t = setTimeout(() => setWaited(true), 6000);
+    return () => clearTimeout(t);
+  }, [playing]);
+
+  useEffect(() => {
+    if (!onAir || !live.whepUrl || webrtcOff) return;
+    // A connection this thin cannot carry two streams at once, and WebRTC is
+    // the one that would fail. Do not even open it.
+    if (onASlowConnection()) return;
+
     let cancelled = false;
     const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.cloudflare.com:3478" }] });
 
@@ -484,14 +537,50 @@ function Player({ live, ar }: { live: WatchableLive; ar: boolean }) {
       pc.close();
       setWebrtcReady(false);
     };
-  }, [onAir, live.whepUrl]);
+  }, [onAir, live.whepUrl, webrtcOff]);
 
-  // Cloudflare's HLS player is cross-origin, so unmuting it needs their SDK.
+  /**
+   * A frozen picture reports itself as connected and playing, so the only
+   * honest test is whether the clock is still moving. Four seconds of a
+   * stopped clock and WebRTC has had its chance: HLS is uncovered, and we do
+   * not try again, because a connection that could not hold it once will not
+   * hold it on the next attempt either.
+   */
+  useEffect(() => {
+    if (!webrtcReady) return;
+    let last = -1;
+    let strikes = 0;
+    const t = setInterval(() => {
+      const el = videoRef.current;
+      if (!el) return;
+      if (el.currentTime === last) {
+        strikes += 1;
+        if (strikes >= 3) {
+          setWebrtcReady(false);
+          setWebrtcOff(true);
+        }
+      } else {
+        strikes = 0;
+        last = el.currentTime;
+      }
+    }, 1300);
+    return () => clearInterval(t);
+  }, [webrtcReady]);
+
+  // Cloudflare's HLS player is cross-origin, so unmuting it needs their SDK —
+  // which is also the only way to hear whether it is playing or buffering.
   useEffect(() => {
     if (!cloudflare) return;
     const existing = document.querySelector<HTMLScriptElement>("script[data-cf-stream-sdk]");
     const attach = () => {
-      if (iframeRef.current && window.Stream) playerRef.current = window.Stream(iframeRef.current);
+      if (!iframeRef.current || !window.Stream) return;
+      const player = window.Stream(iframeRef.current);
+      playerRef.current = player;
+      player.addEventListener?.("playing", () => setPlaying(true));
+      player.addEventListener?.("play", () => setPlaying(true));
+      player.addEventListener?.("waiting", () => setPlaying(false));
+      player.addEventListener?.("stalled", () => setPlaying(false));
+      player.addEventListener?.("error", () => setPlaying(false));
     };
     if (existing) {
       if (window.Stream) attach();
@@ -535,7 +624,9 @@ function Player({ live, ar }: { live: WatchableLive; ar: boolean }) {
         </div>
       ) : (
         <>
-          {/* HLS: what is actually watched until WebRTC proves itself. */}
+          {/* HLS: what is actually watched until WebRTC proves itself. It
+              adapts its quality to the connection, so it keeps playing where
+              WebRTC would stop. */}
           {hls &&
             (cloudflare ? (
               <iframe
@@ -563,6 +654,9 @@ function Player({ live, ar }: { live: WatchableLive; ar: boolean }) {
                 muted
                 loop={onAir}
                 controls={!onAir}
+                onPlaying={() => setPlaying(true)}
+                onWaiting={() => setPlaying(false)}
+                onStalled={() => setPlaying(false)}
                 className={`h-full w-full ${onAir ? "object-cover" : "object-contain"} ${
                   webrtcReady ? "invisible" : ""
                 }`}
@@ -571,7 +665,7 @@ function Player({ live, ar }: { live: WatchableLive; ar: boolean }) {
 
           {/* WebRTC: hidden until it has frames, so it can never be a black
               rectangle over a working stream. */}
-          {onAir && live.whepUrl && (
+          {onAir && live.whepUrl && !webrtcOff && (
             // eslint-disable-next-line jsx-a11y/media-has-caption
             <video
               ref={videoRef}
@@ -579,7 +673,10 @@ function Player({ live, ar }: { live: WatchableLive; ar: boolean }) {
               playsInline
               muted
               onPlaying={(e) => {
-                if (e.currentTarget.videoWidth > 0) setWebrtcReady(true);
+                if (e.currentTarget.videoWidth > 0) {
+                  setWebrtcReady(true);
+                  setPlaying(true);
+                }
               }}
               onEmptied={() => setWebrtcReady(false)}
               className={`absolute inset-0 h-full w-full object-cover ${webrtcReady ? "" : "invisible"}`}
@@ -588,7 +685,31 @@ function Player({ live, ar }: { live: WatchableLive; ar: boolean }) {
         </>
       )}
 
-      {!nothing && muted && (
+      {/*
+        Never a bare black screen. Until something is actually on the glass the
+        viewer is told what is happening, and after a few seconds of nothing
+        they are told that a slow connection is the likely reason and that it
+        is still trying — which is true, and is what keeps them from leaving.
+      */}
+      {!nothing && !playing && (
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/40 px-8 text-center">
+          <span className="h-8 w-8 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+          <p className="text-sm font-medium text-white/90">
+            {!hls
+              ? ar ? "البث على وشك البدء…" : "The live is about to start…"
+              : ar ? "جارٍ تحميل البث…" : "Loading the live…"}
+          </p>
+          {waited && (
+            <p className="text-xs leading-relaxed text-white/60">
+              {ar
+                ? "الاتصال بطيء — ستقل جودة الصورة تلقائياً حتى يعمل البث."
+                : "Your connection is slow — the picture will drop in quality rather than stop."}
+            </p>
+          )}
+        </div>
+      )}
+
+      {!nothing && muted && playing && (
         <button
           onClick={unmute}
           className="absolute inset-x-0 top-1/2 z-10 mx-auto flex w-fit -translate-y-1/2 items-center gap-2 rounded-full bg-black/70 px-5 py-3 text-sm font-semibold text-white backdrop-blur"
