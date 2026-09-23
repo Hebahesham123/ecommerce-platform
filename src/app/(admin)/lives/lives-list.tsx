@@ -17,6 +17,7 @@ import {
   postHostMessageAction,
   prepareLiveAction,
   providerStatusAction,
+  deleteRecordingAction,
   refreshRecordingAction,
   saveLiveAction,
   collectionProductsAction,
@@ -1036,14 +1037,38 @@ function LiveDrawer({
               />
             </div>
             {live.recordingUrl && (
-              <a
-                href={live.recordingUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="btn-outline mt-3 inline-flex h-9 px-3 text-xs"
-              >
-                <IcEye className="h-3.5 w-3.5" /> {ar ? "مشاهدة التسجيل" : "Watch replay"}
-              </a>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <a
+                  href={live.recordingUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn-outline inline-flex h-9 px-3 text-xs"
+                >
+                  <IcEye className="h-3.5 w-3.5" /> {ar ? "مشاهدة التسجيل" : "Watch replay"}
+                </a>
+                <button
+                  onClick={async () => {
+                    const sure = window.confirm(
+                      ar
+                        ? "حذف التسجيل؟ سيُحذف الملف نهائياً ولن تعود الإعادة متاحة."
+                        : "Delete this recording? The file is removed for good and the replay stops being available.",
+                    );
+                    if (!sure) return;
+                    setBusy("delrec");
+                    const res = await deleteRecordingAction(live.id);
+                    setBusy(null);
+                    if (res.ok) onChanged(res.data);
+                    else setErr(res.error);
+                  }}
+                  disabled={busy === "delrec"}
+                  className="btn-ghost h-9 px-3 text-xs text-rose-600 hover:bg-rose-50 disabled:opacity-50"
+                >
+                  <IcTrash className="h-3.5 w-3.5" />
+                  {busy === "delrec"
+                    ? (ar ? "جارٍ الحذف…" : "Deleting…")
+                    : ar ? "حذف التسجيل" : "Delete recording"}
+                </button>
+              </div>
             )}
           </section>
         </div>

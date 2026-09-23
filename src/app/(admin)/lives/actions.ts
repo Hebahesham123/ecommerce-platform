@@ -8,6 +8,7 @@ import {
   attachRecording,
   collectionProducts,
   createRecordingUpload,
+  deleteRecording,
   listLiveCollections,
   listMessages,
   postMessage,
@@ -111,6 +112,11 @@ export async function createRecordingUploadAction(
   extension: string,
 ) {
   return createRecordingUpload(liveId, extension);
+}
+
+/** Throw the replay away, and the file with it. */
+export async function deleteRecordingAction(liveId: string): Promise<Result<LiveStream>> {
+  return deleteRecording(liveId);
 }
 
 /** Point the live at the recording once it is uploaded. */

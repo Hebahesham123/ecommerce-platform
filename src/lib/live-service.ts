@@ -603,6 +603,54 @@ export async function createRecordingUpload(
   }
 }
 
+/**
+ * Throw the replay away, and the file with it.
+ *
+ * Clearing the link alone would leave the video paid for and unreachable,
+ * which is the worst of both: storage is what a recording actually costs. So
+ * the object is removed where we can remove it — ours from storage, the
+ * provider's through its API — and only then does the live forget it.
+ */
+export async function deleteRecording(liveId: string): Promise<Result<LiveStream>> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  const current = await getLive(liveId);
+  if (!current.ok) return current;
+  const url = current.data.recordingUrl;
+
+  try {
+    const supabase = getServerSupabase();
+
+    if (url) {
+      // One we made in the browser and put in our own bucket.
+      const ours = url.match(/\/storage\/v1\/object\/public\/([^/]+)\/(.+)$/);
+      if (ours) {
+        const [, bucket, path] = ours;
+        await supabase.storage.from(bucket).remove([decodeURIComponent(path)]);
+      } else {
+        // One the provider made. Removing it stops us paying to store it.
+        const cf = url.match(/cloudflarestream\.com\/([^/]+)\//);
+        if (cf && providerConfigured()) {
+          await fetch(
+            `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT}/stream/${cf[1]}`,
+            { method: "DELETE", headers: { authorization: `Bearer ${CF_TOKEN}` } },
+          ).catch(() => {});
+        }
+      }
+    }
+
+    const { data, error } = await supabase
+      .from(TABLE)
+      .update({ recording_url: null })
+      .eq("id", liveId)
+      .select(SELECT)
+      .single();
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, data: mapLiveStream(data) };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
 /** The recording is uploaded; point the live at it. */
 export async function attachRecording(liveId: string, url: string): Promise<Result<LiveStream>> {
   if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
