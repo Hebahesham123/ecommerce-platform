@@ -1552,12 +1552,14 @@ const styles = StyleSheet.create({
 `,
 
     free_shipping: `import React, { useEffect, useRef } from "react";
-import { Animated, Easing, Pressable, StyleSheet, Text, View } from "react-native";
+import { Animated, Easing, Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { colors, theme } from "../theme";
 import { openLink, type LinkTo } from "./Pieces";
 
 export type FreeShippingSettings = {
   style?: string;
+  imageUrl?: string;
+  focal?: string;
   kicker?: string;
   title?: string;
   subtitle?: string;
@@ -1602,7 +1604,8 @@ export function FreeShipping({
   const travel = useStripes();
   if (!settings.title && !settings.subtitle) return null;
 
-  const strip = settings.style === "strip";
+  const look = settings.style || "photo";
+  const strip = look === "strip";
   const paper = settings.bg || "#fffaf3";
   const ink = settings.inkColor || "#2b1b10";
   const air = settings.dashColor || colors.accent;
@@ -1625,6 +1628,37 @@ export function FreeShipping({
       </Animated.View>
     </View>
   );
+
+  // The promise over a photograph: the shape everything else in this shop
+  // takes, because the shop is a photographed one.
+  if (look === "photo") {
+    return (
+      <Pressable disabled={!opens} onPress={go} style={[styles.photoWrap, { height: settings.height || 168 }]}>
+        {settings.imageUrl ? (
+          <Image source={{ uri: settings.imageUrl }} style={styles.photo} resizeMode="cover" />
+        ) : (
+          <View style={[styles.photo, { backgroundColor: air }]} />
+        )}
+        <View style={styles.scrim} />
+        <View style={styles.photoBody}>
+          <View style={{ flex: 1 }}>
+            {settings.kicker ? (
+              <Text style={styles.photoKicker}>{settings.kicker.toUpperCase()}</Text>
+            ) : null}
+            {settings.title ? (
+              <Text style={[styles.photoTitle, { fontFamily: theme.titleFont }]}>{settings.title}</Text>
+            ) : null}
+            {settings.subtitle ? <Text style={styles.photoSub}>{settings.subtitle}</Text> : null}
+          </View>
+          {settings.buttonLabel ? (
+            <View style={styles.photoCta}>
+              <Text style={styles.photoCtaText}>{settings.buttonLabel.toUpperCase()}</Text>
+            </View>
+          ) : null}
+        </View>
+      </Pressable>
+    );
+  }
 
   if (strip) {
     return (
@@ -1688,6 +1722,15 @@ export function FreeShipping({
 
 const styles = StyleSheet.create({
   banner: { overflow: "hidden" },
+  photoWrap: { marginHorizontal: -16, overflow: "hidden" },
+  photo: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, width: "100%", height: "100%" },
+  scrim: { position: "absolute", left: 0, right: 0, bottom: 0, height: "70%", backgroundColor: "rgba(20,12,7,0.5)" },
+  photoBody: { position: "absolute", left: 0, right: 0, bottom: 0, flexDirection: "row", alignItems: "flex-end", gap: 12, padding: 16 },
+  photoKicker: { fontSize: 9, fontWeight: "700", letterSpacing: 1.9, color: "#e7c9a9" },
+  photoTitle: { marginTop: 4, fontSize: 24, fontWeight: "700", color: "#ffffff" },
+  photoSub: { marginTop: 2, fontSize: 12, color: "rgba(255,255,255,0.85)" },
+  photoCta: { borderRadius: 999, backgroundColor: "rgba(255,255,255,0.95)", paddingHorizontal: 14, paddingVertical: 6 },
+  photoCtaText: { fontSize: 11, fontWeight: "700", letterSpacing: 1, color: "#2b1b10" },
   stripeClip: { height: 7, overflow: "hidden" },
   stripeRow: { flexDirection: "row", position: "absolute", left: -44, width: 900 },
   stripe: { width: 11, height: 20, marginTop: -6, transform: [{ rotate: "25deg" }] },
@@ -4610,6 +4653,8 @@ function settingsLiteral(block: Block): string {
     ],
     free_shipping: [
       "style",
+      "imageUrl",
+      "focal",
       "kicker",
       "title",
       "subtitle",

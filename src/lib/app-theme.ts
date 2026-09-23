@@ -1259,16 +1259,21 @@ export function newBlock(type: BlockType): Block {
     },
     free_shipping: {
       /**
-       * Four ways to say it: a ribbon of type crossing the screen, a quiet
-       * editorial line, the air-mail envelope, or a single quiet row.
+       * Five ways to say it: over a photograph, a ribbon of type crossing the
+       * screen, a quiet editorial line, the air-mail envelope, or one quiet
+       * row. The first is the default because this shop is a photographed
+       * one - a section of type alone reads as flat between the pictures.
        */
-      style: "ribbon",
+      style: "photo",
       kicker: "Delivered on us",
       title: "Free shipping",
       subtitle: "on every order over EGP 2,000",
       note: "Anywhere we ship, no code needed",
       buttonLabel: "",
       // Empty colours follow the brand, as everywhere else.
+      // The photograph the promise sits on, for the "photo" look.
+      imageUrl: "",
+      focal: "",
       // The stamp in the corner: what it takes to have it delivered free.
       stampTop: "EGP",
       stampBig: "2,000",

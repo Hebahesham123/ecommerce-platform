@@ -2941,6 +2941,77 @@ function FreeShipping({
     />
   );
 
+  // ---- over a photograph, like everything else that works here ----------
+  if (look === "photo") {
+    const shot = str(s.imageUrl);
+    return (
+      <section>
+        <button
+          onClick={() => opens && go(s)}
+          className={`relative -mx-4 block w-[calc(100%+2rem)] overflow-hidden text-start ${opens ? "" : "cursor-default"}`}
+          style={{ height: int(s.height, 0) || 168 }}
+        >
+          {shot ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={shot}
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover"
+              style={{ objectPosition: str(s.focal) || "50% 45%" }}
+            />
+          ) : (
+            <span className="absolute inset-0 block" style={{ background: air }} />
+          )}
+          {/* Dark enough at the foot to read on, clear at the top so the
+              photograph is still a photograph. */}
+          <span
+            aria-hidden
+            className="absolute inset-0 block"
+            style={{
+              background:
+                "linear-gradient(to top, rgba(20,12,7,0.78) 0%, rgba(20,12,7,0.35) 45%, rgba(20,12,7,0) 78%)",
+            }}
+          />
+          <span className="absolute inset-x-0 bottom-0 flex items-end gap-3 p-4">
+            <span className="min-w-0 flex-1">
+              {str(s.kicker) && (
+                <span
+                  dir="auto"
+                  className="block text-[9px] font-bold uppercase tracking-[0.2em]"
+                  style={{ color: "#e7c9a9" }}
+                >
+                  {str(s.kicker)}
+                </span>
+              )}
+              {str(s.title) && (
+                <span
+                  dir="auto"
+                  className="app-display mt-1 block text-[24px] font-bold leading-tight text-white"
+                >
+                  {str(s.title)}
+                </span>
+              )}
+              {str(s.subtitle) && (
+                <span dir="auto" className="mt-0.5 block text-[12px] text-white/85">
+                  {str(s.subtitle)}
+                </span>
+              )}
+            </span>
+            {str(s.buttonLabel) && (
+              <span
+                dir="auto"
+                className="shrink-0 rounded-full bg-white/95 px-3.5 py-1.5 text-[11px] font-bold uppercase tracking-[0.1em]"
+                style={{ color: "#2b1b10" }}
+              >
+                {str(s.buttonLabel)}
+              </span>
+            )}
+          </span>
+        </button>
+      </section>
+    );
+  }
+
   // ---- the ribbon: one line of type crossing the screen -----------------
   if (look === "ribbon") {
     const line = [str(s.title), str(s.subtitle)].filter(Boolean).join(" ");

@@ -3027,7 +3027,8 @@ function BlockGroup({
       {block.type === "free_shipping" && (
         <>
           <Field label={ar ? "الشكل" : "Look"} type="select">
-            <select value={text("style") || "ribbon"} onChange={(e) => onPatch({ style: e.target.value })} className={input}>
+            <select value={text("style") || "photo"} onChange={(e) => onPatch({ style: e.target.value })} className={input}>
+              <option value="photo">{ar ? "فوق صورة" : "Over a photograph"}</option>
               <option value="ribbon">{ar ? "شريط متحرك عبر الشاشة" : "Ribbon of type across the screen"}</option>
               <option value="editorial">{ar ? "سطر هادئ بلا زخرفة" : "Quiet editorial line"}</option>
               <option value="banner">{ar ? "ظرف بريد جوي" : "Air-mail envelope"}</option>
@@ -3048,6 +3049,22 @@ function BlockGroup({
           </Field>
           <Field label={ar ? "السطر الأخير" : "Small print"} type="text">
             <input value={text("note")} onChange={(e) => onPatch({ note: e.target.value })} className={input} />
+          </Field>
+          <Field label={ar ? "الصورة" : "Picture"} type="image_picker">
+            <span className="flex items-center gap-2">
+              {text("imageUrl") ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={text("imageUrl")} alt="" className="h-9 w-9 shrink-0 rounded-lg border border-line object-cover" />
+              ) : null}
+              <ImageUpload onUploaded={(url) => onPatch({ imageUrl: url })} ar={ar} />
+              <input value={text("imageUrl")} onChange={(e) => onPatch({ imageUrl: e.target.value })} placeholder="https://…" className={input} dir="ltr" />
+            </span>
+            <p className="mt-1 text-[11px] text-ink-soft">
+              {ar ? "تُستخدم مع شكل «فوق صورة»." : "Used by the \"Over a photograph\" look."}
+            </p>
+          </Field>
+          <Field label={ar ? "موضع الصورة" : "Picture position"} type="text">
+            <input value={text("focal")} onChange={(e) => onPatch({ focal: e.target.value })} placeholder="50% 45%" className={input} dir="ltr" />
           </Field>
           <Field label={ar ? "الطابع" : "The stamp"} type="text">
             <span className="flex items-center gap-2">
