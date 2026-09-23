@@ -35,9 +35,19 @@ export function HostComments({
   const [busy, setBusy] = useState(false);
   const listRef = useRef<HTMLDivElement | null>(null);
 
+  /**
+   * Follow the newest comment, unless she is reading an older one.
+   *
+   * This used to scroll to the bottom on every arrival, which meant that
+   * scrolling back to find the question somebody asked a minute ago was
+   * undone by the next person to type. It follows while she is at the
+   * bottom and holds still the moment she is not.
+   */
+  const [following, setFollowing] = useState(true);
   useEffect(() => {
-    listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages.length]);
+    const el = listRef.current;
+    if (el && following) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }, [messages.length, following]);
 
   async function reply() {
     const body = draft.trim();
@@ -86,7 +96,11 @@ export function HostComments({
 
       <div
         ref={listRef}
-        className="max-h-56 space-y-1.5 overflow-y-auto rounded-xl bg-surface-page p-3"
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          setFollowing(el.scrollHeight - el.scrollTop - el.clientHeight < 40);
+        }}
+        className="max-h-72 space-y-1.5 overflow-y-auto overscroll-contain rounded-xl bg-surface-page p-3"
       >
         {messages.length === 0 ? (
           <p className="py-4 text-center text-sm text-ink-soft">

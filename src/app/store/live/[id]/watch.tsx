@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useI18n, egp } from "@/lib/i18n";
 import { useLiveChat } from "@/lib/live-chat";
 import { isTestStream, type LiveProduct, type WatchableLive } from "@/lib/live";
+import { LiveComments } from "@/components/live-comments";
 import { useCart } from "../../cart";
 
 /**
@@ -35,7 +36,7 @@ export function Watch({ live: initial }: { live: WatchableLive }) {
   const replay = !onAir && !!live.recordingUrl;
   const pinned = live.products.find((p) => p.pinned) ?? null;
 
-  const { messages, viewers, send: sendComment } = useLiveChat(live.id, { enabled: onAir });
+  const { messages, viewers, send: sendComment } = useLiveChat(live.id, { enabled: onAir, keep: 250 });
 
 
 
@@ -106,9 +107,6 @@ export function Watch({ live: initial }: { live: WatchableLive }) {
     }
   }
 
-  // Only the last handful, the way a live chat reads: the newest at the bottom,
-  // older ones fading out rather than demanding to be scrolled.
-  const visible = messages.slice(-7);
 
   return (
     <div className="fixed inset-0 flex flex-col overflow-hidden bg-black text-white">
@@ -189,29 +187,14 @@ export function Watch({ live: initial }: { live: WatchableLive }) {
           </div>
         )}
 
-        {/* Comments rise here. */}
-        <div className="pointer-events-none px-3 pb-2">
-          <div className="flex max-w-[78%] flex-col justify-end gap-1.5">
-            {visible.map((m, i) => (
-              <div
-                key={m.id}
-                // Older messages recede instead of being cut off, so the eye
-                // lands on what was just said.
-                style={{ opacity: 0.35 + (0.65 * (i + 1)) / visible.length }}
-                className="w-fit max-w-full rounded-2xl bg-black/45 px-3 py-1.5 text-[13px] leading-snug backdrop-blur"
-              >
-                <span className={m.isHost ? "font-bold text-amber-300" : "font-semibold text-white/80"}>
-                  {m.authorName}
-                </span>{" "}
-                <span className="text-white">{m.body}</span>
-              </div>
-            ))}
-            {onAir && messages.length === 0 && (
-              <div className="w-fit rounded-2xl bg-black/35 px-3 py-1.5 text-[13px] text-white/60 backdrop-blur">
-                {ar ? "كوني أول من يعلّق" : "Be the first to comment"}
-              </div>
-            )}
-          </div>
+        {/* The room, scrollable: the whole conversation, not the last few. */}
+        <div className="px-3 pb-2">
+          <LiveComments
+            messages={messages}
+            ar={ar}
+            empty={onAir ? (ar ? "كوني أول من يعلّق" : "Be the first to comment") : null}
+            className="max-h-[38dvh] max-w-[80%]"
+          />
         </div>
 
         {/* Bottom bar: say something, see the products, go to checkout. */}

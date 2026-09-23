@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { IcX, IcAlert } from "@/components/icons";
 import type { LiveChat } from "@/lib/live-chat";
+import { LiveComments } from "@/components/live-comments";
 import { getBrowserSupabase } from "@/lib/supabase/client";
 import { attachRecordingAction, createRecordingUploadAction } from "./actions";
 
@@ -462,8 +463,6 @@ export function Broadcast({
   }
 
   const mmss = `${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(elapsed % 60).padStart(2, "0")}`;
-  // Only the last few, the way a live chat reads.
-  const visible = messages.slice(-5);
 
   return (
     <div className="fixed inset-0 z-[70] overflow-hidden bg-black text-white">
@@ -540,28 +539,16 @@ export function Broadcast({
 
         <div className="flex-1" />
 
-        {/* What the room is saying, over your own picture. */}
-        <div className="pointer-events-none px-3 pb-2">
-          <div className="flex max-w-[80%] flex-col gap-1.5">
-            {messages.length === 0 ? (
-              <div className="w-fit rounded-2xl bg-black/40 px-3 py-1.5 text-[13px] text-white/60 backdrop-blur">
-                {ar ? "لا توجد تعليقات بعد" : "No comments yet"}
-              </div>
-            ) : (
-              visible.map((m, i) => (
-                <div
-                  key={m.id}
-                  style={{ opacity: 0.35 + (0.65 * (i + 1)) / visible.length }}
-                  className="w-fit max-w-full rounded-2xl bg-black/45 px-3 py-1.5 text-[13px] leading-snug backdrop-blur"
-                >
-                  <span className={m.isHost ? "font-bold text-amber-300" : "font-semibold text-white/80"}>
-                    {m.authorName}
-                  </span>{" "}
-                  <span className="text-white">{m.body}</span>
-                </div>
-              ))
-            )}
-          </div>
+        {/* What the room is saying, over your own picture — all of it,
+            scrollable, since the one comment worth answering is usually the
+            one that has just been pushed off the bottom. */}
+        <div className="px-3 pb-2">
+          <LiveComments
+            messages={messages}
+            ar={ar}
+            empty={ar ? "لا توجد تعليقات بعد" : "No comments yet"}
+            className="max-h-[32dvh] max-w-[80%]"
+          />
         </div>
 
         <div className="pointer-events-auto bg-gradient-to-t from-black/85 via-black/60 to-transparent px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-4">

@@ -698,7 +698,7 @@ function LiveDrawer({
   // silent: the count stops at zero and comments fall back to polling.
   const chat = useLiveChat(live.id, {
     enabled: live.status === "live",
-    keep: 100,
+    keep: 250,
     role: "host",
     postVia: async ({ authorName, body }) => {
       const res = await postHostMessageAction(live.id, authorName, body);
