@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
+import { forgetPaymentMethods } from "@/lib/payments-server";
 
 export type SettingsResult<T = void> =
   | { ok: true; data: T }
@@ -47,6 +48,9 @@ export async function updateSection(
     if (error) return { ok: false, error: error.message };
     revalidatePath("/settings");
     revalidatePath(`/settings/${section}`);
+    // Both checkouts read the payment methods through a short cache; a save
+    // that took a minute to show up would read as a save that did not work.
+    if (section === "payments") forgetPaymentMethods();
     return { ok: true, data: undefined };
   } catch (e) {
     return { ok: false, error: (e as Error).message };

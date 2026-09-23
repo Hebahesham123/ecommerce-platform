@@ -1,5 +1,6 @@
 import { readThemeCartItems } from "@/lib/checkout-handoff";
 import { getPageCopy } from "@/lib/page-copy-server";
+import { getPaymentMethods } from "@/lib/payments-server";
 import { PAGE_COPY } from "@/lib/page-copy";
 import { getCheckoutIdentity } from "../actions";
 import CheckoutClient from "./checkout-client";
@@ -20,10 +21,18 @@ export const dynamic = "force-dynamic";
  * who they are again.
  */
 export default async function CheckoutPage() {
-  const [initialItems, identity, copy] = await Promise.all([
+  const [initialItems, identity, copy, methods] = await Promise.all([
     readThemeCartItems(),
     getCheckoutIdentity(),
     getPageCopy(PAGE_COPY["web-checkout"].section),
+    getPaymentMethods(),
   ]);
-  return <CheckoutClient initialItems={initialItems} identity={identity} copy={copy} />;
+  return (
+    <CheckoutClient
+      initialItems={initialItems}
+      identity={identity}
+      copy={copy}
+      methods={methods}
+    />
+  );
 }

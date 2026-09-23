@@ -122,6 +122,10 @@ export function AppSplash({
 
   useEffect(() => {
     if (!on) return;
+    // In the editor it plays when the merchant asks for it and not before:
+    // they are here to arrange the home screen, and covering the phone every
+    // time the page loads would be the feature getting in its own way.
+    if (rehearsal && replay === 0) return;
     // A framed preview of one screen is not the app opening: the Pages hub
     // asks for the bag, or the collection, and an offer over the top of it
     // would be a picture of the wrong thing.

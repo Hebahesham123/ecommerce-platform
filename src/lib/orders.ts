@@ -9,6 +9,8 @@ import {
   type DiscountLine,
 } from "@/lib/discount-engine";
 import { recordNudgeConversion } from "@/lib/nudge-service";
+import { getPaymentMethods } from "@/lib/payments-server";
+import { orderLine } from "@/lib/payments";
 import { awardOrderSignatures } from "@/lib/loyalty/earn";
 import { sendOrderPurchase } from "@/lib/meta-purchase";
 import type { Channel } from "@/lib/channel";
@@ -57,6 +59,8 @@ export type OrderPayload = {
   deliverySlot?: string | null; // slot id from DELIVERY_SLOTS
   giftWrap?: boolean;
   giftMessage?: string | null;
+  /** The id of the method the shopper picked, from the Payments settings. */
+  paymentMethod?: string | null;
   items: CartLine[];
 };
 
@@ -225,6 +229,14 @@ export async function placeOrderCore(
       );
     }
     if (discountCode && discount > 0) noteParts.push(`كوبون ${discountCode} (−${discount})`);
+    // How they mean to pay. Anything but cash needs somebody to ring them
+    // before it ships, so the order says which it is rather than leaving the
+    // shop to guess from a code.
+    if (payload.paymentMethod) {
+      const picked = (await getPaymentMethods()).find((m) => m.id === payload.paymentMethod);
+      const line = orderLine(picked);
+      if (line) noteParts.push(line);
+    }
     const composedNote = noteParts.join(" | ") || null;
 
     // The single stock gate. Both channels reach the shelf through this one

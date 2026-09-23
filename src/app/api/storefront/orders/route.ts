@@ -85,6 +85,7 @@ export async function POST(request: Request) {
     deliverySlot: str(body.deliverySlot, 40) || null,
     giftWrap: body.giftWrap === true,
     giftMessage: str(body.giftMessage, 500) || null,
+    paymentMethod: str(body.paymentMethod, 40) || null,
     items,
   };
 

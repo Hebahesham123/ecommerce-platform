@@ -109,7 +109,10 @@ export const SECTIONS: Section[] = [
   {
     key: "payments",
     label: { ar: "المدفوعات", en: "Payments" },
-    desc: { ar: "طرق الدفع المقبولة", en: "Accepted payment methods" },
+    desc: {
+      ar: "ما يُعرض على العميلة في صفحة الدفع — على الموقع وفي التطبيق",
+      en: "What a shopper is offered at checkout, on the website and in the app",
+    },
     icon: "cash",
     fields: [
       { key: "cod_enabled", label: { ar: "الدفع عند الاستلام", en: "Cash on delivery (COD)" }, type: "toggle" },
@@ -120,10 +123,22 @@ export const SECTIONS: Section[] = [
         options: sel(["automatic","تلقائي","Automatic"],["manual","يدوي","Manual"]) },
     ],
     lists: [
-      { key: "manual_methods", label: { ar: "طرق دفع يدوية", en: "Manual payment methods" }, addLabel: { ar: "إضافة طريقة", en: "Add method" },
+      // What both checkouts offer. Leave it empty and they show the store's
+      // own set: cash on delivery, ValU, Sympl and Halan.
+      { key: "methods", label: { ar: "طرق الدفع في صفحة الدفع", en: "Methods offered at checkout" }, addLabel: { ar: "إضافة طريقة", en: "Add a method" },
         itemFields: [
-          { key: "name", label: { ar: "الاسم", en: "Name" }, type: "text", half: true },
-          { key: "instructions", label: { ar: "التعليمات", en: "Instructions" }, type: "text", half: true },
+          { key: "name", label: { ar: "الاسم (إنجليزي)", en: "Name (English)" }, type: "text", half: true },
+          { key: "name_ar", label: { ar: "الاسم (عربي)", en: "Name (Arabic)" }, type: "text", half: true },
+          { key: "kind", label: { ar: "النوع", en: "Kind" }, type: "select", half: true,
+            options: sel(
+              ["cod","عند الاستلام","Cash on delivery"],
+              ["instalment","تقسيط","Instalments (arranged after the order)"],
+              ["wallet","محفظة","Wallet (arranged after the order)"],
+              ["transfer","تحويل","Bank transfer (arranged after the order)"],
+            ) },
+          { key: "logo", label: { ar: "رابط الشعار", en: "Logo URL" }, type: "text", half: true },
+          { key: "note", label: { ar: "الشرح (إنجليزي)", en: "What the shopper is told (English)" }, type: "text" },
+          { key: "note_ar", label: { ar: "الشرح (عربي)", en: "What the shopper is told (Arabic)" }, type: "text" },
         ] },
     ],
   },

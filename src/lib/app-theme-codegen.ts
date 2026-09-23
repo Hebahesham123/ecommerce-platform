@@ -477,8 +477,32 @@ export type OrderRequest = {
   address: string;
   note?: string;
   couponCode?: string | null;
+  /** Which of the shop's methods the shopper picked. */
+  paymentMethod?: string | null;
   lines: { itemId: string; quantity: number }[];
 };
+
+/**
+ * How this shop can be paid.
+ *
+ * The same list the website's checkout is built from, so a shopper is never
+ * offered on one storefront what the other has never heard of. Nothing here
+ * charges a card: cash is settled at the door and the instalment providers
+ * are arranged with the shopper after the order, which is what each method's
+ * note says.
+ */
+export type PaymentMethod = {
+  id: string;
+  name: string;
+  nameAr: string;
+  kind: string;
+  note: string;
+  noteAr: string;
+  logo: string;
+  enabled: boolean;
+};
+
+export const fetchPayments = () => api<PaymentMethod[]>("/payments");
 
 /**
  * Place the order.
@@ -5117,10 +5141,11 @@ function checkoutScreenFile(): GeneratedFile {
  * The phone is the signed-in account's and cannot be edited — the server
  * refuses any other.
  */
-import React, { useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import React, { useEffect, useState } from "react";
+import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { colors, radius, spacing, theme } from "../theme";
 import { screens, say } from "../screens";
+import { fetchPayments, type PaymentMethod } from "../api";
 
 export type Address = {
   customerName: string;
@@ -5129,6 +5154,7 @@ export type Address = {
   address: string;
   email?: string;
   note?: string;
+  paymentMethod?: string | null;
 };
 
 export function CheckoutScreen({
@@ -5140,6 +5166,24 @@ export function CheckoutScreen({
   busy?: boolean;
   onPlace: (address: Address) => void;
 }) {
+  // What the shop accepts. A checkout that cannot reach the list still takes
+  // cash at the door, so this never blocks the screen.
+  const [methods, setMethods] = useState<PaymentMethod[]>([]);
+  const [method, setMethod] = useState("");
+  useEffect(() => {
+    let alive = true;
+    fetchPayments()
+      .then((list) => {
+        if (!alive || !Array.isArray(list)) return;
+        setMethods(list);
+        const first = list.find((m) => m.kind === "cod") ?? list[0];
+        if (first) setMethod(first.id);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, []);
   const c = screens.checkout;
   const [form, setForm] = useState<Address>({
     customerName: "",
@@ -5165,10 +5209,37 @@ export function CheckoutScreen({
       <Field label="Address" value={form.address} onChange={set("address")} />
       {c.askNote ? <Field label="Order note" value={form.note ?? ""} onChange={set("note")} /> : null}
 
+      {methods.length ? (
+        <View style={styles.pay}>
+          <Text style={styles.payHead}>Payment</Text>
+          <View style={styles.payList}>
+            {methods.map((m, i) => {
+              const on = m.id === method;
+              return (
+                <View key={m.id} style={i ? styles.payRowTop : null}>
+                  <Pressable style={styles.payRow} onPress={() => setMethod(m.id)}>
+                    <View style={[styles.dot, on ? { borderColor: colors.accent } : null]}>
+                      {on ? <View style={styles.dotOn} /> : null}
+                    </View>
+                    <Text style={styles.payName} numberOfLines={1}>{m.name}</Text>
+                    {m.logo ? (
+                      <Image source={{ uri: m.logo }} style={styles.payLogo} resizeMode="contain" />
+                    ) : m.kind !== "cod" ? (
+                      <Text style={styles.payKind}>INSTALMENTS</Text>
+                    ) : null}
+                  </Pressable>
+                  {on && m.note ? <Text style={styles.payNote}>{m.note}</Text> : null}
+                </View>
+              );
+            })}
+          </View>
+        </View>
+      ) : null}
+
       <Pressable
         style={[styles.cta, !ready || busy ? styles.ctaOff : null]}
         disabled={!ready || busy}
-        onPress={() => onPlace(form)}
+        onPress={() => onPlace({ ...form, paymentMethod: method || null })}
       >
         <Text style={styles.ctaText}>{say(c.placeLabel, "Place the order")}</Text>
       </Pressable>
@@ -5207,6 +5278,17 @@ const styles = StyleSheet.create({
   label: { fontSize: 11, fontWeight: "500", color: colors.inkMuted },
   input: { marginTop: 4, height: 44, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, paddingHorizontal: 12, fontSize: 14, color: colors.ink },
   inputOff: { backgroundColor: colors.page, color: colors.inkMuted },
+  pay: { marginTop: spacing.lg },
+  payHead: { marginBottom: 6, fontSize: 11, fontWeight: "600", color: colors.inkMuted },
+  payList: { borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, overflow: "hidden", backgroundColor: colors.surface },
+  payRowTop: { borderTopWidth: 1, borderTopColor: colors.line },
+  payRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 11 },
+  dot: { height: 16, width: 16, borderRadius: 8, borderWidth: 1, borderColor: colors.line, alignItems: "center", justifyContent: "center" },
+  dotOn: { height: 8, width: 8, borderRadius: 4, backgroundColor: colors.accent },
+  payName: { flex: 1, fontSize: 13, fontWeight: "500", color: colors.ink },
+  payLogo: { height: 16, width: 44 },
+  payKind: { fontSize: 10, fontWeight: "600", letterSpacing: 0.6, color: colors.inkSoft },
+  payNote: { paddingHorizontal: 12, paddingBottom: 10, fontSize: 11, lineHeight: 16, color: colors.inkMuted },
   cta: { marginTop: spacing.sm, borderRadius: radius.md, backgroundColor: colors.accent, paddingVertical: 13, alignItems: "center" },
   ctaOff: { opacity: 0.5 },
   ctaText: { fontSize: 14, fontWeight: "700", color: "#fff" },
@@ -6672,6 +6754,7 @@ export default function App() {
         ...address,
         phone,
         couponCode: coupon?.code ?? null,
+        paymentMethod: address.paymentMethod ?? null,
         lines,
       });
       setLines([]);

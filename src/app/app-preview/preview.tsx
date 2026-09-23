@@ -19,6 +19,7 @@ import { Shop } from "./shop";
 import { AppNudge } from "@/components/app-nudge";
 import { AppStrip } from "@/components/app-strip";
 import { AppSplash } from "@/components/app-splash";
+import { payName, payNote, type PaymentMethod } from "@/lib/payments";
 import { AppHeader } from "@/components/app-header";
 import { AppLive } from "@/components/app-live";
 import { liveSessionsOf, liveSessionsFromLives } from "@/lib/app-theme";
@@ -676,6 +677,28 @@ export function Cart({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
+  // What the shop accepts. The same endpoint the website's checkout is
+  // built from, so the two can never drift apart.
+  const [methods, setMethods] = useState<PaymentMethod[]>([]);
+  const [method, setMethod] = useState("");
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/storefront/payments")
+      .then((r) => r.json())
+      .then((r) => {
+        if (!alive || !r?.ok || !Array.isArray(r.data)) return;
+        setMethods(r.data);
+        const first = r.data.find((m: PaymentMethod) => m.kind === "cod") ?? r.data[0];
+        if (first) setMethod(first.id);
+      })
+      .catch(() => {
+        /* a checkout with no list still takes cash at the door */
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
   async function applyCoupon() {
     setCouponErr(null);
     setDiscount(null);
@@ -700,6 +723,7 @@ export function Cart({
       address: form.address,
       note: form.note,
       couponCode: discount ? coupon : null,
+      paymentMethod: method || null,
     });
     setBusy(false);
     if (!res.ok) {
@@ -880,6 +904,55 @@ export function Cart({
               value={form.note ?? ""}
               onChange={(v) => setForm({ ...form, note: v })}
             />
+          )}
+
+          {/* How they mean to pay. Cash is settled at the door; the rest are
+              arranged afterwards, and each one says so rather than letting a
+              shopper think the money has already moved. */}
+          {methods.length > 0 && (
+            <div>
+              <div className="mb-1.5 text-[11px] font-semibold text-slate-500">
+                {ar ? "طريقة الدفع" : "Payment"}
+              </div>
+              <div className="overflow-hidden rounded-xl border border-slate-200">
+                {methods.map((m, i) => {
+                  const on = m.id === method;
+                  return (
+                    <div key={m.id} className={i ? "border-t border-slate-200" : ""}>
+                      <button
+                        onClick={() => setMethod(m.id)}
+                        className={`flex w-full items-center gap-2 px-3 py-2.5 text-start ${on ? "bg-slate-50" : "bg-white"}`}
+                      >
+                        <span
+                          className="grid h-4 w-4 shrink-0 place-items-center rounded-full border"
+                          style={{ borderColor: on ? accent : "#cbd5e1" }}
+                        >
+                          {on && (
+                            <span className="h-2 w-2 rounded-full" style={{ background: accent }} />
+                          )}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-slate-800">
+                          {payName(m, ar)}
+                        </span>
+                        {m.logo ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={m.logo} alt="" className="h-4 w-auto max-w-[44px] object-contain" />
+                        ) : m.kind !== "cod" ? (
+                          <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                            {ar ? "تقسيط" : "Instalments"}
+                          </span>
+                        ) : null}
+                      </button>
+                      {on && payNote(m, ar) && (
+                        <p className="px-3 pb-2.5 text-[11px] leading-relaxed text-slate-500">
+                          {payNote(m, ar)}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           )}
           <Btn full onClick={place} disabled={busy || !form.name || !form.address}>
             {busy

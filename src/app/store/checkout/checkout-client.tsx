@@ -9,6 +9,7 @@ import {
   type CustomerProfile, type CouponPreview,
 } from "../actions";
 import { say, type Copy } from "@/lib/page-copy";
+import { payName, payNote, type PaymentMethod } from "@/lib/payments";
 import { normalizePhone } from "@/lib/phone";
 import { STOREFRONT_HOME } from "@/lib/storefront";
 
@@ -149,11 +150,14 @@ export default function CheckoutClient({
   initialItems,
   identity = null,
   copy = {},
+  methods = [],
 }: {
   initialItems: CartItem[];
   identity?: CheckoutIdentity | null;
   /** The merchant's wording for this page, from the Pages screen. */
   copy?: Copy;
+  /** What the shop accepts, from the Payments settings. */
+  methods?: PaymentMethod[];
 }) {
   // Checkout always renders in English by default, regardless of the store's
   // Arabic-first language setting.
@@ -227,6 +231,16 @@ export default function CheckoutClient({
   const [emailOptIn, setEmailOptIn] = useState(false);
   const [smsOptIn, setSmsOptIn] = useState(false);
   const [billingSame, setBillingSame] = useState(true);
+  // What the shop accepts. Cash first if it is offered, because it is the one
+  // that needs nothing arranged afterwards.
+  const pay = methods.length ? methods : [];
+  const [method, setMethod] = useState<string>("");
+  useEffect(() => {
+    if (!pay.length) return;
+    if (pay.some((m) => m.id === method)) return;
+    setMethod((pay.find((m) => m.kind === "cod") ?? pay[0]).id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [methods]);
 
   // Signed in IS verified — the session was only issued to a shopper we had
   // already recognised, so asking for a code again would be asking twice.
@@ -428,6 +442,7 @@ export default function CheckoutClient({
       note: postal.trim() ? `${ar ? "الرمز البريدي" : "Postal"}: ${postal.trim()}` : "",
       couponCode: appliedCoupon,
       birthday: profileBirthday || null,
+      paymentMethod: method || null,
       items: items.map((i) => ({
         itemId: i.itemId, productName: i.productName, variantTitle: i.variantTitle,
         sku: i.sku, imageUrl: i.imageUrl, price: i.price, quantity: i.quantity,
@@ -720,14 +735,44 @@ export default function CheckoutClient({
               <p className="mb-4 mt-1 text-[14px] text-[var(--co-muted)]">
                 {ar ? "جميع المعاملات آمنة ومشفّرة." : "All transactions are secure and encrypted."}
               </p>
-              <div className="co-list co-single">
-                <div className="co-row co-on">
-                  <input type="radio" className="co-radio" checked readOnly name="payment" />
-                  <span className="flex-1 font-medium text-[var(--co-text)]">
-                    {say(copy, "codLabel", ar) || (ar ? "الدفع عند الاستلام (COD)" : "Cash on Delivery (COD)")}
-                  </span>
-                  <IcCash className="h-6 w-6 text-[var(--co-muted)]" />
-                </div>
+              <div className={`co-list ${pay.length < 2 ? "co-single" : ""}`}>
+                {pay.map((m) => {
+                  const on = m.id === method;
+                  const label =
+                    m.kind === "cod"
+                      ? say(copy, "codLabel", ar) || payName(m, ar)
+                      : payName(m, ar);
+                  return (
+                    <div key={m.id}>
+                      <button
+                        type="button"
+                        onClick={() => setMethod(m.id)}
+                        className={`co-row w-full text-start ${on ? "co-on" : ""}`}
+                      >
+                        <input type="radio" className="co-radio" checked={on} readOnly name="payment" />
+                        <span className="flex-1 font-medium text-[var(--co-text)]">{label}</span>
+                        {m.logo ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={m.logo} alt="" className="h-5 w-auto max-w-[56px] object-contain" />
+                        ) : m.kind === "cod" ? (
+                          <IcCash className="h-6 w-6 text-[var(--co-muted)]" />
+                        ) : (
+                          <span className="text-[12px] font-semibold uppercase tracking-wide text-[var(--co-muted)]">
+                            {ar ? "تقسيط" : "Instalments"}
+                          </span>
+                        )}
+                      </button>
+                      {/* What picking it actually means. An instalment plan is
+                          arranged after the order, and saying so here is the
+                          difference between a promise and a surprise. */}
+                      {on && payNote(m, ar) ? (
+                        <p className="px-4 pb-3 pt-1 text-[13px] leading-relaxed text-[var(--co-muted)]">
+                          {payNote(m, ar)}
+                        </p>
+                      ) : null}
+                    </div>
+                  );
+                })}
               </div>
             </section>
 
