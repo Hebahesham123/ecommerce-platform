@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { IcX, IcVideo, IcAlert } from "@/components/icons";
+import { IcX, IcAlert } from "@/components/icons";
 import type { LiveChat } from "@/lib/live-chat";
 import { getBrowserSupabase } from "@/lib/supabase/client";
 import { attachRecordingAction, createRecordingUploadAction } from "./actions";
@@ -16,9 +16,15 @@ import { attachRecordingAction, createRecordingUploadAction } from "./actions";
  * live input RTMPS would have reached, so viewers, the playback URL and the
  * recording are identical either way. A phone app is still there for anyone who
  * wants one; this is for the host who just wants to start talking.
+ *
+ * It fills the screen. A host watching herself in a postage stamp cannot tell
+ * whether she is framed, lit, or in shot at all — the only questions she has
+ * while the camera is on — so the picture takes the whole phone and every
+ * control floats over it, exactly as the viewers' screen does.
  */
 
 type Phase = "idle" | "starting" | "live" | "ended" | "error";
+type Recording = "off" | "on" | "saving" | "saved" | "failed";
 
 export function Broadcast({
   liveId,
@@ -54,16 +60,23 @@ export function Broadcast({
   const [facing, setFacing] = useState<"user" | "environment">("user");
   const [elapsed, setElapsed] = useState(0);
   const [micLevel, setMicLevel] = useState(0);
-  const [recording, setRecording] = useState<"off" | "on" | "saving" | "saved" | "failed">("off");
+  const [recording, setRecording] = useState<Recording>("off");
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
+  const paintRef = useRef<number | null>(null);
   const [micOn, setMicOn] = useState(true);
   const [draft, setDraft] = useState("");
   const [sendingComment, setSendingComment] = useState(false);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const rafRef = useRef<number | null>(null);
 
+  const stopPainting = useCallback(() => {
+    if (paintRef.current != null) cancelAnimationFrame(paintRef.current);
+    paintRef.current = null;
+  }, []);
+
   const stopEverything = useCallback(() => {
+    stopPainting();
     if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
     rafRef.current = null;
     audioCtxRef.current?.close().catch(() => {});
@@ -72,7 +85,7 @@ export function Broadcast({
     pcRef.current = null;
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
-  }, []);
+  }, [stopPainting]);
 
   // Show the camera immediately. Seeing yourself before going on air is the
   // whole difference between this and pasting a key into another app.
@@ -238,7 +251,9 @@ export function Broadcast({
       fetch(resource, { method: "DELETE" }).catch(() => {});
       resourceRef.current = null;
     }
-    stopEverything();
+    // The camera is released a moment later, so the recorder gets its last
+    // frames instead of the tracks being pulled out from under it.
+    setTimeout(stopEverything, 400);
     setPhase("ended");
     onEnded();
   }
@@ -247,9 +262,16 @@ export function Broadcast({
    * Keep a copy of what is going out.
    *
    * The provider records what a broadcasting app sends and nothing that comes
-   * from a browser, so a browser broadcast that wants a replay has to make
-   * one itself. It records the very same camera and microphone that are being
-   * broadcast, so the replay is what the room saw.
+   * from a browser, so a browser broadcast that wants a replay has to make one
+   * itself.
+   *
+   * It records through a canvas rather than straight off the camera track. A
+   * phone camera hands over a sideways picture and a note saying which way up
+   * it goes; the browser reads the note, the recording file has nowhere to put
+   * it, and the replay comes back lying on its side and the wrong shape. The
+   * canvas is painted with the frame the browser has already turned the right
+   * way up, at the size it is really being shown at, so what is saved is what
+   * was on screen.
    */
   function bestMimeType(): string {
     const wanted = [
@@ -262,30 +284,66 @@ export function Broadcast({
     return wanted.find((t) => MediaRecorder.isTypeSupported(t)) ?? "";
   }
 
+  /** A stream of upright frames, or null if this browser cannot make one. */
+  function uprightStream(camera: MediaStream): MediaStream | null {
+    const video = videoRef.current;
+    const canvas = document.createElement("canvas");
+    if (!video || typeof canvas.captureStream !== "function") return null;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+
+    canvas.width = video.videoWidth || 720;
+    canvas.height = video.videoHeight || 1280;
+
+    const paint = () => {
+      const w = video.videoWidth;
+      const h = video.videoHeight;
+      if (w > 0 && h > 0) {
+        // The phone can be turned over mid-sentence; the canvas follows.
+        if (canvas.width !== w || canvas.height !== h) {
+          canvas.width = w;
+          canvas.height = h;
+        }
+        ctx.drawImage(video, 0, 0, w, h);
+      }
+      paintRef.current = requestAnimationFrame(paint);
+    };
+    paint();
+
+    const out = canvas.captureStream(30);
+    // The picture is redrawn; the sound is the very same track the viewers
+    // are hearing.
+    for (const track of camera.getAudioTracks()) out.addTrack(track);
+    return out;
+  }
+
   function startRecording() {
-    const stream = streamRef.current;
-    if (!stream || typeof MediaRecorder === "undefined") {
+    const camera = streamRef.current;
+    if (!camera || typeof MediaRecorder === "undefined") {
       setRecording("failed");
-      setError(
-        ar
-          ? "هذا المتصفح لا يدعم التسجيل."
-          : "This browser cannot record.",
-      );
+      setError(ar ? "هذا المتصفح لا يدعم التسجيل." : "This browser cannot record.");
       return;
     }
     try {
+      // Straight off the camera is the fallback: a sideways replay is still
+      // better than no replay.
+      const source = uprightStream(camera) ?? camera;
       const mimeType = bestMimeType();
-      const rec = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      const rec = new MediaRecorder(source, mimeType ? { mimeType } : undefined);
       chunksRef.current = [];
       rec.ondataavailable = (e) => {
         if (e.data.size > 0) chunksRef.current.push(e.data);
       };
-      rec.onstop = () => void saveRecording(rec.mimeType);
+      rec.onstop = () => {
+        stopPainting();
+        void saveRecording(rec.mimeType);
+      };
       // A chunk a second, so a crash costs a second rather than the lot.
       rec.start(1000);
       recorderRef.current = rec;
       setRecording("on");
     } catch {
+      stopPainting();
       setRecording("failed");
     }
   }
@@ -338,67 +396,79 @@ export function Broadcast({
     setMicOn(track.enabled);
   }
 
+  function leave() {
+    if (phase === "live") {
+      if (!window.confirm(ar ? "إنهاء البث؟" : "End the broadcast?")) return;
+      endBroadcast();
+      return;
+    }
+    // Closing mid-upload would throw the recording away, which is the one
+    // thing that cannot be got back.
+    if (recording === "on" || recording === "saving") {
+      const sure = window.confirm(
+        ar ? "التسجيل لم يُحفظ بعد. الخروج؟" : "The recording is not saved yet. Leave anyway?",
+      );
+      if (!sure) return;
+    }
+    stopEverything();
+    onClose();
+  }
+
   const mmss = `${String(Math.floor(elapsed / 60)).padStart(2, "0")}:${String(elapsed % 60).padStart(2, "0")}`;
+  // Only the last few, the way a live chat reads.
+  const visible = messages.slice(-5);
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-3">
-      <div className="flex max-h-[92dvh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-surface shadow-2xl">
-        <div className="flex shrink-0 items-center justify-between px-4 py-3">
-          <h2 className="flex items-center gap-2 text-base font-bold text-ink">
-            <IcVideo className="h-5 w-5 text-brand-600" />
-            {ar ? "البث من هذا الهاتف" : "Broadcast from this phone"}
-          </h2>
-          <button
-            onClick={() => {
-              if (phase === "live") {
-                if (!window.confirm(ar ? "إنهاء البث؟" : "End the broadcast?")) return;
-                endBroadcast();
-              }
-              stopEverything();
-              onClose();
-            }}
-            className="btn-ghost h-8 w-8 p-0"
-          >
-            <IcX className="h-4 w-4" />
-          </button>
-        </div>
+    <div className="fixed inset-0 z-[70] overflow-hidden bg-black text-white">
+      {/*
+        Mirrored, but only here. A face that moves the opposite way to the one
+        you moved is useless for checking your own framing, which is why every
+        camera app shows you a mirror. What is broadcast and what is recorded
+        stay the right way round: this is a CSS transform, and it touches
+        nothing but the glass.
+      */}
+      {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted
+        style={facing === "user" ? { transform: "scaleX(-1)" } : undefined}
+        className="absolute inset-0 h-full w-full object-cover"
+      />
 
-        <div className="relative min-h-[200px] flex-1 bg-black">
-          <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 h-full w-full object-cover" />
-          {phase === "live" && (
-            <div className="absolute start-3 top-3 flex items-center gap-2">
-              <span className="rounded-full bg-rose-600 px-2 py-0.5 text-[11px] font-bold uppercase text-white">
-                {ar ? "مباشر" : "Live"}
-              </span>
-              <span className="rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-medium text-white" dir="ltr">
-                {mmss}
-              </span>
-              <span className="rounded-full bg-black/60 px-2 py-0.5 text-[11px] font-medium text-white">
-                👁 {Math.max(watching, viewers)}
-              </span>
+      {/* Everything below floats over the picture. */}
+      <div className="pointer-events-none relative z-10 flex h-full flex-col">
+        <div className="pointer-events-auto flex items-start gap-2 bg-gradient-to-b from-black/70 to-transparent p-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {phase === "live" ? (
+                <>
+                  <span className="rounded-full bg-rose-600 px-2 py-0.5 text-[11px] font-bold uppercase">
+                    {ar ? "مباشر" : "Live"}
+                  </span>
+                  <span
+                    className="rounded-full bg-black/50 px-2 py-0.5 text-[11px] font-medium backdrop-blur"
+                    dir="ltr"
+                  >
+                    {mmss}
+                  </span>
+                  <span className="rounded-full bg-black/50 px-2 py-0.5 text-[11px] font-medium backdrop-blur">
+                    👁 {Math.max(watching, viewers)}
+                  </span>
+                </>
+              ) : (
+                <span className="rounded-full bg-black/50 px-2 py-0.5 text-[11px] font-medium backdrop-blur">
+                  {phase === "ended" ? (ar ? "انتهى البث" : "Ended") : ar ? "معاينة" : "Preview"}
+                </span>
+              )}
+              {recording === "on" && (
+                <span className="rounded-full bg-rose-600 px-2 py-0.5 text-[11px] font-bold">
+                  {ar ? "● تسجيل" : "● REC"}
+                </span>
+              )}
             </div>
-          )}
-          {phase === "starting" && (
-            <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-sm text-white">
-              {ar ? "جارٍ الاتصال…" : "Connecting…"}
-            </div>
-          )}
-          {/* What the room is saying, over your own picture. */}
-          <div className="pointer-events-none absolute inset-x-3 bottom-3 flex flex-col gap-1">
-            {messages.length === 0 && (
-              <div className="w-fit rounded-2xl bg-black/40 px-2.5 py-1 text-[12px] text-white/70 backdrop-blur">
-                {ar ? "لا توجد تعليقات بعد" : "No comments yet"}
-              </div>
-            )}
-            {messages.map((m, i) => (
-              <div
-                key={m.id}
-                style={{ opacity: 0.4 + (0.6 * (i + 1)) / messages.length }}
-                className="w-fit max-w-[85%] rounded-2xl bg-black/50 px-2.5 py-1 text-[12px] leading-snug text-white backdrop-blur"
-              >
-                <span className="font-semibold text-white/80">{m.authorName}</span> {m.body}
-              </div>
-            ))}
+            <h2 className="mt-1 truncate text-[15px] font-semibold drop-shadow">{title}</h2>
           </div>
 
           <button
@@ -407,85 +477,126 @@ export function Broadcast({
               setFacing(next);
               openCamera(next);
             }}
-            className="absolute end-3 top-3 rounded-full bg-black/60 px-3 py-1.5 text-xs font-medium text-white"
+            className="shrink-0 rounded-full bg-black/50 px-3 py-2 text-xs font-medium backdrop-blur"
           >
-            {ar ? "قلب الكاميرا" : "Flip"}
+            {ar ? "قلب" : "Flip"}
+          </button>
+          <button
+            onClick={leave}
+            className="shrink-0 rounded-full bg-black/50 p-2.5 backdrop-blur"
+            aria-label={ar ? "إغلاق" : "Close"}
+          >
+            <IcX className="h-4 w-4" />
           </button>
         </div>
 
-        {error && (
-          <div className="flex items-start gap-2 border-b border-line bg-amber-50 p-3 text-xs text-amber-900">
-            <IcAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-            <span>{error}</span>
+        <div className="flex-1" />
+
+        {/* What the room is saying, over your own picture. */}
+        <div className="pointer-events-none px-3 pb-2">
+          <div className="flex max-w-[80%] flex-col gap-1.5">
+            {messages.length === 0 ? (
+              <div className="w-fit rounded-2xl bg-black/40 px-3 py-1.5 text-[13px] text-white/60 backdrop-blur">
+                {ar ? "لا توجد تعليقات بعد" : "No comments yet"}
+              </div>
+            ) : (
+              visible.map((m, i) => (
+                <div
+                  key={m.id}
+                  style={{ opacity: 0.35 + (0.65 * (i + 1)) / visible.length }}
+                  className="w-fit max-w-full rounded-2xl bg-black/45 px-3 py-1.5 text-[13px] leading-snug backdrop-blur"
+                >
+                  <span className={m.isHost ? "font-bold text-amber-300" : "font-semibold text-white/80"}>
+                    {m.authorName}
+                  </span>{" "}
+                  <span className="text-white">{m.body}</span>
+                </div>
+              ))
+            )}
           </div>
-        )}
-
-        <div className="flex shrink-0 items-center gap-2 border-b border-line px-4 py-2.5">
-          <input
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && replyOnAir()}
-            maxLength={240}
-            placeholder={ar ? "ردّي على المشاهدين…" : "Reply to viewers…"}
-            className="h-10 min-w-0 flex-1 rounded-full border border-line bg-surface-page px-3.5 text-sm text-ink outline-none focus:border-brand-600"
-          />
-          <button
-            onClick={replyOnAir}
-            disabled={sendingComment || !draft.trim()}
-            className="h-10 shrink-0 rounded-full bg-brand px-4 text-sm font-semibold text-white disabled:opacity-40"
-          >
-            {ar ? "إرسال" : "Send"}
-          </button>
         </div>
 
-        <div className="flex shrink-0 items-center gap-3 border-b border-line px-4 py-2.5">
-          <button
-            onClick={toggleMic}
-            className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${
-              micOn ? "bg-surface-page text-ink" : "bg-rose-100 text-rose-700"
-            }`}
-          >
-            {micOn ? (ar ? "الميكروفون يعمل" : "Mic on") : ar ? "الميكروفون مكتوم" : "Mic muted"}
-          </button>
-          <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-surface-page">
-            <div
-              className={`h-full rounded-full transition-[width] duration-75 ${
-                !micOn ? "bg-rose-400" : micLevel > 8 ? "bg-emerald-500" : "bg-slate-300"
+        <div className="pointer-events-auto bg-gradient-to-t from-black/85 via-black/60 to-transparent px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-4">
+          {error && (
+            <div className="mb-2 flex items-start gap-2 rounded-xl bg-amber-500/95 p-2.5 text-xs text-amber-950">
+              <IcAlert className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {/* Mic, level, record — the three things checked mid-sentence. */}
+          <div className="mb-2 flex items-center gap-2">
+            <button
+              onClick={toggleMic}
+              className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold backdrop-blur ${
+                micOn ? "bg-white/15 text-white" : "bg-rose-600 text-white"
               }`}
-              style={{ width: `${micOn ? micLevel : 100}%` }}
-            />
+            >
+              {micOn ? (ar ? "الميكروفون يعمل" : "Mic on") : ar ? "مكتوم" : "Muted"}
+            </button>
+            <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-white/20">
+              <div
+                className={`h-full rounded-full transition-[width] duration-75 ${
+                  !micOn ? "bg-rose-400" : micLevel > 8 ? "bg-emerald-400" : "bg-white/50"
+                }`}
+                style={{ width: `${micOn ? micLevel : 100}%` }}
+              />
+            </div>
+            <button
+              onClick={() => (recording === "on" ? stopRecording() : startRecording())}
+              disabled={recording === "saving"}
+              className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold backdrop-blur ${
+                recording === "on"
+                  ? "bg-rose-600 text-white"
+                  : recording === "saved"
+                    ? "bg-emerald-500 text-white"
+                    : "bg-white/15 text-white"
+              }`}
+            >
+              {recording === "on"
+                ? (ar ? "■ إيقاف" : "■ Stop")
+                : recording === "saving"
+                  ? (ar ? "جارٍ الحفظ…" : "Saving…")
+                  : recording === "saved"
+                    ? (ar ? "✓ حُفظ" : "✓ Saved")
+                    : ar ? "● تسجيل" : "● Record"}
+            </button>
           </div>
-          <span className="shrink-0 text-[11px] text-ink-soft">{ar ? "تحدثي" : "Speak"}</span>
-          <button
-            onClick={() => (recording === "on" ? stopRecording() : startRecording())}
-            disabled={recording === "saving"}
-            className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${
-              recording === "on"
-                ? "bg-rose-600 text-white"
-                : recording === "saved"
-                  ? "bg-emerald-100 text-emerald-700"
-                  : "bg-surface-page text-ink"
-            }`}
-          >
-            {recording === "on"
-              ? (ar ? "■ إيقاف التسجيل" : "■ Stop recording")
-              : recording === "saving"
-                ? (ar ? "جارٍ الحفظ…" : "Saving…")
-                : recording === "saved"
-                  ? (ar ? "✓ حُفظ" : "✓ Saved")
-                  : ar ? "● تسجيل" : "● Record"}
-          </button>
-        </div>
 
-        <div className="shrink-0 p-4">
+          {phase !== "ended" && (
+            <div className="mb-2 flex items-center gap-2">
+              <input
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && replyOnAir()}
+                maxLength={240}
+                placeholder={ar ? "ردّي على المشاهدين…" : "Reply to viewers…"}
+                className="h-11 min-w-0 flex-1 rounded-full bg-white/15 px-4 text-sm text-white outline-none backdrop-blur placeholder:text-white/50"
+              />
+              <button
+                onClick={replyOnAir}
+                disabled={sendingComment || !draft.trim()}
+                className="h-11 shrink-0 rounded-full bg-brand px-4 text-sm font-semibold text-white disabled:opacity-40"
+              >
+                {ar ? "إرسال" : "Send"}
+              </button>
+            </div>
+          )}
+
           {phase === "live" ? (
-            <button onClick={endBroadcast} className="btn-outline h-12 w-full justify-center text-base">
+            <button
+              onClick={endBroadcast}
+              className="h-12 w-full rounded-xl border border-white/30 bg-white/10 text-base font-semibold text-white backdrop-blur"
+            >
               {ar ? "إنهاء البث" : "End broadcast"}
             </button>
           ) : phase === "ended" ? (
-            <p className="py-2 text-center text-sm text-ink-muted">
-              {ar ? "انتهى البث." : "Broadcast ended."}
-            </p>
+            <button
+              onClick={leave}
+              className="h-12 w-full rounded-xl border border-white/30 bg-white/10 text-base font-semibold text-white backdrop-blur"
+            >
+              {ar ? "إغلاق" : "Close"}
+            </button>
           ) : (
             <button
               onClick={goLive}
@@ -495,22 +606,23 @@ export function Broadcast({
               {phase === "starting" ? (ar ? "جارٍ الاتصال…" : "Connecting…") : ar ? "ابدئي البث" : "Go live"}
             </button>
           )}
-          {recording === "on" && (
-            <p className="mb-2 text-center text-[11px] text-rose-600">
-              {ar
+
+          <p className="mt-2 text-center text-[11px] text-white/60">
+            {recording === "on"
+              ? ar
                 ? "يجري التسجيل — يُحفظ تلقائياً عند إنهاء البث."
-                : "Recording — it saves by itself when you end the broadcast."}
-            </p>
-          )}
-          {recording === "saved" && (
-            <p className="mb-2 text-center text-[11px] text-emerald-700">
-              {ar ? "التسجيل محفوظ ومتاح كإعادة." : "Saved, and available as the replay."}
-            </p>
-          )}
-          <p className="mt-2 text-center text-[11px] text-ink-soft">
-            {ar
-              ? `${title} · يظهر المشاهدون بعد ثوانٍ من بدء البث`
-              : `${title} · viewers see you a few seconds after you start`}
+                : "Recording — it saves by itself when you end the broadcast."
+              : recording === "saving"
+                ? ar
+                  ? "جارٍ رفع التسجيل — لا تغلقي هذه الصفحة."
+                  : "Uploading the recording — keep this page open."
+                : recording === "saved"
+                  ? ar
+                    ? "التسجيل محفوظ ومتاح كإعادة."
+                    : "Saved, and available as the replay."
+                  : ar
+                    ? `${title} · يظهر المشاهدون بعد ثوانٍ من بدء البث`
+                    : `${title} · viewers see you a few seconds after you start`}
           </p>
         </div>
       </div>

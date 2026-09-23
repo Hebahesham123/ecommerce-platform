@@ -32,6 +32,10 @@ export function Watch({ live: initial }: { live: WatchableLive }) {
   const [composing, setComposing] = useState(false);
 
   const onAir = live.status === "live";
+  // Watching a recording rather than a live. The video shows its own controls
+  // then, so the bar floating over it has to stop swallowing the taps meant
+  // for them.
+  const replay = !onAir && !!live.recordingUrl;
   const pinned = live.products.find((p) => p.pinned) ?? null;
 
   const { messages, viewers, send: sendComment } = useLiveChat(live.id, { enabled: onAir });
@@ -234,7 +238,11 @@ export function Watch({ live: initial }: { live: WatchableLive }) {
         </div>
 
         {/* Bottom bar: say something, see the products, go to checkout. */}
-        <div className="pointer-events-auto bg-gradient-to-t from-black/80 to-transparent px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
+        <div
+          className={`bg-gradient-to-t from-black/80 to-transparent px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 ${
+            replay ? "pointer-events-none" : "pointer-events-auto"
+          }`}
+        >
           {composing ? (
             <div className="flex items-center gap-2">
               <input
@@ -262,15 +270,20 @@ export function Watch({ live: initial }: { live: WatchableLive }) {
             </div>
           ) : (
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => (onAir ? setComposing(true) : null)}
-                disabled={!onAir}
-                className="h-11 min-w-0 flex-1 rounded-full bg-white/15 px-4 text-start text-sm text-white/70 backdrop-blur disabled:opacity-50"
-              >
-                {onAir
-                  ? ar ? "اكتبي تعليقاً…" : "Say something…"
-                  : ar ? "التعليقات مغلقة" : "Comments are closed"}
-              </button>
+              {replay ? (
+                // The space belongs to the video's own controls now.
+                <span className="min-w-0 flex-1" />
+              ) : (
+                <button
+                  onClick={() => (onAir ? setComposing(true) : null)}
+                  disabled={!onAir}
+                  className="h-11 min-w-0 flex-1 rounded-full bg-white/15 px-4 text-start text-sm text-white/70 backdrop-blur disabled:opacity-50"
+                >
+                  {onAir
+                    ? ar ? "اكتبي تعليقاً…" : "Say something…"
+                    : ar ? "التعليقات مغلقة" : "Comments are closed"}
+                </button>
+              )}
 
               {live.products.length > 0 && (
                 // A bag glyph and a number meant nothing to half the people
@@ -278,7 +291,7 @@ export function Watch({ live: initial }: { live: WatchableLive }) {
                 // for what it opens needs no explaining.
                 <button
                   onClick={() => setSheet(true)}
-                  className="flex h-11 shrink-0 items-center gap-2 rounded-full bg-white/95 ps-1.5 pe-3.5 text-ink shadow-lg"
+                  className="pointer-events-auto flex h-11 shrink-0 items-center gap-2 rounded-full bg-white/95 ps-1.5 pe-3.5 text-ink shadow-lg"
                 >
                   <span className="h-8 w-8 shrink-0 overflow-hidden rounded-full bg-slate-100">
                     {live.products[0]?.imageUrl && (
@@ -296,7 +309,7 @@ export function Watch({ live: initial }: { live: WatchableLive }) {
               {count > 0 && (
                 <Link
                   href="/store/checkout"
-                  className="h-11 shrink-0 rounded-full bg-rose-600 px-4 text-sm font-bold leading-[2.75rem]"
+                  className="pointer-events-auto h-11 shrink-0 rounded-full bg-rose-600 px-4 text-sm font-bold leading-[2.75rem]"
                 >
                   {ar ? `الدفع (${count})` : `Checkout (${count})`}
                 </Link>
@@ -534,14 +547,25 @@ function Player({ live, ar }: { live: WatchableLive; ar: boolean }) {
                 title={live.title}
               />
             ) : (
+              /*
+               * A replay is fitted, never cropped. A live fills the screen
+               * because it is framed for one, but a recording carries
+               * whatever shape the host's phone happened to be held in, and
+               * stretching it to fit cuts her out of her own video. It gets
+               * the browser's controls too: a recording that cannot be
+               * paused or wound back is barely a recording.
+               */
               // eslint-disable-next-line jsx-a11y/media-has-caption
               <video
                 src={hls}
                 autoPlay
                 playsInline
                 muted
-                loop
-                className={`h-full w-full object-cover ${webrtcReady ? "invisible" : ""}`}
+                loop={onAir}
+                controls={!onAir}
+                className={`h-full w-full ${onAir ? "object-cover" : "object-contain"} ${
+                  webrtcReady ? "invisible" : ""
+                }`}
               />
             ))}
 
