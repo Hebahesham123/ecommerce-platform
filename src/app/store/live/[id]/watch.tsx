@@ -21,12 +21,9 @@ import { useCart } from "../../cart";
 export function Watch({ live: initial }: { live: WatchableLive }) {
   const { lang } = useI18n();
   const ar = lang === "ar";
-  const { add, count, setOpen } = useCart();
+  const { add, items, setQty, remove, count, setOpen } = useCart();
 
   const [live, setLive] = useState(initial);
-  const [draft, setDraft] = useState("");
-  const [name, setName] = useState("");
-  const [sending, setSending] = useState(false);
   const [added, setAdded] = useState<string | null>(null);
   const [sheet, setSheet] = useState(false);
   const [composing, setComposing] = useState(false);
@@ -40,13 +37,6 @@ export function Watch({ live: initial }: { live: WatchableLive }) {
 
   const { messages, viewers, send: sendComment } = useLiveChat(live.id, { enabled: onAir });
 
-  useEffect(() => {
-    try {
-      setName(localStorage.getItem("bb_live_name") || "");
-    } catch {
-      /* private browsing */
-    }
-  }, []);
 
 
   // Say we are still here, so the shop can count the room without relying
@@ -80,23 +70,10 @@ export function Watch({ live: initial }: { live: WatchableLive }) {
     return () => clearInterval(t);
   }, [live.id, onAir]);
 
-  async function send() {
-    const body = draft.trim();
-    if (!body || sending) return;
-    setSending(true);
-    const who = name.trim() || (ar ? "زائرة" : "Guest");
-    try {
-      localStorage.setItem("bb_live_name", who);
-    } catch {
-      /* private browsing */
-    }
-    const ok = await sendComment({ authorName: who, body });
-    setSending(false);
-    if (ok) {
-      setDraft("");
-      setComposing(false);
-    }
-  }
+  const handleSend = useCallback(
+    (authorName: string, body: string) => sendComment({ authorName, body }),
+    [sendComment],
+  );
 
   const addToCart = useCallback(
     (p: LiveProduct) => {
@@ -244,30 +221,7 @@ export function Watch({ live: initial }: { live: WatchableLive }) {
           }`}
         >
           {composing ? (
-            <div className="flex items-center gap-2">
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder={ar ? "اسمك" : "Name"}
-                className="h-11 w-24 shrink-0 rounded-full bg-white/15 px-3 text-sm text-white outline-none backdrop-blur placeholder:text-white/50"
-              />
-              <input
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && send()}
-                maxLength={240}
-                autoFocus
-                placeholder={ar ? "اكتبي تعليقاً…" : "Say something…"}
-                className="h-11 min-w-0 flex-1 rounded-full bg-white/15 px-4 text-sm text-white outline-none backdrop-blur placeholder:text-white/50"
-              />
-              <button
-                onClick={send}
-                disabled={sending || !draft.trim()}
-                className="h-11 shrink-0 rounded-full bg-rose-600 px-4 text-sm font-semibold disabled:opacity-40"
-              >
-                {ar ? "إرسال" : "Send"}
-              </button>
-            </div>
+            <Composer ar={ar} onSend={handleSend} onClose={() => setComposing(false)} />
           ) : (
             <div className="flex items-center gap-2">
               {replay ? (
@@ -333,6 +287,9 @@ export function Watch({ live: initial }: { live: WatchableLive }) {
             <ul className="space-y-2">
               {live.products.map((p) => {
                 const soldOut = (p.available ?? 0) <= 0;
+                // What is already in the cart, so it can be changed rather
+                // than only ever added to.
+                const inCart = p.itemId ? items.find((i) => i.itemId === p.itemId) : undefined;
                 return (
                   <li key={p.id} className="flex items-center gap-3">
                     <span className="h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-slate-100">
@@ -353,15 +310,52 @@ export function Watch({ live: initial }: { live: WatchableLive }) {
                         {soldOut && <span className="ms-2 text-rose-600">{ar ? "نفدت" : "Sold out"}</span>}
                       </span>
                     </span>
-                    <button
-                      onClick={() => addToCart(p)}
-                      disabled={soldOut}
-                      className={`h-10 shrink-0 rounded-xl px-4 text-sm font-semibold text-white disabled:opacity-40 ${
-                        added === p.id ? "bg-emerald-600" : "bg-rose-600"
-                      }`}
-                    >
-                      {added === p.id ? (ar ? "تمت" : "Added") : ar ? "أضيفي" : "Add"}
-                    </button>
+                    {/*
+                      Adding was the only thing a viewer could do, so a
+                      mistaken tap stayed in the cart all the way to checkout.
+                      Once something is in, this becomes the way to change how
+                      many — and one step below one takes it out.
+                    */}
+                    {inCart && p.itemId ? (
+                      <div className="flex shrink-0 items-center gap-1 rounded-xl border border-line p-1">
+                        <button
+                          onClick={() =>
+                            inCart.quantity > 1
+                              ? setQty(p.itemId!, inCart.quantity - 1)
+                              : remove(p.itemId!)
+                          }
+                          className="h-8 w-8 rounded-lg text-lg font-semibold leading-none text-ink"
+                          aria-label={
+                            inCart.quantity > 1
+                              ? ar ? "أقل" : "One fewer"
+                              : ar ? "حذف" : "Remove"
+                          }
+                        >
+                          {inCart.quantity > 1 ? "−" : "🗑"}
+                        </button>
+                        <span className="min-w-6 text-center text-sm font-bold text-ink">
+                          {inCart.quantity}
+                        </span>
+                        <button
+                          onClick={() => setQty(p.itemId!, inCart.quantity + 1)}
+                          disabled={inCart.quantity >= (p.available ?? 1)}
+                          className="h-8 w-8 rounded-lg text-lg font-semibold leading-none text-ink disabled:opacity-30"
+                          aria-label={ar ? "أكثر" : "One more"}
+                        >
+                          +
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => addToCart(p)}
+                        disabled={soldOut}
+                        className={`h-10 shrink-0 rounded-xl px-4 text-sm font-semibold text-white disabled:opacity-40 ${
+                          added === p.id ? "bg-emerald-600" : "bg-rose-600"
+                        }`}
+                      >
+                        {added === p.id ? (ar ? "تمت" : "Added") : ar ? "أضيفي" : "Add"}
+                      </button>
+                    )}
                   </li>
                 );
               })}
@@ -382,6 +376,115 @@ export function Watch({ live: initial }: { live: WatchableLive }) {
 
       {/* The cart drawer lives in the store layout, which this page skips. */}
       <button onClick={() => setOpen(true)} className="hidden" aria-hidden />
+    </div>
+  );
+}
+
+/* -------------------------------- composer -------------------------------- */
+
+/**
+ * Saying something, in a box of its own.
+ *
+ * It used to keep its draft in the page's state, so every keystroke re-rendered
+ * the video overlay, the product list and every comment that had arrived. On a
+ * phone in the middle of a live that is enough for the text to fall behind the
+ * fingers — and for Send to be disabled at the instant it is tapped, which is
+ * why it took several taps and sent half a sentence when it finally went. The
+ * page no longer hears about the typing at all.
+ *
+ * Two other things that made Send feel broken are gone with it. It is never
+ * disabled, so a tap is never swallowed; and it does not wait for the server —
+ * the box empties at once and the request carries on behind it, because a
+ * button that appears to do nothing gets pressed again, and again.
+ */
+function Composer({
+  ar,
+  onSend,
+  onClose,
+}: {
+  ar: boolean;
+  onSend: (authorName: string, body: string) => Promise<boolean>;
+  onClose: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [draft, setDraft] = useState("");
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    try {
+      setName(localStorage.getItem("bb_live_name") || "");
+    } catch {
+      /* private browsing */
+    }
+  }, []);
+
+  function submit() {
+    const body = draft.trim();
+    if (!body) return;
+    const who = name.trim() || (ar ? "زائرة" : "Guest");
+    try {
+      localStorage.setItem("bb_live_name", who);
+    } catch {
+      /* private browsing */
+    }
+    setDraft("");
+    setFailed(false);
+    void onSend(who, body).then((ok) => {
+      // Hand the words back rather than swallow them.
+      if (!ok) {
+        setDraft((cur) => cur || body);
+        setFailed(true);
+      }
+    });
+  }
+
+  return (
+    <div>
+      {failed && (
+        <p className="mb-1 ps-3 text-[11px] text-rose-300">
+          {ar ? "لم يُرسل التعليق. حاولي مرة أخرى." : "That did not send — tap Send again."}
+        </p>
+      )}
+      <div className="flex items-center gap-2">
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder={ar ? "اسمك" : "Name"}
+          className="h-11 w-20 shrink-0 rounded-full bg-white/15 px-3 text-sm text-white outline-none backdrop-blur placeholder:text-white/50"
+        />
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") submit();
+          }}
+          maxLength={240}
+          autoFocus
+          enterKeyHint="send"
+          placeholder={ar ? "اكتبي تعليقاً…" : "Say something…"}
+          className="h-11 min-w-0 flex-1 rounded-full bg-white/15 px-4 text-sm text-white outline-none backdrop-blur placeholder:text-white/50"
+        />
+        <button
+          // Without this the tap blurs the input first, the keyboard starts to
+          // close, the bar slides out from under the finger and the tap lands
+          // on nothing — the other half of why Send needed pressing twice.
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={submit}
+          className={`h-11 shrink-0 rounded-full bg-rose-600 px-4 text-sm font-semibold transition-opacity ${
+            draft.trim() ? "" : "opacity-40"
+          }`}
+        >
+          {ar ? "إرسال" : "Send"}
+        </button>
+        <button
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={onClose}
+          className="h-11 w-9 shrink-0 rounded-full bg-white/10 text-white/70"
+          aria-label={ar ? "إغلاق" : "Close"}
+        >
+          ✕
+        </button>
+      </div>
     </div>
   );
 }

@@ -966,16 +966,26 @@ export async function postMessage(input: {
   const body = input.body.trim().slice(0, 240);
   if (!body) return { ok: false, error: "empty_message" };
 
-  const live = await getLive(input.liveId);
-  if (!live.ok) return live;
+  // Two columns, not the whole live with its products and its stock. Posting a
+  // comment was reading the entire broadcast first, which is a heavy query to
+  // run every time somebody says "hi" — and with a room of five hundred it is
+  // the reason Send felt slow.
+  const supabase = getServerSupabase();
+  const { data: state, error: stateError } = await supabase
+    .from(TABLE)
+    .select("status,started_at")
+    .eq("id", input.liveId)
+    .maybeSingle();
+  if (stateError) {
+    return { ok: false, error: missingTable(stateError.message) ? "migration_missing" : stateError.message };
+  }
+  if (!state) return { ok: false, error: "not_found" };
   // Chat belongs to the broadcast. A replay's chat is history, not a guestbook.
-  if (live.data.status !== "live") return { ok: false, error: "chat_closed" };
+  if (state.status !== "live") return { ok: false, error: "chat_closed" };
 
   try {
-    const supabase = getServerSupabase();
-    const offsetMs = live.data.startedAt
-      ? Math.max(0, Date.now() - new Date(live.data.startedAt).getTime())
-      : null;
+    const startedAt = state.started_at as string | null;
+    const offsetMs = startedAt ? Math.max(0, Date.now() - new Date(startedAt).getTime()) : null;
     const { data, error } = await supabase
       .from("live_stream_messages")
       .insert({
