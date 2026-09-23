@@ -826,6 +826,13 @@ function LiveDrawer({
                         ? "الكاميرا تفتح هنا — لا حاجة لأي تطبيق آخر."
                         : "The camera opens right here — no other app needed."}
                     </p>
+                    {live.replayEnabled && (
+                      <p className="mt-2 rounded-xl bg-amber-50 p-2.5 text-[11px] leading-relaxed text-amber-900">
+                        {ar
+                          ? "هذا البث مُعلَّم لحفظ التسجيل، لكن البث من المتصفح قد لا يُسجَّل لدى المزوّد. إن كان التسجيل مهماً، استخدمي تطبيق البث على الهاتف من الأسفل."
+                          : "This live is set to keep the replay, but a browser broadcast may not be recorded by the provider. If the replay matters, use the phone broadcasting app below."}
+                      </p>
+                    )}
                   </>
                 )}
 
