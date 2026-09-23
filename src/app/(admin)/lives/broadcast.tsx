@@ -26,6 +26,9 @@ import { attachRecordingAction, createRecordingUploadAction } from "./actions";
 type Phase = "idle" | "starting" | "live" | "ended" | "error";
 type Recording = "off" | "on" | "saving" | "saved" | "failed";
 
+/** How big the recording has got, in the unit a phone owner thinks in. */
+const mb = (bytes: number) => `${Math.max(1, Math.round(bytes / 1_000_000))} MB`;
+
 export function Broadcast({
   liveId,
   chat,
@@ -64,6 +67,9 @@ export function Broadcast({
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const paintRef = useRef<number | null>(null);
+  const [recordedBytes, setRecordedBytes] = useState(0);
+  /** Kept after a failed upload, so an hour of talking is never simply lost. */
+  const [rescue, setRescue] = useState<{ url: string; name: string } | null>(null);
   const [micOn, setMicOn] = useState(true);
   const [draft, setDraft] = useState("");
   const [sendingComment, setSendingComment] = useState(false);
@@ -292,19 +298,30 @@ export function Broadcast({
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
 
-    canvas.width = video.videoWidth || 720;
-    canvas.height = video.videoHeight || 1280;
+    // 720 on the long edge. Beyond that a phone replay gains nothing a viewer
+    // can see and costs megabytes a minute, which is what makes the difference
+    // between a file that uploads and one that is refused.
+    const fit = (w: number, h: number) => {
+      const scale = Math.min(1, 720 / Math.max(w, h));
+      // Even numbers: odd dimensions upset some encoders.
+      return [Math.round((w * scale) / 2) * 2, Math.round((h * scale) / 2) * 2];
+    };
+
+    const [w0, h0] = fit(video.videoWidth || 720, video.videoHeight || 1280);
+    canvas.width = w0;
+    canvas.height = h0;
 
     const paint = () => {
       const w = video.videoWidth;
       const h = video.videoHeight;
       if (w > 0 && h > 0) {
         // The phone can be turned over mid-sentence; the canvas follows.
-        if (canvas.width !== w || canvas.height !== h) {
-          canvas.width = w;
-          canvas.height = h;
+        const [cw, ch] = fit(w, h);
+        if (canvas.width !== cw || canvas.height !== ch) {
+          canvas.width = cw;
+          canvas.height = ch;
         }
-        ctx.drawImage(video, 0, 0, w, h);
+        ctx.drawImage(video, 0, 0, cw, ch);
       }
       paintRef.current = requestAnimationFrame(paint);
     };
@@ -329,10 +346,22 @@ export function Broadcast({
       // better than no replay.
       const source = uprightStream(camera) ?? camera;
       const mimeType = bestMimeType();
-      const rec = new MediaRecorder(source, mimeType ? { mimeType } : undefined);
+      // Left to itself a recorder picks a bitrate for a desktop screen and
+      // writes a file too big to upload. This is about nine megabytes a
+      // minute, which looks the same on a phone and can actually be sent.
+      const rec = new MediaRecorder(source, {
+        ...(mimeType ? { mimeType } : {}),
+        videoBitsPerSecond: 1_200_000,
+        audioBitsPerSecond: 96_000,
+      });
       chunksRef.current = [];
+      setRecordedBytes(0);
+      setRescue(null);
       rec.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data);
+        if (e.data.size > 0) {
+          chunksRef.current.push(e.data);
+          setRecordedBytes((n) => n + e.data.size);
+        }
       };
       rec.onstop = () => {
         stopPainting();
@@ -363,9 +392,9 @@ export function Broadcast({
       setRecording("failed");
       return;
     }
+    const blob = new Blob(parts, { type: mimeType || "video/webm" });
+    const extension = blob.type.includes("mp4") ? "mp4" : "webm";
     try {
-      const blob = new Blob(parts, { type: mimeType || "video/webm" });
-      const extension = blob.type.includes("mp4") ? "mp4" : "webm";
       // Straight from here to storage: the file is hundreds of megabytes and
       // a serverless request is capped in single digits.
       const slot = await createRecordingUploadAction(liveId, extension);
@@ -381,11 +410,29 @@ export function Broadcast({
       setRecording("saved");
     } catch (e) {
       setRecording("failed");
+      const raw = (e as Error).message;
+      // A refusal on size is not a bug to report, it is a setting to change,
+      // and saying which one is the difference between a fix and a shrug.
+      const tooBig = /maximum allowed size|exceeded|too large|413/i.test(raw);
       setError(
-        ar
-          ? `تعذّر حفظ التسجيل: ${(e as Error).message}`
-          : `Could not save the recording: ${(e as Error).message}`,
+        tooBig
+          ? ar
+            ? "التسجيل أكبر من حد الرفع في Supabase. ارفعي الحد من Storage → Settings، أو احفظي الفيديو على الهاتف من الزر بالأسفل."
+            : "The recording is over Supabase's upload limit. Raise it in Storage → Settings, or save the video to this phone with the button below."
+          : ar
+            ? `تعذّر حفظ التسجيل: ${raw}`
+            : `Could not save the recording: ${raw}`,
       );
+      // Whatever went wrong up there, the video itself is in hand. Offer it
+      // rather than discarding an hour of work on a failed request.
+      try {
+        setRescue({
+          url: URL.createObjectURL(blob),
+          name: `live-${liveId}.${extension}`,
+        });
+      } catch {
+        /* nothing more to offer */
+      }
     }
   }
 
@@ -465,6 +512,7 @@ export function Broadcast({
               {recording === "on" && (
                 <span className="rounded-full bg-rose-600 px-2 py-0.5 text-[11px] font-bold">
                   {ar ? "● تسجيل" : "● REC"}
+                  {recordedBytes > 0 && <span className="ms-1 font-medium">{mb(recordedBytes)}</span>}
                 </span>
               )}
             </div>
@@ -522,6 +570,16 @@ export function Broadcast({
               <IcAlert className="mt-0.5 h-4 w-4 shrink-0" />
               <span>{error}</span>
             </div>
+          )}
+
+          {rescue && (
+            <a
+              href={rescue.url}
+              download={rescue.name}
+              className="mb-2 flex h-11 w-full items-center justify-center rounded-xl bg-white text-sm font-semibold text-ink"
+            >
+              {ar ? `احفظي الفيديو على الهاتف (${mb(recordedBytes)})` : `Save the video to this phone (${mb(recordedBytes)})`}
+            </a>
           )}
 
           {/* Mic, level, record — the three things checked mid-sentence. */}
@@ -614,8 +672,8 @@ export function Broadcast({
                 : "Recording — it saves by itself when you end the broadcast."
               : recording === "saving"
                 ? ar
-                  ? "جارٍ رفع التسجيل — لا تغلقي هذه الصفحة."
-                  : "Uploading the recording — keep this page open."
+                  ? `جارٍ رفع التسجيل (${mb(recordedBytes)}) — لا تغلقي هذه الصفحة.`
+                  : `Uploading the recording (${mb(recordedBytes)}) — keep this page open.`
                 : recording === "saved"
                   ? ar
                     ? "التسجيل محفوظ ومتاح كإعادة."

@@ -564,7 +564,18 @@ export async function reportViewers(id: string, viewers: number): Promise<void> 
 
 // ---- Recording it ourselves -------------------------------------------------
 
-const RECORDING_BUCKET = "files";
+/**
+ * Replays live apart from the media library.
+ *
+ * A bucket with no size of its own inherits the project's, which is fifty
+ * megabytes by default — passed by about five minutes of video, and only
+ * discovered when the upload is refused after the live has ended. This one is
+ * created with room for video (migration 0038) and is never touched by anything
+ * that tidies up product photos.
+ */
+const RECORDING_BUCKET = "live-recordings";
+/** Until that migration is run. Old replays still live here, too. */
+const RECORDING_BUCKET_FALLBACK = "files";
 
 /**
  * Somewhere for the browser to put the recording it made.
@@ -584,17 +595,26 @@ export async function createRecordingUpload(
     const supabase = getServerSupabase();
     const safe = extension.replace(/[^a-z0-9]/gi, "").slice(0, 5) || "webm";
     const path = `lives/${liveId}/${Date.now()}.${safe}`;
-    const { data, error } = await supabase.storage
-      .from(RECORDING_BUCKET)
-      .createSignedUploadUrl(path);
-    if (error || !data) return { ok: false, error: error?.message ?? "no_signed_url" };
-    const { data: pub } = supabase.storage.from(RECORDING_BUCKET).getPublicUrl(path);
+
+    // The proper bucket, or the old one if the migration has not been run yet.
+    // A missing bucket should cost the host a smaller replay, not the replay.
+    let bucket = RECORDING_BUCKET;
+    let signed = await supabase.storage.from(bucket).createSignedUploadUrl(path);
+    if (signed.error && /not found|does not exist/i.test(signed.error.message)) {
+      bucket = RECORDING_BUCKET_FALLBACK;
+      signed = await supabase.storage.from(bucket).createSignedUploadUrl(path);
+    }
+    if (signed.error || !signed.data) {
+      return { ok: false, error: signed.error?.message ?? "no_signed_url" };
+    }
+
+    const { data: pub } = supabase.storage.from(bucket).getPublicUrl(path);
     return {
       ok: true,
       data: {
-        bucket: RECORDING_BUCKET,
+        bucket,
         path,
-        token: data.token,
+        token: signed.data.token,
         publicUrl: pub.publicUrl,
       },
     };
