@@ -490,15 +490,18 @@ function LiveForm({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="w-full max-w-lg rounded-2xl bg-surface p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-4 flex items-center justify-between">
+      <div
+        className="flex max-h-[90dvh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-surface shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex shrink-0 items-center justify-between border-b border-line px-5 py-4">
           <h2 className="text-lg font-bold text-ink">
             {live ? (ar ? "تعديل البث" : "Edit live") : ar ? "بث جديد" : "New live"}
           </h2>
           <button onClick={onClose} className="btn-ghost h-8 w-8 p-0"><IcX className="h-4 w-4" /></button>
         </div>
 
-        <div className="space-y-3">
+        <div className="flex-1 space-y-3 overflow-y-auto px-5 py-4">
           <div>
             <label className="text-xs font-medium text-ink-muted">{ar ? "العنوان" : "Title"}</label>
             <input value={title} onChange={(e) => setTitle(e.target.value)} className={`${field} mt-1`} />
@@ -610,7 +613,7 @@ function LiveForm({
               placeholder={ar ? "ابحثي عن منتج…" : "Search products…"}
               className={`${field} mt-2`}
             />
-            <div className="mt-2 max-h-48 divide-y divide-line overflow-y-auto rounded-xl border border-line">
+            <div className="mt-2 max-h-48 divide-y divide-line overflow-y-auto overscroll-contain rounded-xl border border-line">
               {shownProducts.map((c) => (
                 <label key={c.id} className="flex cursor-pointer items-center gap-2.5 px-3 py-2 text-sm">
                   <input
@@ -647,13 +650,14 @@ function LiveForm({
           />
         )}
 
-        {err && <p className="mt-3 text-sm font-medium text-rose-600">{err}</p>}
-
-        <div className="mt-5 flex justify-end gap-2">
-          <button onClick={onClose} className="btn-outline">{ar ? "إلغاء" : "Cancel"}</button>
-          <button onClick={save} disabled={busy} className="btn-primary disabled:opacity-60">
-            {busy ? (ar ? "جارٍ الحفظ…" : "Saving…") : ar ? "حفظ" : "Save"}
-          </button>
+        <div className="shrink-0 border-t border-line px-5 py-4">
+          {err && <p className="mb-2 text-sm font-medium text-rose-600">{err}</p>}
+          <div className="flex justify-end gap-2">
+            <button onClick={onClose} className="btn-outline">{ar ? "إلغاء" : "Cancel"}</button>
+            <button onClick={save} disabled={busy} className="btn-primary disabled:opacity-60">
+              {busy ? (ar ? "جارٍ الحفظ…" : "Saving…") : ar ? "حفظ" : "Save"}
+            </button>
+          </div>
         </div>
       </div>
     </div>
