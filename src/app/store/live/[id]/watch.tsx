@@ -514,7 +514,11 @@ function Player({ live, ar }: { live: WatchableLive; ar: boolean }) {
         <div className="flex h-full items-center justify-center px-6 text-center text-sm text-white/70">
           {live.status === "scheduled"
             ? ar ? "لم يبدأ البث بعد" : "The live has not started yet"
-            : ar ? "لا يوجد فيديو" : "No video"}
+            : live.status === "ended"
+              ? ar
+                ? "جارٍ تجهيز التسجيل — عودي بعد دقائق قليلة."
+                : "The replay is being prepared — check back in a few minutes."
+              : ar ? "لا يوجد فيديو" : "No video"}
         </div>
       ) : (
         <>

@@ -984,7 +984,13 @@ function LiveDrawer({
               />
               <Stat
                 label={ar ? "التسجيل" : "Replay"}
-                value={live.recordingUrl ? (ar ? "جاهز" : "Ready") : ar ? "غير متاح" : "Not yet"}
+                value={
+                  live.recordingUrl
+                    ? (ar ? "جاهز" : "Ready")
+                    : live.status === "ended" && live.replayEnabled
+                      ? (ar ? "جارٍ التجهيز" : "Preparing")
+                      : ar ? "غير متاح" : "Not yet"
+                }
               />
             </div>
             {live.recordingUrl && (

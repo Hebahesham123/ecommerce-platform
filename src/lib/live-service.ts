@@ -184,7 +184,7 @@ export async function listLives(): Promise<Result<LiveStream[]>> {
     if (error) {
       return { ok: false, error: missingTable(error.message) ? "migration_missing" : error.message };
     }
-    return { ok: true, data: (data ?? []).map(mapLiveStream) };
+    return { ok: true, data: await healRecordings((data ?? []).map(mapLiveStream)) };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }
@@ -209,6 +209,7 @@ export async function getLive(id: string): Promise<Result<LiveStream>> {
 export async function listPublicLives(): Promise<Result<LiveStream[]>> {
   const all = await listLives();
   if (!all.ok) return all;
+  const lives = await healRecordings(all.data);
   const rank = (s: LiveStream) =>
     s.status === "live"
       ? 0
@@ -219,7 +220,7 @@ export async function listPublicLives(): Promise<Result<LiveStream[]>> {
           : 3;
   return {
     ok: true,
-    data: all.data.filter((s) => rank(s) < 3).sort((a, b) => rank(a) - rank(b)),
+    data: lives.filter((s) => rank(s) < 3).sort((a, b) => rank(a) - rank(b)),
   };
 }
 
@@ -235,7 +236,7 @@ export async function getPublicLive(id: string): Promise<Result<LiveStream>> {
   const res = await getLive(id);
   if (!res.ok) return res;
   const [stocked, watching] = await Promise.all([
-    withAvailability(res.data),
+    withAvailability(await healRecording(res.data)),
     res.data.status === "live" ? watchingNow(id) : Promise.resolve(0),
   ]);
   return { ok: true, data: { ...stocked, watching } };
@@ -424,6 +425,47 @@ export async function setLiveStatus(
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }
+}
+
+/**
+ * Fetch the recording for a live that ought to have one and does not.
+ *
+ * Ending a stream used to be the only moment we looked, which is the one
+ * moment the answer is always no: the provider has not finished cutting the
+ * recording yet. So the replay was never found, and the merchant was left
+ * pressing a button to ask again.
+ *
+ * Now anyone reading the live heals it. The first look after the provider
+ * is done stores the URL, and every look after that costs nothing because
+ * there is nothing left to fetch.
+ */
+async function healRecording(live: LiveStream): Promise<LiveStream> {
+  const wanted =
+    live.status === "ended" && live.replayEnabled && !live.recordingUrl && providerConfigured();
+  if (!wanted) return live;
+  const res = await refreshRecording(live.id);
+  return res.ok && res.data ? { ...live, recordingUrl: res.data } : live;
+}
+
+/** The same, for a list — and only for the few that could plausibly have one. */
+async function healRecordings(lives: LiveStream[], max = 4): Promise<LiveStream[]> {
+  const pending = lives.filter(
+    (l) => l.status === "ended" && l.replayEnabled && !l.recordingUrl,
+  );
+  if (!pending.length || !providerConfigured()) return lives;
+  // Newest first: an old live whose recording never arrived is not worth
+  // asking about on every page load forever.
+  const attempt = pending
+    .sort((a, b) => String(b.endedAt ?? "").localeCompare(String(a.endedAt ?? "")))
+    .slice(0, max);
+  const healed = new Map<string, LiveStream>();
+  await Promise.all(
+    attempt.map(async (l) => {
+      const next = await healRecording(l);
+      if (next.recordingUrl) healed.set(l.id, next);
+    }),
+  );
+  return healed.size ? lives.map((l) => healed.get(l.id) ?? l) : lives;
 }
 
 /** Ask the provider whether the replay exists yet, and store it if it does. */
