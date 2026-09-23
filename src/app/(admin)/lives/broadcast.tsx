@@ -246,8 +246,8 @@ export function Broadcast({
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-3">
-      <div className="w-full max-w-md overflow-hidden rounded-2xl bg-surface shadow-2xl">
-        <div className="flex items-center justify-between px-4 py-3">
+      <div className="flex max-h-[92dvh] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-surface shadow-2xl">
+        <div className="flex shrink-0 items-center justify-between px-4 py-3">
           <h2 className="flex items-center gap-2 text-base font-bold text-ink">
             <IcVideo className="h-5 w-5 text-brand-600" />
             {ar ? "البث من هذا الهاتف" : "Broadcast from this phone"}
@@ -267,8 +267,8 @@ export function Broadcast({
           </button>
         </div>
 
-        <div className="relative bg-black">
-          <video ref={videoRef} autoPlay playsInline muted className="aspect-[3/4] w-full object-cover" />
+        <div className="relative min-h-[200px] flex-1 bg-black">
+          <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 h-full w-full object-cover" />
           {phase === "live" && (
             <div className="absolute start-3 top-3 flex items-center gap-2">
               <span className="rounded-full bg-rose-600 px-2 py-0.5 text-[11px] font-bold uppercase text-white">
@@ -324,7 +324,7 @@ export function Broadcast({
           </div>
         )}
 
-        <div className="flex items-center gap-2 border-b border-line px-4 py-2.5">
+        <div className="flex shrink-0 items-center gap-2 border-b border-line px-4 py-2.5">
           <input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -342,7 +342,7 @@ export function Broadcast({
           </button>
         </div>
 
-        <div className="flex items-center gap-3 border-b border-line px-4 py-2.5">
+        <div className="flex shrink-0 items-center gap-3 border-b border-line px-4 py-2.5">
           <button
             onClick={toggleMic}
             className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${
@@ -362,7 +362,7 @@ export function Broadcast({
           <span className="shrink-0 text-[11px] text-ink-soft">{ar ? "تحدثي" : "Speak"}</span>
         </div>
 
-        <div className="p-4">
+        <div className="shrink-0 p-4">
           {phase === "live" ? (
             <button onClick={endBroadcast} className="btn-outline h-12 w-full justify-center text-base">
               {ar ? "إنهاء البث" : "End broadcast"}
