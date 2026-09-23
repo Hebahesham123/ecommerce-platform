@@ -1258,8 +1258,11 @@ export function newBlock(type: BlockType): Block {
       screen: "",
     },
     free_shipping: {
-      /** "banner" is the tall card; "strip" is the one-line ribbon. */
-      style: "banner",
+      /**
+       * Four ways to say it: a ribbon of type crossing the screen, a quiet
+       * editorial line, the air-mail envelope, or a single quiet row.
+       */
+      style: "ribbon",
       kicker: "Delivered on us",
       title: "Free shipping",
       subtitle: "on every order over EGP 2,000",

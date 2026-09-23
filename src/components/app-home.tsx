@@ -2916,7 +2916,8 @@ function FreeShipping({
 }) {
   const s = block.settings ?? {};
   const go = opener(data, handlers);
-  const strip = str(s.style) === "strip";
+  const look = str(s.style) || "ribbon";
+  const strip = look === "strip";
   // Cream paper, roast ink, caramel stripes. The old banner was a dark panel,
   // which put three dark sections in a row on the home screen; an envelope is
   // light by nature and gives the scroll somewhere to breathe.
@@ -2939,6 +2940,97 @@ function FreeShipping({
       }}
     />
   );
+
+  // ---- the ribbon: one line of type crossing the screen -----------------
+  if (look === "ribbon") {
+    const line = [str(s.title), str(s.subtitle)].filter(Boolean).join(" ");
+    const run = line || str(s.kicker);
+    return (
+      <section>
+        <button
+          onClick={() => opens && go(s)}
+          className={`-mx-4 flex w-[calc(100%+2rem)] items-center overflow-hidden py-3 ${opens ? "" : "cursor-default"}`}
+          style={{ background: air }}
+        >
+          {/* Twice, so the second copy is already on screen when the first
+              leaves and the line never appears to end. */}
+          <span className="app-ribbon flex w-max shrink-0 items-center">
+            {[0, 1].map((half) => (
+              <span key={half} className="flex shrink-0 items-center">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <span key={i} dir="auto" className="flex shrink-0 items-center">
+                    <span
+                      className="whitespace-nowrap text-[13px] font-bold uppercase tracking-[0.14em]"
+                      style={{ color: paper }}
+                    >
+                      {run}
+                    </span>
+                    <span className="px-3 text-[11px]" style={{ color: paper, opacity: 0.7 }}>
+                      ✦
+                    </span>
+                  </span>
+                ))}
+              </span>
+            ))}
+          </span>
+        </button>
+      </section>
+    );
+  }
+
+  // ---- the editorial line: no ornament at all ---------------------------
+  if (look === "editorial") {
+    return (
+      <section>
+        <button
+          onClick={() => opens && go(s)}
+          className={`w-full px-4 py-6 text-center ${opens ? "" : "cursor-default"}`}
+          style={{ background: paper, borderRadius: radius }}
+        >
+          {str(s.kicker) && (
+            <span className="flex items-center justify-center gap-2.5">
+              <span className="h-px w-8" style={{ background: `${ink}33` }} />
+              <span
+                dir="auto"
+                className="text-[9px] font-bold uppercase tracking-[0.22em]"
+                style={{ color: air }}
+              >
+                {str(s.kicker)}
+              </span>
+              <span className="h-px w-8" style={{ background: `${ink}33` }} />
+            </span>
+          )}
+          {str(s.title) && (
+            <span
+              dir="auto"
+              className="app-display mt-2 block text-[27px] font-bold leading-tight"
+              style={{ color: ink }}
+            >
+              {str(s.title)}
+            </span>
+          )}
+          {str(s.subtitle) && (
+            <span
+              dir="auto"
+              className="mt-1.5 block text-[10px] font-semibold uppercase tracking-[0.18em]"
+              style={{ color: ink, opacity: 0.6 }}
+            >
+              {str(s.subtitle)}
+            </span>
+          )}
+          {str(s.buttonLabel) && (
+            <span
+              dir="auto"
+              className="mt-3 inline-block border-b pb-0.5 text-[11px] font-bold uppercase tracking-[0.14em]"
+              style={{ color: ink, borderColor: air }}
+            >
+              {str(s.buttonLabel)} {ar ? "←" : "→"}
+            </span>
+          )}
+        </button>
+      </section>
+    );
+  }
 
   if (strip) {
     return (
@@ -3905,9 +3997,12 @@ function SectionBand({
   children: React.ReactNode;
 }) {
   const s = block.settings ?? {};
-  // The mystery box banner wears its line as a tag inside itself; drawing it
-  // above as well says it twice.
-  const kicker = block.type === "promo_card" && str(s.style) === "banner" ? "" : str(s.kicker);
+  // Some sections wear their small line inside themselves — the mystery box as
+  // a tag, the delivery banner between two rules — and drawing it above as
+  // well says it twice.
+  const ownsKicker =
+    (block.type === "promo_card" && str(s.style) === "banner") || block.type === "free_shipping";
+  const kicker = ownsKicker ? "" : str(s.kicker);
   const band = str(s.band);
   const washed = band === "tint" || band === "paper";
 

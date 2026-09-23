@@ -4280,7 +4280,9 @@ function homeScreenFile(theme: AppTheme): GeneratedFile {
     .map((b) => {
       const set = b.settings ?? {};
       // The mystery box banner carries its line as a tag inside itself.
-      const kicker = b.type === "promo_card" && s(set.style) === "banner" ? "" : s(set.kicker);
+      // Said inside the section itself, so not again above it.
+      const ownsKicker = (b.type === "promo_card" && s(set.style) === "banner") || b.type === "free_shipping";
+      const kicker = ownsKicker ? "" : s(set.kicker);
       const band = s(set.band);
       const washed = band === "tint" || band === "paper";
       // A band bleeds to the screen edges, so the page padding comes off and

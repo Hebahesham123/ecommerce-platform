@@ -3027,9 +3027,11 @@ function BlockGroup({
       {block.type === "free_shipping" && (
         <>
           <Field label={ar ? "الشكل" : "Look"} type="select">
-            <select value={text("style") || "banner"} onChange={(e) => onPatch({ style: e.target.value })} className={input}>
-              <option value="banner">{ar ? "بانر كبير" : "Tall banner"}</option>
-              <option value="strip">{ar ? "شريط سطر واحد" : "One-line strip"}</option>
+            <select value={text("style") || "ribbon"} onChange={(e) => onPatch({ style: e.target.value })} className={input}>
+              <option value="ribbon">{ar ? "شريط متحرك عبر الشاشة" : "Ribbon of type across the screen"}</option>
+              <option value="editorial">{ar ? "سطر هادئ بلا زخرفة" : "Quiet editorial line"}</option>
+              <option value="banner">{ar ? "ظرف بريد جوي" : "Air-mail envelope"}</option>
+              <option value="strip">{ar ? "صف واحد صغير" : "One quiet row"}</option>
             </select>
           </Field>
           <Field label={ar ? "السطر العلوي" : "Small line above"} type="text">

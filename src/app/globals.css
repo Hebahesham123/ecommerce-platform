@@ -490,6 +490,17 @@ body {
   .app-seal-turn { animation: none; }
 }
 
+/* App theme: free delivery as a ribbon - one line of type crossing the
+   screen, the way a fashion house says a thing it wants everyone to hear. */
+@keyframes app-ribbon {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.app-ribbon { animation: app-ribbon 18s linear infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .app-ribbon { animation: none; }
+}
+
 /* App theme: free delivery as airmail - the striped border of an air-mail
    envelope, travelling slowly, and a stamp for the threshold. */
 @keyframes app-air-stripes {
