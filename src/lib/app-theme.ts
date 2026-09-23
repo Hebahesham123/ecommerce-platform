@@ -1266,9 +1266,14 @@ export function newBlock(type: BlockType): Block {
       note: "Anywhere we ship, no code needed",
       buttonLabel: "",
       // Empty colours follow the brand, as everywhere else.
+      // The stamp in the corner: what it takes to have it delivered free.
+      stampTop: "EGP",
+      stampBig: "2,000",
+      stampBottom: "and over",
+      // Empty colours follow the brand: cream paper, roast ink, caramel air.
       bg: "",
       bg2: "",
-      inkColor: "#ffffff",
+      inkColor: "",
       dashColor: "",
       radius: 18,
       height: 0,

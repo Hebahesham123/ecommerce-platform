@@ -2886,17 +2886,20 @@ function SaleSeal({
 }
 
 /**
- * Free delivery, said out loud.
+ * Free delivery, as airmail.
  *
  * The store already has a bar that counts a basket up to free delivery, which
  * is the right thing once there is a basket. This is the other half: the
- * promise, before anyone has put anything in one. It is a banner rather than a
- * line of small print because free shipping is the single most persuasive
- * thing most shops can say, and small print is where it usually goes.
+ * promise, before anyone has put anything in one. Free shipping is the single
+ * most persuasive thing most shops can say and it is usually set in the
+ * smallest type on the page.
  *
- * The art is a dashed road travelling under a parcel - delivery, drawn with
- * two rectangles - so it costs nothing to load and reads at any size, and the
- * phone can draw the same thing without a picture library.
+ * So it is an envelope: cream paper, the striped border of an air-mail
+ * envelope travelling slowly round the top and bottom edges, and the
+ * threshold franked onto a postage stamp. It is the one section on the home
+ * screen that is a thing rather than a card, which is the whole job - and it
+ * is drawn with blocks of colour and a dashed border, so it costs nothing to
+ * load and the phone can draw the same thing without a picture library.
  */
 function FreeShipping({
   block,
@@ -2914,37 +2917,27 @@ function FreeShipping({
   const s = block.settings ?? {};
   const go = opener(data, handlers);
   const strip = str(s.style) === "strip";
-  const bg = str(s.bg) || "#2b1b10";
-  const bg2 = str(s.bg2) || accent;
-  const ink = str(s.inkColor, "#ffffff");
-  const dash = str(s.dashColor) || "#e0b877";
+  // Cream paper, roast ink, caramel stripes. The old banner was a dark panel,
+  // which put three dark sections in a row on the home screen; an envelope is
+  // light by nature and gives the scroll somewhere to breathe.
+  const paper = str(s.bg) || "#fffaf3";
+  const ink = str(s.inkColor) || "#2b1b10";
+  const air = str(s.dashColor) || accent;
+  const air2 = str(s.bg2) || "#2b1b10";
   const radius = int(s.radius, 18);
   const height = int(s.height, 0);
   const opens = Boolean(str(s.handle) || str(s.url) || str(s.productId) || str(s.screen));
 
-  const road = (
+  /** The barber-pole border of an air-mail envelope, travelling. */
+  const stripes = (
     <span
       aria-hidden
-      className="app-ship-road block h-px w-full"
+      className="app-air-stripes block h-[7px] w-full"
       style={{
-        backgroundImage: `repeating-linear-gradient(to right, ${dash} 0 14px, transparent 14px 28px)`,
-        backgroundSize: "28px 1px",
-        opacity: 0.85,
+        backgroundImage: `repeating-linear-gradient(115deg, ${air} 0 11px, ${paper} 11px 22px, ${air2} 22px 33px, ${paper} 33px 44px)`,
+        backgroundSize: "44px 7px",
       }}
     />
-  );
-
-  const parcel = (
-    <span aria-hidden className="app-ship-parcel relative block h-5 w-5 shrink-0">
-      <span
-        className="absolute inset-0 rounded-[4px]"
-        style={{ background: dash, opacity: 0.95 }}
-      />
-      <span
-        className="absolute inset-y-0 start-1/2 w-[3px] -translate-x-1/2"
-        style={{ background: bg, opacity: 0.55 }}
-      />
-    </span>
   );
 
   if (strip) {
@@ -2952,22 +2945,22 @@ function FreeShipping({
       <section>
         <button
           onClick={() => opens && go(s)}
-          className={`flex w-full items-center gap-2.5 px-3 py-2.5 text-start ${opens ? "" : "cursor-default"}`}
-          style={{ background: bg, borderRadius: radius, minHeight: height || undefined }}
+          className={`flex w-full items-center gap-2.5 overflow-hidden px-3 py-2.5 text-start ${opens ? "" : "cursor-default"}`}
+          style={{ background: paper, borderRadius: radius, minHeight: height || undefined, border: `1px solid ${air}33` }}
         >
-          {parcel}
+          <span aria-hidden className="h-6 w-1.5 shrink-0 rounded-full" style={{ background: air }} />
           <span className="min-w-0 flex-1">
             <span dir="auto" className="block truncate text-[12px] font-bold" style={{ color: ink }}>
               {str(s.title)}
             </span>
             {str(s.subtitle) && (
-              <span dir="auto" className="block truncate text-[11px]" style={{ color: ink, opacity: 0.8 }}>
+              <span dir="auto" className="block truncate text-[11px]" style={{ color: ink, opacity: 0.7 }}>
                 {str(s.subtitle)}
               </span>
             )}
           </span>
           {opens && (
-            <span aria-hidden className="shrink-0 text-[13px]" style={{ color: dash }}>
+            <span aria-hidden className="shrink-0 text-[13px]" style={{ color: air }}>
               {ar ? "←" : "→"}
             </span>
           )}
@@ -2980,64 +2973,83 @@ function FreeShipping({
     <section>
       <button
         onClick={() => opens && go(s)}
-        className={`relative w-full overflow-hidden px-4 py-4 text-start ${opens ? "" : "cursor-default"}`}
-        style={{
-          background: `linear-gradient(135deg, ${bg} 0%, ${bg} 42%, ${bg2} 100%)`,
-          borderRadius: radius,
-          minHeight: height || undefined,
-        }}
+        className={`relative block w-full overflow-hidden text-start ${opens ? "" : "cursor-default"}`}
+        style={{ background: paper, borderRadius: radius, minHeight: height || undefined }}
       >
-        <span
-          aria-hidden
-          className="pointer-events-none absolute -end-12 -top-14 block h-40 w-40 rounded-full blur-2xl"
-          style={{ background: dash, opacity: 0.16 }}
-        />
+        {stripes}
 
-        {str(s.kicker) && (
-          <span
-            dir="auto"
-            className="relative block text-[9px] font-bold uppercase tracking-[0.2em]"
-            style={{ color: dash }}
-          >
-            ✦ {str(s.kicker)}
-          </span>
-        )}
-        {str(s.title) && (
-          <span
-            dir="auto"
-            className="app-display relative mt-1 block text-[24px] font-bold leading-tight"
-            style={{ color: ink }}
-          >
-            {str(s.title)}
-          </span>
-        )}
-        {str(s.subtitle) && (
-          <span dir="auto" className="relative mt-0.5 block text-[12px]" style={{ color: ink, opacity: 0.85 }}>
-            {str(s.subtitle)}
-          </span>
-        )}
+        <span className="flex items-center gap-3 px-4 py-4">
+          <span className="min-w-0 flex-1">
+            {str(s.kicker) && (
+              <span
+                dir="auto"
+                className="block text-[9px] font-bold uppercase tracking-[0.2em]"
+                style={{ color: air }}
+              >
+                ✦ {str(s.kicker)}
+              </span>
+            )}
+            {str(s.title) && (
+              <span
+                dir="auto"
+                className="app-display mt-1 block text-[26px] font-bold leading-tight"
+                style={{ color: ink }}
+              >
+                {str(s.title)}
+              </span>
+            )}
+            {str(s.subtitle) && (
+              <span dir="auto" className="mt-0.5 block text-[12px]" style={{ color: ink, opacity: 0.72 }}>
+                {str(s.subtitle)}
+              </span>
+            )}
 
-        <span className="relative mt-3 flex items-center gap-2">
-          {road}
-          {parcel}
-        </span>
+            <span className="mt-3 flex flex-wrap items-center gap-2">
+              {str(s.buttonLabel) && (
+                <span
+                  dir="auto"
+                  className="rounded-full px-3.5 py-1.5 text-[12px] font-bold"
+                  style={{ background: ink, color: paper }}
+                >
+                  {str(s.buttonLabel)} {ar ? "←" : "→"}
+                </span>
+              )}
+              {str(s.note) && (
+                <span dir="auto" className="text-[10px]" style={{ color: ink, opacity: 0.55 }}>
+                  {str(s.note)}
+                </span>
+              )}
+            </span>
+          </span>
 
-        <span className="relative mt-3 flex flex-wrap items-center gap-2">
-          {str(s.buttonLabel) && (
+          {/* The stamp: what it costs to have it delivered, franked. */}
+          {str(s.stampTop) || str(s.stampBig) || str(s.stampBottom) ? (
             <span
-              dir="auto"
-              className="rounded-full px-3.5 py-1.5 text-[12px] font-bold"
-              style={{ background: dash, color: bg }}
+              className="app-air-stamp grid h-[78px] w-[62px] shrink-0 place-items-center rounded-[6px] border-2 border-dashed px-1 text-center"
+              style={{ borderColor: `${air}88`, background: `${air}12` }}
             >
-              {str(s.buttonLabel)} {ar ? "←" : "→"}
+              <span className="block">
+                {str(s.stampTop) && (
+                  <span dir="auto" className="block text-[8px] font-bold uppercase tracking-[0.12em]" style={{ color: air }}>
+                    {str(s.stampTop)}
+                  </span>
+                )}
+                {str(s.stampBig) && (
+                  <span dir="auto" className="app-display block text-[19px] font-bold leading-none" style={{ color: ink }}>
+                    {str(s.stampBig)}
+                  </span>
+                )}
+                {str(s.stampBottom) && (
+                  <span dir="auto" className="mt-0.5 block text-[7px] font-bold uppercase tracking-[0.12em]" style={{ color: ink, opacity: 0.6 }}>
+                    {str(s.stampBottom)}
+                  </span>
+                )}
+              </span>
             </span>
-          )}
-          {str(s.note) && (
-            <span dir="auto" className="text-[10px]" style={{ color: ink, opacity: 0.7 }}>
-              {str(s.note)}
-            </span>
-          )}
+          ) : null}
         </span>
+
+        {stripes}
       </button>
     </section>
   );

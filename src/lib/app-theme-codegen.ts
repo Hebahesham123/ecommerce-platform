@@ -1553,7 +1553,7 @@ const styles = StyleSheet.create({
 
     free_shipping: `import React, { useEffect, useRef } from "react";
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from "react-native";
-import { colors, spacing } from "../theme";
+import { colors, theme } from "../theme";
 import { openLink, type LinkTo } from "./Pieces";
 
 export type FreeShippingSettings = {
@@ -1563,6 +1563,9 @@ export type FreeShippingSettings = {
   subtitle?: string;
   note?: string;
   buttonLabel?: string;
+  stampTop?: string;
+  stampBig?: string;
+  stampBottom?: string;
   bg?: string;
   bg2?: string;
   inkColor?: string;
@@ -1571,18 +1574,18 @@ export type FreeShippingSettings = {
   height?: number;
 } & LinkTo;
 
-/** The dashes travel one dash-width and start again, which reads as a road
- *  going past rather than a line that ends. */
-function useRoad() {
+/** The stripes travel one full repeat and start again, so the border reads as
+ *  an envelope going somewhere rather than a line that ends. */
+function useStripes() {
   const shift = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const loop = Animated.loop(
-      Animated.timing(shift, { toValue: 1, duration: 1100, easing: Easing.linear, useNativeDriver: true }),
+      Animated.timing(shift, { toValue: 1, duration: 3400, easing: Easing.linear, useNativeDriver: true }),
     );
     loop.start();
     return () => loop.stop();
   }, [shift]);
-  return shift.interpolate({ inputRange: [0, 1], outputRange: [0, -28] });
+  return shift.interpolate({ inputRange: [0, 1], outputRange: [0, 44] });
 }
 
 export function FreeShipping({
@@ -1596,27 +1599,37 @@ export function FreeShipping({
   onOpenProduct?: (id: string) => void;
   onOpenScreen?: (screen: string) => void;
 }) {
-  const travel = useRoad();
+  const travel = useStripes();
   if (!settings.title && !settings.subtitle) return null;
 
   const strip = settings.style === "strip";
-  const bg = settings.bg || "#2b1b10";
-  const ink = settings.inkColor || "#ffffff";
-  const dash = settings.dashColor || "#e0b877";
+  const paper = settings.bg || "#fffaf3";
+  const ink = settings.inkColor || "#2b1b10";
+  const air = settings.dashColor || colors.accent;
+  const air2 = settings.bg2 || "#2b1b10";
   const r = settings.radius && settings.radius >= 0 ? settings.radius : 18;
   const opens = Boolean(settings.handle || settings.url || settings.productId || settings.screen);
   const go = () => openLink(settings, { onOpenCollection, onOpenProduct, onOpenScreen });
 
-  const parcel = (
-    <View style={[styles.parcel, { backgroundColor: dash }]}>
-      <View style={[styles.tape, { backgroundColor: bg }]} />
+  // The barber-pole border, drawn as leaning blocks because the phone has no
+  // repeating gradient to make one out of.
+  const stripes = (
+    <View style={styles.stripeClip}>
+      <Animated.View style={[styles.stripeRow, { transform: [{ translateX: travel }] }]}>
+        {Array.from({ length: 40 }).map((_, i) => (
+          <View
+            key={i}
+            style={[styles.stripe, { backgroundColor: i % 2 === 0 ? air : air2 }]}
+          />
+        ))}
+      </Animated.View>
     </View>
   );
 
   if (strip) {
     return (
-      <Pressable disabled={!opens} onPress={go} style={[styles.strip, { backgroundColor: bg, borderRadius: r }]}>
-        {parcel}
+      <Pressable disabled={!opens} onPress={go} style={[styles.strip, { backgroundColor: paper, borderRadius: r, borderColor: air }]}>
+        <View style={[styles.pip, { backgroundColor: air }]} />
         <View style={{ flex: 1 }}>
           <Text style={[styles.stripTitle, { color: ink }]} numberOfLines={1}>{settings.title}</Text>
           {settings.subtitle ? (
@@ -1627,61 +1640,73 @@ export function FreeShipping({
     );
   }
 
+  const stamped = Boolean(settings.stampTop || settings.stampBig || settings.stampBottom);
+
   return (
-    <Pressable disabled={!opens} onPress={go} style={[styles.banner, { backgroundColor: bg, borderRadius: r, minHeight: settings.height || undefined }]}>
-      <View style={[styles.wash, { backgroundColor: settings.bg2 || colors.accent }]} />
-      {settings.kicker ? (
-        <Text style={[styles.kicker, { color: dash }]}>{"\u2726 " + settings.kicker.toUpperCase()}</Text>
-      ) : null}
-      {settings.title ? (
-        <Text style={[styles.title, { color: ink }]}>{settings.title}</Text>
-      ) : null}
-      {settings.subtitle ? (
-        <Text style={[styles.sub, { color: ink }]}>{settings.subtitle}</Text>
-      ) : null}
+    <Pressable disabled={!opens} onPress={go} style={[styles.banner, { backgroundColor: paper, borderRadius: r, minHeight: settings.height || undefined }]}>
+      {stripes}
 
-      <View style={styles.roadRow}>
-        <View style={styles.roadClip}>
-          <Animated.View style={[styles.road, { transform: [{ translateX: travel }] }]}>
-            {Array.from({ length: 24 }).map((_, i) => (
-              <View key={i} style={[styles.dash, { backgroundColor: dash }]} />
-            ))}
-          </Animated.View>
+      <View style={styles.body}>
+        <View style={{ flex: 1 }}>
+          {settings.kicker ? (
+            <Text style={[styles.kicker, { color: air }]}>{"\u2726 " + settings.kicker.toUpperCase()}</Text>
+          ) : null}
+          {settings.title ? (
+            <Text style={[styles.title, { color: ink, fontFamily: theme.titleFont }]}>{settings.title}</Text>
+          ) : null}
+          {settings.subtitle ? (
+            <Text style={[styles.sub, { color: ink }]}>{settings.subtitle}</Text>
+          ) : null}
+
+          <View style={styles.footRow}>
+            {settings.buttonLabel ? (
+              <View style={[styles.cta, { backgroundColor: ink }]}>
+                <Text style={[styles.ctaText, { color: paper }]}>{settings.buttonLabel}</Text>
+              </View>
+            ) : null}
+            {settings.note ? <Text style={[styles.note, { color: ink }]}>{settings.note}</Text> : null}
+          </View>
         </View>
-        {parcel}
-      </View>
 
-      <View style={styles.footRow}>
-        {settings.buttonLabel ? (
-          <View style={[styles.cta, { backgroundColor: dash }]}>
-            <Text style={[styles.ctaText, { color: bg }]}>{settings.buttonLabel}</Text>
+        {stamped ? (
+          <View style={[styles.stamp, { borderColor: air }]}>
+            {settings.stampTop ? <Text style={[styles.stampTop, { color: air }]}>{settings.stampTop}</Text> : null}
+            {settings.stampBig ? (
+              <Text style={[styles.stampBig, { color: ink, fontFamily: theme.titleFont }]}>{settings.stampBig}</Text>
+            ) : null}
+            {settings.stampBottom ? (
+              <Text style={[styles.stampBottom, { color: ink }]}>{settings.stampBottom}</Text>
+            ) : null}
           </View>
         ) : null}
-        {settings.note ? <Text style={[styles.note, { color: ink }]}>{settings.note}</Text> : null}
       </View>
+
+      {stripes}
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  banner: { overflow: "hidden", paddingHorizontal: 16, paddingVertical: 16 },
-  wash: { position: "absolute", right: -48, top: -56, height: 160, width: 160, borderRadius: 80, opacity: 0.35 },
+  banner: { overflow: "hidden" },
+  stripeClip: { height: 7, overflow: "hidden" },
+  stripeRow: { flexDirection: "row", position: "absolute", left: -44, width: 900 },
+  stripe: { width: 11, height: 20, marginTop: -6, transform: [{ rotate: "25deg" }] },
+  body: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingVertical: 16 },
   kicker: { fontSize: 9, fontWeight: "700", letterSpacing: 1.9 },
-  title: { marginTop: 4, fontSize: 24, fontWeight: "700" },
-  sub: { marginTop: 2, fontSize: 12, opacity: 0.85 },
-  roadRow: { marginTop: 12, flexDirection: "row", alignItems: "center", gap: 8 },
-  roadClip: { flex: 1, height: 1, overflow: "hidden" },
-  road: { flexDirection: "row", gap: 14, width: 672 },
-  dash: { height: 1, width: 14, opacity: 0.85 },
-  parcel: { height: 20, width: 20, borderRadius: 4, alignItems: "center", justifyContent: "center" },
-  tape: { width: 3, height: 20, opacity: 0.55 },
+  title: { marginTop: 4, fontSize: 26, fontWeight: "700" },
+  sub: { marginTop: 2, fontSize: 12, opacity: 0.72 },
   footRow: { marginTop: 12, flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 },
   cta: { borderRadius: 999, paddingHorizontal: 14, paddingVertical: 6 },
   ctaText: { fontSize: 12, fontWeight: "700" },
-  note: { fontSize: 10, opacity: 0.7 },
-  strip: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12, paddingVertical: 10 },
+  note: { fontSize: 10, opacity: 0.55 },
+  stamp: { width: 62, height: 78, borderRadius: 6, borderWidth: 2, borderStyle: "dashed", alignItems: "center", justifyContent: "center", paddingHorizontal: 4, transform: [{ rotate: "-3deg" }] },
+  stampTop: { fontSize: 8, fontWeight: "700", letterSpacing: 1 },
+  stampBig: { fontSize: 19, fontWeight: "700" },
+  stampBottom: { marginTop: 2, fontSize: 7, fontWeight: "700", letterSpacing: 0.8, opacity: 0.6 },
+  strip: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 10 },
+  pip: { width: 6, height: 24, borderRadius: 999 },
   stripTitle: { fontSize: 12, fontWeight: "700" },
-  stripSub: { fontSize: 11, opacity: 0.8 },
+  stripSub: { fontSize: 11, opacity: 0.7 },
 });
 `,
 
@@ -4588,6 +4613,9 @@ function settingsLiteral(block: Block): string {
       "subtitle",
       "note",
       "buttonLabel",
+      "stampTop",
+      "stampBig",
+      "stampBottom",
       "bg",
       "bg2",
       "inkColor",

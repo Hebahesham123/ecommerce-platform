@@ -3047,10 +3047,20 @@ function BlockGroup({
           <Field label={ar ? "السطر الأخير" : "Small print"} type="text">
             <input value={text("note")} onChange={(e) => onPatch({ note: e.target.value })} className={input} />
           </Field>
-          <ColorRow label={ar ? "الخلفية من" : "Background from"} value={text("bg")} fallback="#2b1b10" onChange={(v) => onPatch({ bg: v })} input={input} ar={ar} />
-          <ColorRow label={ar ? "الخلفية إلى" : "Background to"} value={text("bg2")} fallback="#9d6540" onChange={(v) => onPatch({ bg2: v })} input={input} ar={ar} />
-          <ColorRow label={ar ? "لون النص" : "Text"} value={text("inkColor")} fallback="#ffffff" onChange={(v) => onPatch({ inkColor: v })} input={input} ar={ar} />
-          <ColorRow label={ar ? "لون الطريق" : "Road and parcel"} value={text("dashColor")} fallback="#e0b877" onChange={(v) => onPatch({ dashColor: v })} input={input} ar={ar} />
+          <Field label={ar ? "الطابع" : "The stamp"} type="text">
+            <span className="flex items-center gap-2">
+              <input value={text("stampTop")} onChange={(e) => onPatch({ stampTop: e.target.value })} placeholder="EGP" className={input} />
+              <input value={text("stampBig")} onChange={(e) => onPatch({ stampBig: e.target.value })} placeholder="2,000" className={input} />
+              <input value={text("stampBottom")} onChange={(e) => onPatch({ stampBottom: e.target.value })} placeholder="and over" className={input} />
+            </span>
+            <p className="mt-1 text-[11px] text-ink-soft">
+              {ar ? "اتركيها فارغة ليختفي الطابع." : "Leave them empty and the stamp goes."}
+            </p>
+          </Field>
+          <ColorRow label={ar ? "الورق" : "Paper"} value={text("bg")} fallback="#fffaf3" onChange={(v) => onPatch({ bg: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "الشريط الداكن" : "Dark stripe"} value={text("bg2")} fallback="#2b1b10" onChange={(v) => onPatch({ bg2: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "لون النص" : "Text"} value={text("inkColor")} fallback="#2b1b10" onChange={(v) => onPatch({ inkColor: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "شريط البريد والطابع" : "Airmail stripe and stamp"} value={text("dashColor")} fallback="#9d6540" onChange={(v) => onPatch({ dashColor: v })} input={input} ar={ar} />
           <Field label={ar ? "استدارة الحواف" : "Corner radius"} type="range">
             <input type="number" min={0} max={32} value={num("radius", 18)} onChange={(e) => onPatch({ radius: Number(e.target.value) })} className={input} />
           </Field>
