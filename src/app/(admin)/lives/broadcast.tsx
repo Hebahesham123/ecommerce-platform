@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { IcX, IcVideo, IcAlert } from "@/components/icons";
 import type { LiveChat } from "@/lib/live-chat";
+import { getBrowserSupabase } from "@/lib/supabase/client";
+import { attachRecordingAction, createRecordingUploadAction } from "./actions";
 
 /**
  * Going live from this phone, the way a live is normally done: open it, see
@@ -19,6 +21,7 @@ import type { LiveChat } from "@/lib/live-chat";
 type Phase = "idle" | "starting" | "live" | "ended" | "error";
 
 export function Broadcast({
+  liveId,
   chat,
   watching,
   whipUrl,
@@ -29,6 +32,7 @@ export function Broadcast({
   onClose,
 }: {
   /** Shared with the drawer: one connection per live. */
+  liveId: string;
   chat: LiveChat;
   /** Counted from viewer heartbeats. */
   watching: number;
@@ -50,6 +54,9 @@ export function Broadcast({
   const [facing, setFacing] = useState<"user" | "environment">("user");
   const [elapsed, setElapsed] = useState(0);
   const [micLevel, setMicLevel] = useState(0);
+  const [recording, setRecording] = useState<"off" | "on" | "saving" | "saved" | "failed">("off");
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<BlobPart[]>([]);
   const [micOn, setMicOn] = useState(true);
   const [draft, setDraft] = useState("");
   const [sendingComment, setSendingComment] = useState(false);
@@ -223,6 +230,7 @@ export function Broadcast({
   }
 
   async function endBroadcast() {
+    stopRecording();
     // Tell Cloudflare the broadcast is over, so the recording closes promptly
     // instead of waiting for the connection to time out.
     const resource = resourceRef.current;
@@ -233,6 +241,94 @@ export function Broadcast({
     stopEverything();
     setPhase("ended");
     onEnded();
+  }
+
+  /**
+   * Keep a copy of what is going out.
+   *
+   * The provider records what a broadcasting app sends and nothing that comes
+   * from a browser, so a browser broadcast that wants a replay has to make
+   * one itself. It records the very same camera and microphone that are being
+   * broadcast, so the replay is what the room saw.
+   */
+  function bestMimeType(): string {
+    const wanted = [
+      "video/mp4",
+      "video/webm;codecs=vp9,opus",
+      "video/webm;codecs=vp8,opus",
+      "video/webm",
+    ];
+    if (typeof MediaRecorder === "undefined") return "";
+    return wanted.find((t) => MediaRecorder.isTypeSupported(t)) ?? "";
+  }
+
+  function startRecording() {
+    const stream = streamRef.current;
+    if (!stream || typeof MediaRecorder === "undefined") {
+      setRecording("failed");
+      setError(
+        ar
+          ? "هذا المتصفح لا يدعم التسجيل."
+          : "This browser cannot record.",
+      );
+      return;
+    }
+    try {
+      const mimeType = bestMimeType();
+      const rec = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      chunksRef.current = [];
+      rec.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+      rec.onstop = () => void saveRecording(rec.mimeType);
+      // A chunk a second, so a crash costs a second rather than the lot.
+      rec.start(1000);
+      recorderRef.current = rec;
+      setRecording("on");
+    } catch {
+      setRecording("failed");
+    }
+  }
+
+  function stopRecording() {
+    const rec = recorderRef.current;
+    if (!rec || rec.state === "inactive") return;
+    setRecording("saving");
+    rec.stop();
+    recorderRef.current = null;
+  }
+
+  async function saveRecording(mimeType: string) {
+    const parts = chunksRef.current;
+    chunksRef.current = [];
+    if (!parts.length) {
+      setRecording("failed");
+      return;
+    }
+    try {
+      const blob = new Blob(parts, { type: mimeType || "video/webm" });
+      const extension = blob.type.includes("mp4") ? "mp4" : "webm";
+      // Straight from here to storage: the file is hundreds of megabytes and
+      // a serverless request is capped in single digits.
+      const slot = await createRecordingUploadAction(liveId, extension);
+      if (!slot.ok) throw new Error(slot.error);
+      const { error: upErr } = await getBrowserSupabase()
+        .storage.from(slot.data.bucket)
+        .uploadToSignedUrl(slot.data.path, slot.data.token, blob, {
+          contentType: blob.type,
+        });
+      if (upErr) throw upErr;
+      const attached = await attachRecordingAction(liveId, slot.data.publicUrl);
+      if (!attached.ok) throw new Error(attached.error);
+      setRecording("saved");
+    } catch (e) {
+      setRecording("failed");
+      setError(
+        ar
+          ? `تعذّر حفظ التسجيل: ${(e as Error).message}`
+          : `Could not save the recording: ${(e as Error).message}`,
+      );
+    }
   }
 
   function toggleMic() {
@@ -360,6 +456,25 @@ export function Broadcast({
             />
           </div>
           <span className="shrink-0 text-[11px] text-ink-soft">{ar ? "تحدثي" : "Speak"}</span>
+          <button
+            onClick={() => (recording === "on" ? stopRecording() : startRecording())}
+            disabled={recording === "saving"}
+            className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold ${
+              recording === "on"
+                ? "bg-rose-600 text-white"
+                : recording === "saved"
+                  ? "bg-emerald-100 text-emerald-700"
+                  : "bg-surface-page text-ink"
+            }`}
+          >
+            {recording === "on"
+              ? (ar ? "■ إيقاف التسجيل" : "■ Stop recording")
+              : recording === "saving"
+                ? (ar ? "جارٍ الحفظ…" : "Saving…")
+                : recording === "saved"
+                  ? (ar ? "✓ حُفظ" : "✓ Saved")
+                  : ar ? "● تسجيل" : "● Record"}
+          </button>
         </div>
 
         <div className="shrink-0 p-4">
@@ -379,6 +494,18 @@ export function Broadcast({
             >
               {phase === "starting" ? (ar ? "جارٍ الاتصال…" : "Connecting…") : ar ? "ابدئي البث" : "Go live"}
             </button>
+          )}
+          {recording === "on" && (
+            <p className="mb-2 text-center text-[11px] text-rose-600">
+              {ar
+                ? "يجري التسجيل — يُحفظ تلقائياً عند إنهاء البث."
+                : "Recording — it saves by itself when you end the broadcast."}
+            </p>
+          )}
+          {recording === "saved" && (
+            <p className="mb-2 text-center text-[11px] text-emerald-700">
+              {ar ? "التسجيل محفوظ ومتاح كإعادة." : "Saved, and available as the replay."}
+            </p>
           )}
           <p className="mt-2 text-center text-[11px] text-ink-soft">
             {ar

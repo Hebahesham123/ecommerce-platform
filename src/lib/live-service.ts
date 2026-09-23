@@ -562,6 +562,65 @@ export async function reportViewers(id: string, viewers: number): Promise<void> 
   }
 }
 
+// ---- Recording it ourselves -------------------------------------------------
+
+const RECORDING_BUCKET = "files";
+
+/**
+ * Somewhere for the browser to put the recording it made.
+ *
+ * The provider records what a broadcasting app sends it and nothing that
+ * comes from a browser, so a browser broadcast has to record itself. The file
+ * is far too large to pass through our own server — a serverless request is
+ * capped in single-digit megabytes and a live is hundreds — so the browser
+ * uploads straight to storage with a URL signed for that one path.
+ */
+export async function createRecordingUpload(
+  liveId: string,
+  extension: string,
+): Promise<Result<{ bucket: string; path: string; token: string; publicUrl: string }>> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  try {
+    const supabase = getServerSupabase();
+    const safe = extension.replace(/[^a-z0-9]/gi, "").slice(0, 5) || "webm";
+    const path = `lives/${liveId}/${Date.now()}.${safe}`;
+    const { data, error } = await supabase.storage
+      .from(RECORDING_BUCKET)
+      .createSignedUploadUrl(path);
+    if (error || !data) return { ok: false, error: error?.message ?? "no_signed_url" };
+    const { data: pub } = supabase.storage.from(RECORDING_BUCKET).getPublicUrl(path);
+    return {
+      ok: true,
+      data: {
+        bucket: RECORDING_BUCKET,
+        path,
+        token: data.token,
+        publicUrl: pub.publicUrl,
+      },
+    };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+/** The recording is uploaded; point the live at it. */
+export async function attachRecording(liveId: string, url: string): Promise<Result<LiveStream>> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  try {
+    const supabase = getServerSupabase();
+    const { data, error } = await supabase
+      .from(TABLE)
+      .update({ recording_url: url })
+      .eq("id", liveId)
+      .select(SELECT)
+      .single();
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, data: mapLiveStream(data) };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
 // ---- Who is watching --------------------------------------------------------
 
 /** A viewer is counted while they have been seen this recently. */

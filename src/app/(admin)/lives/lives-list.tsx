@@ -1079,6 +1079,7 @@ function LiveDrawer({
 
       {broadcasting && live.whipUrl && (
         <Broadcast
+          liveId={live.id}
           chat={chat}
           watching={watching}
           whipUrl={live.whipUrl}

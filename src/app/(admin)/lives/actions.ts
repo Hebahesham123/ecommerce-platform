@@ -5,7 +5,9 @@ import {
   getLive,
   hideMessage,
   listLives,
+  attachRecording,
   collectionProducts,
+  createRecordingUpload,
   listLiveCollections,
   listMessages,
   postMessage,
@@ -101,6 +103,19 @@ export async function collectionProductsAction(
   collectionId: string,
 ): Promise<Result<LiveProductInput[]>> {
   return collectionProducts(collectionId);
+}
+
+/** Somewhere for the browser to upload the recording it made. */
+export async function createRecordingUploadAction(
+  liveId: string,
+  extension: string,
+) {
+  return createRecordingUpload(liveId, extension);
+}
+
+/** Point the live at the recording once it is uploaded. */
+export async function attachRecordingAction(liveId: string, url: string): Promise<Result<LiveStream>> {
+  return attachRecording(liveId, url);
 }
 
 /** The host speaking in her own chat, marked as the host. */
