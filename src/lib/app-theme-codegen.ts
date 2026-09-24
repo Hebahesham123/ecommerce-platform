@@ -156,6 +156,19 @@ export const theme = {
         )}, screen: ${q(s.screen)}, live: ${s.live} }`,
     )
     .join(", ")}] as LiveSession[],
+  /**
+   * The product card, everywhere one is drawn.
+   *
+   * nameWords is how many words of a name fit the one line the card gives it.
+   * photoBg is the colour behind every product photo - on a phone it shows
+   * through a cut-out shot rather than blending a baked-in background away,
+   * which the web preview can do and React Native cannot, so a photo shot on
+   * its own grey still arrives on its own grey.
+   */
+  card: {
+    nameWords: ${t.cardNameWords},
+    photoBg: ${q(t.cardPhotoBg)},
+  },
   strip: {
     enabled: ${t.stripEnabled},
     items: [${t.strip
@@ -1000,6 +1013,19 @@ export function inherit(
   };
 }
 
+/**
+ * The first few words of a name, and a sign that there were more.
+ *
+ * Trimming by words rather than by width means the break lands between two
+ * words instead of through the middle of one, so what is left still reads as
+ * language: "Louis Vuitton Pochette…" rather than "Louis Vuitton Poche…".
+ */
+export function shortName(name: string, words: number = theme.card.nameWords) {
+  const parts = String(name || "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length <= words) return parts.join(" ");
+  return parts.slice(0, words).join(" ") + "…";
+}
+
 export function money(v: number | null) {
   return v == null ? "—" : \`\${new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(v)} EGP\`;
 }
@@ -1031,8 +1057,9 @@ export function ProductTile({
       ) : (
         <View style={[styles.tileImage, box]} />
       )}
-      <View style={{ padding: spacing.sm }}>
-        <Text style={styles.tileName} numberOfLines={2}>{card.name}</Text>
+      <View style={styles.tileBody}>
+        {/* One line. A name too long for it stops at a word, not mid-word. */}
+        <Text style={styles.tileName} numberOfLines={1}>{shortName(card.name)}</Text>
         <View style={styles.priceRow}>
           <Text style={styles.price}>{money(card.priceMin)}</Text>
           {card.compareAt != null && card.priceMin != null && card.compareAt > card.priceMin ? (
@@ -1051,9 +1078,10 @@ const styles = StyleSheet.create({
   tile: { borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, overflow: "hidden" },
   fill: { width: "100%" },
   fillImage: { width: "100%", aspectRatio: 1 },
-  tileImage: { backgroundColor: colors.page },
+  tileImage: { backgroundColor: theme.card.photoBg },
+  tileBody: { paddingHorizontal: spacing.sm, paddingTop: 6, paddingBottom: spacing.sm },
   tileName: { fontSize: 11, lineHeight: 15, color: colors.ink },
-  priceRow: { flexDirection: "row", alignItems: "baseline", gap: 6, marginTop: 4 },
+  priceRow: { flexDirection: "row", alignItems: "baseline", gap: 6, marginTop: 2 },
   price: { fontSize: 14, fontWeight: "700", color: colors.accent },
   compareAt: { fontSize: 10, color: colors.inkSoft, textDecorationLine: "line-through" },
 });
@@ -2816,7 +2844,7 @@ const styles = StyleSheet.create({
   tickUnit: { fontSize: 7, fontWeight: "600", color: "#fff", opacity: 0.75, marginTop: 2 },
   row: { gap: gap.item, paddingVertical: spacing.sm },
   card: { width: 158, overflow: "hidden", borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface },
-  photo: { width: "100%", height: 124, backgroundColor: colors.page },
+  photo: { width: "100%", height: 120, backgroundColor: theme.card.photoBg },
   badge: { position: "absolute", top: 6, left: 6, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
   badgeText: { fontSize: 10, fontWeight: "700", color: "#fff" },
   body: { padding: 8 },

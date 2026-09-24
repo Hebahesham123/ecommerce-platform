@@ -1,7 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { ALL_ROWS_CAP, itemsOf, type AppTheme, type Block, type Item } from "@/lib/app-theme";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import {
+  ALL_ROWS_CAP,
+  DEFAULT_SETTINGS,
+  itemsOf,
+  type AppTheme,
+  type Block,
+  type Item,
+} from "@/lib/app-theme";
 
 /**
  * The app's home screen, drawn from a theme.
@@ -174,10 +181,22 @@ function Thumb({
   className = "",
   style,
   fit = "cover",
+  blend,
 }: {
   src: string | null;
   className?: string;
   style?: React.CSSProperties;
+  /**
+   * Multiply the photo onto the card's photo colour.
+   *
+   * Only for product shots. A white background and a light grey one land in
+   * the same place once they are multiplied onto the same colour, which is
+   * what stops a row of cards looking like it was assembled from three
+   * different shops. A photograph meant to fill its frame - a banner, a
+   * lookbook picture - is left alone, because there is no background in it to
+   * reconcile.
+   */
+  blend?: boolean;
   /**
    * "cover" crops the picture to fill the box, "contain" fits all of it in.
    *
@@ -188,17 +207,50 @@ function Thumb({
   fit?: string;
 }) {
   return (
-    <div className={`overflow-hidden rounded-xl bg-slate-100 ${className}`} style={style}>
+    <div
+      className={`overflow-hidden rounded-xl ${blend ? "" : "bg-slate-100 "}${className}`}
+      style={blend ? { background: "var(--app-photo-bg, #ece8e3)", ...style } : style}
+    >
       {src && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={src}
           alt=""
-          className={`h-full w-full ${fit === "contain" ? "object-contain" : "object-cover"}`}
+          className={`h-full w-full ${fit === "contain" ? "object-contain" : "object-cover"}${
+            blend ? " app-photo-blend" : ""
+          }`}
         />
       )}
     </div>
   );
+}
+
+/**
+ * The first few words of a name, and a sign that there were more.
+ *
+ * Trimming by words rather than by width means the break lands between two
+ * words instead of through the middle of one, so what is left still reads as
+ * language: "Louis Vuitton Pochette…" rather than "Louis Vuitton Poche…".
+ */
+/**
+ * The name, minus the brand that is already printed above it.
+ *
+ * "LOUIS VUITTON" over "Louis Vuitton Pochette Voyage" means the three words
+ * the card can show are two words of brand and one of product. Dropping the
+ * repeat buys back the whole line: "Pochette Voyage Taiga…".
+ */
+export function withoutVendor(name: string, vendor?: string | null): string {
+  const v = (vendor ?? "").trim();
+  const n = String(name ?? "").trim();
+  if (!v || !n.toLowerCase().startsWith(v.toLowerCase())) return n;
+  // Unless the name is only the brand, in which case it is all there is.
+  return n.slice(v.length).trim() || n;
+}
+
+export function shortName(name: string, words: number): string {
+  const parts = String(name ?? "").trim().split(/\s+/).filter(Boolean);
+  if (parts.length <= words) return parts.join(" ");
+  return parts.slice(0, words).join(" ") + "…";
 }
 
 /**
@@ -219,6 +271,18 @@ function Thumb({
  * four props. A surface that passed no cart or wishlist handler gets undefined
  * through to Tile, which then draws neither button.
  */
+/**
+ * What every product card on the screen agrees on.
+ *
+ * A card is drawn from six different blocks, so threading two settings through
+ * six call sites would mean six chances to forget one and one card in the app
+ * that quietly disagrees with the rest. The home screen puts them here once.
+ */
+const CardStyle = createContext({
+  nameWords: DEFAULT_SETTINGS.cardNameWords,
+  photoBg: DEFAULT_SETTINGS.cardPhotoBg,
+});
+
 function tileProps(handlers: HomeHandlers, productId: string) {
   return {
     onOpen: handlers.onOpenProduct,
@@ -267,6 +331,7 @@ function Tile({
   // behalf is how you earn a return.
   const single = card.variantId != null && (card.variantCount ?? 1) === 1;
   const canAdd = Boolean(onAdd);
+  const { nameWords } = useContext(CardStyle);
   const ratio =
     shape === "wide" ? "aspect-[4/3]" : shape === "tall" ? "aspect-[3/4]" : "aspect-square";
 
@@ -278,8 +343,8 @@ function Tile({
       style={fadeAfter === undefined ? undefined : { animationDelay: `${fadeAfter}ms` }}
     >
       <button onClick={() => onOpen?.(card.id)} className="block w-full text-start">
-        <span className="relative block bg-white p-2">
-          <Thumb src={card.image} className={`${ratio} rounded-xl`} fit={fit} />
+        <span className="relative block p-1.5">
+          <Thumb src={card.image} className={`${ratio} rounded-xl`} fit={fit} blend />
           {off > 0 && (
             <span
               className="absolute bottom-1 start-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold text-white shadow-sm"
@@ -289,21 +354,26 @@ function Tile({
             </span>
           )}
         </span>
-        <span className="block px-2.5 pb-2.5 pt-0.5">
+        <span className={`block ps-2 pb-2 ${canAdd ? "pe-9" : "pe-2"}`}>
           {card.vendor && (
             <span className="block truncate text-[9px] font-bold uppercase tracking-[0.08em] text-slate-900">
               {card.vendor}
             </span>
           )}
-          <span className="mt-0.5 line-clamp-2 block min-h-[2.1em] text-[11px] leading-snug text-slate-500">
-            {card.name}
+          {/* One line. A name too long for it stops at a word, not mid-word. */}
+          <span className="block truncate text-[11px] leading-snug text-slate-500">
+            {shortName(withoutVendor(card.name, card.vendor), nameWords)}
           </span>
-          <span className="mt-1 block text-[13px] font-bold" style={{ color: accent }}>
-            {money(now, ar)}
+          {/* Was and now on one baseline: the saving reads as one thought, and
+              the card keeps the line the second price used to take. */}
+          <span className="mt-0.5 flex items-baseline gap-1.5">
+            <span className="text-[13px] font-bold" style={{ color: accent }}>
+              {money(now, ar)}
+            </span>
+            {onSale && (
+              <span className="text-[10px] text-slate-400 line-through">{money(was, ar)}</span>
+            )}
           </span>
-          {onSale && (
-            <span className="block text-[10px] text-slate-400 line-through">{money(was, ar)}</span>
-          )}
         </span>
       </button>
 
@@ -312,7 +382,7 @@ function Tile({
           onClick={() => onWish(card)}
           aria-pressed={wished}
           aria-label={ar ? "أضيفي إلى المفضلة" : "Add to wishlist"}
-          className="absolute end-2.5 top-2.5 grid h-7 w-7 place-items-center rounded-full bg-white/90 shadow-sm backdrop-blur"
+          className="absolute end-2 top-2 grid h-7 w-7 place-items-center rounded-full bg-white/90 shadow-sm backdrop-blur"
         >
           <svg
             viewBox="0 0 24 24"
@@ -334,7 +404,7 @@ function Tile({
           aria-label={
             single ? (ar ? "أضيفي إلى الحقيبة" : "Add to bag") : ar ? "اختاري المقاس" : "Choose a size"
           }
-          className="absolute bottom-2.5 end-2.5 grid h-7 w-7 place-items-center rounded-full text-white shadow-sm"
+          className="absolute bottom-2 end-2 grid h-7 w-7 place-items-center rounded-full text-white shadow-sm"
           style={{ background: accent }}
         >
           <svg
@@ -1769,7 +1839,10 @@ function CountdownDeals({
         )}
       </div>
 
-      <div className="-mx-4 mt-2 flex overflow-x-auto px-4 pb-1" style={{ gap: "var(--app-item-gap, 8px)" }}>
+      <div
+        className="-mx-4 mt-2 flex items-start overflow-x-auto px-4 pb-1"
+        style={{ gap: "var(--app-item-gap, 8px)" }}
+      >
         {items.map((item, i) => {
           const lead = featureFirst && i === 0;
           const borrowed = inherit(item, data);
@@ -1786,7 +1859,8 @@ function CountdownDeals({
                 <Thumb
                   src={borrowed.image}
                   className="w-full"
-                  style={{ borderRadius: 0, height: lead ? 176 : 124 }}
+                  style={{ borderRadius: 0, height: lead ? 168 : 120 }}
+                  blend
                 />
                 {str(item.badge) && (
                   <span
@@ -4185,7 +4259,12 @@ export function AppHome({
   showPlaceholders?: boolean;
 }) {
   const blocks = theme.blocks ?? [];
+  const cardStyle = useMemo(
+    () => ({ nameWords: theme.settings.cardNameWords, photoBg: theme.settings.cardPhotoBg }),
+    [theme.settings.cardNameWords, theme.settings.cardPhotoBg],
+  );
   return (
+    <CardStyle.Provider value={cardStyle}>
     <div
       className={`flex flex-col${theme.settings.titleFont === "serif" ? " app-serif" : ""}`}
       style={
@@ -4193,6 +4272,7 @@ export function AppHome({
           gap: `${theme.settings.sectionGap}px`,
           "--app-section-gap": `${theme.settings.sectionGap}px`,
           "--app-item-gap": `${theme.settings.itemGap}px`,
+          "--app-photo-bg": theme.settings.cardPhotoBg,
         } as React.CSSProperties
       }
     >
@@ -4213,6 +4293,7 @@ export function AppHome({
         </p>
       )}
     </div>
+    </CardStyle.Provider>
   );
 }
 

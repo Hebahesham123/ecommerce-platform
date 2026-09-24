@@ -511,6 +511,25 @@ export type AppSettings = {
    */
   sectionGap: number;
   itemGap: number;
+
+  /**
+   * The product card, everywhere one is drawn.
+   *
+   * A name gets one line, not two. Two lines means every card carries the
+   * height of the longest name in the row whether it needs it or not, and a
+   * full designer name read at 11px is not read anyway - the picture and the
+   * price are what a shopper is scanning. So the first few words stand for the
+   * rest, and the rest is one tap away.
+   *
+   * cardPhotoBg is the one colour every product photo sits on. Shop photos
+   * arrive from a dozen places on a dozen backgrounds - one cut out on white,
+   * the next shot on grey - and a row of cards where each picture sits on a
+   * different white is the thing that makes a shop look assembled rather than
+   * made. The photos are multiplied onto this colour, which pulls a white
+   * background and a light grey one to the same place.
+   */
+  cardNameWords: number;
+  cardPhotoBg: string;
 };
 
 /**
@@ -836,6 +855,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   titleFont: "system",
   sectionGap: 12,
   itemGap: 8,
+  cardNameWords: 3,
+  cardPhotoBg: "#ece8e3",
 };
 
 /**
@@ -1605,6 +1626,10 @@ export function normalizeTheme(raw: unknown): AppTheme {
     titleFont: str(s.titleFont) === "serif" ? "serif" : "system",
     sectionGap: size(s.sectionGap, 12, 0, 40),
     itemGap: size(s.itemGap, 8, 0, 24),
+    // One word is a name nobody recognises; eight is the two lines this
+    // replaced.
+    cardNameWords: size(s.cardNameWords, DEFAULT_SETTINGS.cardNameWords, 1, 8),
+    cardPhotoBg: colour(s.cardPhotoBg, DEFAULT_SETTINGS.cardPhotoBg),
     splashEnabled: Boolean(s.splashEnabled),
     splashImageUrl: str(s.splashImageUrl).slice(0, 500),
     splashBg: colour(s.splashBg, DEFAULT_SETTINGS.splashBg),

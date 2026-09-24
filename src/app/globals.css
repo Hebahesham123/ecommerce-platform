@@ -490,6 +490,28 @@ body {
   .app-seal-turn { animation: none; }
 }
 
+/* App theme: every product photo on the same colour.
+
+   Shop photography arrives on whatever background the brand shot it on - one
+   cut out on white, the next on light grey - and a row of cards where each
+   picture sits on a slightly different white is what makes a shop look
+   assembled rather than made. Multiplying the photo onto the card's own photo
+   colour pulls both to the same place: white becomes that colour exactly, a
+   light grey becomes a shade of it. A photograph with a dark background is
+   left looking like a photograph with a dark background, which is correct -
+   there is nothing to reconcile there.
+
+   darken, not multiply: multiply darkens every pixel, which tints the whole
+   photograph and still leaves a shot taken on grey darker than one taken on
+   white. darken takes the darker of the two, so every background lighter than
+   the card colour lands exactly on the card colour and everything darker than
+   it - which is the product - is left alone. Measured across this shop the
+   backgrounds run from 227 to 255, so the colour is set just under the darkest
+   of them and the whole catalogue meets on it. */
+.app-photo-blend {
+  mix-blend-mode: darken;
+}
+
 /* App theme: free delivery, priced. A light crosses the card every few
    seconds - the way a shop window catches the sun, which is the oldest
    attention-getter there is and the only one that does not shout. */

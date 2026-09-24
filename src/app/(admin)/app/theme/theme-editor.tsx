@@ -682,6 +682,39 @@ export function ThemeEditor() {
                     : "Tightens every gap inside a section together, so chips stay tighter than cards."
                 }
               />
+              <SpaceRow
+                label={ar ? "كلمات اسم المنتج" : "Words of the product name"}
+                value={draft.settings.cardNameWords}
+                onChange={(v) => patchSettings({ cardNameWords: v })}
+                min={1}
+                max={8}
+                note={
+                  ar
+                    ? "اسم المنتج يأخذ سطراً واحداً على البطاقة، وما زاد يصبح ثلاث نقاط."
+                    : "A name gets one line on the card; whatever is past this becomes an ellipsis."
+                }
+              />
+              <Field label={ar ? "خلفية صور المنتجات" : "Behind product photos"} type="color">
+                <span className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={draft.settings.cardPhotoBg}
+                    onChange={(e) => patchSettings({ cardPhotoBg: e.target.value })}
+                    className="h-9 w-12 shrink-0 cursor-pointer rounded-lg border border-line bg-white p-1"
+                  />
+                  <input
+                    value={draft.settings.cardPhotoBg}
+                    onChange={(e) => patchSettings({ cardPhotoBg: e.target.value })}
+                    className={input}
+                    dir="ltr"
+                  />
+                </span>
+                <p className="mt-1 text-[11px] text-ink-soft">
+                  {ar
+                    ? "كل صور المنتجات تجلس على هذا اللون، فلا تبدو صورة على أبيض وأخرى على رمادي."
+                    : "Every product photo sits on this one colour, so one shot on white and the next on grey stop fighting each other."}
+                </p>
+              </Field>
               <Field label={ar ? "الشعار" : "Logo"} type="image_picker">
                 <span className="flex items-center gap-2">
                   {draft.settings.logoUrl ? (
