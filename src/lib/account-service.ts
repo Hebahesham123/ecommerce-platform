@@ -30,6 +30,8 @@ export type Account = {
   governorate: string | null;
   city: string | null;
   address: string | null;
+  /** Her own picture, if she has set one. */
+  avatarUrl: string | null;
   orders: AccountOrder[];
 };
 
@@ -44,7 +46,7 @@ export async function accountFor(viewerPhone: string | null): Promise<Account | 
     const [{ data: profile }, { data: verified }, { data: orders }] = await Promise.all([
       supabase
         .from("store_customers")
-        .select("name,email,governorate,city,address")
+        .select("name,email,governorate,city,address,avatar_url")
         .eq("phone", phone)
         .maybeSingle(),
       // A phone verified at checkout has its name here and no profile row yet
@@ -80,6 +82,7 @@ export async function accountFor(viewerPhone: string | null): Promise<Account | 
       governorate: ((profile?.governorate as string) || (last?.governorate as string)) ?? null,
       city: ((profile?.city as string) || (last?.city as string)) ?? null,
       address: ((profile?.address as string) || (last?.address as string)) ?? null,
+      avatarUrl: (profile?.avatar_url as string) ?? null,
       orders: (orders ?? []).map((o) => ({
         orderNumber: String(o.order_number),
         total: Number(o.total),

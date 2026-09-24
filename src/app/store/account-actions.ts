@@ -134,6 +134,99 @@ export async function getMyOrder(orderNumber: string): Promise<ActionResult<MyOr
   }
 }
 
+const AVATAR_BUCKET = "files";
+/** Small enough to arrive as one request; the browser shrinks it before sending. */
+const AVATAR_MAX_BYTES = 900_000;
+
+/**
+ * Set the signed-in shopper's own picture.
+ *
+ * It arrives already shrunk to a square by the browser, so it fits in a single
+ * request and there is no upload URL to hand out — which matters, because a
+ * signed upload URL given to a storefront visitor is a write into storage that
+ * nothing else checks. The phone comes from the session, never the caller, so
+ * this can only ever change her own.
+ *
+ * Stored under a random name. A path built from her phone number would publish
+ * it to anyone the image URL reached.
+ */
+export async function saveMyAvatar(dataUrl: string): Promise<ActionResult<string>> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  const phone = await getSessionPhone();
+  if (!phone) return { ok: false, error: "not_signed_in" };
+
+  const match = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl.trim());
+  if (!match) return { ok: false, error: "not_an_image" };
+  const bytes = Buffer.from(match[2], "base64");
+  if (!bytes.length) return { ok: false, error: "empty_image" };
+  if (bytes.length > AVATAR_MAX_BYTES) return { ok: false, error: "image_too_large" };
+
+  try {
+    const supabase = getServerSupabase();
+    const extension = match[1] === "jpeg" ? "jpg" : match[1];
+    const path = `avatars/${crypto.randomUUID()}.${extension}`;
+
+    const { error: upErr } = await supabase.storage
+      .from(AVATAR_BUCKET)
+      .upload(path, bytes, { contentType: `image/${match[1]}`, cacheControl: "31536000", upsert: false });
+    if (upErr) return { ok: false, error: upErr.message };
+
+    const { data: pub } = supabase.storage.from(AVATAR_BUCKET).getPublicUrl(path);
+    const url = pub.publicUrl;
+
+    // What she had before, so it can be cleared once the new one is safely in.
+    const { data: before } = await supabase
+      .from("store_customers")
+      .select("avatar_url")
+      .eq("phone", phone)
+      .maybeSingle();
+
+    const { error } = await supabase
+      .from("store_customers")
+      .upsert({ phone, avatar_url: url, updated_at: new Date().toISOString() }, { onConflict: "phone" });
+    if (error) {
+      // Do not leave an orphan behind a failed save.
+      await supabase.storage.from(AVATAR_BUCKET).remove([path]);
+      return { ok: false, error: error.message };
+    }
+
+    const old = s(before?.avatar_url);
+    const oldPath = old.match(/\/object\/public\/[^/]+\/(.+)$/)?.[1];
+    if (oldPath && oldPath !== path) {
+      await supabase.storage.from(AVATAR_BUCKET).remove([decodeURIComponent(oldPath)]);
+    }
+
+    return { ok: true, data: url };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+/** Take her picture back off, and delete the file with it. */
+export async function removeMyAvatar(): Promise<ActionResult> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  const phone = await getSessionPhone();
+  if (!phone) return { ok: false, error: "not_signed_in" };
+  try {
+    const supabase = getServerSupabase();
+    const { data: before } = await supabase
+      .from("store_customers")
+      .select("avatar_url")
+      .eq("phone", phone)
+      .maybeSingle();
+    const { error } = await supabase
+      .from("store_customers")
+      .update({ avatar_url: null, updated_at: new Date().toISOString() })
+      .eq("phone", phone);
+    if (error) return { ok: false, error: error.message };
+    const oldPath = s(before?.avatar_url).match(/\/object\/public\/[^/]+\/(.+)$/)?.[1];
+    if (oldPath) await supabase.storage.from(AVATAR_BUCKET).remove([decodeURIComponent(oldPath)]);
+    return { ok: true, data: undefined };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
 /** Update the signed-in shopper's own profile. */
 export async function saveMyProfile(input: {
   name?: string;

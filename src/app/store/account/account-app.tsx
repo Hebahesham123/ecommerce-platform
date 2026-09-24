@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { levelPalette, withAlpha } from "@/lib/loyalty/level-colors";
 import { useRouter } from "next/navigation";
@@ -9,7 +9,13 @@ import { say, type Copy } from "@/lib/page-copy";
 import type { Account } from "@/lib/account-service";
 import type { EarnTask, LoyaltySummary, RewardView, VaultView } from "@/lib/loyalty/types";
 import { getMyLoyalty, redeemMyReward, openMyVault } from "../loyalty-actions";
-import { getMyOrder, saveMyProfile, type MyOrder } from "../account-actions";
+import {
+  getMyOrder,
+  removeMyAvatar,
+  saveMyAvatar,
+  saveMyProfile,
+  type MyOrder,
+} from "../account-actions";
 import { logout } from "../auth-actions";
 
 /**
@@ -53,6 +59,7 @@ export default function AccountApp({
   const money = (n: number) => egp(n, lang);
 
   const [loyalty, setLoyalty] = useState<LoyaltySummary | null>(initialLoyalty);
+  const [avatar, setAvatar] = useState<string | null>(account.avatarUrl);
   // The active section IS the URL now, so it comes in as a prop.
   const page = section;
   const [toast, setToast] = useState<{ text: string; tone: "ok" | "err" } | null>(null);
@@ -157,6 +164,8 @@ export default function AccountApp({
             initials={initials}
             orders={account.orders.length}
             loyalty={loyalty}
+            avatar={avatar}
+            onAvatar={setAvatar}
           />
 
           {loyalty && <SocietyPanels ar={ar} loyalty={loyalty} />}
@@ -339,6 +348,8 @@ function SocietyCard({
   initials,
   orders,
   loyalty,
+  avatar,
+  onAvatar,
 }: {
   ar: boolean;
   name: string;
@@ -346,6 +357,8 @@ function SocietyCard({
   initials: string;
   orders: number;
   loyalty: LoyaltySummary | null;
+  avatar: string | null;
+  onAvatar: (url: string | null) => void;
 }) {
   const vault = loyalty?.primaryVault ?? null;
   const p = loyalty?.progress ?? null;
@@ -389,12 +402,7 @@ function SocietyCard({
       <div className="relative">
         {/* Her, small, the way a byline sits above a headline. */}
         <div className="flex items-center gap-2.5">
-          <span
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-serif text-[11px] text-[#241609]"
-            style={{ background: `linear-gradient(140deg, ${GOLD.bright}, ${GOLD.accent})` }}
-          >
-            {initials}
-          </span>
+          <AvatarPicker ar={ar} initials={initials} avatar={avatar} onAvatar={onAvatar} />
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-medium text-[#EFE3D0]">{name}</span>
             {email && <span className="block truncate text-[10px] text-[#A88D6C]">{email}</span>}
@@ -495,6 +503,149 @@ function SocietyCard({
         </div>
       </div>
     </div>
+  );
+}
+
+/* ------------------------------ avatar picker ----------------------------- */
+
+/**
+ * Two initials are what you show when you have nothing. This is how she gives
+ * the page something: tap the circle, choose a photo.
+ *
+ * The browser does the work first — the image is cropped square and drawn down
+ * to 512 pixels here, before it is sent. A photo straight off a phone is four
+ * or five megabytes and would not survive the request; the same picture at 512
+ * is nearer eighty kilobytes, and at the size it is displayed nobody could tell
+ * the two apart. It also means no upload URL has to be handed to the browser.
+ */
+function AvatarPicker({
+  ar,
+  initials,
+  avatar,
+  onAvatar,
+}: {
+  ar: boolean;
+  initials: string;
+  avatar: string | null;
+  onAvatar: (url: string | null) => void;
+}) {
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const [state, setState] = useState<"idle" | "working" | "failed">("idle");
+  const [menu, setMenu] = useState(false);
+
+  async function squareDataUrl(file: File): Promise<string> {
+    const bitmap = await createImageBitmap(file);
+    const side = Math.min(bitmap.width, bitmap.height);
+    const size = Math.min(512, side);
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("no_canvas");
+    // Centre crop: a portrait is nearly always framed in the middle.
+    ctx.drawImage(
+      bitmap,
+      (bitmap.width - side) / 2,
+      (bitmap.height - side) / 2,
+      side,
+      side,
+      0,
+      0,
+      size,
+      size,
+    );
+    bitmap.close?.();
+    return canvas.toDataURL("image/jpeg", 0.85);
+  }
+
+  async function choose(file: File | undefined) {
+    if (!file) return;
+    setState("working");
+    try {
+      const res = await saveMyAvatar(await squareDataUrl(file));
+      if (!res.ok) throw new Error(res.error);
+      onAvatar(res.data);
+      setState("idle");
+    } catch {
+      setState("failed");
+    }
+  }
+
+  return (
+    <span className="relative shrink-0">
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          void choose(e.target.files?.[0]);
+          e.target.value = "";
+        }}
+      />
+      <button
+        onClick={() => (avatar ? setMenu((v) => !v) : fileRef.current?.click())}
+        disabled={state === "working"}
+        className="relative block h-8 w-8 overflow-hidden rounded-full"
+        style={{ background: `linear-gradient(140deg, ${GOLD.bright}, ${GOLD.accent})` }}
+        aria-label={ar ? "تغيير صورتك" : "Change your picture"}
+      >
+        {avatar ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={avatar} alt="" className="h-full w-full object-cover" />
+        ) : (
+          <span className="flex h-full w-full items-center justify-center font-serif text-[11px] text-[#241609]">
+            {initials}
+          </span>
+        )}
+        {state === "working" && (
+          <span className="absolute inset-0 flex items-center justify-center bg-black/55">
+            <span className="h-3 w-3 animate-spin rounded-full border border-white/40 border-t-white" />
+          </span>
+        )}
+      </button>
+
+      {/* A camera is the one mark everybody reads as "you can change this". */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute -bottom-0.5 -end-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full text-[7px]"
+        style={{ backgroundColor: GOLD.bright, color: "#241609" }}
+      >
+        ✎
+      </span>
+
+      {menu && (
+        <span className="absolute top-9 z-20 flex w-36 flex-col overflow-hidden rounded-xl bg-[#2C1D0F] text-[11px] shadow-xl ring-1 ring-inset ring-[#4A331C]" style={{ insetInlineStart: 0 }}>
+          <button
+            onClick={() => {
+              setMenu(false);
+              fileRef.current?.click();
+            }}
+            className="px-3 py-2 text-start text-[#F0E4D2] hover:bg-[#3A2714]"
+          >
+            {ar ? "تغيير الصورة" : "Change picture"}
+          </button>
+          <button
+            onClick={async () => {
+              setMenu(false);
+              setState("working");
+              const res = await removeMyAvatar();
+              if (res.ok) onAvatar(null);
+              setState(res.ok ? "idle" : "failed");
+            }}
+            className="px-3 py-2 text-start text-[#D9877C] hover:bg-[#3A2714]"
+          >
+            {ar ? "إزالة الصورة" : "Remove picture"}
+          </button>
+        </span>
+      )}
+
+      {state === "failed" && (
+        <span className="absolute top-9 z-20 w-36 rounded-lg bg-[#5A2A24] px-2 py-1 text-[10px] text-[#FBD9D3]" style={{ insetInlineStart: 0 }}>
+          {ar ? "تعذّر حفظ الصورة." : "That picture could not be saved."}
+        </span>
+      )}
+    </span>
   );
 }
 
