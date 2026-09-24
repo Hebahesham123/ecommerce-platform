@@ -139,7 +139,7 @@ export default function AccountApp({
       <div className="mx-auto grid max-w-[1180px] gap-6 px-4 py-8 lg:grid-cols-[260px_1fr]">
         {/* Sidebar / account menu. On mobile it IS the account home; a section
             page hides it and shows only that section (with a Menu link). */}
-        <aside className={`${section === "overview" ? "flex" : "hidden lg:flex"} flex-col gap-3`}>
+        <aside className={`${section === "overview" ? "flex" : "hidden lg:flex"} flex-col gap-2`}>
           {/*
             The society card, built like the Society screens themselves.
 
@@ -167,7 +167,7 @@ export default function AccountApp({
             return (
               <div
                 key={gi}
-                className={`rounded-2xl border p-1.5 shadow-sm ${t ? "" : "border-[#E4D7C5] bg-[#FBF7F1]"}`}
+                className={`rounded-2xl border p-1 shadow-sm ${t ? "" : "border-[#E4D7C5] bg-[#FBF7F1]"}`}
                 style={
                   t
                     ? ({
@@ -182,7 +182,7 @@ export default function AccountApp({
               >
                 {g.title && (
                   <div
-                    className="px-2.5 py-2 text-[9px] font-semibold uppercase tracking-[0.2em]"
+                    className="px-2.5 pb-1 pt-1.5 text-[9px] font-semibold uppercase tracking-[0.2em]"
                     style={{ color: t ? t.accent : "#A08972" }}
                   >
                     {g.title}
@@ -195,7 +195,7 @@ export default function AccountApp({
                       key={key}
                       href={hrefFor(key)}
                       aria-current={on}
-                      className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-start text-sm transition-colors ${
+                      className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-1.5 text-start text-sm leading-6 transition-colors ${
                         on
                           ? t
                             ? "text-[#FFF6EA]"
@@ -228,10 +228,10 @@ export default function AccountApp({
             );
           })}
 
-          <div className="rounded-2xl border border-[#E4D7C5] bg-[#FBF7F1] p-1.5 shadow-sm">
+          <div className="rounded-2xl border border-[#E4D7C5] bg-[#FBF7F1] p-1 shadow-sm">
             <button
               onClick={() => start(async () => { await logout(); (window.top ?? window).location.assign("/shop"); })}
-              className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-start text-sm text-[#9B4B41] hover:bg-[#F3E9DC]"
+              className="flex w-full items-center gap-2.5 rounded-xl px-3 py-1.5 text-start text-sm leading-6 text-[#9B4B41] hover:bg-[#F3E9DC]"
             >
               {ar ? "تسجيل الخروج" : "Sign out"}
             </button>
