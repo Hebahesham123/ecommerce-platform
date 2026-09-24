@@ -1840,7 +1840,7 @@ function CountdownDeals({
       </div>
 
       <div
-        className="-mx-4 mt-2 flex items-start overflow-x-auto px-4 pb-1"
+        className="-mx-4 mt-2 flex items-stretch overflow-x-auto px-4 pb-1"
         style={{ gap: "var(--app-item-gap, 8px)" }}
       >
         {items.map((item, i) => {
@@ -1852,14 +1852,17 @@ function CountdownDeals({
             <button
               key={item.id}
               onClick={() => go(item)}
-              className="shrink-0 overflow-hidden border border-slate-200 bg-white text-start"
+              className="flex shrink-0 flex-col overflow-hidden border border-slate-200 bg-white text-start"
               style={{ borderRadius: radius, width: lead ? 224 : 158 }}
             >
-              <span className="relative block">
+              {/* The picture takes whatever height the row settles on, so the
+                  prices line up across it and a featured card leads by being
+                  wider rather than by leaving a step behind it. */}
+              <span className="relative block flex-1">
                 <Thumb
                   src={borrowed.image}
-                  className="w-full"
-                  style={{ borderRadius: 0, height: lead ? 168 : 120 }}
+                  className="h-full w-full"
+                  style={{ borderRadius: 0, minHeight: lead ? 168 : 120 }}
                   blend
                 />
                 {str(item.badge) && (

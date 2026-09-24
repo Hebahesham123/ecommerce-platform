@@ -461,6 +461,27 @@ export function ThemeEditor() {
     });
   }
 
+  /**
+   * Put a section at a given place in the order.
+   *
+   * Not a swap: taking it out and putting it back where it was asked for is
+   * what a merchant means by "third". Swapping with whatever happens to be
+   * third would move that one to where this came from, which is a different
+   * thing and only looks the same when the two are neighbours.
+   */
+  function moveTo(id: string, to: number) {
+    setDraft((d) => {
+      if (!d) return d;
+      const from = d.blocks.findIndex((b) => b.id === id);
+      const at = Math.max(0, Math.min(d.blocks.length - 1, to));
+      if (from < 0 || from === at) return d;
+      const blocks = [...d.blocks];
+      const [moved] = blocks.splice(from, 1);
+      blocks.splice(at, 0, moved);
+      return { ...d, blocks };
+    });
+  }
+
   function add(type: BlockType, preset?: Record<string, unknown>) {
     const made = newBlock(type);
     const block = preset ? { ...made, settings: { ...made.settings, ...preset } } : made;
@@ -688,6 +709,7 @@ export function ThemeEditor() {
                 onChange={(v) => patchSettings({ cardNameWords: v })}
                 min={1}
                 max={8}
+                unit={ar ? " كلمة" : " words"}
                 note={
                   ar
                     ? "اسم المنتج يأخذ سطراً واحداً على البطاقة، وما زاد يصبح ثلاث نقاط."
@@ -1232,6 +1254,16 @@ export function ThemeEditor() {
                 highlighted={hovered === block.id}
                 first={i === 0}
                 last={i === draft.blocks.length - 1}
+                index={i}
+                count={draft.blocks.length}
+                order={draft.blocks.map((b, n) => ({
+                  id: b.id,
+                  label:
+                    [b.settings?.title, b.settings?.heading, b.settings?.kicker]
+                      .map((v) => (typeof v === "string" ? v.trim() : ""))
+                      .find(Boolean) || (ar ? BLOCK_META[b.type].ar : BLOCK_META[b.type].en),
+                  at: n,
+                }))}
                 collections={data.collections}
                 accent={draft.settings.accent}
                 input={input}
@@ -1239,6 +1271,7 @@ export function ThemeEditor() {
                 onHover={setHovered}
                 onPatch={(patch) => patchBlock(block.id, patch)}
                 onMove={(by) => move(block.id, by)}
+                onMoveTo={(to) => moveTo(block.id, to)}
                 onRemove={() =>
                   setDraft((d) => (d ? { ...d, blocks: d.blocks.filter((b) => b.id !== block.id) } : d))
                 }
@@ -1856,6 +1889,9 @@ function BlockGroup({
   highlighted,
   first,
   last,
+  index,
+  count,
+  order,
   collections,
   pages,
   accent,
@@ -1864,6 +1900,7 @@ function BlockGroup({
   onHover,
   onPatch,
   onMove,
+  onMoveTo,
   onRemove,
 }: {
   block: Block;
@@ -1872,6 +1909,11 @@ function BlockGroup({
   highlighted: boolean;
   first: boolean;
   last: boolean;
+  /** Where this section sits, and how many there are. */
+  index: number;
+  count: number;
+  /** Every section in order, so the list can say what it would sit between. */
+  order: { id: string; label: string; at: number }[];
   collections: { handle: string; title: string; count: number; image: string | null }[];
   /** The merchant's own pages, so any link here can point at one. */
   pages: { key: string; ar: string; en: string }[];
@@ -1882,6 +1924,7 @@ function BlockGroup({
   onHover: (key: string | null) => void;
   onPatch: (patch: Record<string, unknown>) => void;
   onMove: (by: 1 | -1) => void;
+  onMoveTo: (to: number) => void;
   onRemove: () => void;
 }) {
   const meta = BLOCK_META[block.type];
@@ -1938,6 +1981,25 @@ function BlockGroup({
       codeHref={`/app/theme/code?file=components/${componentName(block.type)}.tsx`}
       actions={
         <>
+          {/* Where it sits. Two arrows are fine for one step and miserable for
+              nine, so the place itself is a list: pick it and the section goes
+              there. The label says which section it will land on, because "5"
+              means nothing next to a screen a merchant is reading by name. */}
+          <select
+            value={index}
+            onChange={(e) => onMoveTo(Number(e.target.value))}
+            onClick={(e) => e.stopPropagation()}
+            title={ar ? "الترتيب" : "Position"}
+            aria-label={ar ? "ترتيب القسم" : "Section position"}
+            className="h-7 w-[3.4rem] shrink-0 rounded-lg border border-line bg-surface px-1 text-[11px] text-ink-muted"
+          >
+            {order.map((o) => (
+              <option key={o.id} value={o.at}>
+                {o.at + 1}
+                {o.at === index ? "" : " · " + o.label}
+              </option>
+            ))}
+          </select>
           <button
             onClick={() => onMove(-1)}
             disabled={first}
@@ -3852,6 +3914,7 @@ function SpaceRow({
   min,
   max,
   note,
+  unit = "px",
 }: {
   label: string;
   value: number;
@@ -3859,6 +3922,8 @@ function SpaceRow({
   min: number;
   max: number;
   note?: string;
+  /** Most of these are pixels. A count of words is not. */
+  unit?: string;
 }) {
   return (
     <Field label={label} type="range">
@@ -3871,8 +3936,9 @@ function SpaceRow({
           onChange={(e) => onChange(Number(e.target.value))}
           className="h-1.5 flex-1 cursor-pointer appearance-none rounded-full bg-line accent-[rgb(139,92,246)]"
         />
-        <span className="w-10 shrink-0 text-end text-[11px] tabular-nums text-ink-muted">
-          {value}px
+        <span className="w-14 shrink-0 text-end text-[11px] tabular-nums text-ink-muted">
+          {value}
+          {unit}
         </span>
       </span>
       {note && <p className="mt-1 text-[11px] text-ink-soft">{note}</p>}
