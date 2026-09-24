@@ -136,36 +136,82 @@ export default function AccountApp({
         {/* Sidebar / account menu. On mobile it IS the account home; a section
             page hides it and shows only that section (with a Menu link). */}
         <aside className={`${section === "overview" ? "flex" : "hidden lg:flex"} flex-col gap-3`}>
-          <div className="rounded-2xl border border-[#E4D7C5] bg-[#FBF7F1] p-5 text-center shadow-sm">
-            <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full border border-[#CDB99F] bg-gradient-to-br from-[#D9BFA2] to-[#A8764A] font-serif text-2xl text-white">
-              {initials}
-            </div>
-            <div className="mt-3 font-serif text-lg">{account.name || (ar ? "عميلة" : "Customer")}</div>
-            {account.email && <div className="text-xs text-[#7C6450]">{account.email}</div>}
-            {loyalty && (
-              <div className="mt-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#A46C3C]">
-                {loyalty.progress.currentLevelName} {SIG}
+          {/*
+            The society's own card, in the society's own colours.
+
+            It sat in the same cream as every other panel, so the one thing on
+            this page that is meant to feel earned looked like a settings box.
+            The Society screens are lit gold on deep brown; this is that, which
+            makes her standing the first thing the page says rather than
+            something filed among the menus.
+          */}
+          <div className="relative overflow-hidden rounded-2xl border border-[#6E4C2C] bg-[#2A1A0F] p-5 text-center shadow-[0_14px_34px_-16px_rgba(42,26,15,0.7)]">
+            {/* Light from above, so the card has a source and not a flat fill. */}
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-0"
+              style={{
+                background:
+                  "radial-gradient(120% 85% at 50% 0%, rgba(216,174,110,0.30) 0%, rgba(120,78,42,0.12) 45%, transparent 76%)",
+              }}
+            />
+            <div className="relative">
+              <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-[#F0D6AC] via-[#C08E5C] to-[#7A4B27] font-serif text-2xl text-[#2A1A0F] ring-1 ring-[#F0D6AC]/40 ring-offset-2 ring-offset-[#2A1A0F]">
+                {initials}
               </div>
-            )}
-            <div className="mt-4 flex border-t border-[#E4D7C5] pt-3 text-center">
-              <Stat v={loyalty ? `${fmtN(loyalty.user.signatureBalance)}` : "—"} k={ar ? "توقيع" : "Signatures"} />
-              <Stat v={String(account.orders.length)} k={ar ? "طلبات" : "Orders"} border />
-              <Stat v={loyalty ? String(loyalty.streak.currentStreak) : "0"} k={ar ? "ستريك" : "Streak"} border />
-            </div>
-            {loyalty && loyalty.progress.nextLevel && (
-              <div className="mt-4 border-t border-dashed border-[#E4D7C5] pt-3 text-start">
-                <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-[#7C6450]">
-                  <span>{ar ? "التقدّم" : "Progress"}</span>
-                  <span className="font-serif text-sm text-[#A46C3C]">{fmtN(loyalty.user.signatureBalance)} {SIG}</span>
-                </div>
-                <div className="mt-2 h-1 overflow-hidden rounded bg-[#E4D7C5]">
-                  <div className="h-full bg-gradient-to-r from-[#C08E5C] to-[#7A4B27]" style={{ width: `${loyalty.progress.percentage}%` }} />
-                </div>
-                <div className="mt-1.5 text-[10px] text-[#7C6450]">
-                  {fmtN(loyalty.progress.remaining ?? 0)} {ar ? `للوصول إلى ${loyalty.progress.nextLevelName}` : `until ${loyalty.progress.nextLevelName}`}
-                </div>
+              <div className="mt-3 font-serif text-xl tracking-wide text-[#F6E7CF]">
+                {account.name || (ar ? "عميلة" : "Customer")}
               </div>
-            )}
+              {account.email && <div className="text-xs text-[#B79B78]">{account.email}</div>}
+              {loyalty && (
+                <div className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#D8AE6E]">
+                  {loyalty.progress.currentLevelName} {SIG}
+                </div>
+              )}
+
+              <div className="mt-4 flex border-t border-[#553A22] pt-3 text-center">
+                <Stat v={loyalty ? `${fmtN(loyalty.user.signatureBalance)}` : "—"} k={ar ? "توقيع" : "Signatures"} />
+                <Stat v={String(account.orders.length)} k={ar ? "طلبات" : "Orders"} border />
+                <Stat v={loyalty ? String(loyalty.streak.currentStreak) : "0"} k={ar ? "ستريك" : "Streak"} border />
+              </div>
+
+              {loyalty && loyalty.progress.nextLevel && (
+                <div className="mt-4 border-t border-[#553A22] pt-4 text-start">
+                  <div className="mb-2 flex items-baseline justify-between gap-2">
+                    <span className="text-[10px] uppercase tracking-[0.18em] text-[#B79B78]">
+                      {ar ? "التوقيعات" : "Signatures"}
+                    </span>
+                    <span className="truncate font-serif text-xs text-[#D8AE6E]">
+                      {loyalty.progress.nextLevelName} {SIG}
+                    </span>
+                  </div>
+
+                  {/* The bar earns the glow: it is the one number she is
+                      actually climbing. */}
+                  <div className="relative h-2.5 overflow-hidden rounded-full bg-[#3B2817] ring-1 ring-inset ring-[#5C3F24]">
+                    <div
+                      className="absolute inset-y-0 start-0 rounded-full bg-gradient-to-r from-[#8A5A2B] via-[#D8AE6E] to-[#F6E3BC] shadow-[0_0_14px_rgba(246,227,188,0.55)]"
+                      style={{ width: `${Math.min(100, Math.max(2, loyalty.progress.percentage))}%` }}
+                    />
+                  </div>
+
+                  <div className="mt-2.5 flex items-baseline justify-between gap-2">
+                    <span className="font-serif text-2xl leading-none text-[#F6E7CF]">
+                      {fmtN(loyalty.user.signatureBalance)} <span className="text-[#D8AE6E]">{SIG}</span>
+                    </span>
+                    <span className="text-[10px] uppercase tracking-[0.14em] text-[#B79B78]">
+                      {ar
+                        ? `من ${fmtN(loyalty.user.signatureBalance + (loyalty.progress.remaining ?? 0))}`
+                        : `out of ${fmtN(loyalty.user.signatureBalance + (loyalty.progress.remaining ?? 0))}`}
+                    </span>
+                  </div>
+                  <div className="mt-1 text-[10px] text-[#B79B78]">
+                    {fmtN(loyalty.progress.remaining ?? 0)}{" "}
+                    {ar ? `للوصول إلى ${loyalty.progress.nextLevelName}` : `until ${loyalty.progress.nextLevelName}`}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {nav.map((g, gi) => (
@@ -251,11 +297,12 @@ export default function AccountApp({
 }
 
 // ---- small shared bits ------------------------------------------------------
+/** One figure on the society card — gold on brown, like the Society screens. */
 function Stat({ v, k, border }: { v: string; k: string; border?: boolean }) {
   return (
-    <div className={`flex-1 ${border ? "border-s border-[#E4D7C5]" : ""}`}>
-      <div className="font-serif text-lg">{v}</div>
-      <div className="text-[8.5px] uppercase tracking-wide text-[#7C6450]">{k}</div>
+    <div className={`flex-1 ${border ? "border-s border-[#553A22]" : ""}`}>
+      <div className="font-serif text-lg text-[#F6E7CF]">{v}</div>
+      <div className="text-[8.5px] uppercase tracking-[0.14em] text-[#B79B78]">{k}</div>
     </div>
   );
 }
