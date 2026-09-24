@@ -294,6 +294,15 @@ const PAGES = [
 /** Every screen key the picker can store, pages included. */
 export const LINK_SCREEN_KEYS = [...SCREENS, ...PAGES].map((s) => s.key);
 
+/**
+ * The merchant's own pages, offered beside the shop's.
+ *
+ * They are stored the same way - as a screen key that happens to be a page
+ * handle - so a link made before a page existed keeps working when it does,
+ * and the app resolves the handle at the moment of the tap.
+ */
+export type PickerPage = { key: string; ar: string; en: string };
+
 type Kind = "none" | "collection" | "product" | "page" | "screen" | "search" | "url";
 
 /**
@@ -307,7 +316,7 @@ function kindOf(v: LinkValue): Kind {
   if (v.url) return "url";
   if (v.productId) return "product";
   if (v.screen?.startsWith(SEARCH_PREFIX)) return "search";
-  if (v.screen) return PAGES.some((p) => p.key === v.screen) ? "page" : "screen";
+  if (v.screen) return SCREENS.some((s) => s.key === v.screen) ? "screen" : "page";
   if (v.handle) return "collection";
   return "none";
 }
@@ -406,6 +415,7 @@ export function LinkPicker({
   value,
   onChange,
   collections,
+  pages = [],
   input,
   ar,
   kinds,
@@ -413,6 +423,8 @@ export function LinkPicker({
   value: LinkValue;
   onChange: (next: LinkValue) => void;
   collections: Collection[];
+  /** The merchant's own pages, listed after the shop's own. */
+  pages?: PickerPage[];
   input: string;
   ar: boolean;
   /**
@@ -504,7 +516,7 @@ export function LinkPicker({
       return (ar ? "بحث: " : "Search: ") + value.screen.slice(SEARCH_PREFIX.length);
     }
     if (value.screen) {
-      const found = [...SCREENS, ...PAGES].find((s) => s.key === value.screen);
+      const found = [...SCREENS, ...PAGES, ...pages].find((s) => s.key === value.screen);
       return found ? (ar ? found.ar : found.en) : value.screen;
     }
     if (value.handle) {
@@ -737,7 +749,7 @@ export function LinkPicker({
 
               {(open === "page" || open === "screen") && (
                 <div className="max-h-56 overflow-y-auto">
-                  {(open === "page" ? PAGES : SCREENS).map((s) => (
+                  {(open === "page" ? [...pages, ...PAGES] : SCREENS).map((s) => (
                     <button
                       key={s.key}
                       type="button"

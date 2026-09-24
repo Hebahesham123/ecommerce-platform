@@ -14,6 +14,7 @@ import {
 import { Btn, Empty, money, Note, Sheet, Spinner } from "./ui";
 import { Reviews } from "./reviews";
 import { AppHome, type HomeData } from "@/components/app-home";
+import { AppPageView } from "@/components/app-page";
 import { CollectionPage, ProductPage, type ScreenHandlers } from "@/components/app-screens";
 
 /**
@@ -29,6 +30,7 @@ import { CollectionPage, ProductPage, type ScreenHandlers } from "@/components/a
 type View =
   | { kind: "home" }
   | { kind: "collection"; handle: string; title: string }
+  | { kind: "page"; handle: string }
   | { kind: "search"; q: string };
 
 const SORTS = [
@@ -162,7 +164,12 @@ export function Shop({
     if (!req?.handle || req.at === lastPage.current) return;
     lastPage.current = req.at;
     if (req.handle === "requests") return onLeave("requests");
-    if (req.handle === "reviews" || req.handle === "happy-customers") setPage(req.handle);
+    if (req.handle === "reviews" || req.handle === "happy-customers") return setPage(req.handle);
+    // One of the merchant's own pages — For Her, For Him — which are screens
+    // rather than sheets: they are somewhere you go, not something that
+    // covers where you are.
+    const own = home?.theme.settings.pages?.find((p) => p.handle === req.handle);
+    if (own) setView({ kind: "page", handle: own.handle });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openPage]);
 
@@ -278,6 +285,25 @@ export function Shop({
           wishlist={wishlist}
           onToggleWish={onToggleWish}
         />
+      ) : view.kind === "page" ? (
+        (() => {
+          const page = home.theme.settings.pages?.find((p) => p.handle === view.handle);
+          if (!page) return <Failed ar={ar} error="page_not_found" onRetry={loadHome} />;
+          return (
+            <AppPageView
+              page={page}
+              settings={home.theme.settings}
+              ar={ar}
+              onBack={() => setView({ kind: "home" })}
+              onOpen={(tile) => {
+                if (tile.url) return window.open(tile.url, "_blank", "noopener,noreferrer");
+                if (tile.productId) return setOpen(tile.productId);
+                if (tile.screen) return onScreen?.(tile.screen);
+                if (tile.handle) go({ type: "collection", handle: tile.handle });
+              }}
+            />
+          );
+        })()
       ) : view.kind === "collection" ? (
         <div className="-mx-4 -mb-4 -mt-4">
           <CollectionPage

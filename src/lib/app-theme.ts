@@ -379,6 +379,40 @@ export type Block = {
   settings: Record<string, unknown>;
 };
 
+/**
+ * A page the merchant writes: a line, a headline and a set of ways in.
+ *
+ * The website has these - For Her, For Him - and they are not collections.
+ * A collection is a wall of products; this is the page you send somebody to
+ * when the honest answer to "what do you have for her?" is eleven answers.
+ * So it is a headline over a set of pictures, each one opening a collection,
+ * and it lives behind a handle the shortcuts and the menu can point at.
+ */
+export type AppPage = {
+  id: string;
+  /** What a link points at: "for-her". */
+  handle: string;
+  /** The small line above the headline. */
+  kicker: string;
+  /** The headline, in two lines the way the website sets it. */
+  line1: string;
+  line2: string;
+  /** "circles" the way the website draws them, or "tiles". */
+  layout: string;
+  items: PageTile[];
+};
+
+/** One way in: a picture, a word, and where it goes. */
+export type PageTile = {
+  id: string;
+  imageUrl: string;
+  label: string;
+  handle: string;
+  url: string;
+  productId: string;
+  screen: string;
+};
+
 /** One shortcut in the row under the header. */
 export type StripItem = {
   id: string;
@@ -426,6 +460,8 @@ export type AppSettings = {
    */
   stripEnabled: boolean;
   strip: StripItem[];
+  /** The merchant's own pages — For Her, For Him — behind their handles. */
+  pages: AppPage[];
 
   /**
    * The picture the app opens on.
@@ -796,6 +832,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   splashScreen: "",
   stripEnabled: false,
   strip: [],
+  pages: [],
   titleFont: "system",
   sectionGap: 12,
   itemGap: 8,
@@ -1536,6 +1573,7 @@ function colour(v: unknown, fallback: string = DEFAULT_SETTINGS.accent): string 
 export function normalizeTheme(raw: unknown): AppTheme {
   const row = (raw ?? {}) as {
     settings?: unknown;
+    pages?: unknown;
     blocks?: unknown;
     tabs?: unknown;
     screens?: unknown;
@@ -1543,6 +1581,7 @@ export function normalizeTheme(raw: unknown): AppTheme {
   const s = (row.settings ?? {}) as Record<string, unknown>;
 
   const settings: AppSettings = {
+    pages: [],
     storeName: str(s.storeName, DEFAULT_SETTINGS.storeName).slice(0, 60),
     logoUrl: str(s.logoUrl) || null,
     accent: colour(s.accent),
@@ -1597,6 +1636,38 @@ export function normalizeTheme(raw: unknown): AppTheme {
           .slice(0, 12)
       : [],
   };
+
+  // Pages: the merchant's own, each keeping only what it can draw.
+  settings.pages = (Array.isArray(s.pages) ? (s.pages as unknown[]) : [])
+    .map((raw, i) => {
+      const p = (raw ?? {}) as Record<string, unknown>;
+      return {
+        id: str(p.id) || `p-${i}`,
+        handle: str(p.handle).slice(0, 60).toLowerCase(),
+        kicker: str(p.kicker).slice(0, 60),
+        line1: str(p.line1).slice(0, 60),
+        line2: str(p.line2).slice(0, 60),
+        layout: str(p.layout) === "tiles" ? "tiles" : "circles",
+        items: (Array.isArray(p.items) ? (p.items as unknown[]) : [])
+          .map((rawItem, j) => {
+            const t = (rawItem ?? {}) as Record<string, unknown>;
+            return {
+              id: str(t.id) || `t-${j}`,
+              imageUrl: str(t.imageUrl).slice(0, 500),
+              label: str(t.label).slice(0, 40),
+              handle: str(t.handle).slice(0, 80),
+              url: str(t.url).slice(0, 300),
+              productId: str(t.productId).slice(0, 60),
+              screen: str(t.screen).slice(0, 40),
+            };
+          })
+          .filter((t) => t.label || t.imageUrl)
+          .slice(0, 24),
+      };
+    })
+    // A page nobody can reach is not a page.
+    .filter((p) => p.handle)
+    .slice(0, 12);
 
   const raws = Array.isArray(row.blocks) ? row.blocks : null;
   const blocks: Block[] = (raws ?? DEFAULT_BLOCKS)

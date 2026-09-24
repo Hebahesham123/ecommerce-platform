@@ -135,6 +135,46 @@ export function ThemeEditor() {
   // Which screen the editor is on. Home is blocks; the rest are settings.
   const [page, setPage] = useState<ScreenKey | "home" | "live">("home");
   const [stripIndex, setStripIndex] = useState(0);
+  // What the link pickers should offer beside the shop's own pages.
+  const pagePicks = (draft?.settings.pages ?? []).map((p) => ({
+    key: p.handle,
+    ar: p.line2 || p.handle,
+    en: p.line2 || p.handle,
+  }));
+
+  /** The merchant's own pages, edited in place. */
+  const patchPage = (i: number, patch: Record<string, unknown>) =>
+    setDraft(
+      (d) =>
+        d
+          ? {
+              ...d,
+              settings: {
+                ...d.settings,
+                pages: (d.settings.pages ?? []).map((p, j) => (j === i ? { ...p, ...patch } : p)),
+              },
+            }
+          : d,
+      `page:${i}:${Object.keys(patch).join(",")}`,
+    );
+  const patchTile = (i: number, j: number, patch: Record<string, unknown>) =>
+    setDraft(
+      (d) =>
+        d
+          ? {
+              ...d,
+              settings: {
+                ...d.settings,
+                pages: (d.settings.pages ?? []).map((p, pi) =>
+                  pi === i
+                    ? { ...p, items: p.items.map((t, ti) => (ti === j ? { ...t, ...patch } : t)) }
+                    : p,
+                ),
+              },
+            }
+          : d,
+      `tile:${i}:${j}`,
+    );
   // Bumping this plays the opening picture again in the phone.
   const [splashPlay, setSplashPlay] = useState(0);
   const [stack, setStack] = useState<Screen[]>([]);
@@ -959,6 +999,135 @@ export function ThemeEditor() {
                   </button>
                 </div>
               )}
+            </Group>
+
+            <Group
+              id="__pages"
+              title={ar ? "الصفحات" : "Pages"}
+              subtitle={ar ? "صفحاتك الخاصة" : "your own pages"}
+              open={open["__pages"] ?? false}
+              onToggle={() => setOpen((s) => ({ ...s, __pages: !(s["__pages"] ?? false) }))}
+            >
+              <p className="mb-2 text-[11px] leading-relaxed text-ink-soft">
+                {ar
+                  ? "صفحة مثل «For Her»: عنوان وصور تفتح كل منها قسمًا. اربطيها من الاختصارات أو القائمة."
+                  : "A page like For Her: a headline and pictures that each open a collection. Point a shortcut or a menu item at it."}
+              </p>
+
+              {(draft.settings.pages ?? []).map((page, i) => (
+                <div key={page.id} className="mb-3 rounded-xl border border-line p-3">
+                  <div className="mb-2 flex items-center gap-2">
+                    <input
+                      value={page.handle}
+                      onChange={(e) => patchPage(i, { handle: e.target.value })}
+                      placeholder="for-her"
+                      className={input}
+                      dir="ltr"
+                    />
+                    <button
+                      onClick={() => patchSettings({ pages: (draft.settings.pages ?? []).filter((_, j) => j !== i) })}
+                      className="shrink-0 rounded-lg border border-line p-2 text-ink-soft hover:text-rose-600"
+                      aria-label={ar ? "حذف" : "Remove"}
+                    >
+                      <IcTrash className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <input value={page.kicker} onChange={(e) => patchPage(i, { kicker: e.target.value })} placeholder="SUMMER PICKS" className={input} />
+                    <input value={page.line1} onChange={(e) => patchPage(i, { line1: e.target.value })} placeholder="shop" className={input} />
+                    <input value={page.line2} onChange={(e) => patchPage(i, { line2: e.target.value })} placeholder="WOMEN COLLECTION" className={input} />
+                  </div>
+                  <select
+                    value={page.layout}
+                    onChange={(e) => patchPage(i, { layout: e.target.value })}
+                    className={`${input} mt-2`}
+                  >
+                    <option value="circles">{ar ? "دوائر (مثل الموقع)" : "Circles, like the website"}</option>
+                    <option value="tiles">{ar ? "بطاقات بالصورة كاملة" : "Tiles, the whole picture"}</option>
+                  </select>
+
+                  <div className="mt-2 space-y-2">
+                    {page.items.map((tile, j) => (
+                      <div key={tile.id} className="rounded-lg border border-line p-2">
+                        <div className="flex items-center gap-2">
+                          {tile.imageUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={tile.imageUrl} alt="" className="h-8 w-8 shrink-0 rounded object-cover" />
+                          ) : null}
+                          <input
+                            value={tile.label}
+                            onChange={(e) => patchTile(i, j, { label: e.target.value })}
+                            placeholder={ar ? "الكلمة" : "Word"}
+                            className={input}
+                          />
+                          <ImageUpload compact onUploaded={(url) => patchTile(i, j, { imageUrl: url })} ar={ar} />
+                          <button
+                            onClick={() =>
+                              patchPage(i, { items: page.items.filter((_, k) => k !== j) })
+                            }
+                            className="shrink-0 rounded-lg border border-line p-1.5 text-ink-soft hover:text-rose-600"
+                            aria-label={ar ? "حذف" : "Remove"}
+                          >
+                            <IcTrash className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                        <div className="mt-2">
+                          <LinkPicker
+                            value={{ handle: tile.handle, url: tile.url, productId: tile.productId, screen: tile.screen }}
+                            onChange={(next) =>
+                              patchTile(i, j, {
+                                handle: next.handle ?? "",
+                                url: next.url ?? "",
+                                productId: next.productId ?? "",
+                                screen: next.screen ?? "",
+                              })
+                            }
+                            collections={data.collections}
+                            pages={pagePicks}
+                            input={input}
+                            ar={ar}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                    <button
+                      onClick={() =>
+                        patchPage(i, {
+                          items: [
+                            ...page.items,
+                            { id: itemId(), imageUrl: "", label: "", handle: "", url: "", productId: "", screen: "" },
+                          ],
+                        })
+                      }
+                      className="btn-outline w-full justify-center text-xs"
+                    >
+                      <IcPlus className="h-3.5 w-3.5" /> {ar ? "إضافة صورة" : "Add a way in"}
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              <button
+                onClick={() =>
+                  patchSettings({
+                    pages: [
+                      ...(draft.settings.pages ?? []),
+                      {
+                        id: itemId(),
+                        handle: "",
+                        kicker: "",
+                        line1: "shop",
+                        line2: "",
+                        layout: "circles",
+                        items: [],
+                      },
+                    ],
+                  })
+                }
+                className="btn-outline w-full justify-center text-xs"
+              >
+                <IcPlus className="h-3.5 w-3.5" /> {ar ? "صفحة جديدة" : "New page"}
+              </button>
             </Group>
 
             <div className="mb-1.5 mt-4 px-1 text-[11px] font-semibold uppercase tracking-wide text-ink-soft">

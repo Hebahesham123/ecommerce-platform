@@ -86,6 +86,24 @@ export type StripShortcut = {
   screen: string;
 };
 
+export type ThemePage = {
+  id: string;
+  handle: string;
+  kicker: string;
+  line1: string;
+  line2: string;
+  layout: string;
+  items: {
+    id: string;
+    imageUrl: string;
+    label: string;
+    handle: string;
+    url: string;
+    productId: string;
+    screen: string;
+  }[];
+};
+
 export const theme = {
   storeName: ${q(t.storeName)},
   /** Section titles. undefined means the platform's own face. */
@@ -96,6 +114,8 @@ export const theme = {
   accent: ${q(t.accent)},
   background: ${q(t.background)},
   menuHandle: ${q(t.menuHandle)},
+  /** The merchant's own pages - For Her, For Him - behind their handles. */
+  pages: ([${(t.pages ?? []).map((p) => `{ id: ${q(p.id)}, handle: ${q(p.handle)}, kicker: ${q(p.kicker)}, line1: ${q(p.line1)}, line2: ${q(p.line2)}, layout: ${q(p.layout)}, items: [${p.items.map((i) => `{ id: ${q(i.id)}, imageUrl: ${q(i.imageUrl)}, label: ${q(i.label)}, handle: ${q(i.handle)}, url: ${q(i.url)}, productId: ${q(i.productId)}, screen: ${q(i.screen)} }`).join(", ")}] }`).join(",\n    ")}] as ThemePage[]),
   /** The picture the app opens on, and how it leaves. */
   splash: {
     enabled: ${t.splashEnabled && t.splashImageUrl ? "true" : "false"},
@@ -513,6 +533,105 @@ export const fetchPayments = () => api<PaymentMethod[]>("/payments");
  */
 export const placeOrder = (payload: OrderRequest) =>
   api<{ orderNumber: string }>("/orders", { method: "POST", body: JSON.stringify(payload) });
+`,
+  };
+}
+
+/** A page the merchant wrote: a headline and the ways in under it. */
+function pageScreenFile(): GeneratedFile {
+  return {
+    path: "components/PageScreen.tsx",
+    language: "tsx",
+    contents: `import React from "react";
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { colors, spacing, theme } from "../theme";
+
+export type PageTile = {
+  id: string;
+  imageUrl?: string;
+  label?: string;
+  handle?: string;
+  url?: string;
+  productId?: string;
+  screen?: string;
+};
+
+export type Page = {
+  id: string;
+  handle: string;
+  kicker?: string;
+  line1?: string;
+  line2?: string;
+  layout?: string;
+  items: PageTile[];
+};
+
+/**
+ * Not a collection: a collection is a wall of products, and the honest answer
+ * to "what do you have for her?" is eleven answers. So it is the website's own
+ * shape - a small line, a headline over two lines, and pictures that each open
+ * a collection.
+ */
+export function PageScreen({
+  page,
+  onOpen,
+}: {
+  page: Page;
+  onOpen: (tile: PageTile) => void;
+}) {
+  const tiles = (page.items ?? []).filter((t) => t.label || t.imageUrl);
+  const circles = page.layout !== "tiles";
+  return (
+    <ScrollView contentContainerStyle={styles.wrap}>
+      <View style={styles.head}>
+        {page.kicker ? <Text style={styles.kicker}>{page.kicker.toUpperCase()}</Text> : null}
+        {page.line1 ? <Text style={styles.line1}>{page.line1.toUpperCase()}</Text> : null}
+        {page.line2 ? (
+          <Text style={[styles.line2, { fontFamily: theme.titleFont }]}>{page.line2}</Text>
+        ) : null}
+      </View>
+
+      <View style={styles.grid}>
+        {tiles.map((t) => (
+          <Pressable key={t.id} style={circles ? styles.cell : styles.tileCell} onPress={() => onOpen(t)}>
+            {circles ? (
+              <View style={styles.circle}>
+                {t.imageUrl ? <Image source={{ uri: t.imageUrl }} style={styles.circleImg} resizeMode="cover" /> : null}
+              </View>
+            ) : (
+              <View style={styles.tile}>
+                {t.imageUrl ? <Image source={{ uri: t.imageUrl }} style={styles.tileImg} resizeMode="cover" /> : null}
+                <View style={styles.tileScrim} />
+                {t.label ? <Text style={styles.tileLabel} numberOfLines={1}>{t.label.toUpperCase()}</Text> : null}
+              </View>
+            )}
+            {circles && t.label ? (
+              <Text style={styles.label} numberOfLines={1}>{t.label.toUpperCase()}</Text>
+            ) : null}
+          </Pressable>
+        ))}
+      </View>
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  wrap: { padding: spacing.lg },
+  head: { alignItems: "center", paddingVertical: 10 },
+  kicker: { fontSize: 10, fontWeight: "700", letterSpacing: 2.4, color: colors.accent },
+  line1: { marginTop: 8, fontSize: 15, fontWeight: "600", letterSpacing: 3, color: colors.inkMuted },
+  line2: { marginTop: 4, fontSize: 26, fontWeight: "700", color: colors.ink },
+  grid: { marginTop: 8, flexDirection: "row", flexWrap: "wrap" },
+  cell: { width: "33.33%", alignItems: "center", paddingHorizontal: 4, paddingVertical: 8 },
+  circle: { width: "100%", aspectRatio: 1, borderRadius: 999, overflow: "hidden", backgroundColor: "#f3ece4" },
+  circleImg: { width: "100%", height: "100%" },
+  label: { marginTop: 8, fontSize: 11, fontWeight: "600", letterSpacing: 1, color: colors.ink },
+  tileCell: { width: "50%", padding: 4 },
+  tile: { width: "100%", aspectRatio: 0.75, borderRadius: 16, overflow: "hidden", backgroundColor: "#f3ece4" },
+  tileImg: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, width: "100%", height: "100%" },
+  tileScrim: { position: "absolute", left: 0, right: 0, bottom: 0, height: "50%", backgroundColor: "rgba(20,12,7,0.42)" },
+  tileLabel: { position: "absolute", left: 12, right: 12, bottom: 10, fontSize: 12, fontWeight: "700", letterSpacing: 0.8, color: "#fff" },
+});
 `,
   };
 }
@@ -6881,8 +7000,9 @@ function appFile(theme: AppTheme): GeneratedFile {
  * the tabs are the merchant's; edit them there, not here.
  */
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Pressable, SafeAreaView, StatusBar, StyleSheet, Text, View } from "react-native";
+import { Linking, Pressable, SafeAreaView, StatusBar, StyleSheet, Text, View } from "react-native";
 import { Splash } from "./components/Splash";
+import { PageScreen } from "./components/PageScreen";
 import { colors, spacing, theme } from "./theme";
 import { screens, say } from "./screens";
 import {
@@ -6911,6 +7031,7 @@ import { SignInScreen } from "./components/SignInScreen";${
 /** A screen pushed on top of a tab. Tabs themselves are not pushed. */
 type Screen =
   | { kind: "collection"; handle: string; title?: string }
+  | { kind: "page"; handle: string }
   | { kind: "search"; term: string }
   | { kind: "product"; id: string }
   | { kind: "checkout" }
@@ -7069,6 +7190,10 @@ export default function App() {
     }) {
       return goTab(screen);
     }
+    // One of the merchant's own pages, if the handle names one.
+    if ((theme.pages ?? []).some((p) => p.handle === screen)) {
+      return push({ kind: "page", handle: screen });
+    }
     // Reviews, Happy customers and Requests are pages of the shop that this
     // build has no screen for. Say so rather than doing nothing at all.
     setNotice(
@@ -7079,7 +7204,17 @@ export default function App() {
   };
 
   const body = top ? (
-    top.kind === "collection" ? (
+    top.kind === "page" ? (
+      <PageScreen
+        page={(theme.pages ?? []).find((p) => p.handle === top.handle) ?? { id: "", handle: top.handle, items: [] }}
+        onOpen={(tile) => {
+          if (tile.url) return Linking.openURL(tile.url);
+          if (tile.productId) return push({ kind: "product", id: tile.productId });
+          if (tile.screen) return goScreen(tile.screen);
+          if (tile.handle) push({ kind: "collection", handle: tile.handle, title: tile.label });
+        }}
+      />
+    ) : top.kind === "collection" ? (
       <CollectionScreen handle={top.handle} onOpenProduct={(id) => push({ kind: "product", id })} onAdd={(v) => add(v)} />
     ) : top.kind === "search" ? (
       <SearchResults query={top.term} onOpenProduct={(id) => push({ kind: "product", id })} />
@@ -7214,6 +7349,7 @@ export function generateApp(theme: AppTheme, baseUrl: string): GeneratedFile[] {
     homeScreenFile(theme),
     piecesFile(),
     splashFile(),
+    pageScreenFile(),
     tabBarFile(theme),
     appFile(theme),
     collectionScreenFile(),
