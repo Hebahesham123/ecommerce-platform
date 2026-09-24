@@ -106,3 +106,38 @@ export function checkoutRewards(
   // Already earned first: it costs nothing to use and expires if it is not.
   return [...mine, ...affordable].slice(0, 6);
 }
+
+/**
+ * What she is closest to, when nothing is spendable yet.
+ *
+ * A rewards list that draws nothing when there is nothing looks exactly like a
+ * rewards list that is broken - and a shopper with no signatures yet is the
+ * one person who most needs telling that signatures buy something. So the
+ * block still appears, with one line saying what the next reward is and how
+ * far away it is.
+ *
+ * Level-locked rewards are left out: more signatures will not unlock them, so
+ * naming one as the next thing to save for would be a lie.
+ */
+export type NextReward = { short: number; title: string; balance: number };
+
+export function nextReward(
+  loyalty: LoyaltySummary | null | undefined,
+  ar: boolean,
+  shipping = 0,
+): NextReward | null {
+  if (!loyalty?.enrolled) return null;
+  const balance = loyalty.user?.signatureBalance ?? 0;
+  const cheapest = (loyalty.availableRewards ?? [])
+    .filter((r: RewardView) => spendable(r.discountKind))
+    .filter((r) => shipping > 0 || r.discountKind !== "free_shipping")
+    .filter((r) => r.status !== "locked" || r.lockedReason === "signatures")
+    .filter((r) => r.signatureCost > balance)
+    .sort((a, b) => a.signatureCost - b.signatureCost)[0];
+  if (!cheapest) return null;
+  return {
+    short: cheapest.signatureCost - balance,
+    title: ar ? (cheapest.titleAr ?? cheapest.titleEn) : cheapest.titleEn,
+    balance,
+  };
+}

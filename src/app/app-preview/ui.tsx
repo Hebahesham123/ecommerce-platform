@@ -31,17 +31,26 @@ export function Btn({
   full?: boolean;
   type?: "button" | "submit";
 }) {
+  // The shop's own colour, handed down by whatever is drawing the phone.
+  // The fallback is only ever seen by a surface that forgot to set one.
   const styles =
     variant === "primary"
-      ? "bg-violet-600 text-white hover:bg-violet-700 disabled:bg-violet-300"
+      ? "text-white hover:brightness-110 disabled:opacity-40"
       : variant === "outline"
         ? "border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:text-slate-400"
-        : "text-violet-700 hover:bg-violet-50 disabled:text-slate-400";
+        : "hover:bg-black/[0.04] disabled:opacity-40";
+  const tint: React.CSSProperties =
+    variant === "primary"
+      ? { background: "var(--app-accent, #7c3aed)" }
+      : variant === "ghost"
+        ? { color: "var(--app-accent, #6d28d9)" }
+        : {};
   return (
     <button
       type={type}
       onClick={onClick}
       disabled={disabled}
+      style={tint}
       className={`inline-flex h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold transition disabled:cursor-not-allowed ${styles} ${
         full ? "w-full" : ""
       }`}
@@ -77,7 +86,7 @@ export function Field({
         disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="mt-1 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-violet-500 disabled:bg-slate-100 disabled:text-slate-500"
+        className="mt-1 h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-[color:var(--app-accent,#7c3aed)] disabled:bg-slate-100 disabled:text-slate-500"
       />
       {hint && <span className="mt-1 block text-[11px] leading-relaxed text-slate-500">{hint}</span>}
     </label>
@@ -143,7 +152,7 @@ export function Empty({ children }: { children: ReactNode }) {
 export function Spinner() {
   return (
     <div className="flex justify-center py-12">
-      <span className="h-6 w-6 animate-spin rounded-full border-2 border-slate-200 border-t-violet-600" />
+      <span className="h-6 w-6 animate-spin rounded-full border-2 border-slate-200 border-t-[color:var(--app-accent,#7c3aed)]" />
     </div>
   );
 }

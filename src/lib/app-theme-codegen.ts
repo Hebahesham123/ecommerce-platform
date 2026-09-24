@@ -602,6 +602,28 @@ const giftDetail = (kind: string | null, value: number | null, minOrder: number 
 };
 
 /**
+ * What she is closest to, when nothing is spendable yet.
+ *
+ * A rewards block that draws nothing when there is nothing looks exactly like
+ * one that is broken, and a shopper with no signatures yet is the one person
+ * who most needs telling that signatures buy something. Level-locked rewards
+ * are left out: more signatures will not unlock them.
+ */
+export function nextGift(l: Loyalty | null, shipping: number = 0) {
+  if (!l || !l.enrolled) return null;
+  const balance = (l.user && l.user.signatureBalance) || 0;
+  const spendable = (k: string | null) => k === "percent" || k === "amount" || k === "free_shipping";
+  const cheapest = (l.availableRewards || [])
+    .filter((r) => spendable(r.discountKind))
+    .filter((r) => shipping > 0 || r.discountKind !== "free_shipping")
+    .filter((r) => r.status !== "locked")
+    .filter((r) => r.signatureCost > balance)
+    .sort((a, b) => a.signatureCost - b.signatureCost)[0];
+  if (!cheapest) return null;
+  return { short: cheapest.signatureCost - balance, title: cheapest.titleEn, balance };
+}
+
+/**
  * The rewards worth offering in a basket, already redeemed ones first.
  *
  * shipping is what delivery costs on this order: while the shop delivers free,
@@ -5602,6 +5624,7 @@ export function CartScreen({
   subtotal,
   discount = 0,
   gifts = [],
+  giftNote = null,
   giftBusy = null,
   onUseGift,
   onChangeQuantity,
@@ -5613,6 +5636,8 @@ export function CartScreen({
   discount?: number;
   /** Rewards she can spend on this basket. Empty for a guest. */
   gifts?: Gift[];
+  /** What she is closest to, when none of them is hers yet. */
+  giftNote?: string | null;
   giftBusy?: string | null;
   onUseGift?: (gift: Gift) => void;
   onChangeQuantity: (itemId: string, quantity: number) => void;
@@ -5664,7 +5689,7 @@ export function CartScreen({
           </View>
         ))}
 
-        {gifts.length && onUseGift && !discount ? (
+        {(gifts.length || giftNote) && onUseGift && !discount ? (
           <View style={styles.gifts}>
             <Text style={styles.giftsTitle}>YOUR REWARDS</Text>
             {gifts.map((g) => (
@@ -5685,6 +5710,7 @@ export function CartScreen({
                 </Text>
               </Pressable>
             ))}
+            {!gifts.length && giftNote ? <Text style={styles.giftNote}>{giftNote}</Text> : null}
           </View>
         ) : null}
 
@@ -7236,6 +7262,7 @@ import { screens, say } from "./screens";
 import {
   fetchLoyalty,
   giftsFrom,
+  nextGift,
   placeOrder,
   previewDiscount,
   priceCart,
@@ -7383,6 +7410,11 @@ export default function App() {
   }, [phone]);
 
   const gifts = useMemo(() => giftsFrom(loyalty), [loyalty]);
+  const giftNote = useMemo(() => {
+    const next = nextGift(loyalty);
+    if (!next) return null;
+    return next.short + " more signatures for " + next.title + " — you have " + next.balance + " so far";
+  }, [loyalty]);
 
   /**
    * Spend a gift on this basket.
@@ -7550,6 +7582,7 @@ export default function App() {
       subtotal={cart?.subtotal ?? 0}
       discount={coupon?.amount ?? 0}
       gifts={gifts}
+      giftNote={giftNote}
       giftBusy={giftBusy}
       onUseGift={useGift}
       onChangeQuantity={setQuantity}

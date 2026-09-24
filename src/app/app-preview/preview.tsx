@@ -20,7 +20,7 @@ import { AppNudge } from "@/components/app-nudge";
 import { AppStrip } from "@/components/app-strip";
 import { AppSplash } from "@/components/app-splash";
 import { payName, payNote, type PaymentMethod } from "@/lib/payments";
-import { checkoutRewards, type CheckoutReward } from "@/lib/loyalty/checkout";
+import { checkoutRewards, nextReward, type CheckoutReward } from "@/lib/loyalty/checkout";
 import type { LoyaltySummary } from "@/lib/loyalty/types";
 import { AppHeader } from "@/components/app-header";
 import { AppLive } from "@/components/app-live";
@@ -326,7 +326,15 @@ export function Preview({
         <div
           className="app-surface relative flex h-[760px] flex-col overflow-hidden rounded-[2rem] border-8 border-slate-900 shadow-2xl"
           style={
-            { background: brand.background, "--app-page": brand.background } as React.CSSProperties
+            {
+              background: brand.background,
+              "--app-page": brand.background,
+              // Everything inside the phone reads these rather than picking a
+              // colour of its own, so a merchant who changes the accent
+              // changes the buttons, the cart and the rewards with it.
+              "--app-accent": accent,
+              "--app-ink": "#211a15",
+            } as React.CSSProperties
           }
         >
           {/* Whatever the merchant is running this week, held in front of the
@@ -666,6 +674,10 @@ export function Cart({
     };
   }, [signedIn]);
   const gifts = useMemo(() => checkoutRewards(loyalty, ar), [loyalty, ar]);
+  // What she is closest to, when none of them is hers yet. Without this the
+  // block simply vanishes, and a shopper cannot tell an empty balance from a
+  // broken screen.
+  const soon = useMemo(() => nextReward(loyalty, ar), [loyalty, ar]);
   const [form, setForm] = useState({
     name: "",
     governorate: "",
@@ -874,9 +886,15 @@ export function Cart({
             ))}
           </ul>
 
-          {signedIn && !discount && gifts.length > 0 && (
-            <div className="rounded-2xl border border-violet-200 bg-violet-50/60 p-3">
-              <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-violet-700">
+          {signedIn && !discount && (gifts.length > 0 || soon) && (
+            <div
+              className="rounded-2xl border p-3"
+              style={{ borderColor: accent + "40", background: accent + "0f" }}
+            >
+              <p
+                className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em]"
+                style={{ color: accent }}
+              >
                 {ar ? "هداياك" : "Your rewards"}
               </p>
               <ul className="space-y-1.5">
@@ -886,7 +904,8 @@ export function Cart({
                       type="button"
                       onClick={() => useGift(g)}
                       disabled={!!giftBusy}
-                      className="flex w-full items-center gap-2 rounded-xl border border-violet-200 bg-white px-3 py-2 text-start transition active:scale-[0.99] disabled:opacity-60"
+                      className="flex w-full items-center gap-2 rounded-xl border bg-white px-3 py-2 text-start transition active:scale-[0.99] disabled:opacity-60"
+                      style={{ borderColor: accent + "40" }}
                     >
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-[13px] font-semibold text-slate-900">
@@ -900,13 +919,25 @@ export function Cart({
                               (ar ? " نقطة" : " signatures")}
                         </span>
                       </span>
-                      <span className="shrink-0 text-[12px] font-bold text-violet-700">
+                      <span className="shrink-0 text-[12px] font-bold" style={{ color: accent }}>
                         {giftBusy === g.id ? "…" : g.ready ? (ar ? "استخدام" : "Use") : ar ? "استبدال" : "Redeem"}
                       </span>
                     </button>
                   </li>
                 ))}
               </ul>
+              {gifts.length === 0 && soon && (
+                <p className="text-[11px] text-slate-600">
+                  {ar
+                    ? soon.short.toLocaleString("ar-EG") + " توقيع للحصول على " + soon.title
+                    : soon.short.toLocaleString("en-US") + " more signatures for " + soon.title}
+                  <span className="block text-slate-400">
+                    {ar
+                      ? "رصيدك الآن " + soon.balance.toLocaleString("ar-EG")
+                      : "You have " + soon.balance.toLocaleString("en-US") + " so far"}
+                  </span>
+                </p>
+              )}
             </div>
           )}
 
@@ -917,7 +948,7 @@ export function Cart({
                 value={coupon}
                 onChange={(e) => setCoupon(e.target.value.toUpperCase())}
                 placeholder={screens.cart.couponLabel || (ar ? "كود الخصم" : "Discount code")}
-                className="h-10 min-w-0 flex-1 rounded-xl border border-slate-300 px-3 text-sm outline-none focus:border-violet-500"
+                className="h-10 min-w-0 flex-1 rounded-xl border border-slate-300 px-3 text-sm outline-none focus:border-[color:var(--app-accent)]"
               />
               <Btn variant="outline" onClick={applyCoupon} disabled={!coupon || !signedIn}>
                 {ar ? "تطبيق" : "Apply"}
@@ -939,7 +970,10 @@ export function Cart({
           </div>
           )}
 
-          <div className="rounded-2xl bg-slate-900 p-4 text-white">
+          <div
+            className="rounded-2xl p-4 text-white"
+            style={{ background: "var(--app-ink, #211a15)" }}
+          >
             <div className="flex items-center justify-between text-sm">
               <span className="text-slate-300">
                 {screens.cart.totalLabel || (ar ? "الإجمالي" : "Total")}
@@ -1171,7 +1205,7 @@ function Row({ label, onClick }: { label: string; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className="flex w-full items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-sm font-medium text-slate-800 transition hover:border-violet-300"
+      className="flex w-full items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-sm font-medium text-slate-800 transition hover:border-[color:var(--app-accent)]"
     >
       {label}
       <span className="text-slate-300">›</span>

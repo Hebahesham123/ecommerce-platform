@@ -8,8 +8,8 @@ import {
   sendOtp, verifyOtp, placeOrder, getCustomer, previewCoupon,
   type CustomerProfile, type CouponPreview,
 } from "../actions";
-import { redeemMyReward } from "../loyalty-actions";
-import { checkoutRewards, type CheckoutReward } from "@/lib/loyalty/checkout";
+import { getMyLoyalty, redeemMyReward } from "../loyalty-actions";
+import { checkoutRewards, nextReward, type CheckoutReward } from "@/lib/loyalty/checkout";
 import type { LoyaltySummary } from "@/lib/loyalty/types";
 import { say, type Copy } from "@/lib/page-copy";
 import { payName, payNote, type PaymentMethod } from "@/lib/payments";
@@ -291,7 +291,27 @@ export default function CheckoutClient({
   // needs applying; one she can afford is redeemed and applied in a single tap,
   // which is the whole point - nobody should have to leave a checkout to
   // collect something they have already earned.
-  const gifts = useMemo(() => checkoutRewards(loyalty, ar, shipping), [loyalty, ar, shipping]);
+  //
+  // The server could only look her up if she arrived already signed in. Proving
+  // her number here IS signing in - verifyOtp issues the session - so once she
+  // has, her standing is asked for again rather than waiting for a page she is
+  // never going to reload.
+  const [standing, setStanding] = useState<LoyaltySummary | null>(loyalty);
+  useEffect(() => {
+    if (standing || step !== "verified") return;
+    let alive = true;
+    getMyLoyalty().then((r) => {
+      if (alive && r.ok) setStanding(r.data);
+    });
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
+
+  const gifts = useMemo(() => checkoutRewards(standing, ar, shipping), [standing, ar, shipping]);
+  // What she is closest to, when none of them is hers yet.
+  const soon = useMemo(() => nextReward(standing, ar, shipping), [standing, ar, shipping]);
 
   function applyProfile(p: CustomerProfile) {
     if (p.name) {
@@ -429,6 +449,7 @@ export default function CheckoutClient({
           return;
         }
         code = res.data.code ?? "";
+        getMyLoyalty().then((r) => r.ok && setStanding(r.data));
         if (!code) {
           // A reward the staff fulfil by hand has no code to apply. It is
           // still hers - it just does not change this order's total.
@@ -619,7 +640,7 @@ export default function CheckoutClient({
       {/* Her gifts. Hidden once something is applied, because only one code
           goes on an order and a list of choices under a decision already made
           is just a way of making her doubt it. */}
-      {!appliedCoupon && gifts.length > 0 && (
+      {!appliedCoupon && (gifts.length > 0 || soon) && (
         <div className="mt-3">
           <p className="mb-2 flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--co-muted)]">
             <IcGift className="h-3.5 w-3.5" />
@@ -656,6 +677,20 @@ export default function CheckoutClient({
               );
             })}
           </ul>
+          {/* Nothing to spend yet: say what the next one is rather than drawing
+              an empty box, which reads as a fault rather than as a balance. */}
+          {gifts.length === 0 && soon && (
+            <p className="text-[13px] text-[var(--co-muted)]">
+              {ar
+                ? `${soon.short.toLocaleString("ar-EG")} توقيع للحصول على "${soon.title}"`
+                : `${soon.short.toLocaleString("en-US")} more signatures for ${soon.title}`}
+              <span className="block text-[12px]">
+                {ar
+                  ? `رصيدك الآن ${soon.balance.toLocaleString("ar-EG")}`
+                  : `You have ${soon.balance.toLocaleString("en-US")} so far`}
+              </span>
+            </p>
+          )}
           {giftErr && <p className="mt-1.5 text-[13px] text-[#d72c0d]">{giftErr}</p>}
         </div>
       )}
@@ -935,12 +970,12 @@ export default function CheckoutClient({
                   onClick={() => setDiscountOpen(true)}
                   className="inline-flex h-11 items-center gap-2 rounded-[8px] border border-[var(--co-line)] bg-white px-4 text-[14px] text-[var(--co-text)] hover:bg-[var(--co-accent-soft)]"
                 >
-                  {gifts.length > 0 ? (
+                  {gifts.length > 0 || soon ? (
                     <IcGift className="h-4 w-4 text-[var(--co-accent,#8a5a3b)]" />
                   ) : (
                     <IcTag className="h-4 w-4 text-[var(--co-muted)]" />
                   )}
-                  {gifts.length > 0
+                  {gifts.length > 0 || soon
                     ? ar
                       ? "استخدمي هديتك أو كود خصم"
                       : "Use a reward or discount"
