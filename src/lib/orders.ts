@@ -312,6 +312,21 @@ export async function placeOrderCore(
     }
     if (discountCode && discount > 0 && verdict.ok && verdict.source === "table") {
       await redeemDiscount(discountCode);
+      // A Society reward carries the same code as the discount it minted, and
+      // the checkout now offers her rewards directly - so one that has been
+      // spent has to be marked spent, or it keeps being offered on every later
+      // order and fails the moment she chooses it. A missed mark must never
+      // fail a placed order, so it is allowed to go quiet.
+      try {
+        await supabase
+          .from("user_rewards")
+          .update({ status: "redeemed" })
+          .eq("phone", ph)
+          .eq("code", discountCode)
+          .in("status", ["available", "claimed"]);
+      } catch {
+        /* the order stands whether or not the reward could be stamped */
+      }
     }
 
     // The passwordless profile, so a returning shopper is autofilled next time

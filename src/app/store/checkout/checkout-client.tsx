@@ -8,6 +8,9 @@ import {
   sendOtp, verifyOtp, placeOrder, getCustomer, previewCoupon,
   type CustomerProfile, type CouponPreview,
 } from "../actions";
+import { redeemMyReward } from "../loyalty-actions";
+import { checkoutRewards, type CheckoutReward } from "@/lib/loyalty/checkout";
+import type { LoyaltySummary } from "@/lib/loyalty/types";
 import { say, type Copy } from "@/lib/page-copy";
 import { payName, payNote, type PaymentMethod } from "@/lib/payments";
 import { normalizePhone } from "@/lib/phone";
@@ -70,6 +73,13 @@ const IcTag = (p: { className?: string }) => (
   <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" {...p}>
     <path d="M10.6 2.5H16a1.5 1.5 0 0 1 1.5 1.5v5.4a1.5 1.5 0 0 1-.44 1.06l-6 6a1.5 1.5 0 0 1-2.12 0l-5.4-5.4a1.5 1.5 0 0 1 0-2.12l6-6a1.5 1.5 0 0 1 1.06-.44Z" />
     <circle cx="13.4" cy="6.6" r="1.1" />
+  </svg>
+);
+const IcGift = (p: { className?: string }) => (
+  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" {...p}>
+    <path d="M3 8.6h14v7.4a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 3 16Z" />
+    <path d="M2.2 5.9h15.6v2.7H2.2zM10 5.9v11.6" />
+    <path d="M10 5.9S9.2 2.5 7 2.5a1.7 1.7 0 0 0 0 3.4Zm0 0s.8-3.4 3-3.4a1.7 1.7 0 0 1 0 3.4Z" />
   </svg>
 );
 const IcCash = (p: { className?: string }) => (
@@ -151,6 +161,7 @@ export default function CheckoutClient({
   identity = null,
   copy = {},
   methods = [],
+  loyalty = null,
 }: {
   initialItems: CartItem[];
   identity?: CheckoutIdentity | null;
@@ -158,6 +169,8 @@ export default function CheckoutClient({
   copy?: Copy;
   /** What the shop accepts, from the Payments settings. */
   methods?: PaymentMethod[];
+  /** The signed-in shopper's Society standing, so her gifts are offered here. */
+  loyalty?: LoyaltySummary | null;
 }) {
   // Checkout always renders in English by default, regardless of the store's
   // Arabic-first language setting.
@@ -258,6 +271,9 @@ export default function CheckoutClient({
   const [couponAmount, setCouponAmount] = useState(0);
   const [couponBusy, setCouponBusy] = useState(false);
   const [discountOpen, setDiscountOpen] = useState(false);
+
+  const [giftBusy, setGiftBusy] = useState<string | null>(null);
+  const [giftErr, setGiftErr] = useState<string | null>(null);
   const [welcomeName, setWelcomeName] = useState<string | null>(known?.name ?? null);
   const [profileBirthday, setProfileBirthday] = useState<string | null>(known?.birthday ?? null);
 
@@ -270,6 +286,12 @@ export default function CheckoutClient({
   const discount = appliedCoupon ? Math.min(couponAmount, subtotal) : 0;
   const total = Math.max(0, subtotal - discount + shipping);
   const itemCount = items.reduce((s, i) => s + i.quantity, 0);
+
+  // The gifts she can spend on this order. A reward she already redeemed only
+  // needs applying; one she can afford is redeemed and applied in a single tap,
+  // which is the whole point - nobody should have to leave a checkout to
+  // collect something they have already earned.
+  const gifts = useMemo(() => checkoutRewards(loyalty, ar, shipping), [loyalty, ar, shipping]);
 
   function applyProfile(p: CustomerProfile) {
     if (p.name) {
@@ -359,24 +381,83 @@ export default function CheckoutClient({
     setCouponAmount(0);
   }
 
+  /** Price a code against this basket and apply it. Returns why, if it fails. */
+  async function applyCode(c: string): Promise<string | null> {
+    setCouponBusy(true);
+    const res = await previewCoupon(c, items, phone);
+    setCouponBusy(false);
+    if (!res.ok) {
+      clearCoupon();
+      return couponMessage(res);
+    }
+    setAppliedCoupon(res.code);
+    setCouponInput(res.code);
+    setCouponAmount(res.amount);
+    setCouponErr(null);
+    return null;
+  }
+
   async function applyCoupon() {
     const c = couponInput.trim();
     if (!c) {
       setCouponErr(ar ? "أدخلي كود الخصم" : "Enter a code");
       return;
     }
-    setCouponBusy(true);
-    const res = await previewCoupon(c, items, phone);
-    setCouponBusy(false);
-    if (!res.ok) {
-      clearCoupon();
-      setCouponErr(couponMessage(res));
-      return;
-    }
-    setAppliedCoupon(res.code);
-    setCouponInput(res.code);
-    setCouponAmount(res.amount);
+    setCouponErr(await applyCode(c));
+  }
+
+  /**
+   * Spend a gift on this order.
+   *
+   * One she has already redeemed carries its code, so it only has to be
+   * applied. One she has not costs signatures, and redeeming is a real spend,
+   * so it happens on her tap and nowhere else - never because the checkout
+   * decided for her. Either way she never sees the code: it lands in the
+   * discount field applied, which is what choosing a gift should mean.
+   */
+  async function useGift(g: CheckoutReward) {
+    if (giftBusy) return;
+    setGiftErr(null);
     setCouponErr(null);
+    setGiftBusy(g.id);
+    try {
+      let code = g.code;
+      if (!g.ready) {
+        const res = await redeemMyReward(g.id);
+        if (!res.ok) {
+          setGiftErr(giftMessage(res.error));
+          return;
+        }
+        code = res.data.code ?? "";
+        if (!code) {
+          // A reward the staff fulfil by hand has no code to apply. It is
+          // still hers - it just does not change this order's total.
+          setGiftErr(ar ? "تم الاستبدال. ستصلك الهدية مع طلبك." : "Redeemed. It will come with your order.");
+          return;
+        }
+      }
+      const why = await applyCode(code);
+      if (why) setGiftErr(why);
+    } finally {
+      setGiftBusy(null);
+    }
+  }
+
+  function giftMessage(reason: string): string {
+    switch (reason) {
+      case "not_signed_in":
+        return ar ? "سجّلي الدخول أولاً" : "Sign in to use your rewards";
+      case "insufficient_signatures":
+        return ar ? "نقاطك لا تكفي" : "Not enough signatures";
+      case "level_too_low":
+        return ar ? "مستواك لا يسمح بهذه الهدية بعد" : "Your level does not reach this reward yet";
+      case "already_redeemed":
+        return ar ? "استبدلتِها بالفعل" : "You have already claimed this one";
+      case "reward_unavailable":
+        return ar ? "انتهت هذه الهدية" : "This reward has run out";
+      default:
+        return ar ? "تعذّر الاستبدال" : "Could not redeem that reward";
+    }
   }
 
   async function startCheckout() {
@@ -534,6 +615,50 @@ export default function CheckoutClient({
         )}
       </div>
       {couponErr && <p className="mt-1.5 text-[13px] text-[#d72c0d]">{couponErr}</p>}
+
+      {/* Her gifts. Hidden once something is applied, because only one code
+          goes on an order and a list of choices under a decision already made
+          is just a way of making her doubt it. */}
+      {!appliedCoupon && gifts.length > 0 && (
+        <div className="mt-3">
+          <p className="mb-2 flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-[0.08em] text-[var(--co-muted)]">
+            <IcGift className="h-3.5 w-3.5" />
+            {ar ? "هداياك" : "Your rewards"}
+          </p>
+          <ul className="space-y-2">
+            {gifts.map((g) => {
+              const busy = giftBusy === g.id;
+              return (
+                <li key={g.id}>
+                  <button
+                    type="button"
+                    onClick={() => useGift(g)}
+                    disabled={!!giftBusy}
+                    className="flex w-full items-center gap-3 rounded-[10px] border border-[var(--co-line)] bg-white px-3 py-2.5 text-start transition hover:border-[var(--co-accent)] hover:bg-[var(--co-accent-soft)] disabled:opacity-60"
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[14px] font-medium text-[var(--co-text)]">
+                        {g.title}
+                      </span>
+                      <span className="block truncate text-[12px] text-[var(--co-muted)]">
+                        {g.detail}
+                        {g.cost > 0 &&
+                          " · " +
+                            g.cost.toLocaleString(ar ? "ar-EG" : "en-US") +
+                            (ar ? " نقطة" : " signatures")}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-[13px] font-semibold text-[var(--co-accent,#8a5a3b)]">
+                      {busy ? "…" : g.ready ? (ar ? "استخدام" : "Use") : ar ? "استبدال" : "Redeem"}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          {giftErr && <p className="mt-1.5 text-[13px] text-[#d72c0d]">{giftErr}</p>}
+        </div>
+      )}
     </div>
   );
 
@@ -810,8 +935,18 @@ export default function CheckoutClient({
                   onClick={() => setDiscountOpen(true)}
                   className="inline-flex h-11 items-center gap-2 rounded-[8px] border border-[var(--co-line)] bg-white px-4 text-[14px] text-[var(--co-text)] hover:bg-[var(--co-accent-soft)]"
                 >
-                  <IcTag className="h-4 w-4 text-[var(--co-muted)]" />
-                  {ar ? "إضافة خصم" : "Add discount"}
+                  {gifts.length > 0 ? (
+                    <IcGift className="h-4 w-4 text-[var(--co-accent,#8a5a3b)]" />
+                  ) : (
+                    <IcTag className="h-4 w-4 text-[var(--co-muted)]" />
+                  )}
+                  {gifts.length > 0
+                    ? ar
+                      ? "استخدمي هديتك أو كود خصم"
+                      : "Use a reward or discount"
+                    : ar
+                      ? "إضافة خصم"
+                      : "Add discount"}
                 </button>
               )}
 

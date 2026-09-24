@@ -20,6 +20,8 @@ import { AppNudge } from "@/components/app-nudge";
 import { AppStrip } from "@/components/app-strip";
 import { AppSplash } from "@/components/app-splash";
 import { payName, payNote, type PaymentMethod } from "@/lib/payments";
+import { checkoutRewards, type CheckoutReward } from "@/lib/loyalty/checkout";
+import type { LoyaltySummary } from "@/lib/loyalty/types";
 import { AppHeader } from "@/components/app-header";
 import { AppLive } from "@/components/app-live";
 import { liveSessionsOf, liveSessionsFromLives } from "@/lib/app-theme";
@@ -648,6 +650,22 @@ export function Cart({
   const [discount, setDiscount] = useState<{ amount: number; label: string } | null>(null);
   const [couponErr, setCouponErr] = useState<string | null>(null);
   const [checkout, setCheckout] = useState(startAtCheckout);
+
+  // Her Society standing, read here so a gift she has earned is offered where
+  // it is spent rather than on a screen she has to go and find.
+  const [loyalty, setLoyalty] = useState<LoyaltySummary | null>(null);
+  const [giftBusy, setGiftBusy] = useState<string | null>(null);
+  useEffect(() => {
+    if (!signedIn) return setLoyalty(null);
+    let alive = true;
+    api.get<LoyaltySummary>("/loyalty").then((r) => {
+      if (alive && r.ok) setLoyalty(r.data);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [signedIn]);
+  const gifts = useMemo(() => checkoutRewards(loyalty, ar), [loyalty, ar]);
   const [form, setForm] = useState({
     name: "",
     governorate: "",
@@ -699,16 +717,57 @@ export function Cart({
     };
   }, []);
 
+  /** Price a code against this basket and apply it. Returns why, if it fails. */
+  async function applyCode(code: string): Promise<string | null> {
+    const res = await api.post<{ ok: boolean; amount?: number; label?: string; reason?: string }>(
+      "/discount",
+      { code, lines: cart },
+    );
+    if (!res.ok) return res.error;
+    if (!res.data.ok) return res.data.reason ?? "not_eligible";
+    setCoupon(code);
+    setDiscount({ amount: res.data.amount ?? 0, label: res.data.label ?? code });
+    return null;
+  }
+
   async function applyCoupon() {
     setCouponErr(null);
     setDiscount(null);
-    const res = await api.post<{ ok: boolean; amount?: number; label?: string; reason?: string }>(
-      "/discount",
-      { code: coupon, lines: cart },
-    );
-    if (!res.ok) return setCouponErr(res.error);
-    if (!res.data.ok) return setCouponErr(res.data.reason ?? "not_eligible");
-    setDiscount({ amount: res.data.amount ?? 0, label: res.data.label ?? coupon });
+    setCouponErr(await applyCode(coupon));
+  }
+
+  /**
+   * Spend a gift on this order.
+   *
+   * One already redeemed only needs applying. One she has not redeemed costs
+   * signatures, and that spend happens on her tap and nowhere else - the cart
+   * never decides to spend her points for her.
+   */
+  async function useGift(g: CheckoutReward) {
+    if (giftBusy) return;
+    setGiftBusy(g.id);
+    setCouponErr(null);
+    try {
+      let code = g.code;
+      if (!g.ready) {
+        const r = await api.post<{ balance: number; userReward: { code: string | null } | null }>(
+          "/loyalty/redeem",
+          { rewardId: g.id },
+        );
+        if (!r.ok) return setCouponErr(r.error);
+        code = r.data.userReward?.code ?? "";
+        // The balance and the list both moved, so read them again.
+        api.get<LoyaltySummary>("/loyalty").then((x) => x.ok && setLoyalty(x.data));
+        if (!code) {
+          setCouponErr(ar ? "تم الاستبدال — تصلك مع طلبك" : "Redeemed - it comes with your order");
+          return;
+        }
+      }
+      const why = await applyCode(code);
+      if (why) setCouponErr(why);
+    } finally {
+      setGiftBusy(null);
+    }
   }
 
   async function place() {
@@ -814,6 +873,42 @@ export function Cart({
               </li>
             ))}
           </ul>
+
+          {signedIn && !discount && gifts.length > 0 && (
+            <div className="rounded-2xl border border-violet-200 bg-violet-50/60 p-3">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-violet-700">
+                {ar ? "هداياك" : "Your rewards"}
+              </p>
+              <ul className="space-y-1.5">
+                {gifts.map((g) => (
+                  <li key={g.id}>
+                    <button
+                      type="button"
+                      onClick={() => useGift(g)}
+                      disabled={!!giftBusy}
+                      className="flex w-full items-center gap-2 rounded-xl border border-violet-200 bg-white px-3 py-2 text-start transition active:scale-[0.99] disabled:opacity-60"
+                    >
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[13px] font-semibold text-slate-900">
+                          {g.title}
+                        </span>
+                        <span className="block truncate text-[11px] text-slate-500">
+                          {g.detail}
+                          {g.cost > 0 &&
+                            " · " +
+                              g.cost.toLocaleString(ar ? "ar-EG" : "en-US") +
+                              (ar ? " نقطة" : " signatures")}
+                        </span>
+                      </span>
+                      <span className="shrink-0 text-[12px] font-bold text-violet-700">
+                        {giftBusy === g.id ? "…" : g.ready ? (ar ? "استخدام" : "Use") : ar ? "استبدال" : "Redeem"}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           {screens.cart.showCoupon && (
           <div className="rounded-2xl border border-slate-200 bg-white p-3">

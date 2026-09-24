@@ -433,6 +433,9 @@ export const fetchCollection = (
       (filters && filters.onSale ? "&onSale=1" : ""),
   );
 
+/** Prices in a reward's line read the way prices read everywhere else. */
+const money = (n: number) => "EGP " + Math.round(n).toLocaleString("en-US");
+
 /** One product, by product handle or by variant id. */
 export const fetchProduct = (id: string) => api<Product>(\`/products/\${encodeURIComponent(id)}\`);
 
@@ -523,6 +526,117 @@ export type PaymentMethod = {
 };
 
 export const fetchPayments = () => api<PaymentMethod[]>("/payments");
+
+// ---------------------------------------------------------------- rewards --
+/**
+ * A gift, as the basket needs it.
+ *
+ * Two kinds reach a basket: one she has already redeemed, which carries its
+ * code and only has to be applied, and one she can afford right now, which is
+ * redeemed and applied in a single tap. Everything else in the Society - the
+ * locked rewards, the ones she cannot afford yet, the ones the staff fulfil by
+ * hand - is not a choice she can make while she is paying.
+ */
+export type Gift = {
+  id: string;
+  title: string;
+  code: string;
+  detail: string;
+  cost: number;
+  ready: boolean;
+};
+
+type RewardRow = {
+  id: string;
+  titleEn: string;
+  titleAr: string | null;
+  status: string;
+  signatureCost: number;
+  discountKind: string | null;
+  discountValue: number | null;
+  minOrderValue: number | null;
+};
+type MyRewardRow = {
+  id: string;
+  rewardId: string;
+  type: string;
+  title: string;
+  status: string;
+  code: string | null;
+  expiresAt: string | null;
+};
+export type Loyalty = {
+  enrolled: boolean;
+  user: { signatureBalance: number };
+  availableRewards: RewardRow[];
+  myRewards: MyRewardRow[];
+};
+
+export const fetchLoyalty = () => api<Loyalty>("/loyalty");
+
+export const redeemReward = (rewardId: string) =>
+  api<{ balance: number; userReward: { code: string | null } | null }>("/loyalty/redeem", {
+    method: "POST",
+    body: JSON.stringify({ rewardId }),
+  });
+
+const giftDetail = (kind: string | null, value: number | null, minOrder: number | null) => {
+  const over = minOrder ? " on orders over " + money(minOrder) : "";
+  if (kind === "free_shipping") return "Free delivery" + over;
+  if (kind === "percent" && value) return value + "% off" + over;
+  if (kind === "amount" && value) return money(value) + " off" + over;
+  return "A gift";
+};
+
+/**
+ * The rewards worth offering in a basket, already redeemed ones first.
+ *
+ * shipping is what delivery costs on this order: while the shop delivers free,
+ * a free-delivery reward is worth nothing and is left out rather than sold to
+ * her for signatures.
+ */
+export function giftsFrom(l: Loyalty | null, shipping: number = 0): Gift[] {
+  if (!l || !l.enrolled) return [];
+  const now = Date.now();
+  const at = (v: string | null) => (v ? new Date(v).getTime() : Infinity);
+  const held = (l.myRewards || [])
+    .filter((r) => r.code && (r.status === "available" || r.status === "claimed"))
+    .filter((r) => shipping > 0 || r.type !== "delivery")
+    .filter((r) => !r.expiresAt || at(r.expiresAt) > now)
+    // Only one code goes on an order, so two unused copies of the same reward
+    // are one choice wearing two faces. The soonest to expire is the one to
+    // spend.
+    .sort((a, b) => at(a.expiresAt) - at(b.expiresAt));
+
+  const seen: string[] = [];
+  const mine: Gift[] = [];
+  for (const r of held) {
+    if (seen.indexOf(r.rewardId) >= 0) continue;
+    seen.push(r.rewardId);
+    mine.push({ id: r.id, title: r.title, code: r.code || "", detail: "Ready to use", cost: 0, ready: true });
+  }
+
+  const balance = (l.user && l.user.signatureBalance) || 0;
+  const spendable = (k: string | null) => k === "percent" || k === "amount" || k === "free_shipping";
+  const affordable: Gift[] = (l.availableRewards || [])
+    .filter((r) => r.status === "affordable" || r.status === "available")
+    .filter((r) => spendable(r.discountKind))
+    .filter((r) => shipping > 0 || r.discountKind !== "free_shipping")
+    .filter((r) => r.signatureCost <= balance)
+    // No sense spending signatures on one she already holds a code for.
+    .filter((r) => seen.indexOf(r.id) < 0)
+    .sort((a, b) => a.signatureCost - b.signatureCost)
+    .map((r) => ({
+      id: r.id,
+      title: r.titleEn,
+      code: "",
+      detail: giftDetail(r.discountKind, r.discountValue, r.minOrderValue),
+      cost: r.signatureCost,
+      ready: false,
+    }));
+
+  return mine.concat(affordable).slice(0, 6);
+}
 
 /**
  * Place the order.
@@ -5444,6 +5558,7 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { colors, radius, spacing } from "../theme";
 import { screens, say } from "../screens";
 import { money } from "./Pieces";
+import type { Gift } from "../api";
 
 export type CartLine = {
   itemId: string;
@@ -5458,6 +5573,9 @@ export function CartScreen({
   lines,
   subtotal,
   discount = 0,
+  gifts = [],
+  giftBusy = null,
+  onUseGift,
   onChangeQuantity,
   onApplyCoupon,
   onCheckout,
@@ -5465,6 +5583,10 @@ export function CartScreen({
   lines: CartLine[];
   subtotal: number;
   discount?: number;
+  /** Rewards she can spend on this basket. Empty for a guest. */
+  gifts?: Gift[];
+  giftBusy?: string | null;
+  onUseGift?: (gift: Gift) => void;
   onChangeQuantity: (itemId: string, quantity: number) => void;
   onApplyCoupon?: (code: string) => void;
   onCheckout: () => void;
@@ -5514,6 +5636,30 @@ export function CartScreen({
           </View>
         ))}
 
+        {gifts.length && onUseGift && !discount ? (
+          <View style={styles.gifts}>
+            <Text style={styles.giftsTitle}>YOUR REWARDS</Text>
+            {gifts.map((g) => (
+              <Pressable
+                key={g.id}
+                style={styles.gift}
+                disabled={Boolean(giftBusy)}
+                onPress={() => onUseGift(g)}
+              >
+                <View style={styles.giftText}>
+                  <Text style={styles.giftName} numberOfLines={1}>{g.title}</Text>
+                  <Text style={styles.giftNote} numberOfLines={1}>
+                    {g.detail + (g.cost > 0 ? " · " + g.cost + " signatures" : "")}
+                  </Text>
+                </View>
+                <Text style={styles.giftCta}>
+                  {giftBusy === g.id ? "…" : g.ready ? "Use" : "Redeem"}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+
         {c.showCoupon && onApplyCoupon ? (
           <View style={styles.coupon}>
             <TextInput
@@ -5557,6 +5703,13 @@ const styles = StyleSheet.create({
   stepOff: { opacity: 0.4 },
   stepText: { fontSize: 14, color: colors.inkMuted },
   qty: { width: 20, textAlign: "center", fontSize: 14, fontWeight: "600", color: colors.ink },
+  gifts: { borderRadius: radius.lg, borderWidth: 1, borderColor: colors.accent, backgroundColor: colors.surface, padding: 8, gap: 6, marginBottom: spacing.sm },
+  giftsTitle: { fontSize: 10, fontWeight: "800", letterSpacing: 1, color: colors.accent },
+  gift: { flexDirection: "row", alignItems: "center", gap: spacing.sm, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 10, paddingVertical: 8 },
+  giftText: { flex: 1 },
+  giftName: { fontSize: 13, fontWeight: "700", color: colors.ink },
+  giftNote: { fontSize: 11, color: colors.inkSoft },
+  giftCta: { fontSize: 12, fontWeight: "800", color: colors.accent },
   coupon: { flexDirection: "row", alignItems: "center", gap: spacing.sm, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, padding: 8 },
   couponInput: { flex: 1, height: 36, paddingHorizontal: 8, fontSize: 13, color: colors.ink },
   couponCta: { borderRadius: radius.sm, backgroundColor: colors.accent, paddingHorizontal: 14, paddingVertical: 8 },
@@ -7053,10 +7206,15 @@ import { AllCollectionsScreen, PageScreen } from "./components/PageScreen";
 import { colors, spacing, theme } from "./theme";
 import { screens, say } from "./screens";
 import {
+  fetchLoyalty,
+  giftsFrom,
   placeOrder,
   previewDiscount,
   priceCart,
+  redeemReward,
   setToken,
+  type Gift,
+  type Loyalty,
   type PricedCart,
   type Product,
 } from "./api";
@@ -7094,6 +7252,8 @@ export default function App() {
   const [lines, setLines] = useState<Line[]>([]);
   const [cart, setCart] = useState<PricedCart | null>(null);
   const [coupon, setCoupon] = useState<{ code: string; amount: number } | null>(null);
+  const [loyalty, setLoyalty] = useState<Loyalty | null>(null);
+  const [giftBusy, setGiftBusy] = useState<string | null>(null);
   const [phone, setPhone] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -7176,6 +7336,58 @@ export default function App() {
       }
     },
     [lines],
+  );
+
+  /** Her standing, once she is signed in. A guest has no rewards to offer. */
+  useEffect(() => {
+    if (!phone) return setLoyalty(null);
+    let alive = true;
+    fetchLoyalty()
+      .then((l) => {
+        if (alive) setLoyalty(l);
+      })
+      .catch(() => {
+        /* a shop without a loyalty programme simply has no rewards */
+      });
+    return () => {
+      alive = false;
+    };
+  }, [phone]);
+
+  const gifts = useMemo(() => giftsFrom(loyalty), [loyalty]);
+
+  /**
+   * Spend a gift on this basket.
+   *
+   * One already redeemed only needs applying. One she has not redeemed costs
+   * signatures, and that spend happens on her tap and nowhere else - the app
+   * never decides to spend her points for her.
+   */
+  const useGift = useCallback(
+    async (g: Gift) => {
+      if (giftBusy) return;
+      setGiftBusy(g.id);
+      try {
+        let code = g.code;
+        if (!g.ready) {
+          const res = await redeemReward(g.id);
+          code = (res.userReward && res.userReward.code) || "";
+          fetchLoyalty()
+            .then(setLoyalty)
+            .catch(() => {});
+          if (!code) {
+            setNotice("Redeemed - it comes with your order.");
+            return;
+          }
+        }
+        await applyCoupon(code);
+      } catch (e) {
+        setNotice(String((e as Error).message ?? e));
+      } finally {
+        setGiftBusy(null);
+      }
+    },
+    [applyCoupon, giftBusy],
   );
 
   const signedIn = (token: string, who: string) => {
@@ -7309,6 +7521,9 @@ export default function App() {
       lines={cart?.lines ?? []}
       subtotal={cart?.subtotal ?? 0}
       discount={coupon?.amount ?? 0}
+      gifts={gifts}
+      giftBusy={giftBusy}
+      onUseGift={useGift}
       onChangeQuantity={setQuantity}
       onApplyCoupon={screens.cart.showCoupon ? applyCoupon : undefined}
       onCheckout={checkout}
