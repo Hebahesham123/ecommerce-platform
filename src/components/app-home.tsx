@@ -3058,6 +3058,94 @@ function FreeShipping({
     />
   );
 
+  // ---- priced at nothing ----------------------------------------------
+  //
+  // Six ways of saying "free delivery" went past without landing, and the
+  // thing they had in common is that they all described it. A shopper does
+  // not read a description; she reads a price. So it is priced: what the
+  // delivery would have cost, struck through, and nothing beside it - the
+  // one piece of commercial language everybody already knows how to read.
+  if (look === "bold") {
+    const big = str(s.bigWord, ar ? "مجاني" : "FREE");
+    const small = str(s.smallWord, ar ? "التوصيل" : "Delivery");
+    const was = str(s.wasPrice);
+    return (
+      <section>
+        <button
+          onClick={() => opens && go(s)}
+          className={`relative flex w-full items-center gap-3 overflow-hidden px-4 py-3.5 text-start ${opens ? "" : "cursor-default"}`}
+          style={{
+            background: `linear-gradient(120deg, ${str(s.bg) || "#2b1b10"} 0%, ${str(s.bg2) || accent} 100%)`,
+            borderRadius: radius,
+            minHeight: height || undefined,
+          }}
+        >
+          {/* The light. */}
+          <span
+            aria-hidden
+            className="app-ship-shine pointer-events-none absolute inset-y-0 -start-1/3 w-1/3 block"
+            style={{
+              background:
+                "linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.22) 50%, rgba(255,255,255,0) 100%)",
+            }}
+          />
+
+          <span className="relative flex min-w-0 flex-1 items-end gap-2.5">
+            <span
+              dir="auto"
+              className="app-display text-[42px] font-bold leading-none"
+              style={{ color: "#ffffff" }}
+            >
+              {big}
+            </span>
+            <span className="min-w-0 pb-1">
+              <span
+                dir="auto"
+                className="block text-[13px] font-bold uppercase tracking-[0.18em]"
+                style={{ color: "#ffffff" }}
+              >
+                {small}
+              </span>
+              {str(s.subtitle) && (
+                <span dir="auto" className="mt-0.5 block text-[11px] text-white/80">
+                  {str(s.subtitle)}
+                </span>
+              )}
+            </span>
+          </span>
+
+          {/* What it would have cost, crossed out: the saving, stated. */}
+          {was && (
+            <span
+              className="relative shrink-0 rounded-xl px-2.5 py-1.5 text-center"
+              style={{ background: "rgba(20,12,7,0.28)" }}
+            >
+              <span
+                dir="auto"
+                className="block text-[9px] font-bold uppercase tracking-[0.14em]"
+                style={{ color: air }}
+              >
+                {str(s.wasLabel, ar ? "بدلاً من" : "was")}
+              </span>
+              <span
+                dir="auto"
+                className="mt-0.5 block text-[15px] font-bold text-white line-through decoration-2"
+                style={{ textDecorationColor: air }}
+              >
+                {was}
+              </span>
+            </span>
+          )}
+        </button>
+        {str(s.note) && (
+          <p dir="auto" className="mt-1.5 text-center text-[10px] text-slate-500">
+            {str(s.note)}
+          </p>
+        )}
+      </section>
+    );
+  }
+
   // ---- a rule, not a banner --------------------------------------------
   //
   // Five designs in, the thing every one of them had in common was size: a

@@ -3294,6 +3294,7 @@ function BlockGroup({
         <>
           <Field label={ar ? "الشكل" : "Look"} type="select">
             <select value={text("style") || "photo"} onChange={(e) => onPatch({ style: e.target.value })} className={input}>
+              <option value="bold">{ar ? "سعر مشطوب (الأوضح)" : "Priced at nothing (boldest)"}</option>
               <option value="rule">{ar ? "سطر بين خطين (الأصغر)" : "A rule, not a banner (smallest)"}</option>
               <option value="photo">{ar ? "فوق صورة" : "Over a photograph"}</option>
               <option value="ribbon">{ar ? "شريط متحرك عبر الشاشة" : "Ribbon of type across the screen"}</option>
@@ -3332,6 +3333,21 @@ function BlockGroup({
           </Field>
           <Field label={ar ? "موضع الصورة" : "Picture position"} type="text">
             <input value={text("focal")} onChange={(e) => onPatch({ focal: e.target.value })} placeholder="50% 45%" className={input} dir="ltr" />
+          </Field>
+          <Field label={ar ? "الكلمة الكبيرة" : "The big word"} type="text">
+            <span className="flex items-center gap-2">
+              <input value={text("bigWord")} onChange={(e) => onPatch({ bigWord: e.target.value })} placeholder="FREE" className={input} />
+              <input value={text("smallWord")} onChange={(e) => onPatch({ smallWord: e.target.value })} placeholder="Delivery" className={input} />
+            </span>
+          </Field>
+          <Field label={ar ? "السعر المشطوب" : "The price crossed out"} type="text">
+            <span className="flex items-center gap-2">
+              <input value={text("wasLabel")} onChange={(e) => onPatch({ wasLabel: e.target.value })} placeholder="was" className={input} />
+              <input value={text("wasPrice")} onChange={(e) => onPatch({ wasPrice: e.target.value })} placeholder="EGP 60" className={input} />
+            </span>
+            <p className="mt-1 text-[11px] text-ink-soft">
+              {ar ? "اتركيه فارغًا ليختفي." : "Leave it empty and it goes."}
+            </p>
           </Field>
           <Field label={ar ? "الطابع" : "The stamp"} type="text">
             <span className="flex items-center gap-2">

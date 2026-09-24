@@ -1308,13 +1308,18 @@ export function newBlock(type: BlockType): Block {
        * A section-sized answer to a one-line promise was what was wrong with
        * every larger version of this.
        */
-      style: "rule",
+      style: "bold",
       kicker: "Delivered on us",
       title: "Free shipping",
       subtitle: "on every order over EGP 2,000",
       note: "Anywhere we ship, no code needed",
       buttonLabel: "",
       // Empty colours follow the brand, as everywhere else.
+      /** The "bold" look: the word, the thing, and what it would have cost. */
+      bigWord: "FREE",
+      smallWord: "Delivery",
+      wasLabel: "was",
+      wasPrice: "EGP 60",
       // The photograph the promise sits on, for the "photo" look.
       imageUrl: "",
       focal: "",
