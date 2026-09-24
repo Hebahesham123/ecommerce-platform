@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, useTransition } from "react";
 import Link from "next/link";
+import { levelPalette } from "@/lib/loyalty/level-colors";
 import { useRouter } from "next/navigation";
 import { useI18n, egp } from "@/lib/i18n";
 import { say, type Copy } from "@/lib/page-copy";
@@ -99,7 +100,7 @@ export default function AccountApp({
     });
   }
 
-  const nav: { title: string | null; items: [PageKey, string, string][] }[] = [
+  const nav: { title: string | null; society?: boolean; items: [PageKey, string, string][] }[] = [
     { title: null, items: [
       ["overview", "Overview", "نظرة عامة"],
       ["orders", "My Orders", "طلباتي"],
@@ -110,7 +111,7 @@ export default function AccountApp({
       ["addresses", "My Addresses", "عناويني"],
       ["payment", "Payment & Wallet", "الدفع والمحفظة"],
     ]},
-    ...(loyalty ? [{ title: "Beauty Bar Society", items: [
+    ...(loyalty ? [{ title: "Beauty Bar Society", society: true, items: [
       ["vault", "The Vault", "الفولت"],
       ["rewards", "My Rewards", "مكافآتي"],
       ["levels", "The Levels", "المستويات"],
@@ -129,6 +130,9 @@ export default function AccountApp({
   };
 
   const initials = (account.name || account.phone).trim().slice(0, 2).toUpperCase();
+  // Every stage of the Society has its own colour. The Society's own menu
+  // wears the one she has reached, so the page quietly changes as she climbs.
+  const tier = loyalty ? levelPalette(loyalty.progress.currentLevel) : null;
 
   return (
     <div className="min-h-screen bg-[#F2E8DA] text-[#3A291B]" dir={ar ? "rtl" : "ltr"}>
@@ -214,27 +218,73 @@ export default function AccountApp({
             </div>
           </div>
 
-          {nav.map((g, gi) => (
-            <div key={gi} className="rounded-2xl border border-[#E4D7C5] bg-[#FBF7F1] p-1.5 shadow-sm">
-              {g.title && <div className="px-2.5 py-2 text-[9px] font-semibold uppercase tracking-[0.2em] text-[#A08972]">{g.title}</div>}
-              {g.items.map(([key, en, arLbl]) => {
-                const on = page === key;
-                return (
-                  <Link
-                    key={key}
-                    href={hrefFor(key)}
-                    aria-current={on}
-                    className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-start text-sm transition-colors ${
-                      on ? "bg-gradient-to-br from-[#C08E5C] to-[#7A4B27] text-[#FFF6EA]" : "text-[#7C6450] hover:bg-[#F3E9DC]"
-                    }`}
+          {nav.map((g, gi) => {
+            // Only the Society group is tinted. A page where every panel is
+            // coloured says nothing; one panel that is says exactly one thing.
+            const t = g.society ? tier : null;
+            return (
+              <div
+                key={gi}
+                className={`rounded-2xl border p-1.5 shadow-sm ${t ? "" : "border-[#E4D7C5] bg-[#FBF7F1]"}`}
+                style={
+                  t
+                    ? ({
+                        backgroundColor: t.tint,
+                        borderColor: t.edge,
+                        // Hover needs a colour a stylesheet can see, and the
+                        // tier's is only known at render.
+                        "--tier-soft": t.soft,
+                      } as React.CSSProperties)
+                    : undefined
+                }
+              >
+                {g.title && (
+                  <div
+                    className="px-2.5 py-2 text-[9px] font-semibold uppercase tracking-[0.2em]"
+                    style={{ color: t ? t.accent : "#A08972" }}
                   >
-                    <span className="flex-1">{ar ? arLbl : en}</span>
-                    {navValue[key] ? <span className={`text-[10px] ${on ? "text-[#F1D9BE]" : "text-[#A08972]"}`}>{navValue[key]}</span> : null}
-                  </Link>
-                );
-              })}
-            </div>
-          ))}
+                    {g.title}
+                  </div>
+                )}
+                {g.items.map(([key, en, arLbl]) => {
+                  const on = page === key;
+                  return (
+                    <Link
+                      key={key}
+                      href={hrefFor(key)}
+                      aria-current={on}
+                      className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-start text-sm transition-colors ${
+                        on
+                          ? t
+                            ? "text-[#FFF6EA]"
+                            : "bg-gradient-to-br from-[#C08E5C] to-[#7A4B27] text-[#FFF6EA]"
+                          : t
+                            ? "hover:bg-[var(--tier-soft)]"
+                            : "text-[#7C6450] hover:bg-[#F3E9DC]"
+                      }`}
+                      style={
+                        t
+                          ? on
+                            ? { backgroundColor: t.accent }
+                            : { color: t.accent }
+                          : undefined
+                      }
+                    >
+                      <span className="flex-1">{ar ? arLbl : en}</span>
+                      {navValue[key] ? (
+                        <span
+                          className="text-[10px]"
+                          style={{ color: on ? "#F1D9BE" : t ? t.accent : "#A08972", opacity: on ? 1 : 0.75 }}
+                        >
+                          {navValue[key]}
+                        </span>
+                      ) : null}
+                    </Link>
+                  );
+                })}
+              </div>
+            );
+          })}
 
           <div className="rounded-2xl border border-[#E4D7C5] bg-[#FBF7F1] p-1.5 shadow-sm">
             <button
