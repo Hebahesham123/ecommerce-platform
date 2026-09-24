@@ -15,7 +15,7 @@ function missing(err: { message?: string; code?: string } | null): boolean {
   return err.code === "42P01" || m.includes("does not exist") || m.includes("schema cache") || m.includes("could not find the table");
 }
 
-export type LoyaltyLevelRow = { key: string; sort: number; name_en: string; name_ar: string; threshold: number };
+export type LoyaltyLevelRow = { key: string; sort: number; name_en: string; name_ar: string; threshold: number; color: string | null };
 export type EarningRuleRow = { id: string; action_type: string; title: string | null; signatures: number; rate_per_egp: number; multiplier: number; active: boolean };
 export type RewardRow = {
   id: string; title_en: string; title_ar: string | null; type: string; signature_cost: number;
@@ -44,7 +44,7 @@ export async function getLoyaltyOverview(): Promise<ActionResult<LoyaltyOverview
   try {
     const supabase = getServerSupabase();
     const [levels, rules, rewards, vaults, events, profiles, claims] = await Promise.all([
-      supabase.from("loyalty_levels").select("key,sort,name_en,name_ar,threshold").order("sort"),
+      supabase.from("loyalty_levels").select("key,sort,name_en,name_ar,threshold,color").order("sort"),
       supabase.from("loyalty_earning_rules").select("id,action_type,title,signatures,rate_per_egp,multiplier,active").order("action_type"),
       supabase.from("loyalty_rewards").select("id,title_en,title_ar,type,signature_cost,min_level,discount_kind,discount_value,active,per_user_limit").order("signature_cost"),
       supabase.from("loyalty_vaults").select("id,vault_type,title_en,required_progress,level_required,active").order("sort"),
@@ -166,6 +166,31 @@ export async function setLevelThreshold(key: string, threshold: number): Promise
   try {
     const supabase = getServerSupabase();
     const { error } = await supabase.from("loyalty_levels").update({ threshold: Math.max(0, Math.trunc(threshold)) }).eq("key", key);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true, data: undefined };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+/**
+ * Set the colour a level is shown in.
+ *
+ * One hex value per level; every shade a screen needs is mixed from it, so
+ * this is the only thing to choose. Anything that is not a colour is stored
+ * as none, and the storefront falls back to its own default rather than
+ * rendering something broken.
+ */
+export async function setLevelColor(key: string, color: string): Promise<ActionResult> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  const hex = color.trim();
+  const valid = /^#[0-9a-f]{6}$/i.test(hex);
+  try {
+    const supabase = getServerSupabase();
+    const { error } = await supabase
+      .from("loyalty_levels")
+      .update({ color: valid ? hex.toLowerCase() : null })
+      .eq("key", key);
     if (error) return { ok: false, error: error.message };
     return { ok: true, data: undefined };
   } catch (e) {

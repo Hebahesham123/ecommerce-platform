@@ -60,6 +60,7 @@ function toLevel(r: Row): Level {
     taglineAr: sn(r.tagline_ar),
     threshold: n(r.threshold),
     icon: sn(r.icon),
+    color: sn(r.color),
   };
 }
 function toReward(r: Row): Reward {

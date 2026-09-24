@@ -132,7 +132,7 @@ export default function AccountApp({
   const initials = (account.name || account.phone).trim().slice(0, 2).toUpperCase();
   // Every stage of the Society has its own colour. The Society's own menu
   // wears the one she has reached, so the page quietly changes as she climbs.
-  const tier = loyalty ? levelPalette(loyalty.progress.currentLevel) : null;
+  const tier = loyalty ? levelPalette(loyalty.levels, loyalty.progress.currentLevel) : null;
 
   return (
     <div className="min-h-screen bg-[#F2E8DA] text-[#3A291B]" dir={ar ? "rtl" : "ltr"}>

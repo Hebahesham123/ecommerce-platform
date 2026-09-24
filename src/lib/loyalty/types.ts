@@ -12,6 +12,8 @@ export type Level = {
   taglineAr: string | null;
   threshold: number;
   icon: string | null;
+  /** Hex, set in the loyalty programme. Null until one is chosen. */
+  color: string | null;
 };
 
 export type SignatureDirection = "earn" | "spend" | "expire" | "adjustment" | "bonus";

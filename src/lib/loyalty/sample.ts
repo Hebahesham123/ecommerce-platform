@@ -32,11 +32,11 @@ export const SAMPLE_SUMMARY: LoyaltySummary = {
     percentage: 68,
   },
   levels: [
-    { key: "discovery", sort: 1, nameEn: "The Discovery", nameAr: "", taglineEn: "Every great collection starts somewhere.", taglineAr: null, threshold: 0, icon: null },
-    { key: "curated", sort: 2, nameEn: "The Curated", nameAr: "", taglineEn: "Your taste is taking shape.", taglineAr: null, threshold: 500, icon: null },
-    { key: "insider", sort: 3, nameEn: "The Insider", nameAr: "", taglineEn: "You know where the good things are.", taglineAr: null, threshold: 1500, icon: null },
-    { key: "icon", sort: 4, nameEn: "The Icon", nameAr: "", taglineEn: "More than a member. Part of the story.", taglineAr: null, threshold: 4000, icon: null },
-    { key: "muse", sort: 5, nameEn: "The Muse", nameAr: "", taglineEn: "The highest expression of exceptional taste.", taglineAr: null, threshold: 10000, icon: null },
+    { key: "discovery", sort: 1, nameEn: "The Discovery", nameAr: "", taglineEn: "Every great collection starts somewhere.", taglineAr: null, threshold: 0, icon: null, color: "#7E7364" },
+    { key: "curated", sort: 2, nameEn: "The Curated", nameAr: "", taglineEn: "Your taste is taking shape.", taglineAr: null, threshold: 500, icon: null, color: "#A46C3C" },
+    { key: "insider", sort: 3, nameEn: "The Insider", nameAr: "", taglineEn: "You know where the good things are.", taglineAr: null, threshold: 1500, icon: null, color: "#8F7226" },
+    { key: "icon", sort: 4, nameEn: "The Icon", nameAr: "", taglineEn: "More than a member. Part of the story.", taglineAr: null, threshold: 4000, icon: null, color: "#9B4B41" },
+    { key: "muse", sort: 5, nameEn: "The Muse", nameAr: "", taglineEn: "The highest expression of exceptional taste.", taglineAr: null, threshold: 10000, icon: null, color: "#6C5375" },
   ],
   primaryVault: {
     id: "v1",

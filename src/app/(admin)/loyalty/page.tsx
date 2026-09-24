@@ -7,7 +7,7 @@ import { PageHeader } from "@/components/page-header";
 import { Card, Badge } from "@/components/ui";
 import { KpiRow, StatTile } from "@/components/dashboard-ui";
 import { IcSignature, IcCustomers, IcStar, IcAlert, IcEye, IcRefresh } from "@/components/icons";
-import { getLoyaltyOverview, setLevelThreshold, type LoyaltyOverview } from "./actions";
+import { getLoyaltyOverview, setLevelColor, setLevelThreshold, type LoyaltyOverview } from "./actions";
 
 export default function LoyaltyOverviewPage() {
   const { lang } = useI18n();
@@ -84,6 +84,7 @@ export default function LoyaltyOverviewPage() {
                   <tr className="border-b border-line text-xs text-ink-soft">
                     <th className="px-4 py-2 text-start font-medium">{ar ? "المستوى" : "Level"}</th>
                     <th className="px-3 py-2 text-start font-medium">{ar ? "عتبة التواقيع (مدى الحياة)" : "Lifetime threshold"}</th>
+                    <th className="px-3 py-2 text-start font-medium">{ar ? "اللون" : "Colour"}</th>
                     <th className="px-3 py-2 text-start font-medium">{ar ? "أعضاء" : "Members"}</th>
                   </tr>
                 </thead>
@@ -96,6 +97,9 @@ export default function LoyaltyOverviewPage() {
                       </td>
                       <td className="px-3 py-2.5">
                         <ThresholdEditor levelKey={l.key} value={l.threshold} onSaved={load} />
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <ColorEditor levelKey={l.key} value={l.color} onSaved={load} />
                       </td>
                       <td className="px-3 py-2.5 text-ink">{num(data.stats.membersByLevel[l.key] ?? 0, lang)}</td>
                     </tr>
@@ -162,6 +166,54 @@ export default function LoyaltyOverviewPage() {
         </div>
       ) : null}
     </>
+  );
+}
+
+/**
+ * The colour a level is shown in.
+ *
+ * One value, because every shade the storefront needs — the panel tint, its
+ * border, the accent — is mixed from it. Choosing five shades by hand and
+ * keeping them in step is the job this avoids.
+ */
+function ColorEditor({
+  levelKey,
+  value,
+  onSaved,
+}: {
+  levelKey: string;
+  value: string | null;
+  onSaved: () => void;
+}) {
+  const fallback = "#a46c3c";
+  const [v, setV] = useState(value ?? fallback);
+  const [saving, setSaving] = useState(false);
+  const dirty = (value ?? fallback).toLowerCase() !== v.toLowerCase();
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <input
+        type="color"
+        value={v}
+        onChange={(e) => setV(e.target.value)}
+        aria-label="Level colour"
+        className="h-7 w-9 cursor-pointer rounded-lg border border-line bg-surface p-0.5"
+      />
+      <span className="font-mono text-xs uppercase text-ink-soft">{v}</span>
+      {dirty && (
+        <button
+          disabled={saving}
+          onClick={async () => {
+            setSaving(true);
+            await setLevelColor(levelKey, v);
+            setSaving(false);
+            onSaved();
+          }}
+          className="btn-primary h-7 px-2 text-xs"
+        >
+          {saving ? "…" : "Save"}
+        </button>
+      )}
+    </span>
   );
 }
 
