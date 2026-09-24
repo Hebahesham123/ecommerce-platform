@@ -2,6 +2,7 @@ import "server-only";
 
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
 import type {
+  EarnTask,
   Level,
   LevelKey,
   LoyaltyProgress,
@@ -137,6 +138,7 @@ export async function getLoyaltySummary(phone: string): Promise<LoyaltySummary> 
     vaultsRes,
     userVaultsRes,
     privRes,
+    tasksRes,
     rewardsRes,
     eventsRes,
     streakRes,
@@ -150,6 +152,7 @@ export async function getLoyaltySummary(phone: string): Promise<LoyaltySummary> 
     supabase.from("loyalty_vaults").select("*").eq("active", true).order("sort"),
     supabase.from("user_vaults").select("*").eq("phone", phone),
     supabase.from("loyalty_privileges").select("*").eq("active", true).order("sort"),
+    supabase.from("loyalty_earning_rules").select("*").eq("active", true),
     supabase.from("loyalty_rewards").select("*").eq("active", true).order("signature_cost"),
     supabase
       .from("loyalty_events")
@@ -209,6 +212,21 @@ export async function getLoyaltySummary(phone: string): Promise<LoyaltySummary> 
     vaults.find((v) => v.vaultType === "signature") ??
     vaults[0] ??
     null;
+
+  // What she can do to earn more. Ordered by what it pays, largest first,
+  // since that is the order anyone reads a list of things to do in.
+  const tasks: EarnTask[] = (tasksRes.data ?? [])
+    .map(
+      (r: Row): EarnTask => ({
+        id: s(r.id),
+        actionType: s(r.action_type),
+        title: sn(r.title),
+        signatures: n(r.signatures),
+        ratePerEgp: n(r.rate_per_egp),
+        oneTime: r.one_time === true,
+      }),
+    )
+    .sort((a, b) => b.signatures - a.signatures);
 
   const privileges: Privilege[] = (privRes.data ?? []).map((r: Row): Privilege => {
     const req = s(r.level_required) as LevelKey;
@@ -302,6 +320,7 @@ export async function getLoyaltySummary(phone: string): Promise<LoyaltySummary> 
     primaryVault,
     vaults,
     privileges,
+    tasks,
     availableRewards,
     myRewards,
     activeEvents,

@@ -64,6 +64,11 @@ export const SAMPLE_SUMMARY: LoyaltySummary = {
     { id: "p3", titleEn: "Birthday Surprise", titleAr: null, descriptionEn: "Every year", descriptionAr: null, levelRequired: "curated", sort: 3, unlocked: true },
     { id: "p4", titleEn: "Private Reward", titleAr: null, descriptionEn: "Reach The Insider to unlock", descriptionAr: null, levelRequired: "insider", sort: 4, unlocked: false },
   ],
+  tasks: [
+    { id: "t1", actionType: "profile_complete", title: "Complete profile", signatures: 100, ratePerEgp: 0, oneTime: true },
+    { id: "t2", actionType: "review", title: "Post a review", signatures: 20, ratePerEgp: 0, oneTime: false },
+    { id: "t3", actionType: "order", title: null, signatures: 0, ratePerEgp: 1, oneTime: false },
+  ],
   availableRewards: [
     { id: "r1", titleEn: "Complimentary Delivery", titleAr: null, descriptionEn: "Valid for 3 days", descriptionAr: null, type: "delivery", signatureCost: 200, minLevel: null, discountKind: "free_shipping", discountValue: null, bonusSignatures: null, minOrderValue: null, expiryDays: 3, image: null, active: true, status: "affordable", lockedReason: null },
     { id: "r2", titleEn: "15% Off", titleAr: null, descriptionEn: "On your next order", descriptionAr: null, type: "discount", signatureCost: 400, minLevel: null, discountKind: "percent", discountValue: 15, bonusSignatures: null, minOrderValue: null, expiryDays: 7, image: null, active: true, status: "available", lockedReason: null },

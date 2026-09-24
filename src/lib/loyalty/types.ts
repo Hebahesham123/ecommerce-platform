@@ -71,6 +71,24 @@ export type UserReward = {
   createdAt: string;
 };
 
+/**
+ * A way to earn signatures, as the customer sees it.
+ *
+ * The programme already knows these — they are the rules that pay out. They
+ * were only ever read on the server when something happened; showing them is
+ * how somebody finds out what to do next.
+ */
+export type EarnTask = {
+  id: string;
+  actionType: string;
+  /** What the merchant called it, if anything. */
+  title: string | null;
+  /** A flat award. Zero when the rule pays per pound spent instead. */
+  signatures: number;
+  ratePerEgp: number;
+  oneTime: boolean;
+};
+
 export type Privilege = {
   id: string;
   titleEn: string;
@@ -146,6 +164,7 @@ export type LoyaltySummary = {
   primaryVault: VaultView | null;
   vaults: VaultView[];
   privileges: Privilege[];
+  tasks: EarnTask[];
   availableRewards: RewardView[];
   myRewards: UserReward[];
   activeEvents: SocietyEvent[];

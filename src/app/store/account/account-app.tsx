@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation";
 import { useI18n, egp } from "@/lib/i18n";
 import { say, type Copy } from "@/lib/page-copy";
 import type { Account } from "@/lib/account-service";
-import type { LoyaltySummary, RewardView, VaultView } from "@/lib/loyalty/types";
+import type { EarnTask, LoyaltySummary, RewardView, VaultView } from "@/lib/loyalty/types";
 import { getMyLoyalty, redeemMyReward, openMyVault } from "../loyalty-actions";
 import { getMyOrder, saveMyProfile, type MyOrder } from "../account-actions";
 import { logout } from "../auth-actions";
@@ -158,6 +158,8 @@ export default function AccountApp({
             orders={account.orders.length}
             loyalty={loyalty}
           />
+
+          {loyalty && <SocietyPanels ar={ar} loyalty={loyalty} />}
 
           {nav.map((g, gi) => {
             // Only the Society group is tinted. A page where every panel is
@@ -494,6 +496,201 @@ function SocietyCard({
       </div>
     </div>
   );
+}
+
+/* ----------------------------- society panels ----------------------------- */
+
+/**
+ * A panel on the society card's own terms: gold on the same deep brown, and
+ * shut until it is asked for.
+ *
+ * All three of these are lists, and three open lists is a page nobody scrolls
+ * to the end of. Closed, they read as a short contents page — which is what
+ * somebody glancing at their account actually wants — and any one of them
+ * opens where it stands, under its own heading.
+ */
+function SocietyPanel({
+  title,
+  count,
+  children,
+}: {
+  title: string;
+  /** Shown beside the title while shut, so it is worth opening. */
+  count?: string | number;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="overflow-hidden rounded-2xl bg-[#241609] ring-1 ring-inset ring-[#4A331C]">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-2 px-3.5 py-2.5 text-start"
+      >
+        <span className="min-w-0 flex-1 truncate text-[12px] font-semibold uppercase tracking-[0.12em] text-[#F8F0E2]">
+          {title}
+        </span>
+        {count != null && count !== "" && (
+          <span className="shrink-0 text-[11px] font-semibold" style={{ color: GOLD.bright }}>
+            {count}
+          </span>
+        )}
+        <svg
+          viewBox="0 0 24 24"
+          className={`h-3.5 w-3.5 shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
+          fill="none"
+          stroke={GOLD.bright}
+          strokeWidth="2.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden
+        >
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
+      {open && <div className="px-3.5 pb-3">{children}</div>}
+    </div>
+  );
+}
+
+/** The bottom line of a panel — where the whole list lives. */
+function SeeAll({ href, label }: { href: string; label: string }) {
+  return (
+    <Link
+      href={href}
+      className="mt-2.5 inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.14em]"
+      style={{ color: GOLD.bright }}
+    >
+      {label}
+      <span aria-hidden>›</span>
+    </Link>
+  );
+}
+
+/**
+ * The tiers, the tasks and the privileges, in the arrangement the Society
+ * screens put them in: the ladder across the top, and beneath it what to do
+ * next beside what has already been earned.
+ *
+ * Side by side only where there is width for it. In the desktop sidebar the
+ * column is too narrow to split in two, so they stack — the arrangement is
+ * worth keeping, but not at the cost of four words to a line.
+ */
+function SocietyPanels({ ar, loyalty }: { ar: boolean; loyalty: LoyaltySummary }) {
+  const levels = loyalty.levels;
+  const mySort = levels.find((l) => l.key === loyalty.progress.currentLevel)?.sort ?? 1;
+  const perks = loyalty.privileges.filter((p) => p.unlocked);
+
+  // A rule that pays per pound has no single figure to show, so it says what
+  // it actually does instead.
+  const worth = (t: EarnTask) =>
+    t.ratePerEgp > 0
+      ? ar
+        ? `${t.ratePerEgp}✦ لكل جنيه`
+        : `${t.ratePerEgp}✦ per EGP`
+      : ar
+        ? `${fmtN(t.signatures)} توقيع`
+        : `${fmtN(t.signatures)} signatures`;
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <SocietyPanel title={ar ? "مستوياتي" : "My Tiers"} count={`${mySort}/${levels.length}`}>
+        <ul className="space-y-1">
+          {levels.map((l) => {
+            const active = l.key === loyalty.progress.currentLevel;
+            const locked = l.sort > mySort;
+            return (
+              <li
+                key={l.key}
+                className="flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-[12px]"
+                style={{
+                  borderColor: active ? withAlpha(GOLD.bright, 0.5) : "transparent",
+                  background: active
+                    ? `linear-gradient(90deg, ${withAlpha(GOLD.bright, 0.26)}, ${withAlpha(GOLD.bright, 0.05)})`
+                    : "#2C1D0F",
+                  color: locked ? "#8C755A" : "#F0E4D2",
+                }}
+              >
+                <span aria-hidden style={{ color: locked ? "#7A6448" : GOLD.bright }}>
+                  {locked ? "🔒" : SIG}
+                </span>
+                <span className="min-w-0 flex-1 truncate uppercase tracking-[0.06em]">
+                  {ar && l.nameAr ? l.nameAr : l.nameEn}
+                </span>
+                <span className="shrink-0 text-[10px]" style={{ color: active ? "#86CF9E" : "#8C755A" }}>
+                  {active
+                    ? ar ? "(الحالي)" : "(Active)"
+                    : locked
+                      ? ar ? "(مقفل)" : "(Locked)"
+                      : ar ? "(مكتمل)" : "(Reached)"}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+        <SeeAll href={hrefFor("levels")} label={ar ? "كل المستويات" : "See all tiers"} />
+      </SocietyPanel>
+
+      <div className="grid grid-cols-2 items-start gap-1.5 lg:grid-cols-1">
+        <SocietyPanel title={ar ? "مهام الولاء" : "Loyalty Tasks"} count={loyalty.tasks.length || ""}>
+          {loyalty.tasks.length === 0 ? (
+            <p className="text-[11px] text-[#8C755A]">{ar ? "لا توجد مهام." : "Nothing listed yet."}</p>
+          ) : (
+            <ul className="space-y-1.5">
+              {loyalty.tasks.slice(0, 5).map((t) => (
+                <li key={t.id} className="flex gap-1.5 text-[12px] leading-snug text-[#F0E4D2]">
+                  <span aria-hidden style={{ color: GOLD.bright }}>
+                    •
+                  </span>
+                  <span className="min-w-0">
+                    {t.title || taskName(t.actionType, ar)}
+                    <span className="block text-[10px]" style={{ color: GOLD.bright }}>
+                      {worth(t)}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <SeeAll href={hrefFor("activity")} label={ar ? "الكل" : "See all"} />
+        </SocietyPanel>
+
+        <SocietyPanel title={ar ? "المزايا المفتوحة" : "Unlocked Perks"} count={perks.length || ""}>
+          {perks.length === 0 ? (
+            <p className="text-[11px] text-[#8C755A]">
+              {ar ? "لم تُفتح مزايا بعد." : "None unlocked yet."}
+            </p>
+          ) : (
+            <ul className="space-y-1.5">
+              {perks.slice(0, 6).map((v) => (
+                <li key={v.id} className="flex gap-1.5 text-[12px] leading-snug text-[#F0E4D2]">
+                  <span aria-hidden style={{ color: GOLD.bright }}>
+                    {SIG}
+                  </span>
+                  <span className="min-w-0">{ar && v.titleAr ? v.titleAr : v.titleEn}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <SeeAll href={hrefFor("rewards")} label={ar ? "مكافآتي" : "My rewards"} />
+        </SocietyPanel>
+      </div>
+    </div>
+  );
+}
+
+/** A readable name for a rule the merchant never titled. */
+function taskName(actionType: string, ar: boolean): string {
+  const names: Record<string, [string, string]> = {
+    order: ["Place an order", "اطلبي طلباً"],
+    profile_complete: ["Complete your profile", "أكملي ملفك"],
+    review: ["Post a review", "اكتبي تقييماً"],
+    birthday: ["Your birthday", "عيد ميلادك"],
+    new_category: ["Try a new category", "جرّبي فئة جديدة"],
+    signup: ["Join the Society", "انضمي للمجتمع"],
+  };
+  const hit = names[actionType];
+  return hit ? (ar ? hit[1] : hit[0]) : actionType.replace(/_/g, " ");
 }
 
 /** One figure on the society card — gold on brown, like the Society screens. */
