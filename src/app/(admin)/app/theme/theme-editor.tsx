@@ -20,6 +20,7 @@ import {
 import { AppHome, type HomeData } from "@/components/app-home";
 import { CollectionPage, ProductPage, type ScreenHandlers } from "@/components/app-screens";
 import { AppStrip } from "@/components/app-strip";
+import { AppPageView } from "@/components/app-page";
 import { AppSplash } from "@/components/app-splash";
 import { AppLive } from "@/components/app-live";
 import { AppHeader } from "@/components/app-header";
@@ -182,6 +183,11 @@ export function ThemeEditor() {
   const [stack, setStack] = useState<Screen[]>([]);
   const screen = stack[stack.length - 1] ?? null;
   const push = useCallback((next: Screen) => setStack((s) => [...s, next]), []);
+  // Which handles are pages, for the callback below: it is declared before
+  // the draft is, and a ref is the honest way to read the current one.
+  const pageHandles = useRef<string[]>([]);
+  pageHandles.current = (draft?.settings.pages ?? []).map((p) => p.handle);
+
   // A link can point at a whole screen rather than at something in the shop.
   // The phone shows it the same way pressing that tab would.
   const showScreen = useCallback(
@@ -190,6 +196,11 @@ export function ThemeEditor() {
       if (screen === "orders") return setStack([{ kind: "orders" }]);
       if (screen === "cart" || screen === "account" || screen === "live") {
         return setPage(screen);
+      }
+      // One of the merchant's own pages: this phone draws those, because
+      // they are the merchant's to design and they have to be checked here.
+      if (pageHandles.current.includes(screen)) {
+        return setStack([{ kind: "page", handle: screen }]);
       }
       // Reviews, Happy customers and Requests are real pages in the app, but
       // this phone only draws the screens the editor designs. Say where the
@@ -1424,6 +1435,33 @@ export function ThemeEditor() {
                 screen.kind === "orders" ? (
                   <div className="bg-[var(--app-page,#f8fafc)] p-4">
                     <Orders ar={ar} signedIn={Boolean(shopper)} />
+                  </div>
+                ) : screen.kind === "page" ? (
+                  <div className="bg-[var(--app-page,#f8fafc)] px-4 pb-4">
+                    <AppPageView
+                      page={
+                        (draft.settings.pages ?? []).find((p) => p.handle === screen.handle) ?? {
+                          id: "",
+                          handle: screen.handle,
+                          kicker: "",
+                          line1: "",
+                          line2: screen.handle,
+                          layout: "circles",
+                          items: [],
+                        }
+                      }
+                      settings={draft.settings}
+                      ar={ar}
+                      onBack={pop}
+                      onOpen={(tile) => {
+                        if (tile.productId) return push({ kind: "product", id: tile.productId });
+                        if (tile.screen) return showScreen(tile.screen);
+                        if (tile.handle) {
+                          const found = data.collections.find((c) => c.handle === tile.handle);
+                          push({ kind: "collection", handle: tile.handle, title: found?.title ?? tile.label });
+                        }
+                      }}
+                    />
                   </div>
                 ) : screen.kind === "collection" ? (
                   <CollectionPage
@@ -3715,6 +3753,8 @@ function screenFile(key: ScreenKey): string {
 type Screen =
   | { kind: "collection"; handle: string; title: string }
   | { kind: "product"; id: string }
+  /** One of the merchant's own pages — For Her, For Him. */
+  | { kind: "page"; handle: string }
   // Orders has no settings to design, so it has no pill — but the tab is real
   // and pressing it should show real orders, not nothing.
   | { kind: "orders" };
