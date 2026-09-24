@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState, useTransition } from "react";
 import Link from "next/link";
-import { levelPalette, paletteFrom, withAlpha, type LevelPalette } from "@/lib/loyalty/level-colors";
+import { levelPalette, withAlpha } from "@/lib/loyalty/level-colors";
 import { useRouter } from "next/navigation";
 import { useI18n, egp } from "@/lib/i18n";
 import { say, type Copy } from "@/lib/page-copy";
@@ -157,7 +157,6 @@ export default function AccountApp({
             initials={initials}
             orders={account.orders.length}
             loyalty={loyalty}
-            tier={tier}
           />
 
           {nav.map((g, gi) => {
@@ -292,6 +291,24 @@ export default function AccountApp({
 /* ------------------------------ society card ------------------------------ */
 
 /**
+ * The Society is gold. Every level of it.
+ *
+ * The tier's own colour says which level she is on, and it says that in the
+ * menu below — one place, once. Spending it here as well would make this card
+ * change its whole character between tiers, when the thing it is for is the
+ * opposite: the Society looking like the Society, whoever is reading it.
+ *
+ * The bar is lit along its whole length rather than only at the end, so the
+ * figure sitting on it reads from the first signature to the last.
+ */
+const GOLD = {
+  accent: "#8A5A24",
+  bright: "#E4BC74",
+  glow: "#FFF3D0",
+  fill: "linear-gradient(90deg, #C9A05A 0%, #E9CB8A 55%, #FBF0D2 100%)",
+};
+
+/**
  * Where the light falls, and the dust it catches.
  *
  * The Society screens are not an even brown fill — they are lit from one side,
@@ -320,7 +337,6 @@ function SocietyCard({
   initials,
   orders,
   loyalty,
-  tier,
 }: {
   ar: boolean;
   name: string;
@@ -328,9 +344,7 @@ function SocietyCard({
   initials: string;
   orders: number;
   loyalty: LoyaltySummary | null;
-  tier: LevelPalette | null;
 }) {
-  const t = tier ?? paletteFrom(null, "curated");
   const p = loyalty?.progress ?? null;
 
   // The top of the ladder has nothing above it, so the bar is full and the
@@ -346,10 +360,10 @@ function SocietyCard({
         aria-hidden
         className="pointer-events-none absolute inset-0"
         style={{
-          background: `radial-gradient(110% 130% at 88% 42%, ${withAlpha(t.glow, 0.5)} 0%, ${withAlpha(
-            t.accent,
-            0.22,
-          )} 34%, transparent 72%)`,
+          background: `radial-gradient(110% 130% at 88% 42%, ${withAlpha(
+            GOLD.glow,
+            0.42,
+          )} 0%, ${withAlpha(GOLD.accent, 0.24)} 34%, transparent 72%)`,
         }}
       />
       <div aria-hidden className="pointer-events-none absolute inset-0">
@@ -374,7 +388,7 @@ function SocietyCard({
         <div className="flex items-center gap-2.5">
           <span
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-serif text-xs text-[#241609]"
-            style={{ background: `linear-gradient(140deg, ${t.bright}, ${t.accent})` }}
+            style={{ background: `linear-gradient(140deg, ${GOLD.bright}, ${GOLD.accent})` }}
           >
             {initials}
           </span>
@@ -388,7 +402,7 @@ function SocietyCard({
         {p && (
           <h2 className="mt-3.5 font-serif text-[26px] uppercase leading-[1.1] tracking-[0.01em] text-[#F8F0E2]">
             {p.currentLevelName}{" "}
-            <span style={{ color: t.bright }}>{SIG}</span>
+            <span style={{ color: GOLD.bright }}>{SIG}</span>
           </h2>
         )}
 
@@ -409,7 +423,7 @@ function SocietyCard({
                 style={{
                   insetInlineStart: 0,
                   width: `${pct}%`,
-                  background: `linear-gradient(90deg, ${t.accent} 0%, ${t.bright} 62%, ${t.glow} 100%)`,
+                  background: GOLD.fill,
                 }}
               />
               {/* Where it has got to, catching the light. */}
@@ -419,14 +433,17 @@ function SocietyCard({
                 style={{
                   insetInlineStart: `calc(${pct}% - 13px)`,
                   background: `radial-gradient(circle, ${withAlpha("#FFFDF6", 0.95)} 0%, ${withAlpha(
-                    t.glow,
-                    0.55,
+                    GOLD.glow,
+                    0.6,
                   )} 42%, transparent 70%)`,
                 }}
               />
               <div className="relative flex h-full items-center justify-between px-3">
                 <span className="text-[10px] font-bold text-[#3A2410]">{fmtN(p.lifetime)}</span>
-                <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-[#C2A882]">
+                <span
+                  className="text-[9px] font-semibold uppercase tracking-[0.12em]"
+                  style={{ color: pct > 78 ? "#6B4A18" : "#C2A882" }}
+                >
                   {atTop
                     ? ar ? "أعلى مستوى" : "Top tier"
                     : ar ? `من ${fmtN(target)}` : `out of ${fmtN(target)}`}
@@ -435,7 +452,7 @@ function SocietyCard({
             </div>
 
             <div className="mt-3 font-serif text-[30px] leading-none text-[#F8F0E2]">
-              {fmtN(p.lifetime)} <span style={{ color: t.bright }}>{SIG}</span>
+              {fmtN(p.lifetime)} <span style={{ color: GOLD.bright }}>{SIG}</span>
             </div>
             <div className="mt-1 text-[10px] text-[#A88D6C]">
               {atTop
