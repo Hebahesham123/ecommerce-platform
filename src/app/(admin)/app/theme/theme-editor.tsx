@@ -138,8 +138,10 @@ export function ThemeEditor() {
   // What the link pickers should offer beside the shop's own pages.
   const pagePicks = (draft?.settings.pages ?? []).map((p) => ({
     key: p.handle,
-    ar: p.line2 || p.handle,
-    en: p.line2 || p.handle,
+    // The handle rides along: two pages can share a headline, and the handle
+    // is what the merchant typed and will recognise.
+    ar: [p.line2, p.handle].filter(Boolean).join(" · "),
+    en: [p.line2, p.handle].filter(Boolean).join(" · "),
   }));
 
   /** The merchant's own pages, edited in place. */
@@ -789,6 +791,7 @@ export function ThemeEditor() {
                   </Field>
                   <Field label={ar ? "اللمس يفتح" : "A tap opens"} type="link">
                     <LinkPicker
+                      pages={pagePicks}
                       value={{
                         handle: draft.settings.splashHandle,
                         url: draft.settings.splashUrl,
@@ -959,6 +962,7 @@ export function ThemeEditor() {
                         </div>
                         <div className="mt-1.5">
                           <LinkPicker
+                            pages={pagePicks}
                             value={item}
                             onChange={(link) =>
                               patchSettings({
@@ -1005,8 +1009,8 @@ export function ThemeEditor() {
               id="__pages"
               title={ar ? "الصفحات" : "Pages"}
               subtitle={ar ? "صفحاتك الخاصة" : "your own pages"}
-              open={open["__pages"] ?? false}
-              onToggle={() => setOpen((s) => ({ ...s, __pages: !(s["__pages"] ?? false) }))}
+              open={open["__pages"] ?? true}
+              onToggle={() => setOpen((s) => ({ ...s, __pages: !(s["__pages"] ?? true) }))}
             >
               <p className="mb-2 text-[11px] leading-relaxed text-ink-soft">
                 {ar
@@ -1178,6 +1182,7 @@ export function ThemeEditor() {
                 key={block.id}
                 block={block}
                 ar={ar}
+                pages={pagePicks}
                 open={open[block.id] ?? false}
                 highlighted={hovered === block.id}
                 first={i === 0}
@@ -1752,6 +1757,7 @@ function BlockGroup({
   first,
   last,
   collections,
+  pages,
   accent,
   input,
   onToggle,
@@ -1767,6 +1773,8 @@ function BlockGroup({
   first: boolean;
   last: boolean;
   collections: { handle: string; title: string; count: number; image: string | null }[];
+  /** The merchant's own pages, so any link here can point at one. */
+  pages: { key: string; ar: string; en: string }[];
   /** Shown as the fallback wherever a colour is left empty. */
   accent: string;
   input: string;
@@ -1922,6 +1930,7 @@ function BlockGroup({
           </Field>
           <Field label={ar ? "يفتح" : "Opens"} type="link">
             <LinkPicker
+              pages={pages}
               value={{
                 handle: text("handle"),
                 url: text("url"),
@@ -1948,6 +1957,7 @@ function BlockGroup({
         <>
           <Field label={ar ? "القسم" : "Collection"} type="collection">
             <LinkPicker
+              pages={pages}
               value={{ handle: text("handle") }}
               onChange={(next) => onPatch({ handle: next.handle ?? "" })}
               collections={collections}
@@ -2089,6 +2099,7 @@ function BlockGroup({
               <ColorRow label={ar ? "النص على الداكن" : "Text on the deep"} value={text("onDeep")} fallback="#f0e6d8" onChange={(v) => onPatch({ onDeep: v })} input={input} ar={ar} />
               <Field label={ar ? "البطاقة تفتح" : "The card opens"} type="link">
                 <LinkPicker
+                  pages={pages}
                   value={{
                     handle: text("handle"),
                     url: text("url"),
@@ -2153,6 +2164,7 @@ function BlockGroup({
           </Field>
           <Field label={ar ? "البطاقة والزر يفتحان" : "Card and button open"} type="link">
             <LinkPicker
+              pages={pages}
               value={{ handle: text("handle"), url: text("url"), productId: text("productId"), screen: text("screen") }}
               onChange={(next) => onPatch({ handle: next.handle ?? "", url: next.url ?? "", productId: next.productId ?? "", screen: next.screen ?? "" })}
               collections={collections}
@@ -2279,6 +2291,7 @@ function BlockGroup({
           </Field>
           <Field label={ar ? "يفتح" : "Opens"} type="link">
             <LinkPicker
+              pages={pages}
               value={{
                 handle: text("handle"),
                 url: text("url"),
@@ -2358,6 +2371,7 @@ function BlockGroup({
           </Field>
           <Field label={ar ? "يفتح" : "Opens"} type="link">
             <LinkPicker
+              pages={pages}
               value={{
                 handle: text("seeAllHandle"),
                 url: text("seeAllUrl"),
@@ -2404,6 +2418,7 @@ function BlockGroup({
               </Field>
               <Field label={ar ? "يفتح" : "Opens"} type="link">
                 <LinkPicker
+                  pages={pages}
                   value={{
                     handle: text("seeAllHandle"),
                     url: text("seeAllUrl"),
@@ -2515,6 +2530,7 @@ function BlockGroup({
                   </Field>
                   <Field label={ar ? "الزر السفلي يفتح" : "Bottom pill opens"} type="link">
                     <LinkPicker
+                      pages={pages}
                       value={{
                         handle: text("pillHandle"),
                         url: text("pillUrl"),
@@ -2568,6 +2584,7 @@ function BlockGroup({
               </Field>
               <Field label={ar ? "يفتح" : "Opens"} type="link">
                 <LinkPicker
+                  pages={pages}
                   value={{
                     handle: text("handle"),
                     url: text("url"),
@@ -2633,6 +2650,7 @@ function BlockGroup({
           </Field>
           <Field label={ar ? "يفتح" : "Opens"} type="link">
             <LinkPicker
+              pages={pages}
               value={{
                 handle: text("handle"),
                 url: text("url"),
@@ -2723,6 +2741,7 @@ function BlockGroup({
               </Field>
               <Field label={ar ? "يفتح" : "Opens"} type="link">
                 <LinkPicker
+                  pages={pages}
                   value={{
                     handle: text("seeAllHandle"),
                     url: text("seeAllUrl"),
@@ -2922,6 +2941,7 @@ function BlockGroup({
               </Field>
               <Field label={ar ? "يفتح" : "Opens"} type="link">
                 <LinkPicker
+                  pages={pages}
                   value={{
                     handle: text("replaysHandle"),
                     url: text("replaysUrl"),
@@ -2982,6 +3002,7 @@ function BlockGroup({
               </Field>
               <Field label={ar ? "يفتح" : "Opens"} type="link">
                 <LinkPicker
+                  pages={pages}
                   value={{
                     handle: text("offerHandle"),
                     url: text("offerUrl"),
@@ -3184,6 +3205,7 @@ function BlockGroup({
           </Field>
           <Field label={ar ? "يفتح" : "Opens"} type="link">
             <LinkPicker
+              pages={pages}
               value={{ handle: text("handle"), url: text("url"), productId: text("productId"), screen: text("screen") }}
               onChange={(next) =>
                 onPatch({
@@ -3263,6 +3285,7 @@ function BlockGroup({
           </Field>
           <Field label={ar ? "يفتح" : "Opens"} type="link">
             <LinkPicker
+              pages={pages}
               value={{ handle: text("handle"), url: text("url"), productId: text("productId"), screen: text("screen") }}
               onChange={(next) =>
                 onPatch({
@@ -3403,6 +3426,7 @@ function BlockGroup({
           block={block}
           ar={ar}
           collections={collections}
+          pages={pages}
           accent={accent}
           input={input}
           onPatch={onPatch}
@@ -3444,6 +3468,7 @@ function ItemList({
   block,
   ar,
   collections,
+  pages,
   accent,
   input,
   onPatch,
@@ -3452,6 +3477,8 @@ function ItemList({
   block: Block;
   ar: boolean;
   collections: { handle: string; title: string; count: number; image: string | null }[];
+  /** The merchant's own pages, so any link here can point at one. */
+  pages: { key: string; ar: string; en: string }[];
   input: string;
   onPatch: (patch: Record<string, unknown>) => void;
 }) {
@@ -3591,6 +3618,7 @@ function ItemList({
                           />
                         ) : f.kind === "link" ? (
                           <LinkPicker
+                            pages={pages}
                             value={{
                               handle: typeof item.handle === "string" ? item.handle : "",
                               url: typeof item.url === "string" ? item.url : "",
@@ -3604,6 +3632,7 @@ function ItemList({
                           />
                         ) : f.kind === "collection" ? (
                           <LinkPicker
+                            pages={pages}
                             value={{ handle: typeof value === "string" ? value : "" }}
                             onChange={(next) =>
                               patchItem(item.id, { [f.key]: next.handle ?? "" })
