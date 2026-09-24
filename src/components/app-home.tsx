@@ -4298,12 +4298,14 @@ function isPlaceholder(node: React.ReactElement): boolean {
         : data.collections.slice(0, ALL_ROWS_CAP);
       return !targets.some((c) => (data.rows[c.handle] ?? []).length > 0);
     }
-    case "hero":
-    case "cards":
     case "sale_seal":
       return !str(s.bigText) && !str(s.tagline) && !str(s.imageUrl);
     case "free_shipping":
       return !str(s.title) && !str(s.subtitle);
+    // A hero, a card row and the footwear edit are made of items: they are
+    // unfinished when they have none, not when they have no headline.
+    case "hero":
+    case "cards":
     case "moments":
       return itemsOf(block).filter((i) => str(i.imageUrl) || str(i.label)).length === 0;
     case "tiers":
