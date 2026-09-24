@@ -278,6 +278,7 @@ type Collection = { handle: string; title: string; count: number; image: string 
  */
 const SCREENS = [
   { key: "home", ar: "الرئيسية", en: "Home" },
+  { key: "collections", ar: "كل الأقسام", en: "All collections" },
   { key: "search", ar: "البحث", en: "Search" },
   { key: "cart", ar: "السلة", en: "Cart" },
   { key: "orders", ar: "الطلبات", en: "Orders" },

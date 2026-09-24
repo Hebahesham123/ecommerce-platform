@@ -542,9 +542,10 @@ function pageScreenFile(): GeneratedFile {
   return {
     path: "components/PageScreen.tsx",
     language: "tsx",
-    contents: `import React from "react";
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+    contents: `import React, { useEffect, useState } from "react";
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { colors, spacing, theme } from "../theme";
+import { fetchHome } from "../api";
 
 export type PageTile = {
   id: string;
@@ -615,7 +616,53 @@ export function PageScreen({
   );
 }
 
+/**
+ * Every department the shop has, drawn as a page.
+ *
+ * The list is the catalogue's, asked for here rather than carried through the
+ * app for a screen that may never be opened, and never kept by hand: a second
+ * list of departments is a list that goes out of date.
+ */
+export function AllCollectionsScreen({ onOpen }: { onOpen: (handle: string, title?: string) => void }) {
+  const [items, setItems] = useState<PageTile[] | null>(null);
+  useEffect(() => {
+    let alive = true;
+    fetchHome()
+      .then((home) => {
+        if (!alive) return;
+        setItems(
+          (home.collections ?? []).map((c) => ({
+            id: c.handle,
+            imageUrl: c.image ?? undefined,
+            label: c.title,
+            handle: c.handle,
+          })),
+        );
+      })
+      .catch(() => setItems([]));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  if (!items) {
+    return (
+      <View style={styles.loading}>
+        <ActivityIndicator color={colors.accent} />
+      </View>
+    );
+  }
+
+  return (
+    <PageScreen
+      page={{ id: "all-collections", handle: "collections", line2: "All collections", layout: "circles", items }}
+      onOpen={(tile) => onOpen(tile.handle ?? "", tile.label)}
+    />
+  );
+}
+
 const styles = StyleSheet.create({
+  loading: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl },
   wrap: { padding: spacing.lg },
   head: { alignItems: "center", paddingVertical: 10 },
   kicker: { fontSize: 10, fontWeight: "700", letterSpacing: 2.4, color: colors.accent },
@@ -7002,7 +7049,7 @@ function appFile(theme: AppTheme): GeneratedFile {
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Linking, Pressable, SafeAreaView, StatusBar, StyleSheet, Text, View } from "react-native";
 import { Splash } from "./components/Splash";
-import { PageScreen } from "./components/PageScreen";
+import { AllCollectionsScreen, PageScreen } from "./components/PageScreen";
 import { colors, spacing, theme } from "./theme";
 import { screens, say } from "./screens";
 import {
@@ -7032,6 +7079,7 @@ import { SignInScreen } from "./components/SignInScreen";${
 type Screen =
   | { kind: "collection"; handle: string; title?: string }
   | { kind: "page"; handle: string }
+  | { kind: "collections" }
   | { kind: "search"; term: string }
   | { kind: "product"; id: string }
   | { kind: "checkout" }
@@ -7190,6 +7238,7 @@ export default function App() {
     }) {
       return goTab(screen);
     }
+    if (screen === "collections") return push({ kind: "collections" });
     // One of the merchant's own pages, if the handle names one.
     if ((theme.pages ?? []).some((p) => p.handle === screen)) {
       return push({ kind: "page", handle: screen });
@@ -7204,7 +7253,9 @@ export default function App() {
   };
 
   const body = top ? (
-    top.kind === "page" ? (
+    top.kind === "collections" ? (
+      <AllCollectionsScreen onOpen={(handle, title) => push({ kind: "collection", handle, title })} />
+    ) : top.kind === "page" ? (
       <PageScreen
         page={(theme.pages ?? []).find((p) => p.handle === top.handle) ?? { id: "", handle: top.handle, items: [] }}
         onOpen={(tile) => {

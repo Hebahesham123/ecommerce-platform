@@ -29,6 +29,8 @@ import { CollectionPage, ProductPage, type ScreenHandlers } from "@/components/a
 
 type View =
   | { kind: "home" }
+  /** Every department the shop has, built from the catalogue itself. */
+  | { kind: "collections" }
   | { kind: "collection"; handle: string; title: string }
   | { kind: "page"; handle: string }
   | { kind: "search"; q: string };
@@ -163,6 +165,7 @@ export function Shop({
     const req = openPage;
     if (!req?.handle || req.at === lastPage.current) return;
     lastPage.current = req.at;
+    if (req.handle === "collections") return setView({ kind: "collections" });
     if (req.handle === "requests") return onLeave("requests");
     if (req.handle === "reviews" || req.handle === "happy-customers") return setPage(req.handle);
     // One of the merchant's own pages — For Her, For Him — which are screens
@@ -284,6 +287,32 @@ export function Shop({
           onAdd={onAdd}
           wishlist={wishlist}
           onToggleWish={onToggleWish}
+        />
+      ) : view.kind === "collections" ? (
+        <AppPageView
+          page={{
+            id: "all-collections",
+            handle: "collections",
+            kicker: "",
+            line1: "",
+            line2: ar ? "كل الأقسام" : "All collections",
+            layout: "circles",
+            // The catalogue is the list; keeping a second one by hand would
+            // only ever be out of date.
+            items: home.collections.map((c) => ({
+              id: c.handle,
+              imageUrl: c.image ?? "",
+              label: c.title,
+              handle: c.handle,
+              url: "",
+              productId: "",
+              screen: "",
+            })),
+          }}
+          settings={home.theme.settings}
+          ar={ar}
+          onBack={() => setView({ kind: "home" })}
+          onOpen={(tile) => go({ type: "collection", handle: tile.handle })}
         />
       ) : view.kind === "page" ? (
         (() => {

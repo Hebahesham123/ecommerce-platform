@@ -197,6 +197,7 @@ export function ThemeEditor() {
       if (screen === "cart" || screen === "account" || screen === "live") {
         return setPage(screen);
       }
+      if (screen === "collections") return setStack([{ kind: "collections" }]);
       // One of the merchant's own pages: this phone draws those, because
       // they are the merchant's to design and they have to be checked here.
       if (pageHandles.current.includes(screen)) {
@@ -1435,6 +1436,34 @@ export function ThemeEditor() {
                 screen.kind === "orders" ? (
                   <div className="bg-[var(--app-page,#f8fafc)] p-4">
                     <Orders ar={ar} signedIn={Boolean(shopper)} />
+                  </div>
+                ) : screen.kind === "collections" ? (
+                  <div className="bg-[var(--app-page,#f8fafc)] px-4 pb-4">
+                    <AppPageView
+                      page={{
+                        id: "all-collections",
+                        handle: "collections",
+                        kicker: "",
+                        line1: "",
+                        line2: ar ? "كل الأقسام" : "All collections",
+                        layout: "circles",
+                        items: data.collections.map((c) => ({
+                          id: c.handle,
+                          imageUrl: c.image ?? "",
+                          label: c.title,
+                          handle: c.handle,
+                          url: "",
+                          productId: "",
+                          screen: "",
+                        })),
+                      }}
+                      settings={draft.settings}
+                      ar={ar}
+                      onBack={pop}
+                      onOpen={(tile) =>
+                        push({ kind: "collection", handle: tile.handle, title: tile.label })
+                      }
+                    />
                   </div>
                 ) : screen.kind === "page" ? (
                   <div className="bg-[var(--app-page,#f8fafc)] px-4 pb-4">
@@ -3752,6 +3781,8 @@ function screenFile(key: ScreenKey): string {
 
 type Screen =
   | { kind: "collection"; handle: string; title: string }
+  /** Every department the shop has. */
+  | { kind: "collections" }
   | { kind: "product"; id: string }
   /** One of the merchant's own pages — For Her, For Him. */
   | { kind: "page"; handle: string }
