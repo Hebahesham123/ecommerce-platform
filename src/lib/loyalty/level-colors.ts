@@ -71,6 +71,24 @@ function mix(color: string, amount: number): string {
   return `#${c.map((v) => v.toString(16).padStart(2, "0")).join("")}`;
 }
 
+/**
+ * A colour partway between itself and the page.
+ *
+ * `keep` is how much of the colour survives: 1 is the colour untouched, 0 is
+ * the paper. Exported so a column of panels can be walked from one end to the
+ * other in even steps.
+ */
+export function towardPaper(color: string, keep: number): string {
+  return mix(color, Math.max(0, Math.min(1, keep)));
+}
+
+/** Whether text on this colour should be dark. */
+export function isLight(color: string): boolean {
+  const c = rgb(color);
+  if (!c) return true;
+  return (0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2]) / 255 > 0.55;
+}
+
 export function paletteFrom(color: string | null | undefined, key?: LevelKey | null): LevelPalette {
   const base = (color && rgb(color) ? color : null) ?? (key ? UNSET[key] : null) ?? UNSET.discovery;
   return {
