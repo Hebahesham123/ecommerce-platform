@@ -1038,8 +1038,15 @@ function LiveDrawer({
             </div>
             {live.recordingUrl && (
               <div className="mt-3 flex flex-wrap items-center gap-2">
+                {/*
+                  The replay page, not the file. This used to open the raw
+                  video straight out of storage — a small black rectangle on an
+                  empty tab, with none of the shop around it. It is the same
+                  page customers are sent to, which is also the point: what she
+                  checks here is what they will see.
+                */}
                 <a
-                  href={live.recordingUrl}
+                  href={`/store/live/${live.id}`}
                   target="_blank"
                   rel="noreferrer"
                   className="btn-outline inline-flex h-9 px-3 text-xs"

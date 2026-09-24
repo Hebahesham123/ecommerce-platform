@@ -522,9 +522,11 @@ function Player({ live, ar }: { live: WatchableLive; ar: boolean }) {
   const onAir = live.status === "live";
   const hls = onAir ? live.playbackUrl : live.recordingUrl;
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const replayRef = useRef<HTMLVideoElement | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const playerRef = useRef<StreamPlayer | null>(null);
   const [muted, setMuted] = useState(true);
+  const [fullScreened, setFullScreened] = useState(false);
 
   /**
    * WebRTC is an improvement on HLS, and an improvement has to earn its place
@@ -694,6 +696,31 @@ function Player({ live, ar }: { live: WatchableLive; ar: boolean }) {
     }
   }
 
+  /**
+   * A replay, the size of the phone, with sound.
+   *
+   * Full screen cannot be asked for on the page's behalf — every browser
+   * requires the person to ask — so this is what the one tap is for. It is the
+   * same tap that turns the sound on, because those are not two decisions:
+   * nobody wants a silent video in a small box.
+   */
+  async function watchProperly() {
+    const el = replayRef.current;
+    if (!el) return;
+    el.muted = false;
+    setMuted(false);
+    setFullScreened(true);
+    try {
+      const ios = el as HTMLVideoElement & { webkitEnterFullscreen?: () => void };
+      if (el.requestFullscreen) await el.requestFullscreen();
+      else if (ios.webkitEnterFullscreen) ios.webkitEnterFullscreen();
+    } catch {
+      // Refused, or unsupported. The sound still came on, which was the
+      // larger half of what was asked for.
+    }
+    el.play().catch(() => {});
+  }
+
   const nothing = !hls && !onAir;
 
   return (
@@ -734,12 +761,18 @@ function Player({ live, ar }: { live: WatchableLive; ar: boolean }) {
                */
               // eslint-disable-next-line jsx-a11y/media-has-caption
               <video
+                ref={replayRef}
                 src={hls}
                 autoPlay
                 playsInline
                 muted
                 loop={onAir}
                 controls={!onAir}
+                preload="auto"
+                // Something to look at while the first seconds arrive. A
+                // replay opening on black reads as broken; opening on the
+                // live's own cover reads as loading.
+                poster={!onAir ? (live.coverUrl ?? undefined) : undefined}
                 onPlaying={() => setPlaying(true)}
                 onWaiting={() => setPlaying(false)}
                 onStalled={() => setPlaying(false)}
@@ -783,19 +816,41 @@ function Player({ live, ar }: { live: WatchableLive; ar: boolean }) {
           <p className="text-sm font-medium text-white/90">
             {!hls
               ? ar ? "البث على وشك البدء…" : "The live is about to start…"
-              : ar ? "جارٍ تحميل البث…" : "Loading the live…"}
+              : onAir
+                ? ar ? "جارٍ تحميل البث…" : "Loading the live…"
+                : ar ? "جارٍ تحميل التسجيل…" : "Loading the replay…"}
           </p>
           {waited && (
             <p className="text-xs leading-relaxed text-white/60">
-              {ar
-                ? "الاتصال بطيء — ستقل جودة الصورة تلقائياً حتى يعمل البث."
-                : "Your connection is slow — the picture will drop in quality rather than stop."}
+              {onAir
+                ? ar
+                  ? "الاتصال بطيء — ستقل جودة الصورة تلقائياً حتى يعمل البث."
+                  : "Your connection is slow — the picture will drop in quality rather than stop."
+                : ar
+                  ? "التسجيل كبير وما زال يُحمَّل — سيبدأ بعد لحظات."
+                  : "It is a long recording and still arriving — it will start in a moment."}
             </p>
           )}
         </div>
       )}
 
-      {!nothing && muted && playing && (
+      {/*
+        A replay gets the bigger offer. It is the thing a customer was sent a
+        link to, so the first tap should give them the whole of it — sound and
+        the whole screen — rather than sound in a small box with the rest left
+        to be discovered.
+      */}
+      {!nothing && !onAir && !fullScreened && (
+        <button
+          onClick={watchProperly}
+          className="absolute inset-x-0 top-1/2 z-10 mx-auto flex w-fit -translate-y-1/2 items-center gap-2.5 rounded-full bg-rose-600 px-6 py-3.5 text-base font-bold text-white shadow-2xl"
+        >
+          <PlayIcon />
+          {ar ? "شاهدي بملء الشاشة" : "Watch full screen"}
+        </button>
+      )}
+
+      {!nothing && onAir && muted && playing && (
         <button
           onClick={unmute}
           className="absolute inset-x-0 top-1/2 z-10 mx-auto flex w-fit -translate-y-1/2 items-center gap-2 rounded-full bg-black/70 px-5 py-3 text-sm font-semibold text-white backdrop-blur"
@@ -819,6 +874,12 @@ const ShareIcon = () => (
 const CloseIcon = () => (
   <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
     <path d="M6 6l12 12M18 6L6 18" />
+  </svg>
+);
+
+const PlayIcon = () => (
+  <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor">
+    <path d="M8 5.5v13l11-6.5L8 5.5Z" />
   </svg>
 );
 

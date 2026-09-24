@@ -404,6 +404,10 @@ export function Broadcast({
         .storage.from(slot.data.bucket)
         .uploadToSignedUrl(slot.data.path, slot.data.token, blob, {
           contentType: blob.type,
+          // A recording never changes, so it may be cached for as long as the
+          // CDN will keep it. The hour it defaults to means the first customer
+          // after every lull waits for the origin all over again.
+          cacheControl: "31536000",
         });
       if (upErr) throw upErr;
       const attached = await attachRecordingAction(liveId, slot.data.publicUrl);
