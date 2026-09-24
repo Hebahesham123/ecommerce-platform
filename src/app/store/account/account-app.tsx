@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState, useTransition } from "react";
 import Link from "next/link";
-import { levelPalette } from "@/lib/loyalty/level-colors";
+import { levelPalette, paletteFrom, withAlpha, type LevelPalette } from "@/lib/loyalty/level-colors";
 import { useRouter } from "next/navigation";
 import { useI18n, egp } from "@/lib/i18n";
 import { say, type Copy } from "@/lib/page-copy";
@@ -141,82 +141,24 @@ export default function AccountApp({
             page hides it and shows only that section (with a Menu link). */}
         <aside className={`${section === "overview" ? "flex" : "hidden lg:flex"} flex-col gap-3`}>
           {/*
-            The society's own card, in the society's own colours.
+            The society card, built like the Society screens themselves.
 
-            It sat in the same cream as every other panel, so the one thing on
-            this page that is meant to feel earned looked like a settings box.
-            The Society screens are lit gold on deep brown; this is that, which
-            makes her standing the first thing the page says rather than
-            something filed among the menus.
+            Everything here is the composition those screens use: light thrown
+            from one side rather than an even fill, her name small beside a
+            small portrait, and the tier set large in serif capitals — because
+            the tier is the headline, not a caption under an avatar. The stack
+            below it reads the way the Society page reads: what is being
+            counted, the bar, then the count.
           */}
-          <div className="relative overflow-hidden rounded-2xl border border-[#6E4C2C] bg-[#2A1A0F] p-5 text-center shadow-[0_14px_34px_-16px_rgba(42,26,15,0.7)]">
-            {/* Light from above, so the card has a source and not a flat fill. */}
-            <div
-              aria-hidden
-              className="pointer-events-none absolute inset-0"
-              style={{
-                background:
-                  "radial-gradient(120% 85% at 50% 0%, rgba(216,174,110,0.30) 0%, rgba(120,78,42,0.12) 45%, transparent 76%)",
-              }}
-            />
-            <div className="relative">
-              <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-[#F0D6AC] via-[#C08E5C] to-[#7A4B27] font-serif text-2xl text-[#2A1A0F] ring-1 ring-[#F0D6AC]/40 ring-offset-2 ring-offset-[#2A1A0F]">
-                {initials}
-              </div>
-              <div className="mt-3 font-serif text-xl tracking-wide text-[#F6E7CF]">
-                {account.name || (ar ? "عميلة" : "Customer")}
-              </div>
-              {account.email && <div className="text-xs text-[#B79B78]">{account.email}</div>}
-              {loyalty && (
-                <div className="mt-1.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#D8AE6E]">
-                  {loyalty.progress.currentLevelName} {SIG}
-                </div>
-              )}
-
-              <div className="mt-4 flex border-t border-[#553A22] pt-3 text-center">
-                <Stat v={loyalty ? `${fmtN(loyalty.user.signatureBalance)}` : "—"} k={ar ? "توقيع" : "Signatures"} />
-                <Stat v={String(account.orders.length)} k={ar ? "طلبات" : "Orders"} border />
-                <Stat v={loyalty ? String(loyalty.streak.currentStreak) : "0"} k={ar ? "ستريك" : "Streak"} border />
-              </div>
-
-              {loyalty && loyalty.progress.nextLevel && (
-                <div className="mt-4 border-t border-[#553A22] pt-4 text-start">
-                  <div className="mb-2 flex items-baseline justify-between gap-2">
-                    <span className="text-[10px] uppercase tracking-[0.18em] text-[#B79B78]">
-                      {ar ? "التوقيعات" : "Signatures"}
-                    </span>
-                    <span className="truncate font-serif text-xs text-[#D8AE6E]">
-                      {loyalty.progress.nextLevelName} {SIG}
-                    </span>
-                  </div>
-
-                  {/* The bar earns the glow: it is the one number she is
-                      actually climbing. */}
-                  <div className="relative h-2.5 overflow-hidden rounded-full bg-[#3B2817] ring-1 ring-inset ring-[#5C3F24]">
-                    <div
-                      className="absolute inset-y-0 start-0 rounded-full bg-gradient-to-r from-[#8A5A2B] via-[#D8AE6E] to-[#F6E3BC] shadow-[0_0_14px_rgba(246,227,188,0.55)]"
-                      style={{ width: `${Math.min(100, Math.max(2, loyalty.progress.percentage))}%` }}
-                    />
-                  </div>
-
-                  <div className="mt-2.5 flex items-baseline justify-between gap-2">
-                    <span className="font-serif text-2xl leading-none text-[#F6E7CF]">
-                      {fmtN(loyalty.user.signatureBalance)} <span className="text-[#D8AE6E]">{SIG}</span>
-                    </span>
-                    <span className="text-[10px] uppercase tracking-[0.14em] text-[#B79B78]">
-                      {ar
-                        ? `من ${fmtN(loyalty.user.signatureBalance + (loyalty.progress.remaining ?? 0))}`
-                        : `out of ${fmtN(loyalty.user.signatureBalance + (loyalty.progress.remaining ?? 0))}`}
-                    </span>
-                  </div>
-                  <div className="mt-1 text-[10px] text-[#B79B78]">
-                    {fmtN(loyalty.progress.remaining ?? 0)}{" "}
-                    {ar ? `للوصول إلى ${loyalty.progress.nextLevelName}` : `until ${loyalty.progress.nextLevelName}`}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
+          <SocietyCard
+            ar={ar}
+            name={account.name || (ar ? "عميلة" : "Customer")}
+            email={account.email}
+            initials={initials}
+            orders={account.orders.length}
+            loyalty={loyalty}
+            tier={tier}
+          />
 
           {nav.map((g, gi) => {
             // Only the Society group is tinted. A page where every panel is
@@ -347,12 +289,180 @@ export default function AccountApp({
 }
 
 // ---- small shared bits ------------------------------------------------------
+/* ------------------------------ society card ------------------------------ */
+
+/**
+ * Where the light falls, and the dust it catches.
+ *
+ * The Society screens are not an even brown fill — they are lit from one side,
+ * with the glow strongest behind the tier's name and falling away across the
+ * card. Fixed positions, not random ones: a server and a browser that disagree
+ * about where a speck of dust goes is a hydration error, and nobody can see
+ * the difference anyway.
+ */
+const MOTES = [
+  { x: 14, y: 22, s: 1.5, o: 0.35 },
+  { x: 32, y: 12, s: 1, o: 0.25 },
+  { x: 58, y: 28, s: 2, o: 0.45 },
+  { x: 71, y: 16, s: 1, o: 0.3 },
+  { x: 84, y: 34, s: 1.5, o: 0.5 },
+  { x: 92, y: 58, s: 1, o: 0.3 },
+  { x: 66, y: 62, s: 1.5, o: 0.28 },
+  { x: 44, y: 46, s: 1, o: 0.22 },
+  { x: 22, y: 64, s: 1.5, o: 0.3 },
+  { x: 8, y: 48, s: 1, o: 0.2 },
+];
+
+function SocietyCard({
+  ar,
+  name,
+  email,
+  initials,
+  orders,
+  loyalty,
+  tier,
+}: {
+  ar: boolean;
+  name: string;
+  email: string | null;
+  initials: string;
+  orders: number;
+  loyalty: LoyaltySummary | null;
+  tier: LevelPalette | null;
+}) {
+  const t = tier ?? paletteFrom(null, "curated");
+  const p = loyalty?.progress ?? null;
+
+  // The top of the ladder has nothing above it, so the bar is full and the
+  // number beside it says so rather than counting towards nothing.
+  const atTop = !!p && !p.nextLevel;
+  const pct = p ? (atTop ? 100 : Math.min(100, Math.max(4, p.percentage))) : 0;
+  const target = p ? p.lifetime + (p.remaining ?? 0) : 0;
+
+  return (
+    <div className="relative overflow-hidden rounded-2xl bg-[#241609] p-5 shadow-[0_16px_38px_-18px_rgba(36,22,9,0.75)]">
+      {/* The light, thrown from the side the tier's name sits on. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0"
+        style={{
+          background: `radial-gradient(110% 130% at 88% 42%, ${withAlpha(t.glow, 0.5)} 0%, ${withAlpha(
+            t.accent,
+            0.22,
+          )} 34%, transparent 72%)`,
+        }}
+      />
+      <div aria-hidden className="pointer-events-none absolute inset-0">
+        {MOTES.map((m, i) => (
+          <span
+            key={i}
+            className="absolute rounded-full bg-white"
+            style={{
+              left: `${m.x}%`,
+              top: `${m.y}%`,
+              width: m.s,
+              height: m.s,
+              opacity: m.o,
+              boxShadow: `0 0 ${m.s * 3}px ${withAlpha("#ffffff", m.o)}`,
+            }}
+          />
+        ))}
+      </div>
+
+      <div className="relative">
+        {/* Her, small, the way a byline sits above a headline. */}
+        <div className="flex items-center gap-2.5">
+          <span
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-serif text-xs text-[#241609]"
+            style={{ background: `linear-gradient(140deg, ${t.bright}, ${t.accent})` }}
+          >
+            {initials}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-medium text-[#EFE3D0]">{name}</span>
+            {email && <span className="block truncate text-[10px] text-[#A88D6C]">{email}</span>}
+          </span>
+        </div>
+
+        {/* The headline: the tier, in capitals, the size the Society sets it. */}
+        {p && (
+          <h2 className="mt-3.5 font-serif text-[26px] uppercase leading-[1.1] tracking-[0.01em] text-[#F8F0E2]">
+            {p.currentLevelName}{" "}
+            <span style={{ color: t.bright }}>{SIG}</span>
+          </h2>
+        )}
+
+        {p && (
+          <>
+            <div className="mt-3 text-[11px] font-medium text-[#C2A882]">
+              {ar ? "التوقيعات" : "Signatures"}
+            </div>
+
+            {/*
+              The bar the Society page uses: tall enough to hold its own
+              numbers, lit at the point it has reached — which is the bit that
+              makes it feel like a level and not a loading indicator.
+            */}
+            <div className="relative mt-1.5 h-[22px] w-full overflow-hidden rounded-full bg-[#38240F] ring-1 ring-inset ring-[#4E361C]">
+              <div
+                className="absolute inset-y-0 rounded-full"
+                style={{
+                  insetInlineStart: 0,
+                  width: `${pct}%`,
+                  background: `linear-gradient(90deg, ${t.accent} 0%, ${t.bright} 62%, ${t.glow} 100%)`,
+                }}
+              />
+              {/* Where it has got to, catching the light. */}
+              <div
+                aria-hidden
+                className="absolute top-1/2 h-[26px] w-[26px] -translate-y-1/2 rounded-full"
+                style={{
+                  insetInlineStart: `calc(${pct}% - 13px)`,
+                  background: `radial-gradient(circle, ${withAlpha("#FFFDF6", 0.95)} 0%, ${withAlpha(
+                    t.glow,
+                    0.55,
+                  )} 42%, transparent 70%)`,
+                }}
+              />
+              <div className="relative flex h-full items-center justify-between px-3">
+                <span className="text-[10px] font-bold text-[#3A2410]">{fmtN(p.lifetime)}</span>
+                <span className="text-[9px] font-semibold uppercase tracking-[0.12em] text-[#C2A882]">
+                  {atTop
+                    ? ar ? "أعلى مستوى" : "Top tier"
+                    : ar ? `من ${fmtN(target)}` : `out of ${fmtN(target)}`}
+                </span>
+              </div>
+            </div>
+
+            <div className="mt-3 font-serif text-[30px] leading-none text-[#F8F0E2]">
+              {fmtN(p.lifetime)} <span style={{ color: t.bright }}>{SIG}</span>
+            </div>
+            <div className="mt-1 text-[10px] text-[#A88D6C]">
+              {atTop
+                ? ar ? "توقيعات مكتسبة حتى الآن" : "Signatures earned to date"
+                : ar
+                  ? `${fmtN(p.remaining ?? 0)} للوصول إلى ${p.nextLevelName}`
+                  : `${fmtN(p.remaining ?? 0)} until ${p.nextLevelName}`}
+            </div>
+          </>
+        )}
+
+        <div className="mt-4 flex border-t border-[#4A331C] pt-3 text-center">
+          <Stat v={loyalty ? fmtN(loyalty.user.signatureBalance) : "—"} k={ar ? "توقيع" : "Signatures"} />
+          <Stat v={String(orders)} k={ar ? "طلبات" : "Orders"} border />
+          <Stat v={loyalty ? String(loyalty.streak.currentStreak) : "0"} k={ar ? "ستريك" : "Streak"} border />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** One figure on the society card — gold on brown, like the Society screens. */
 function Stat({ v, k, border }: { v: string; k: string; border?: boolean }) {
   return (
-    <div className={`flex-1 ${border ? "border-s border-[#553A22]" : ""}`}>
+    <div className={`flex-1 ${border ? "border-s border-[#4A331C]" : ""}`}>
       <div className="font-serif text-lg text-[#F6E7CF]">{v}</div>
-      <div className="text-[8.5px] uppercase tracking-[0.14em] text-[#B79B78]">{k}</div>
+      <div className="text-[8.5px] uppercase tracking-[0.14em] text-[#A88D6C]">{k}</div>
     </div>
   );
 }

@@ -22,7 +22,22 @@ export type LevelPalette = {
   accent: string;
   /** A hover, or a figure that should catch the eye without shouting. */
   soft: string;
+  /**
+   * The same colour, lightened until it reads on a dark ground.
+   *
+   * A tier colour chosen to be legible on cream is, by definition, too dark to
+   * be legible on brown. The society card is brown, so it uses this.
+   */
+  bright: string;
+  /** Brighter still: the lit end of a progress bar, the centre of a glow. */
+  glow: string;
 };
+
+/** The tier's colour at a given opacity, for glows and washes. */
+export function withAlpha(color: string, alpha: number): string {
+  const c = rgb(color);
+  return c ? `rgba(${c[0]}, ${c[1]}, ${c[2]}, ${alpha})` : color;
+}
 
 /** The paper these are mixed towards. */
 const PAPER = "#FBF7F1";
@@ -63,6 +78,8 @@ export function paletteFrom(color: string | null | undefined, key?: LevelKey | n
     edge: mix(base, 0.34),
     soft: mix(base, 0.16),
     accent: base,
+    bright: mix(base, 0.62),
+    glow: mix(base, 0.34),
   };
 }
 
