@@ -345,6 +345,7 @@ function SocietyCard({
   orders: number;
   loyalty: LoyaltySummary | null;
 }) {
+  const vault = loyalty?.primaryVault ?? null;
   const p = loyalty?.progress ?? null;
 
   // The top of the ladder has nothing above it, so the bar is full and the
@@ -354,7 +355,7 @@ function SocietyCard({
   const target = p ? p.lifetime + (p.remaining ?? 0) : 0;
 
   return (
-    <div className="relative overflow-hidden rounded-2xl bg-[#241609] p-5 shadow-[0_16px_38px_-18px_rgba(36,22,9,0.75)]">
+    <div className="relative overflow-hidden rounded-2xl bg-[#241609] p-4 shadow-[0_16px_38px_-18px_rgba(36,22,9,0.75)]">
       {/* The light, thrown from the side the tier's name sits on. */}
       <div
         aria-hidden
@@ -387,7 +388,7 @@ function SocietyCard({
         {/* Her, small, the way a byline sits above a headline. */}
         <div className="flex items-center gap-2.5">
           <span
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-serif text-xs text-[#241609]"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-serif text-[11px] text-[#241609]"
             style={{ background: `linear-gradient(140deg, ${GOLD.bright}, ${GOLD.accent})` }}
           >
             {initials}
@@ -400,7 +401,7 @@ function SocietyCard({
 
         {/* The headline: the tier, in capitals, the size the Society sets it. */}
         {p && (
-          <h2 className="mt-3.5 font-serif text-[26px] uppercase leading-[1.1] tracking-[0.01em] text-[#F8F0E2]">
+          <h2 className="mt-3 font-serif text-[23px] uppercase leading-[1.1] tracking-[0.01em] text-[#F8F0E2]">
             {p.currentLevelName}{" "}
             <span style={{ color: GOLD.bright }}>{SIG}</span>
           </h2>
@@ -408,7 +409,7 @@ function SocietyCard({
 
         {p && (
           <>
-            <div className="mt-3 text-[11px] font-medium text-[#C2A882]">
+            <div className="mt-2.5 text-[11px] font-medium text-[#C2A882]">
               {ar ? "التوقيعات" : "Signatures"}
             </div>
 
@@ -417,7 +418,7 @@ function SocietyCard({
               numbers, lit at the point it has reached — which is the bit that
               makes it feel like a level and not a loading indicator.
             */}
-            <div className="relative mt-1.5 h-[22px] w-full overflow-hidden rounded-full bg-[#38240F] ring-1 ring-inset ring-[#4E361C]">
+            <div className="relative mt-1.5 h-[20px] w-full overflow-hidden rounded-full bg-[#38240F] ring-1 ring-inset ring-[#4E361C]">
               <div
                 className="absolute inset-y-0 rounded-full"
                 style={{
@@ -429,9 +430,9 @@ function SocietyCard({
               {/* Where it has got to, catching the light. */}
               <div
                 aria-hidden
-                className="absolute top-1/2 h-[26px] w-[26px] -translate-y-1/2 rounded-full"
+                className="absolute top-1/2 h-[24px] w-[24px] -translate-y-1/2 rounded-full"
                 style={{
-                  insetInlineStart: `calc(${pct}% - 13px)`,
+                  insetInlineStart: `calc(${pct}% - 12px)`,
                   background: `radial-gradient(circle, ${withAlpha("#FFFDF6", 0.95)} 0%, ${withAlpha(
                     GOLD.glow,
                     0.6,
@@ -451,20 +452,41 @@ function SocietyCard({
               </div>
             </div>
 
-            <div className="mt-3 font-serif text-[30px] leading-none text-[#F8F0E2]">
-              {fmtN(p.lifetime)} <span style={{ color: GOLD.bright }}>{SIG}</span>
-            </div>
-            <div className="mt-1 text-[10px] text-[#A88D6C]">
-              {atTop
-                ? ar ? "توقيعات مكتسبة حتى الآن" : "Signatures earned to date"
-                : ar
-                  ? `${fmtN(p.remaining ?? 0)} للوصول إلى ${p.nextLevelName}`
-                  : `${fmtN(p.remaining ?? 0)} until ${p.nextLevelName}`}
+            <div className="mt-2.5 flex items-end justify-between gap-2">
+              <div className="min-w-0">
+                <div className="font-serif text-[26px] leading-none text-[#F8F0E2]">
+                  {fmtN(p.lifetime)} <span style={{ color: GOLD.bright }}>{SIG}</span>
+                </div>
+                <div className="mt-1 text-[10px] text-[#A88D6C]">
+                  {atTop
+                    ? ar ? "توقيعات مكتسبة حتى الآن" : "Signatures earned to date"
+                    : ar
+                      ? `${fmtN(p.remaining ?? 0)} للوصول إلى ${p.nextLevelName}`
+                      : `${fmtN(p.remaining ?? 0)} until ${p.nextLevelName}`}
+                </div>
+              </div>
+
+              <Link
+                href={hrefFor("vault")}
+                className="shrink-0 rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-colors"
+                style={{
+                  borderColor: withAlpha(GOLD.bright, 0.4),
+                  color: GOLD.bright,
+                  backgroundColor: withAlpha(GOLD.bright, 0.08),
+                }}
+              >
+                {ar ? "الفولت" : "The Vault"}
+                {vault && (
+                  <span className="ms-1.5 opacity-70">
+                    {fmtN(vault.currentProgress)}/{fmtN(vault.requiredProgress)}
+                  </span>
+                )}
+              </Link>
             </div>
           </>
         )}
 
-        <div className="mt-4 flex border-t border-[#4A331C] pt-3 text-center">
+        <div className="mt-3 flex border-t border-[#4A331C] pt-2.5 text-center">
           <Stat v={loyalty ? fmtN(loyalty.user.signatureBalance) : "—"} k={ar ? "توقيع" : "Signatures"} />
           <Stat v={String(orders)} k={ar ? "طلبات" : "Orders"} border />
           <Stat v={loyalty ? String(loyalty.streak.currentStreak) : "0"} k={ar ? "ستريك" : "Streak"} border />
