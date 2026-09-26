@@ -678,6 +678,26 @@ export function ProductPage({
   const [added, setAdded] = useState(false);
   const [viewers, setViewers] = useState(0);
   const strip = useRef<HTMLDivElement | null>(null);
+  /**
+   * The buttons belong under the price, where the decision is being made.
+   *
+   * They were only at the foot of the screen because that is where a bar can
+   * always be seen, which solved being reachable by giving up being in the
+   * right place. So they sit under the price and the instalments now, and the
+   * bar returns by itself once they have scrolled out of sight - the same two
+   * buttons, never both at once.
+   */
+  const buyRef = useRef<HTMLDivElement | null>(null);
+  const [buyAway, setBuyAway] = useState(false);
+  useEffect(() => {
+    const el = buyRef.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver((rows) => setBuyAway(!rows[0].isIntersecting), {
+      threshold: 0,
+    });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [product]);
 
   useEffect(() => {
     let live = true;
@@ -747,6 +767,40 @@ export function ProductPage({
   const providers = p.instalmentProviders.split(/[·,|]/).map((x) => x.trim()).filter(Boolean);
   const card: Card = { id: product.id, handle: product.handle, name: product.name, image: product.image, priceMin: product.priceMin, compareAt: product.compareAt, vendor: product.vendor };
   const wished = handlers.wishlist?.includes(product.id) ?? false;
+
+  /** Add to cart and buy now — the same two wherever they are drawn. */
+  const buyPair = (
+    <>
+      <button
+        disabled={soldOut}
+        onClick={() => {
+          if (!variant) return;
+          handlers.onAdd?.(variant.id, qty);
+          setAdded(true);
+          setTimeout(() => setAdded(false), 1600);
+        }}
+        className="h-12 flex-1 rounded-xl text-[12px] font-bold uppercase tracking-[0.16em] text-white transition disabled:opacity-45"
+        style={{ background: added ? "#4a7858" : accent }}
+      >
+        {soldOut
+          ? say(p.soldOutLabel, ar ? "نفد" : "Sold out")
+          : added
+            ? ar
+              ? "أُضيفت ✓"
+              : "Added ✓"
+            : say(p.addLabel, ar ? "أضيفي للسلة" : "Add to cart")}
+      </button>
+      {p.showBuyNow && !soldOut && handlers.onBuyNow && (
+        <button
+          onClick={() => variant && handlers.onBuyNow?.(variant.id, qty)}
+          className="h-12 flex-1 rounded-xl px-2 text-[11.5px] font-bold leading-tight text-white"
+          style={{ background: dark }}
+        >
+          {say(p.buyNowLabel, ar ? "اشتري الآن" : "Buy now")}
+        </button>
+      )}
+    </>
+  );
   const description = product.description ? plain(product.description) : "";
   const stars = Math.max(0, Math.min(5, Math.round(Number(p.ratingValue) || 0)));
 
@@ -912,6 +966,13 @@ export function ProductPage({
                 ))}
               </span>
             </div>
+          </div>
+        )}
+
+        {/* The decision is made here, so this is where the buttons are. */}
+        {handlers.onAdd && (
+          <div ref={buyRef} className="mt-4 flex gap-2">
+            {buyPair}
           </div>
         )}
 
@@ -1125,35 +1186,13 @@ export function ProductPage({
 
       <div className="h-4" />
 
-      {/* ---------------- the bar that stays ---------------- */}
-      {handlers.onAdd && (
-        <div className="sticky bottom-0 z-10 flex gap-2 border-t bg-white/95 px-3 py-2.5 backdrop-blur" style={{ borderColor: line }}>
-          <button
-            disabled={soldOut}
-            onClick={() => {
-              if (!variant) return;
-              handlers.onAdd?.(variant.id, qty);
-              setAdded(true);
-              setTimeout(() => setAdded(false), 1600);
-            }}
-            className="h-12 flex-1 rounded-xl text-[12px] font-bold uppercase tracking-[0.16em] text-white transition disabled:opacity-45"
-            style={{ background: added ? "#4a7858" : accent }}
-          >
-            {soldOut
-              ? say(p.soldOutLabel, ar ? "نفد" : "Sold out")
-              : added
-                ? ar ? "أُضيفت ✓" : "Added ✓"
-                : say(p.addLabel, ar ? "أضيفي للسلة" : "Add to cart")}
-          </button>
-          {p.showBuyNow && !soldOut && handlers.onBuyNow && (
-            <button
-              onClick={() => variant && handlers.onBuyNow?.(variant.id, qty)}
-              className="h-12 flex-1 rounded-xl px-2 text-[11.5px] font-bold leading-tight text-white"
-              style={{ background: dark }}
-            >
-              {say(p.buyNowLabel, ar ? "اشتري الآن" : "Buy now")}
-            </button>
-          )}
+      {/* ---------------- the bar, once they have scrolled away ------------ */}
+      {handlers.onAdd && buyAway && (
+        <div
+          className="sticky bottom-0 z-10 flex gap-2 border-t bg-white/95 px-3 py-2.5 backdrop-blur"
+          style={{ borderColor: line }}
+        >
+          {buyPair}
         </div>
       )}
     </div>
