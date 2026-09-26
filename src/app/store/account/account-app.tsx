@@ -686,7 +686,7 @@ function AvatarPicker({
       <button
         onClick={() => (avatar ? setMenu((v) => !v) : fileRef.current?.click())}
         disabled={state === "working"}
-        className="relative block h-8 w-8 overflow-hidden rounded-full"
+        className="relative block h-12 w-12 overflow-hidden rounded-full"
         style={{ background: `linear-gradient(140deg, ${GOLD.bright}, ${GOLD.accent})` }}
         aria-label={ar ? "تغيير صورتك" : "Change your picture"}
       >
@@ -694,7 +694,7 @@ function AvatarPicker({
           // eslint-disable-next-line @next/next/no-img-element
           <img src={avatar} alt="" className="h-full w-full object-cover" />
         ) : (
-          <span className="flex h-full w-full items-center justify-center font-serif text-[11px] text-[#241609]">
+          <span className="flex h-full w-full items-center justify-center font-serif text-base text-[#241609]">
             {initials}
           </span>
         )}
@@ -708,14 +708,14 @@ function AvatarPicker({
       {/* A camera is the one mark everybody reads as "you can change this". */}
       <span
         aria-hidden
-        className="pointer-events-none absolute -bottom-0.5 -end-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full text-[7px]"
+        className="pointer-events-none absolute -bottom-0.5 -end-0.5 flex h-4 w-4 items-center justify-center rounded-full text-[9px]"
         style={{ backgroundColor: GOLD.bright, color: "#241609" }}
       >
         ✎
       </span>
 
       {menu && (
-        <span className="absolute top-9 z-20 flex w-36 flex-col overflow-hidden rounded-xl bg-[#2C1D0F] text-[11px] shadow-xl ring-1 ring-inset ring-[#4A331C]" style={{ insetInlineStart: 0 }}>
+        <span className="absolute top-14 z-20 flex w-36 flex-col overflow-hidden rounded-xl bg-[#2C1D0F] text-[11px] shadow-xl ring-1 ring-inset ring-[#4A331C]" style={{ insetInlineStart: 0 }}>
           <button
             onClick={() => {
               setMenu(false);
@@ -741,7 +741,7 @@ function AvatarPicker({
       )}
 
       {state === "failed" && (
-        <span className="absolute top-9 z-20 w-36 rounded-lg bg-[#5A2A24] px-2 py-1 text-[10px] text-[#FBD9D3]" style={{ insetInlineStart: 0 }}>
+        <span className="absolute top-14 z-20 w-36 rounded-lg bg-[#5A2A24] px-2 py-1 text-[10px] text-[#FBD9D3]" style={{ insetInlineStart: 0 }}>
           {ar ? "تعذّر حفظ الصورة." : "That picture could not be saved."}
         </span>
       )}
