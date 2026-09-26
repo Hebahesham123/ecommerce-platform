@@ -2092,6 +2092,15 @@ export type Moment = { id: string; imageUrl?: string; label?: string; focal?: st
 export type MomentsSettings = {
   title?: string;
   subtitle?: string;
+  /**
+   * How many fit across before anyone has to scroll.
+   *
+   * A row that scrolls hides whatever is past the edge, and on a phone that is
+   * most of it. Asking for a number rather than a width lets the screen decide
+   * the width: the cards divide what there is, keep the proportions of the
+   * size below, and the whole edit is visible at once. Zero scrolls instead.
+   */
+  perRow?: number;
   cardWidth?: number;
   cardHeight?: number;
   radius?: number;
@@ -2126,16 +2135,22 @@ export function Moments({
   const h = settings.cardHeight && settings.cardHeight > 0 ? settings.cardHeight : 210;
   const r = settings.radius && settings.radius >= 0 ? settings.radius : 14;
   const word = settings.labelColor || "#ffffff";
+  const across = settings.perRow === undefined ? 5 : Math.max(0, Math.round(settings.perRow));
+  const grid = across >= 2;
+  // Five across leaves about sixty pixels a card, and a word set at thirteen
+  // would not fit in it. The shade over the picture shrinks with the card too:
+  // half of it is right at two hundred pixels tall and a slab at ninety.
+  const tight = across >= 5;
 
-  return (
-    <View>
-      {settings.title ? <SectionHeading title={settings.title} /> : null}
-      {settings.subtitle ? <Text style={styles.subtitle}>{settings.subtitle}</Text> : null}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-        {items.map((m) => (
+  const cards = items.map((m) => (
           <Pressable
             key={m.id}
-            style={[styles.card, { width: w, height: h, borderRadius: r }]}
+            style={[
+              styles.card,
+              grid
+                ? { flex: 1, aspectRatio: w > 0 && h > 0 ? w / h : 5 / 7, borderRadius: r }
+                : { width: w, height: h, borderRadius: r },
+            ]}
             onPress={() => openLink(m, { onOpenCollection, onOpenProduct, onOpenScreen })}
           >
             {m.imageUrl ? (
@@ -2143,15 +2158,26 @@ export function Moments({
             ) : (
               <View style={[styles.img, { backgroundColor: colors.line }]} />
             )}
-            <View style={styles.scrim} />
+            <View style={tight ? styles.scrimTight : styles.scrim} />
             {m.label ? (
-              <Text style={[styles.word, { color: word }]} numberOfLines={1}>
+              <Text style={[tight ? styles.wordTight : styles.word, { color: word }]} numberOfLines={1}>
                 {m.label}
               </Text>
             ) : null}
           </Pressable>
-        ))}
-      </ScrollView>
+  ));
+
+  return (
+    <View>
+      {settings.title ? <SectionHeading title={settings.title} /> : null}
+      {settings.subtitle ? <Text style={styles.subtitle}>{settings.subtitle}</Text> : null}
+      {grid ? (
+        <View style={styles.grid}>{cards}</View>
+      ) : (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+          {cards}
+        </ScrollView>
+      )}
     </View>
   );
 }
@@ -2159,10 +2185,13 @@ export function Moments({
 const styles = StyleSheet.create({
   subtitle: { marginTop: 2, fontSize: 11, lineHeight: 16, color: colors.inkSoft },
   row: { gap: gap.itemTight, paddingVertical: spacing.sm },
+  grid: { flexDirection: "row", gap: gap.itemTight, paddingVertical: spacing.sm },
   card: { overflow: "hidden", backgroundColor: colors.line },
   img: { position: "absolute", left: 0, top: 0, right: 0, bottom: 0 },
   scrim: { position: "absolute", left: 0, right: 0, bottom: 0, height: "50%", backgroundColor: "rgba(0,0,0,0.34)" },
+  scrimTight: { position: "absolute", left: 0, right: 0, bottom: 0, height: "42%", backgroundColor: "rgba(0,0,0,0.4)" },
   word: { position: "absolute", left: 12, right: 12, bottom: 10, fontSize: 13, fontWeight: "600" },
+  wordTight: { position: "absolute", left: 5, right: 5, bottom: 5, fontSize: 9, fontWeight: "700" },
 });
 `,
 

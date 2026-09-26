@@ -1210,6 +1210,12 @@ export function newBlock(type: BlockType): Block {
       kicker: "",
       title: "",
       subtitle: "",
+      /**
+       * How many fit across the screen. The cards divide the width between
+       * them and keep the proportions of the size below, so the whole edit is
+       * visible without scrolling. Zero scrolls at that pixel size instead.
+       */
+      perRow: 5,
       // The card's shape, in pixels, and how much of the picture it shows.
       cardWidth: 150,
       cardHeight: 210,

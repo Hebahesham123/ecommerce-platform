@@ -3618,6 +3618,14 @@ function BlockGroup({
           <Field label={ar ? "السطر تحته" : "Line underneath"} type="text">
             <input value={text("subtitle")} onChange={(e) => onPatch({ subtitle: e.target.value })} className={input} />
           </Field>
+          <Field label={ar ? "كم بطاقة في الصف" : "How many fit across"} type="range">
+            <input type="number" min={0} max={6} value={num0("perRow", 5)} onChange={(e) => onPatch({ perRow: Number(e.target.value) })} className={input} />
+            <p className="mt-1 text-[11px] text-ink-soft">
+              {ar
+                ? "تتقاسم البطاقات عرض الشاشة فتظهر كلها بلا تمرير. صفر يعيدها صفاً يُمرَّر بالعرض المحدد تحت."
+                : "The cards divide the screen between them, so the whole edit shows without scrolling. Zero goes back to a scrolling row at the width below."}
+            </p>
+          </Field>
           <Field label={ar ? "عرض البطاقة" : "Card width"} type="range">
             <input type="number" min={110} max={260} value={num("cardWidth", 150)} onChange={(e) => onPatch({ cardWidth: Number(e.target.value) })} className={input} />
           </Field>

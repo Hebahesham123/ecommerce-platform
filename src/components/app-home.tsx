@@ -919,24 +919,52 @@ function BlockView({
       const h = int(s.cardHeight, 210);
       const shape = int(s.radius, 14);
       const word = str(s.labelColor, "#ffffff");
+      /**
+       * How many fit across before anyone has to scroll.
+       *
+       * A row that scrolls hides whatever is past the edge, and what is past
+       * the edge on a phone is most of it. Asking for a number instead of a
+       * width lets the screen decide the width: the cards divide what there
+       * is, keep their proportions, and the whole edit is visible at once.
+       * Zero goes back to a scrolling row at the pixel size set below.
+       */
+      const across = int(s.perRow, 5);
+      const grid = across >= 2;
+      // The shape the merchant chose, kept as a ratio once the width is the
+      // screen's to decide.
+      const ratio = w > 0 && h > 0 ? w / h : 5 / 7;
+      // Five across leaves about sixty pixels a card; a word set at thirteen
+      // would not fit in it.
+      const tight = across >= 5;
       return (
         <section>
           {str(s.title) && <Heading title={str(s.title)} ar={ar} accent={accent} />}
           {str(s.subtitle) && (
-            <p dir="auto" className="mt-0.5 text-[11px] leading-relaxed text-slate-500">
+            <p dir="auto" className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-slate-500">
               {str(s.subtitle)}
             </p>
           )}
           <div
-            className="-mx-4 mt-2.5 flex overflow-x-auto px-4 pb-1"
-            style={{ gap: "calc(var(--app-item-gap, 8px) * 0.67)" }}
+            className={
+              grid
+                ? "mt-2 grid"
+                : "-mx-4 mt-2 flex overflow-x-auto px-4 pb-1"
+            }
+            style={{
+              gap: "calc(var(--app-item-gap, 8px) * 0.67)",
+              ...(grid ? { gridTemplateColumns: `repeat(${across}, minmax(0, 1fr))` } : null),
+            }}
           >
             {moments.map((m) => (
               <button
                 key={m.id}
                 onClick={() => opener(data, handlers)(m)}
-                className="relative shrink-0 overflow-hidden text-start"
-                style={{ width: w, height: h, borderRadius: shape }}
+                className={`relative overflow-hidden text-start ${grid ? "w-full" : "shrink-0"}`}
+                style={
+                  grid
+                    ? { aspectRatio: String(ratio), borderRadius: shape }
+                    : { width: w, height: h, borderRadius: shape }
+                }
               >
                 {str(m.imageUrl) ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -949,18 +977,24 @@ function BlockView({
                 ) : (
                   <div className="absolute inset-0 bg-slate-200" />
                 )}
+                {/* The shade the word sits on. Half the card was right at two
+                    hundred pixels tall and is a slab at ninety, so it shrinks
+                    with the card and leans darker where the word actually is. */}
                 <div
                   aria-hidden
-                  className="absolute inset-x-0 bottom-0 h-1/2"
+                  className={`absolute inset-x-0 bottom-0 ${tight ? "h-[42%]" : "h-1/2"}`}
                   style={{
-                    background:
-                      "linear-gradient(to top, rgba(0,0,0,0.58) 0%, rgba(0,0,0,0.22) 45%, rgba(0,0,0,0) 100%)",
+                    background: tight
+                      ? "linear-gradient(to top, rgba(0,0,0,0.68) 0%, rgba(0,0,0,0.26) 55%, rgba(0,0,0,0) 100%)"
+                      : "linear-gradient(to top, rgba(0,0,0,0.58) 0%, rgba(0,0,0,0.22) 45%, rgba(0,0,0,0) 100%)",
                   }}
                 />
                 {str(m.label) && (
                   <span
                     dir="auto"
-                    className="absolute bottom-2.5 start-3 end-3 truncate text-[13px] font-semibold"
+                    className={`absolute truncate font-semibold ${
+                      tight ? "bottom-1.5 start-1.5 end-1.5 text-[9px]" : "bottom-2.5 start-3 end-3 text-[13px]"
+                    }`}
                     style={{ color: word }}
                   >
                     {str(m.label)}
