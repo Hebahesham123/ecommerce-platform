@@ -30,8 +30,13 @@ export type PaymentMethod = {
 };
 
 /**
- * What beauty-bareg.net tells shoppers today: cash at the door, and three
- * instalment providers under "0% interest, no bank required".
+ * What beauty-bareg.net tells shoppers today: cash at the door, and the
+ * instalment providers on the strip of marks in its footer.
+ *
+ * The instalment ones are all arranged after the order, so each note says so.
+ * The two that are not — a card and a wallet — are off until the merchant
+ * turns them on, because whether this shop can take either is a fact about
+ * the shop and not something a list of defaults gets to decide.
  */
 export const DEFAULT_METHODS: PaymentMethod[] = [
   {
@@ -74,7 +79,62 @@ export const DEFAULT_METHODS: PaymentMethod[] = [
     logo: "",
     enabled: true,
   },
+  {
+    id: "souhoola",
+    name: "Souhoola",
+    nameAr: "سهولة",
+    kind: "instalment",
+    note: "Instalments through Souhoola. We confirm the plan with you before dispatch.",
+    noteAr: "تقسيط عبر سهولة — نؤكد الخطة معك قبل الشحن.",
+    logo: "",
+    enabled: true,
+  },
+  {
+    id: "aman",
+    name: "Aman",
+    nameAr: "أمان",
+    kind: "instalment",
+    note: "Instalments through Aman. We confirm the plan with you before dispatch.",
+    noteAr: "تقسيط عبر أمان — نؤكد الخطة معك قبل الشحن.",
+    logo: "",
+    enabled: true,
+  },
+  {
+    id: "forsa",
+    name: "Forsa",
+    nameAr: "فرصة",
+    kind: "instalment",
+    note: "Instalments through Forsa. We confirm the plan with you before dispatch.",
+    noteAr: "تقسيط عبر فرصة — نؤكد الخطة معك قبل الشحن.",
+    logo: "",
+    enabled: true,
+  },
+  // Off until the Payments screen says otherwise. See CARD_ID / WALLET_ID.
+  {
+    id: "card",
+    name: "Card on delivery",
+    nameAr: "الدفع بالبطاقة عند الاستلام",
+    kind: "cod",
+    note: "Pay by card when your order arrives — the courier carries a machine.",
+    noteAr: "تدفعين بالبطاقة عند وصول الطلب — المندوب معه ماكينة.",
+    logo: "",
+    enabled: false,
+  },
+  {
+    id: "wallet",
+    name: "InstaPay or Vodafone Cash",
+    nameAr: "إنستاباي أو فودافون كاش",
+    kind: "wallet",
+    note: "We send you the number to transfer to once the order is placed.",
+    noteAr: "نرسل لك الرقم للتحويل عليه بعد تأكيد الطلب.",
+    logo: "",
+    enabled: false,
+  },
 ];
+
+/** The two defaults that wait for a switch on the Payments screen. */
+const CARD_ID = "card";
+const WALLET_ID = "wallet";
 
 const str = (v: unknown, fallback = ""): string => {
   const s = typeof v === "string" ? v.trim() : "";
@@ -110,9 +170,24 @@ export function methodsFrom(raw: unknown): PaymentMethod[] {
       })
     : DEFAULT_METHODS;
 
-  // The cash-on-delivery toggle on the same screen still means what it says.
+  // The toggles on the same screen still mean what they say. Card and wallet
+  // are the other way round from cash: off in the list, and switched on here,
+  // because the shop has no gateway of its own and neither is something to
+  // offer until the merchant says the shop can honour it. A merchant who
+  // writes their own rows is not second-guessed - the switches only reach the
+  // defaults.
   const codOff = saved.cod_enabled === false || saved.cod_enabled === "false";
-  return list.filter((m) => m.enabled && m.name && !(codOff && m.kind === "cod"));
+  const on = (v: unknown) => v === true || v === "true";
+  const usingDefaults = rows.length === 0;
+  return list
+    .map((m) =>
+      usingDefaults && m.id === CARD_ID
+        ? { ...m, enabled: on(saved.card_enabled) }
+        : usingDefaults && m.id === WALLET_ID
+          ? { ...m, enabled: on(saved.wallet_enabled) }
+          : m,
+    )
+    .filter((m) => m.enabled && m.name && !(codOff && m.kind === "cod"));
 }
 
 export const payName = (m: PaymentMethod, ar: boolean) => (ar && m.nameAr ? m.nameAr : m.name);
