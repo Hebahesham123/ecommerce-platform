@@ -3162,7 +3162,7 @@ const styles = StyleSheet.create({
 `,
 
     price_slider: `import React, { useState } from "react";
-import { Image, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { colors, gap, spacing } from "../theme";
 import { SectionHeading } from "./Pieces";
 
@@ -3209,6 +3209,19 @@ export function PriceSlider({ settings }: { settings: PriceSliderSettings }) {
   if (!items.length) return null;
 
   const cur = settings.currency || "EGP";
+  /**
+   * Which plan is being read, and the rest as marks under it.
+   *
+   * Three providers written out in full is three of everything, and a shopper
+   * comparing them has to hold two in her head while she reads the third. One
+   * at a time, with the others as their own logos underneath, is the same
+   * information in a third of the height: tap a mark and it takes the place of
+   * the one above.
+   */
+  const [pick, setPick] = useState(0);
+  const at = Math.min(pick, Math.max(0, items.length - 1));
+  const lead = items[at];
+  const rest = items.filter((_, n) => n !== at);
   const r = settings.radius && settings.radius > 0 ? settings.radius : 14;
   const pct = ((price - min) / (max - min)) * 100;
 
@@ -3245,8 +3258,8 @@ export function PriceSlider({ settings }: { settings: PriceSliderSettings }) {
           <Text style={styles.end}>{cur + " " + nf(max)}</Text>
         </View>
 
-        <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
-          {items.map((i) => {
+        <View style={{ marginTop: spacing.sm, gap: spacing.sm }}>
+          {[lead].filter(Boolean).map((i) => {
             const months = Math.max(1, parseInt(i.months ?? "", 10) || 1);
             return (
               <View key={i.id} style={styles.row}>
@@ -3282,6 +3295,31 @@ export function PriceSlider({ settings }: { settings: PriceSliderSettings }) {
               </View>
             );
           })}
+
+          {/* The others, as their own marks. Four to a row is the ceiling, not
+              the target: two laid out in four columns sit in the left half of
+              the card looking like two more are missing. */}
+          {rest.length > 0 ? (
+            <View style={styles.marks}>
+              {rest.map((i) => (
+                <Pressable
+                  key={i.id}
+                  style={styles.mark}
+                  onPress={() => setPick(items.indexOf(i))}
+                  accessibilityLabel={i.name}
+                >
+                  {i.logo ? (
+                    <Image source={{ uri: i.logo }} style={styles.markLogo} resizeMode="contain" />
+                  ) : (
+                    <Text style={styles.markName} numberOfLines={1}>{i.name}</Text>
+                  )}
+                  <Text style={styles.markPrice} numberOfLines={1}>
+                    {nf(price / Math.max(1, parseInt(i.months ?? "", 10) || 1)) + "/mo"}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
         </View>
       </View>
     </>
@@ -3299,6 +3337,11 @@ const styles = StyleSheet.create({
   ends: { flexDirection: "row", justifyContent: "space-between" },
   end: { fontSize: 10, color: colors.inkSoft },
   row: { flexDirection: "row", alignItems: "center", gap: gap.item, borderWidth: 1, borderColor: colors.line, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 },
+  marks: { flexDirection: "row", gap: 6 },
+  mark: { flex: 1, alignItems: "center", justifyContent: "center", gap: 2, borderWidth: 1, borderColor: colors.line, borderRadius: 10, paddingHorizontal: 4, paddingVertical: 6, backgroundColor: colors.surface },
+  markLogo: { width: "100%", height: 16 },
+  markName: { fontSize: 9, fontWeight: "700", color: colors.inkMuted },
+  markPrice: { fontSize: 9, fontWeight: "600", color: colors.inkSoft },
   provider: { width: 56, height: 36, justifyContent: "center", alignItems: "center" },
   providerName: { width: 56, fontSize: 11, fontWeight: "600", color: colors.inkMuted },
   logo: { width: 56, height: 36 },

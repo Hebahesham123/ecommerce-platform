@@ -2128,12 +2128,31 @@ function PriceSlider({ block, items, ar, accent }: { block: Block; items: Item[]
   const cur = str(s.currency, "EGP");
   const radius = int(s.radius, 14);
 
+  /**
+   * Which plan is being read, and the rest as marks under it.
+   *
+   * Three providers written out in full is three of everything - three
+   * monthly figures, three terms, three sets of perks - and a shopper
+   * comparing them has to hold two in her head while she reads the third.
+   * One at a time, with the others as their own logos underneath, is the
+   * same information in a third of the height and asks nothing of her
+   * memory: tap a mark and it takes the place of the one above.
+   */
+  const [pick, setPick] = useState(0);
+  const at = Math.min(pick, Math.max(0, items.length - 1));
+  const lead = items[at];
+  const rest = items.filter((_, i) => i !== at);
+
+  /** What this plan costs a month at the price on the slider. */
+  const perMonth = (item: Item) =>
+    Math.round(price / Math.max(1, parseInt(str(item.months), 10) || 1));
+
   return (
     <section>
       {str(s.title) && <Heading title={str(s.title)} ar={ar} accent={accent} />}
       {str(s.subtitle) && <p className="text-[11px] text-slate-500">{str(s.subtitle)}</p>}
       <div
-        className="mt-2 border border-slate-200 p-3"
+        className="mt-2 border border-slate-200 p-2.5"
         style={{ background: str(s.cardBg, "#ffffff"), borderRadius: radius }}
       >
         {str(s.priceLabel) && (
@@ -2156,8 +2175,8 @@ function PriceSlider({ block, items, ar, accent }: { block: Block; items: Item[]
           <span>{cur} {nf(max)}</span>
         </div>
 
-        <div className="mt-3 flex flex-col" style={{ gap: "calc(var(--app-item-gap, 8px) * 0.67)" }}>
-          {items.map((item) => {
+        <div className="mt-2.5 flex flex-col" style={{ gap: "calc(var(--app-item-gap, 8px) * 0.67)" }}>
+          {[lead].filter(Boolean).map((item) => {
             const months = Math.max(1, parseInt(str(item.months), 10) || 1);
             return (
               <div
@@ -2220,6 +2239,48 @@ function PriceSlider({ block, items, ar, accent }: { block: Block; items: Item[]
               </div>
             );
           })}
+
+          {/* The others, as their own marks. Four to a row, which is as many
+              as a phone can hold without the logos going illegible. */}
+          {rest.length > 0 && (
+            <div
+              className="grid gap-1.5"
+              style={{
+                // Four to a row is the ceiling, not the target: two marks laid
+                // out in four columns sit in the left half of the card looking
+                // like two more are missing.
+                gridTemplateColumns: `repeat(${Math.min(4, rest.length)}, minmax(0, 1fr))`,
+              }}
+            >
+              {rest.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => setPick(items.indexOf(item))}
+                  className="flex flex-col items-center justify-center gap-0.5 rounded-lg border border-slate-200 bg-white px-1 py-1.5 transition hover:border-slate-300 active:scale-[0.98]"
+                  aria-label={str(item.name)}
+                >
+                  <span className="grid h-4 w-full place-items-center">
+                    {str(item.logo) ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={str(item.logo)}
+                        alt={str(item.name)}
+                        className="max-h-4 max-w-full object-contain"
+                      />
+                    ) : (
+                      <span className="w-full truncate text-center text-[9px] font-bold text-slate-700">
+                        {str(item.name)}
+                      </span>
+                    )}
+                  </span>
+                  <span className="block w-full truncate text-center text-[9px] font-semibold tabular-nums text-slate-500">
+                    {nf(perMonth(item))}
+                    <span className="font-medium">/{ar ? "ش" : "mo"}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </section>
