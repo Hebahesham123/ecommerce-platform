@@ -1898,6 +1898,10 @@ export type FreeShippingSettings = {
   stampTop?: string;
   stampBig?: string;
   stampBottom?: string;
+  bigWord?: string;
+  smallWord?: string;
+  wasLabel?: string;
+  wasPrice?: string;
   bg?: string;
   bg2?: string;
   inkColor?: string;
@@ -1958,6 +1962,42 @@ export function FreeShipping({
       </Animated.View>
     </View>
   );
+
+  // A ticket, torn off.
+  //
+  // A banner is a rectangle with words in it and the eye has learned to slide
+  // off rectangles. A ticket is an object - a stub, a perforation and a face
+  // value - and the eye stops on objects. The notches do the work: two circles
+  // in the page's own colour sitting half outside the card at each end of the
+  // tear, which is what turns a dashed line into something that was torn.
+  if (look === "ticket") {
+    const big = settings.bigWord || "FREE";
+    const small = settings.smallWord || "Delivery";
+    const was = settings.wasPrice || "";
+    return (
+      <Pressable disabled={!opens} onPress={go} style={[styles.ticket, { backgroundColor: settings.bg || "#2b1b10", borderRadius: r, minHeight: settings.height || undefined }]}>
+        <View style={styles.ticketBody}>
+          {settings.kicker ? (
+            <Text style={[styles.ticketKicker, { color: air }]}>{settings.kicker.toUpperCase()}</Text>
+          ) : null}
+          <View style={styles.ticketLine}>
+            <Text style={[styles.ticketBig, { fontFamily: theme.titleFont }]}>{big}</Text>
+            <Text style={styles.ticketSmall}>{small.toUpperCase()}</Text>
+          </View>
+          {settings.subtitle ? <Text style={styles.ticketSub}>{settings.subtitle}</Text> : null}
+        </View>
+        {was ? (
+          <View style={styles.stub}>
+            <View style={styles.tear} />
+            <View style={[styles.notch, styles.notchTop, { backgroundColor: colors.page }]} />
+            <View style={[styles.notch, styles.notchBottom, { backgroundColor: colors.page }]} />
+            <Text style={styles.stubLabel}>{(settings.wasLabel || "was").toUpperCase()}</Text>
+            <Text style={styles.stubPrice}>{was}</Text>
+          </View>
+        ) : null}
+      </Pressable>
+    );
+  }
 
   // The promise over a photograph: the shape everything else in this shop
   // takes, because the shop is a photographed one.
@@ -2061,6 +2101,21 @@ const styles = StyleSheet.create({
   photoSub: { marginTop: 2, fontSize: 12, color: "rgba(255,255,255,0.85)" },
   photoCta: { borderRadius: 999, backgroundColor: "rgba(255,255,255,0.95)", paddingHorizontal: 14, paddingVertical: 6 },
   photoCtaText: { fontSize: 11, fontWeight: "700", letterSpacing: 1, color: "#2b1b10" },
+  ticket: { flexDirection: "row", overflow: "hidden" },
+  ticketBody: { flex: 1, paddingHorizontal: 16, paddingVertical: 12 },
+  ticketKicker: { fontSize: 9, fontWeight: "800", letterSpacing: 2 },
+  ticketLine: { flexDirection: "row", alignItems: "flex-end", gap: 8, marginTop: 4 },
+  ticketBig: { fontSize: 30, fontWeight: "700", color: "#ffffff" },
+  ticketSmall: { fontSize: 12, fontWeight: "800", letterSpacing: 1.6, color: "rgba(255,255,255,0.9)", paddingBottom: 3 },
+  ticketSub: { marginTop: 6, fontSize: 11, color: "rgba(255,255,255,0.7)" },
+  stub: { width: 92, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
+  // React Native has no dashed border on one side, so the tear is a hairline.
+  tear: { position: "absolute", left: 0, top: 8, bottom: 8, width: 1, backgroundColor: "rgba(255,255,255,0.45)" },
+  notch: { position: "absolute", left: -8, width: 16, height: 16, borderRadius: 8 },
+  notchTop: { top: -8 },
+  notchBottom: { bottom: -8 },
+  stubLabel: { fontSize: 8, fontWeight: "800", letterSpacing: 1.6, color: "rgba(255,255,255,0.55)" },
+  stubPrice: { marginTop: 2, fontSize: 16, fontWeight: "700", color: "#ffffff", textDecorationLine: "line-through" },
   stripeClip: { height: 7, overflow: "hidden" },
   stripeRow: { flexDirection: "row", position: "absolute", left: -44, width: 900 },
   stripe: { width: 11, height: 20, marginTop: -6, transform: [{ rotate: "25deg" }] },

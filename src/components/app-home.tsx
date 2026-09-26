@@ -3169,6 +3169,115 @@ function FreeShipping({
     />
   );
 
+  // ---- a ticket, torn off ----------------------------------------------
+  //
+  // Seven ways of saying "free delivery" have gone past. What the best of them
+  // got right was pricing it - a struck-through cost is the one piece of
+  // commercial language everyone reads without being taught. What none of them
+  // had was a shape. A banner is a rectangle with words in it and the eye has
+  // learned to slide off rectangles; a ticket is an object, with a stub, a
+  // perforation and a face value, and the eye stops on objects.
+  //
+  // The notches are the whole trick: two circles in the page's own colour,
+  // half outside the card at each end of the perforation. They are what turns
+  // a dashed line into something that was torn.
+  if (look === "ticket") {
+    const big = str(s.bigWord, ar ? "مجاني" : "FREE");
+    const small = str(s.smallWord, ar ? "التوصيل" : "Delivery");
+    const was = str(s.wasPrice);
+    const body = str(s.bg) || "#2b1b10";
+    const edge = str(s.bg2) || accent;
+    const page = "var(--app-page, #f3ede5)";
+    return (
+      <section>
+        <button
+          onClick={() => opens && go(s)}
+          className={`relative flex w-full overflow-hidden text-start ${opens ? "" : "cursor-default"}`}
+          style={{
+            background: `linear-gradient(115deg, ${body} 0%, ${edge} 140%)`,
+            borderRadius: radius,
+            minHeight: height || undefined,
+          }}
+        >
+          {/* The ticket proper. */}
+          <span className={`min-w-0 flex-1 px-4 py-3 ${was ? "pe-3" : ""}`}>
+            {str(s.kicker) && (
+              <span
+                dir="auto"
+                className="block text-[9px] font-bold uppercase tracking-[0.22em]"
+                style={{ color: air }}
+              >
+                {str(s.kicker)}
+              </span>
+            )}
+            <span className="mt-1 flex items-end gap-2">
+              <span
+                dir="auto"
+                className="app-display text-[30px] font-bold leading-none text-white"
+              >
+                {big}
+              </span>
+              <span
+                dir="auto"
+                className="pb-[3px] text-[12px] font-bold uppercase tracking-[0.16em] text-white/90"
+              >
+                {small}
+              </span>
+            </span>
+            {str(s.subtitle) && (
+              <span dir="auto" className="mt-1.5 block text-[11px] text-white/70">
+                {str(s.subtitle)}
+              </span>
+            )}
+          </span>
+
+          {/* The stub, and what the ticket is worth. */}
+          {was && (
+            <span className="relative flex w-[92px] shrink-0 flex-col items-center justify-center px-2">
+              {/* The tear. */}
+              <span
+                aria-hidden
+                className="absolute inset-y-2 start-0 border-s border-dashed"
+                style={{ borderColor: "rgba(255,255,255,0.45)" }}
+              />
+              <span
+                aria-hidden
+                className="absolute -top-2 start-0 h-4 w-4 -translate-x-1/2 rounded-full rtl:translate-x-1/2"
+                style={{ background: page }}
+              />
+              <span
+                aria-hidden
+                className="absolute -bottom-2 start-0 h-4 w-4 -translate-x-1/2 rounded-full rtl:translate-x-1/2"
+                style={{ background: page }}
+              />
+              {/* A struck price only does its work if it can be read first.
+                  On a brown ticket the accent is too close to the ground to
+                  carry either the label or the line through it. */}
+              <span
+                dir="auto"
+                className="block text-[8px] font-bold uppercase tracking-[0.16em] text-white/55"
+              >
+                {str(s.wasLabel, ar ? "بدلاً من" : "was")}
+              </span>
+              <span
+                dir="auto"
+                className="mt-0.5 block text-[16px] font-bold text-white line-through decoration-2"
+                style={{ textDecorationColor: "rgba(255,255,255,0.85)" }}
+              >
+                {was}
+              </span>
+            </span>
+          )}
+        </button>
+        {str(s.note) && (
+          <p dir="auto" className="mt-1.5 text-center text-[10px] text-slate-500">
+            {str(s.note)}
+          </p>
+        )}
+      </section>
+    );
+  }
+
   // ---- priced at nothing ----------------------------------------------
   //
   // Six ways of saying "free delivery" went past without landing, and the

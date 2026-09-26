@@ -3518,6 +3518,7 @@ function BlockGroup({
         <>
           <Field label={ar ? "الشكل" : "Look"} type="select">
             <select value={text("style") || "photo"} onChange={(e) => onPatch({ style: e.target.value })} className={input}>
+              <option value="ticket">{ar ? "تذكرة توصيل" : "A delivery ticket"}</option>
               <option value="bold">{ar ? "سعر مشطوب (الأوضح)" : "Priced at nothing (boldest)"}</option>
               <option value="rule">{ar ? "سطر بين خطين (الأصغر)" : "A rule, not a banner (smallest)"}</option>
               <option value="photo">{ar ? "فوق صورة" : "Over a photograph"}</option>
