@@ -110,6 +110,57 @@ function useScrollLift(tierAccent: string | null) {
   return ref;
 }
 
+/**
+ * The menu cards, darkest to brightest.
+ *
+ * Five steps of the society card's own light, in the order they are read.
+ * The society panels above keep the single dark they share; this is only the
+ * menu, which is long enough to want somewhere to be going.
+ *
+ * The middle of any dark-to-light run is the one place where neither cream
+ * nor brown can be read against it, so the fourth step clears it rather than
+ * landing in it. Every one of these has a text colour that passes on it.
+ */
+const MENU_RAMP = ["#2A1A0D", "#453526", "#645443", "#A99B85", "#C9BDA8"];
+
+function rampStep(i: number, of: number): string {
+  if (of <= 1) return MENU_RAMP[0];
+  const x = (i / (of - 1)) * (MENU_RAMP.length - 1);
+  const k = Math.min(MENU_RAMP.length - 2, Math.floor(x));
+  return mixHex(MENU_RAMP[k], MENU_RAMP[k + 1], x - k);
+}
+
+/** Perceived brightness, for deciding what can be written on a colour. */
+function relativeLuminance(hex: string): number {
+  const chan = (k: number) => {
+    const v = parseInt(hex.slice(k, k + 2), 16) / 255;
+    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  };
+  return 0.2126 * chan(1) + 0.7152 * chan(3) + 0.0722 * chan(5);
+}
+
+type CardSkin = {
+  bg: string;
+  edge: string;
+  text: string;
+  muted: string;
+  accent: string;
+  hover: string;
+};
+
+function skinFor(bg: string): CardSkin {
+  // Not a fixed cut-off: the colour is asked which of the two it can carry.
+  const dark = relativeLuminance(bg) < 0.22;
+  return {
+    bg,
+    edge: mixHex(bg, dark ? "#F7EFE2" : "#2A1A0D", 0.16),
+    text: dark ? "#F7EFE2" : "#33251A",
+    muted: dark ? "#C0A98B" : "#6B5A45",
+    accent: dark ? "#E4BC74" : "#7A5320",
+    hover: dark ? "rgba(255,255,255,0.09)" : "rgba(42,26,13,0.08)",
+  };
+}
+
 /** What is written on a panel, at every level of light it reaches. */
 const ON_CARD = {
   text: "#F7EFE2",
@@ -224,6 +275,9 @@ export default function AccountApp({
   // wears the one she has reached, so the page quietly changes as she climbs.
   const tier = loyalty ? levelPalette(loyalty.levels, loyalty.progress.currentLevel) : null;
   const column = useScrollLift(tier?.accent ?? null);
+  // Every menu group, and the way out — the run the ramp is spread across.
+  const menuCards = nav.length + 1;
+  const signOut = skinFor(rampStep(nav.length, menuCards));
 
   return (
     <div className="min-h-screen bg-[#F2E8DA] text-[#3A291B]" dir={ar ? "rtl" : "ltr"}>
@@ -273,24 +327,29 @@ export default function AccountApp({
           {nav.map((g, gi) => {
             // Only the Society group is coloured. A page where every panel is
             // coloured says nothing; one panel that is says exactly one thing —
-            // which level she has reached. It takes the same light as the rest.
-            const t = g.society ? tier : null;
+            // which level she has reached. It is tinted at its own step of the
+            // ramp, so it brightens with its neighbours instead of stepping out
+            // of the run.
+            const base = rampStep(gi, menuCards);
+            const skin = skinFor(
+              g.society && tier ? mixHex(base, tier.accent, 0.3) : base,
+            );
             return (
               <div
                 key={gi}
-                className="rounded-2xl border p-1 shadow-sm transition-colors duration-200"
+                className="rounded-2xl border p-1 shadow-sm"
                 style={
                   {
-                    backgroundColor: t ? "var(--tier-bg)" : "var(--card-bg)",
-                    borderColor: t ? "var(--tier-edge)" : "var(--card-edge)",
-                    "--row-hover": ON_CARD.hover,
+                    backgroundColor: skin.bg,
+                    borderColor: skin.edge,
+                    "--row-hover": skin.hover,
                   } as React.CSSProperties
                 }
               >
                 {g.title && (
                   <div
                     className="px-2.5 pb-0.5 pt-1 text-[9px] font-semibold uppercase tracking-[0.2em]"
-                    style={{ color: ON_CARD.accent }}
+                    style={{ color: skin.accent }}
                   >
                     {g.title}
                   </div>
@@ -310,19 +369,22 @@ export default function AccountApp({
                       style={
                         on
                           ? {
-                              backgroundColor: t ? t.accent : undefined,
-                              backgroundImage: t
-                                ? undefined
-                                : "linear-gradient(135deg, #C08E5C, #7A4B27)",
+                              // The chosen row in the Society's group wears her
+                              // tier outright; everywhere else, the shop's bronze.
+                              backgroundColor: g.society && tier ? tier.accent : undefined,
+                              backgroundImage:
+                                g.society && tier
+                                  ? undefined
+                                  : "linear-gradient(135deg, #C08E5C, #7A4B27)",
                             }
-                          : { color: ON_CARD.text }
+                          : { color: skin.text }
                       }
                     >
                       <span className="flex-1">{ar ? arLbl : en}</span>
                       {navValue[key] ? (
                         <span
                           className="text-[10px]"
-                          style={{ color: on ? "#F1D9BE" : ON_CARD.muted }}
+                          style={{ color: on ? "#F1D9BE" : skin.muted }}
                         >
                           {navValue[key]}
                         </span>
@@ -334,14 +396,20 @@ export default function AccountApp({
             );
           })}
 
+          {/* The brightest of the five, and the end of the column. */}
           <div
-            className="rounded-2xl border p-1 shadow-sm transition-colors duration-200"
-            style={{ backgroundColor: "var(--card-bg)", borderColor: "var(--card-edge)" }}
+            className="rounded-2xl border p-1 shadow-sm"
+            style={{ backgroundColor: signOut.bg, borderColor: signOut.edge }}
           >
             <button
               onClick={() => start(async () => { await logout(); (window.top ?? window).location.assign("/shop"); })}
               className="flex w-full items-center gap-2.5 rounded-xl px-3 py-1 text-start text-sm leading-5 hover:bg-[var(--row-hover)]"
-              style={{ color: "#E9A79C", ["--row-hover" as string]: ON_CARD.hover } as React.CSSProperties}
+              style={
+                {
+                  color: relativeLuminance(signOut.bg) < 0.22 ? "#E9A79C" : "#8C3B31",
+                  "--row-hover": signOut.hover,
+                } as React.CSSProperties
+              }
             >
               {ar ? "تسجيل الخروج" : "Sign out"}
             </button>
