@@ -134,12 +134,35 @@ const MENU_RAMP = ["#2A1A0D", "#3B2916", "#4B3823", "#5D4B35", "#6E5D48"];
  * that flip fall below what can be read at all — a smooth wash of colour is
  * not worth two illegible rows.
  */
+/** The ramp sampled at any point between its ends. */
+function rampAt(t: number): string {
+  const x = Math.max(0, Math.min(1, t)) * (MENU_RAMP.length - 1);
+  const k = Math.min(MENU_RAMP.length - 2, Math.floor(x));
+  return mixHex(MENU_RAMP[k], MENU_RAMP[k + 1], x - k);
+}
+
+/**
+ * One card's share of the one gradient.
+ *
+ * Five cards each holding a flat colour showed five hard edges; one panel
+ * holding the whole gradient lost the cards. This is both: each card carries
+ * the stretch of the run that belongs to it, and because a card ends on the
+ * exact colour the next one starts from, the fall of light continues across
+ * the gaps as if the page were not in the way.
+ */
+function cardSlice(i: number, of: number): string {
+  const from = rampAt(i / of);
+  const to = rampAt((i + 1) / of);
+  return `linear-gradient(to bottom, ${from}, ${to})`;
+}
+
 const MENU_INK = {
   text: "#F9F3E9",
   muted: "rgba(249,243,233,0.85)",
   accent: "#F0DCB0",
   signout: "#FFD3C8",
   hover: "rgba(255,255,255,0.09)",
+  edge: "rgba(255,255,255,0.10)",
 };
 
 
@@ -257,6 +280,8 @@ export default function AccountApp({
   // wears the one she has reached, so the page quietly changes as she climbs.
   const tier = loyalty ? levelPalette(loyalty.levels, loyalty.progress.currentLevel) : null;
   const column = useScrollLift(tier?.accent ?? null);
+  // Every menu group, and the way out: the five the gradient is shared between.
+  const menuCards = nav.length + 1;
 
 
   return (
@@ -305,101 +330,103 @@ export default function AccountApp({
           {loyalty && <SocietyPanels ar={ar} loyalty={loyalty} />}
 
           {/*
-            The menu, as one piece.
+            Five cards, one gradient.
 
-            Five cards each holding a flat colour made five hard edges — the
-            eye reads the joins, not the run. So it is one surface with one
-            gradient poured down it, and the groups inside carry no colour of
-            their own at all: nothing to line up, nothing to step between, and
-            the fall of light does not know where the sections are.
-
-            The sections are still legible as sections — their headings and
-            their spacing do that, which is what was doing it anyway.
+            Each card carries the stretch of the run that belongs to it, and
+            ends on the exact colour the next one begins with — so the light
+            keeps falling across the gaps instead of stopping at every join,
+            which is what five flat colours did.
           */}
-          <div
-            className="overflow-hidden rounded-2xl shadow-sm ring-1 ring-inset"
-            style={{
-              background: `linear-gradient(to bottom, ${MENU_RAMP.join(", ")})`,
-              ["--tw-ring-color" as string]: "rgba(42,26,13,0.14)",
-            }}
-          >
-            {nav.map((g, gi) => {
-              return (
-                <div
-                  key={gi}
-                  className="p-1"
-                  style={
-                    {
-                      // The Society's group is a wash of her tier laid over the
-                      // gradient rather than a colour of its own, so the light
-                      // still runs through it unbroken.
-                      backgroundColor:
-                        g.society && tier ? withAlpha(tier.accent, 0.22) : undefined,
-                      "--row-hover": MENU_INK.hover,
-                    } as React.CSSProperties
-                  }
-                >
-                  {g.title && (
-                    <div
-                      className="px-2.5 pb-0.5 pt-2 text-[9px] font-semibold uppercase tracking-[0.2em]"
-                      style={{ color: MENU_INK.accent }}
-                    >
-                      {g.title}
-                    </div>
-                  )}
-                  {g.items.map(([key, en, arLbl], ri) => {
-                    const on = page === key;
-                    return (
-                      <Link
-                        key={key}
-                        href={hrefFor(key)}
-                        aria-current={on}
-                        className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-1 text-start text-sm leading-5 transition-colors ${
-                          on ? "text-[#FFF6EA]" : "hover:bg-[var(--row-hover)]"
-                        }`}
-                        style={
-                          on
-                            ? {
-                                // The chosen row in the Society's group wears her
-                                // tier outright; everywhere else, the shop's bronze.
-                                backgroundColor:
-                                  g.society && tier ? tier.accent : undefined,
-                                backgroundImage:
-                                  g.society && tier
-                                    ? undefined
-                                    : "linear-gradient(135deg, #C08E5C, #7A4B27)",
-                              }
-                            : { color: MENU_INK.text }
-                        }
-                      >
-                        <span className="flex-1">{ar ? arLbl : en}</span>
-                        {navValue[key] ? (
-                          <span
-                            className="text-[10px]"
-                            style={{ color: on ? "#F1D9BE" : MENU_INK.muted }}
-                          >
-                            {navValue[key]}
-                          </span>
-                        ) : null}
-                      </Link>
-                    );
-                  })}
-                </div>
-              );
-            })}
-
+          {nav.map((g, gi) => (
             <div
-              className="p-1"
-              style={{ ["--row-hover" as string]: MENU_INK.hover } as React.CSSProperties}
+              key={gi}
+              className="rounded-2xl border p-1 shadow-sm"
+              style={
+                {
+                  backgroundImage: cardSlice(gi, menuCards),
+                  borderColor: MENU_INK.edge,
+                  "--row-hover": MENU_INK.hover,
+                } as React.CSSProperties
+              }
             >
-              <button
-                onClick={() => start(async () => { await logout(); (window.top ?? window).location.assign("/shop"); })}
-                className="flex w-full items-center gap-2.5 rounded-xl px-3 py-1 text-start text-sm leading-5 hover:bg-[var(--row-hover)]"
-                style={{ color: MENU_INK.signout }}
+              {/*
+                The Society's card is a wash of her tier laid over its slice
+                rather than a colour of its own, so it keeps its place in the
+                run and still says which level she has reached.
+              */}
+              <div
+                className="rounded-xl"
+                style={{
+                  backgroundColor:
+                    g.society && tier ? withAlpha(tier.accent, 0.22) : undefined,
+                }}
               >
-                {ar ? "تسجيل الخروج" : "Sign out"}
-              </button>
+                {g.title && (
+                  <div
+                    className="px-2.5 pb-0.5 pt-1.5 text-[9px] font-semibold uppercase tracking-[0.2em]"
+                    style={{ color: MENU_INK.accent }}
+                  >
+                    {g.title}
+                  </div>
+                )}
+                {g.items.map(([key, en, arLbl]) => {
+                  const on = page === key;
+                  return (
+                    <Link
+                      key={key}
+                      href={hrefFor(key)}
+                      aria-current={on}
+                      className={`flex w-full items-center gap-2.5 rounded-xl px-3 py-1 text-start text-sm leading-5 transition-colors ${
+                        on ? "text-[#FFF6EA]" : "hover:bg-[var(--row-hover)]"
+                      }`}
+                      style={
+                        on
+                          ? {
+                              // The chosen row in the Society's card wears her
+                              // tier outright; everywhere else, the shop's bronze.
+                              backgroundColor: g.society && tier ? tier.accent : undefined,
+                              backgroundImage:
+                                g.society && tier
+                                  ? undefined
+                                  : "linear-gradient(135deg, #C08E5C, #7A4B27)",
+                            }
+                          : { color: MENU_INK.text }
+                      }
+                    >
+                      <span className="flex-1">{ar ? arLbl : en}</span>
+                      {navValue[key] ? (
+                        <span
+                          className="text-[10px]"
+                          style={{ color: on ? "#F1D9BE" : MENU_INK.muted }}
+                        >
+                          {navValue[key]}
+                        </span>
+                      ) : null}
+                    </Link>
+                  );
+                })}
+              </div>
             </div>
+          ))}
+
+          {/* The last of the five, and the end of the run. */}
+          <div
+            className="rounded-2xl border p-1 shadow-sm"
+            style={
+              {
+                backgroundImage: cardSlice(nav.length, menuCards),
+                borderColor: MENU_INK.edge,
+                "--row-hover": MENU_INK.hover,
+              } as React.CSSProperties
+            }
+          >
+            <button
+              onClick={() => start(async () => { await logout(); (window.top ?? window).location.assign("/shop"); })}
+              className="flex w-full items-center gap-2.5 rounded-xl px-3 py-1 text-start text-sm leading-5 hover:bg-[var(--row-hover)]"
+              style={{ color: MENU_INK.signout }}
+            >
+              {ar ? "تسجيل الخروج" : "Sign out"}
+            </button>
           </div>
         </aside>
 
