@@ -462,6 +462,36 @@ export function ThemeEditor() {
   }
 
   /**
+   * The section being carried, and the gap it is hovering over.
+   *
+   * Held as ids rather than positions because the list under the pointer is
+   * the same list being reordered - an index captured on lift is wrong the
+   * moment anything moves.
+   */
+  const [carrying, setCarrying] = useState<string | null>(null);
+  const [landing, setLanding] = useState<{ id: string; below: boolean } | null>(null);
+
+  /** Let go: put the carried section where the pointer says. */
+  function dropCarried() {
+    if (!carrying || !landing) return setCarrying(null);
+    setDraft((d) => {
+      if (!d) return d;
+      const from = d.blocks.findIndex((b) => b.id === carrying);
+      const onto = d.blocks.findIndex((b) => b.id === landing.id);
+      if (from < 0 || onto < 0 || from === onto) return d;
+      const blocks = [...d.blocks];
+      const [moved] = blocks.splice(from, 1);
+      // The target's index shifts down by one once the carried card is out of
+      // the list above it, which is exactly what "below" already means there.
+      const at = onto + (landing.below ? 1 : 0) - (from < onto ? 1 : 0);
+      blocks.splice(Math.max(0, Math.min(blocks.length, at)), 0, moved);
+      return { ...d, blocks };
+    });
+    setCarrying(null);
+    setLanding(null);
+  }
+
+  /**
    * Put a section at a given place in the order.
    *
    * Not a swap: taking it out and putting it back where it was asked for is
@@ -1272,6 +1302,22 @@ export function ThemeEditor() {
                 onPatch={(patch) => patchBlock(block.id, patch)}
                 onMove={(by) => move(block.id, by)}
                 onMoveTo={(to) => moveTo(block.id, to)}
+                drag={{
+                  lifted: carrying === block.id,
+                  landing:
+                    carrying && carrying !== block.id && landing?.id === block.id
+                      ? landing.below
+                        ? ("below" as const)
+                        : ("above" as const)
+                      : null,
+                  onLift: () => setCarrying(block.id),
+                  onOver: (below: boolean) => setLanding({ id: block.id, below }),
+                  onDrop: dropCarried,
+                  onEnd: () => {
+                    setCarrying(null);
+                    setLanding(null);
+                  },
+                }}
                 onRemove={() =>
                   setDraft((d) => (d ? { ...d, blocks: d.blocks.filter((b) => b.id !== block.id) } : d))
                 }
@@ -1744,6 +1790,7 @@ function Group({
   blockKey,
   onHover,
   actions,
+  drag,
   children,
 }: {
   id: string;
@@ -1756,6 +1803,23 @@ function Group({
   blockKey?: string;
   onHover?: (key: string | null) => void;
   actions?: React.ReactNode;
+  /**
+   * Everything needed to pick this card up and put it somewhere else.
+   *
+   * Only the home sections are orderable, so a group that leaves this out is
+   * simply not draggable rather than draggable and inert - a handle that does
+   * nothing is worse than no handle.
+   */
+  drag?: {
+    /** True while this one is the card being carried. */
+    lifted: boolean;
+    /** "above" or "below" when the carried card would land here. */
+    landing: "above" | "below" | null;
+    onLift: () => void;
+    onDrop: () => void;
+    onOver: (below: boolean) => void;
+    onEnd: () => void;
+  };
   children: React.ReactNode;
 }) {
   return (
@@ -1763,11 +1827,46 @@ function Group({
       data-block-key={blockKey}
       onMouseEnter={() => blockKey && onHover?.(blockKey)}
       onMouseLeave={() => onHover?.(null)}
+      onDragOver={
+        drag
+          ? (e) => {
+              e.preventDefault();
+              const r = e.currentTarget.getBoundingClientRect();
+              drag.onOver(e.clientY > r.top + r.height / 2);
+            }
+          : undefined
+      }
+      onDrop={
+        drag
+          ? (e) => {
+              e.preventDefault();
+              drag.onDrop();
+            }
+          : undefined
+      }
       className={`mb-1.5 rounded-xl border transition-colors ${
-        highlighted ? "border-violet-400 bg-violet-50/40 ring-1 ring-violet-300" : "border-line"
-      }`}
+        drag?.lifted ? "opacity-40 " : ""
+      }${drag?.landing === "above" ? "border-t-2 border-t-violet-500 " : ""}${
+        drag?.landing === "below" ? "border-b-2 border-b-violet-500 " : ""
+      }${highlighted ? "border-violet-400 bg-violet-50/40 ring-1 ring-violet-300" : "border-line"}`}
     >
       <div className="flex items-center gap-1 px-3 py-2">
+        {drag && (
+          // The grip. Only this is draggable, so a stray drag inside a field
+          // never picks the whole section up.
+          <span
+            draggable
+            onDragStart={(e) => {
+              e.dataTransfer.effectAllowed = "move";
+              drag.onLift();
+            }}
+            onDragEnd={drag.onEnd}
+            title="Drag to reorder"
+            className="-ms-1 shrink-0 cursor-grab px-1 py-1 text-ink-soft hover:text-ink active:cursor-grabbing"
+          >
+            <IcGrip className="h-3.5 w-3.5" />
+          </span>
+        )}
         <button onClick={onToggle} className="flex min-w-0 flex-1 items-center gap-2 text-start">
           <IcChevron
             className={`h-3 w-3 shrink-0 text-ink-soft transition-transform ${
@@ -1775,7 +1874,11 @@ function Group({
             } rtl:-scale-x-100`}
           />
           <span className="flex min-w-0 flex-1 flex-col">
-            <span className="truncate text-sm font-medium text-ink">{title}</span>
+            {/* The controls beside it cost the name some width, so the whole
+                of it is a hover away. */}
+            <span title={title} className="truncate text-sm font-medium text-ink">
+              {title}
+            </span>
             {subtitle && (
               <span className="truncate font-mono text-[10px] text-ink-soft">{subtitle}</span>
             )}
@@ -1795,6 +1898,20 @@ function Group({
       {open && <div className="border-t border-line px-3 pb-2">{children}</div>}
       <span className="hidden">{id}</span>
     </div>
+  );
+}
+
+/** Six dots: the one mark every list that can be reordered wears. */
+function IcGrip(p: { className?: string }) {
+  return (
+    <svg viewBox="0 0 16 16" fill="currentColor" {...p}>
+      <circle cx="6" cy="3.5" r="1.4" />
+      <circle cx="10" cy="3.5" r="1.4" />
+      <circle cx="6" cy="8" r="1.4" />
+      <circle cx="10" cy="8" r="1.4" />
+      <circle cx="6" cy="12.5" r="1.4" />
+      <circle cx="10" cy="12.5" r="1.4" />
+    </svg>
   );
 }
 
@@ -1902,6 +2019,7 @@ function BlockGroup({
   onMove,
   onMoveTo,
   onRemove,
+  drag,
 }: {
   block: Block;
   ar: boolean;
@@ -1926,6 +2044,15 @@ function BlockGroup({
   onMove: (by: 1 | -1) => void;
   onMoveTo: (to: number) => void;
   onRemove: () => void;
+  /** Handed straight to Group; see the note there. */
+  drag: {
+    lifted: boolean;
+    landing: "above" | "below" | null;
+    onLift: () => void;
+    onDrop: () => void;
+    onOver: (below: boolean) => void;
+    onEnd: () => void;
+  };
 }) {
   const meta = BLOCK_META[block.type];
   const s = block.settings ?? {};
@@ -1978,6 +2105,7 @@ function BlockGroup({
       }
       open={open}
       onToggle={onToggle}
+      drag={drag}
       codeHref={`/app/theme/code?file=components/${componentName(block.type)}.tsx`}
       actions={
         <>
@@ -1989,14 +2117,15 @@ function BlockGroup({
             value={index}
             onChange={(e) => onMoveTo(Number(e.target.value))}
             onClick={(e) => e.stopPropagation()}
-            title={ar ? "الترتيب" : "Position"}
+            title={ar ? "انقلي القسم إلى مكان" : "Move this section to a place"}
             aria-label={ar ? "ترتيب القسم" : "Section position"}
-            className="h-7 w-[3.4rem] shrink-0 rounded-lg border border-line bg-surface px-1 text-[11px] text-ink-muted"
+            className="h-7 w-[4.4rem] shrink-0 rounded-lg border border-line bg-surface px-1 text-[11px] font-medium text-ink-muted"
           >
             {order.map((o) => (
               <option key={o.id} value={o.at}>
-                {o.at + 1}
-                {o.at === index ? "" : " · " + o.label}
+                {o.at === index
+                  ? (ar ? "مكان " : "No. ") + (o.at + 1)
+                  : o.at + 1 + " · " + o.label}
               </option>
             ))}
           </select>
