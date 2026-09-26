@@ -18,6 +18,7 @@ import {
   IcRedo,
 } from "@/components/icons";
 import { AppHome, type HomeData } from "@/components/app-home";
+import { TabIcon } from "@/components/app-tab-icons";
 import { placementsOf, type Placement } from "@/lib/app-theme";
 import { CollectionPage, ProductPage, type ScreenHandlers } from "@/components/app-screens";
 import { AppStrip } from "@/components/app-strip";
@@ -1737,7 +1738,7 @@ export function ThemeEditor() {
                       style={{ color: t.key === activeTab ? draft.settings.accent : "#94a3b8" }}
                     >
                       <span className="relative text-base leading-none">
-                        {TAB_DEFAULTS[t.key].icon}
+                        <TabIcon tab={t.key} on={false} className="mx-auto h-[19px] w-[19px]" />
                         {t.key === "cart" && cartCount > 0 && (
                           <span
                             className="absolute -end-2 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full px-1 text-[9px] font-bold text-white"

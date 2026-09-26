@@ -1,5 +1,6 @@
 "use client";
 
+import { TabIcon } from "@/components/app-tab-icons";
 import {
   SCREEN_LABELS,
   TAB_DEFAULTS,
@@ -124,8 +125,8 @@ export function TabsPanel({
         {tabs.map((tab, i) => (
           <li key={tab.key} className="rounded-xl border border-line bg-surface-page p-2">
             <div className="flex items-center gap-1.5">
-              <span className="w-5 text-center text-base leading-none">
-                {TAB_DEFAULTS[tab.key].icon}
+              <span className="grid w-5 shrink-0 place-items-center text-ink-muted">
+                <TabIcon tab={tab.key} className="h-4 w-4" />
               </span>
               <input
                 value={tab.label}

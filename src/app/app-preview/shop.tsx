@@ -270,7 +270,9 @@ export function Shop({
       {/* The menu and search live in the header, as they do on the website, so
           the home screen starts flush under the shortcuts. Only the padding
           down the sides is the page's to give. */}
-      <div className={view.kind === "home" ? "px-4 pb-4" : "p-4"}>
+      <div
+        className={`${open ? "hidden " : ""}${view.kind === "home" ? "px-4 pb-4" : "p-4"}`}
+      >
       {homeErr ? (
         <Failed ar={ar} error={homeErr} onRetry={loadHome} />
       ) : !home ? (
@@ -361,6 +363,7 @@ export function Shop({
           onOpen={(p) => setOpen(p.id)}
         />
       )}
+      </div>
 
       <Sheet
         open={Boolean(menu)}
@@ -402,9 +405,12 @@ export function Shop({
         </Note>
       </Sheet>
 
-      {/* A product is a screen pushed over everything, as it is in the app. */}
+      {/* A product takes the place of the shop's content rather than covering
+          the phone. The header and the tab bar are the app's own chrome, and a
+          shopper wants the search, the wishlist and the bag from here as much
+          as from anywhere else. */}
       {open && home && (
-        <div className="absolute inset-0 z-20 overflow-y-auto bg-white">
+        <div className="bg-white">
           <ProductPage
             key={open}
             id={open}
@@ -429,7 +435,6 @@ export function Shop({
           />
         </div>
       )}
-      </div>
     </div>
   );
 }

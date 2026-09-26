@@ -23,6 +23,7 @@ import { payName, payNote, type PaymentMethod } from "@/lib/payments";
 import { checkoutRewards, nextReward, type CheckoutReward } from "@/lib/loyalty/checkout";
 import type { LoyaltySummary } from "@/lib/loyalty/types";
 import { AppHeader } from "@/components/app-header";
+import { TabIcon } from "@/components/app-tab-icons";
 import { AppLive } from "@/components/app-live";
 import { liveSessionsOf, liveSessionsFromLives } from "@/lib/app-theme";
 import type { NudgeCampaign } from "@/lib/nudge";
@@ -309,7 +310,6 @@ export function Preview({
     .map((t) => ({
       key: t.key as Tab,
       label: t.label || TAB_DEFAULTS[t.key][ar ? "ar" : "en"],
-      icon: TAB_DEFAULTS[t.key].icon,
     }));
 
   // A tab that has been hidden must not stay selected underneath it.
@@ -491,7 +491,7 @@ export function Preview({
                 className="relative flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[11px] font-semibold transition"
                 style={{ color: activeTab === tb.key ? accent : "#475569" }}
               >
-                <span className="text-lg leading-none">{tb.icon}</span>
+                <TabIcon tab={tb.key} on={activeTab === tb.key} className="h-[21px] w-[21px]" />
                 {tb.label}
                 {tb.key === "cart" && count > 0 && (
                   <span

@@ -547,12 +547,22 @@ export type Tab = { key: TabKey; label: string; visible: boolean };
 
 export const TAB_KEYS: TabKey[] = ["shop", "live", "cart", "orders", "account"];
 
+/**
+ * The five tabs.
+ *
+ * The icon is only read by the code generator now: the web preview and the
+ * editor draw the marks in components/app-tab-icons.tsx, which React Native
+ * cannot use without a drawing library. A quarter circle and a half square
+ * read as a font that failed to load rather than as a basket and a receipt,
+ * so the generated app uses the same emoji it already uses for delivery and
+ * payment rather than geometry nobody recognises.
+ */
 export const TAB_DEFAULTS: Record<TabKey, { ar: string; en: string; icon: string }> = {
-  shop: { ar: "المتجر", en: "Shop", icon: "◳" },
-  live: { ar: "البث", en: "Live", icon: "◉" },
-  cart: { ar: "السلة", en: "Cart", icon: "◔" },
-  orders: { ar: "طلباتي", en: "Orders", icon: "◨" },
-  account: { ar: "حسابي", en: "Account", icon: "◍" },
+  shop: { ar: "المتجر", en: "Shop", icon: "🛍️" },
+  live: { ar: "البث", en: "Live", icon: "🔴" },
+  cart: { ar: "السلة", en: "Cart", icon: "🛒" },
+  orders: { ar: "طلباتي", en: "Orders", icon: "🧾" },
+  account: { ar: "حسابي", en: "Account", icon: "👤" },
 };
 
 /**
