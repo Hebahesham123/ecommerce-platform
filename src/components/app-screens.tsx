@@ -659,6 +659,7 @@ export function ProductPage({
   ar,
   handlers = {},
   crumb,
+  extras,
 }: {
   id: string;
   settings: ScreenSettings["product"];
@@ -666,6 +667,11 @@ export function ProductPage({
   handlers?: ScreenHandlers;
   /** Where the shopper came from, for the breadcrumb. */
   crumb?: string;
+  /**
+   * Sections the merchant put on the product screen, drawn under everything
+   * this screen knows how to say for itself.
+   */
+  extras?: React.ReactNode;
 }) {
   const [product, setProduct] = useState<Product | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1183,6 +1189,8 @@ export function ProductPage({
           </div>
         </div>
       )}
+
+      {extras && <div className="px-4 pb-2">{extras}</div>}
 
       <div className="h-4" />
 

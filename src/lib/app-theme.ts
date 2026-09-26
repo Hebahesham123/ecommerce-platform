@@ -816,6 +816,32 @@ export const DEFAULT_SCREENS: ScreenSettings = {
  * afford to download. The merchant's own order decides which win; the rest are
  * a tap away under the category chips.
  */
+/**
+ * The screens a section can be put on.
+ *
+ * The home screen is what every section was written for, so a section that
+ * says nothing means home. Saying so per section rather than keeping three
+ * separate lists of sections is what stops the product screen's "you might
+ * also like" from being a different component that drifts from the home
+ * screen's - it is the same section, drawn somewhere else.
+ */
+export type Placement = "home" | "product" | "cart";
+export const PLACEMENTS: Placement[] = ["home", "product", "cart"];
+
+/** Which screens this section was put on. Home unless it says otherwise. */
+export function placementsOf(block: Block): Placement[] {
+  const raw = block.settings?.showOn;
+  const list = (typeof raw === "string" ? raw.split(",") : Array.isArray(raw) ? raw : [])
+    .map((v) => String(v).trim())
+    .filter((v): v is Placement => (PLACEMENTS as string[]).includes(v));
+  return list.length ? list : ["home"];
+}
+
+/** The sections a given screen should draw, in the merchant's order. */
+export function blocksFor(blocks: Block[], where: Placement): Block[] {
+  return blocks.filter((b) => placementsOf(b).includes(where));
+}
+
 export const ALL_ROWS_CAP = 8;
 
 export const DEFAULT_SETTINGS: AppSettings = {

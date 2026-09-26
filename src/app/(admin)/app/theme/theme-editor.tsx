@@ -18,6 +18,7 @@ import {
   IcRedo,
 } from "@/components/icons";
 import { AppHome, type HomeData } from "@/components/app-home";
+import { placementsOf, type Placement } from "@/lib/app-theme";
 import { CollectionPage, ProductPage, type ScreenHandlers } from "@/components/app-screens";
 import { AppStrip } from "@/components/app-strip";
 import { AppPageView } from "@/components/app-page";
@@ -1510,6 +1511,11 @@ export function ThemeEditor() {
                   screens={draft.screens}
                   accent={draft.settings.accent}
                   startAtCheckout={page === "checkout"}
+                  cartExtras={
+                    home ? (
+                      <AppHome theme={draft} data={home} ar={ar} where="cart" showPlaceholders />
+                    ) : null
+                  }
                   onNeedSignIn={() => setSignInOpen(true)}
                   onPlaced={() => {
                     setCart([]);
@@ -1626,6 +1632,11 @@ export function ThemeEditor() {
                     settings={draft.screens.product}
                     ar={ar}
                     crumb={stack.find((x) => x.kind === "collection")?.title}
+                    extras={
+                      home ? (
+                        <AppHome theme={draft} data={home} ar={ar} where="product" showPlaceholders />
+                      ) : null
+                    }
                     handlers={{
                       onBack: pop,
                       onOpenProduct: (id) => push({ kind: "product", id }),
@@ -2158,6 +2169,40 @@ function BlockGroup({
       <p className="pt-2 text-[11px] leading-relaxed text-ink-soft">
         {ar ? meta.hintAr : meta.hintEn}
       </p>
+
+      {/* Where it appears. A section is written once and can stand on any of
+          the three screens, which is what keeps the product screen's "you
+          might also like" from being a second component that drifts. */}
+      <Field label={ar ? "تظهر في" : "Shown on"} type="checkbox">
+        <span className="flex flex-wrap gap-3">
+          {(["home", "product", "cart"] as const).map((place) => {
+            const on = placementsOf(block).includes(place);
+            const word =
+              place === "home"
+                ? ar ? "الرئيسية" : "Home"
+                : place === "product"
+                  ? ar ? "صفحة المنتج" : "Product page"
+                  : ar ? "السلة" : "Cart";
+            return (
+              <label key={place} className="flex items-center gap-1.5 text-[12px] text-ink">
+                <input
+                  type="checkbox"
+                  checked={on}
+                  onChange={() => {
+                    const next = on
+                      ? placementsOf(block).filter((x) => x !== place)
+                      : [...placementsOf(block), place];
+                    // A section on no screen at all is a section nobody can
+                    // find, so the last one cannot be turned off.
+                    onPatch({ showOn: (next.length ? next : [place]).join(",") });
+                  }}
+                />
+                {word}
+              </label>
+            );
+          })}
+        </span>
+      </Field>
 
       {deadLinks.length > 0 && (
         <div className="mt-2 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-2.5">

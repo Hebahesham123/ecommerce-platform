@@ -1,5 +1,6 @@
 import {
   BLOCK_META,
+  blocksFor,
   itemsOf,
   liveSessionsOf,
   TAB_DEFAULTS,
@@ -4825,7 +4826,8 @@ function homeScreenFile(theme: AppTheme): GeneratedFile {
   // A section can carry a line above it and a colour under it. Resolved here,
   // at generation time, so the screen stays a plain list of sections rather
   // than every component having to learn about bands.
-  const rendered = theme.blocks
+  const sectionsOf = (blocks: typeof theme.blocks) =>
+    blocks
     .map((b) => {
       const set = b.settings ?? {};
       // The mystery box banner carries its line as a tag inside itself.
@@ -4853,6 +4855,65 @@ function homeScreenFile(theme: AppTheme): GeneratedFile {
         : section;
     })
     .join(`\n`);
+
+  const rendered = sectionsOf(blocksFor(theme.blocks, "home"));
+
+  /**
+   * The same sections, placed elsewhere.
+   *
+   * A merchant who puts "complete your look" beside the basket gets the
+   * section she already built, not a second one written to look like it -
+   * which is the only arrangement where the two cannot drift apart. Each one
+   * asks for the catalogue itself rather than being handed it, because the
+   * product screen and the basket have no reason to carry a home payload
+   * around for a section that may not be there.
+   */
+  const placed = ([
+    ["product", "ProductSections"],
+    ["cart", "CartSections"],
+  ] as const).map(([where, name]) => {
+    const blocks = blocksFor(theme.blocks, where);
+    if (!blocks.length) return { name, code: "", used: false };
+    const needsRecs = blocks.some((b) => b.type === "complete_look");
+    const recsBit = needsRecs
+      ? `
+  const [recs, setRecs] = useState<Recommendations | null>(null);
+  useEffect(() => {
+    if (!signedIn) return setRecs(null);
+    fetchRecommendations().then(setRecs).catch(() => setRecs(null));
+  }, [signedIn]);`
+      : "";
+    return {
+      name,
+      used: true,
+      code: `
+
+/** Sections the merchant placed on the ${where} screen. */
+export function ${name}({
+  onOpenCollection,
+  onOpenProduct,
+  onOpenScreen,
+  signedIn,
+}: {
+  onOpenCollection?: (handle: string) => void;
+  onOpenProduct?: (id: string) => void;
+  onOpenScreen?: (screen: string) => void;
+  signedIn?: boolean;
+}) {
+  const [data, setData] = useState<HomePayload | null>(null);
+  useEffect(() => {
+    fetchHome().then(setData).catch(() => setData(null));
+  }, []);${recsBit}
+  if (!data) return null;
+  return (
+    <View style={styles.placed}>
+${sectionsOf(blocks)}
+    </View>
+  );
+}`,
+    };
+  });
+  const placedCode = placed.map((p) => p.code).join("");
 
   return {
     path: "HomeScreen.tsx",
@@ -5028,8 +5089,9 @@ const styles = StyleSheet.create({
   wordmarkAccent: { color: colors.accent },
   headerIcon: { fontSize: 17, color: colors.ink },
   search: { height: 40, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, paddingHorizontal: 16, fontSize: 14, color: colors.ink },
+  placed: { gap: gap.section, paddingVertical: gap.section },
 });
-`,
+${placedCode}`,
   };
 }
 
@@ -5748,7 +5810,7 @@ export const say = (chosen: string, fallback: string) => chosen || fallback;
   };
 }
 
-function cartScreenFile(): GeneratedFile {
+function cartScreenFile(placed: boolean): GeneratedFile {
   return {
     path: "components/CartScreen.tsx",
     language: "tsx",
@@ -5758,7 +5820,7 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { colors, radius, spacing } from "../theme";
 import { screens, say } from "../screens";
 import { money } from "./Pieces";
-import type { Gift } from "../api";
+import type { Gift } from "../api";${placed ? '\nimport { CartSections } from "../HomeScreen";' : ""}
 
 export type CartLine = {
   itemId: string;
@@ -5780,6 +5842,9 @@ export function CartScreen({
   onChangeQuantity,
   onApplyCoupon,
   onCheckout,
+  onOpenCollection,
+  onOpenProduct,
+  onOpenScreen,
 }: {
   lines: CartLine[];
   subtotal: number;
@@ -5793,6 +5858,10 @@ export function CartScreen({
   onChangeQuantity: (itemId: string, quantity: number) => void;
   onApplyCoupon?: (code: string) => void;
   onCheckout: () => void;
+  /** Where a section placed on the basket can send her. */
+  onOpenCollection?: (handle: string) => void;
+  onOpenProduct?: (id: string) => void;
+  onOpenScreen?: (screen: string) => void;
 }) {
   const c = screens.cart;
   const [code, setCode] = useState("");
@@ -5839,7 +5908,7 @@ export function CartScreen({
           </View>
         ))}
 
-        {(gifts.length || giftNote) && onUseGift && !discount ? (
+${placed ? "        {/* What the merchant put beside the basket. */}\n        <CartSections onOpenCollection={onOpenCollection} onOpenProduct={onOpenProduct} onOpenScreen={onOpenScreen} signedIn />\n" : ""}        {(gifts.length || giftNote) && onUseGift && !discount ? (
           <View style={styles.gifts}>
             <Text style={styles.giftsTitle}>YOUR REWARDS</Text>
             {gifts.map((g) => (
@@ -6666,7 +6735,7 @@ const styles = StyleSheet.create({
 }
 
 // ---------------------------------------------------------- one product --
-function productScreenFile(): GeneratedFile {
+function productScreenFile(placed: boolean): GeneratedFile {
   return {
     path: "components/ProductScreen.tsx",
     language: "tsx",
@@ -6683,7 +6752,7 @@ import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View
 import { theme } from "../theme";
 import { screens, say } from "../screens";
 import { fetchProduct, searchProducts, type Card, type Product } from "../api";
-import { money } from "./Pieces";
+import { money } from "./Pieces";${placed ? '\nimport { ProductSections } from "../HomeScreen";' : ""}
 
 const NL = String.fromCharCode(10);
 
@@ -6718,6 +6787,7 @@ export function ProductScreen({
   id,
   onAdd,
   onBuyNow,
+  onOpenCollection,
   onOpenProduct,
   onOpenScreen,
 }: {
@@ -6725,6 +6795,8 @@ export function ProductScreen({
   onAdd: (variantId: string, product: Product) => void;
   /** Add, then go to the basket. */
   onBuyNow?: (variantId: string, product: Product, quantity: number) => void;
+  /** Where a section placed on this screen can send her. */
+  onOpenCollection?: (handle: string) => void;
   onOpenProduct?: (id: string) => void;
   onOpenScreen?: (screen: string) => void;
 }) {
@@ -7038,7 +7110,7 @@ export function ProductScreen({
             </ScrollView>
           </View>
         ) : null}
-      </ScrollView>
+${placed ? "\n        {/* What the merchant put on the product screen. */}\n        <ProductSections onOpenCollection={onOpenCollection} onOpenProduct={onOpenProduct} onOpenScreen={onOpenScreen} signedIn />\n" : ""}      </ScrollView>
 
       {/* the bar that stays */}
       <View style={styles.footer}>
@@ -7738,6 +7810,9 @@ export default function App() {
       onChangeQuantity={setQuantity}
       onApplyCoupon={screens.cart.showCoupon ? applyCoupon : undefined}
       onCheckout={checkout}
+      onOpenCollection={(handle) => push({ kind: "collection", handle })}
+      onOpenProduct={(id) => push({ kind: "product", id })}
+      onOpenScreen={goScreen}
     />
   ) : tab === "orders" ? (
     <OrdersScreen signedIn={Boolean(phone)} onSignIn={() => push({ kind: "signin" })} />
@@ -7830,9 +7905,9 @@ export function generateApp(theme: AppTheme, baseUrl: string): GeneratedFile[] {
     tabBarFile(theme),
     appFile(theme),
     collectionScreenFile(),
-    productScreenFile(),
+    productScreenFile(blocksFor(theme.blocks, "product").length > 0),
     searchScreenFile(),
-    cartScreenFile(),
+    cartScreenFile(blocksFor(theme.blocks, "cart").length > 0),
     checkoutScreenFile(),
     accountScreenFile(),
     ordersScreenFile(),

@@ -412,6 +412,20 @@ export function Shop({
             ar={ar}
             crumb={view.kind === "collection" ? view.title : undefined}
             handlers={{ ...screenHandlers, onBack: () => setOpen(null) }}
+            extras={
+              <AppHome
+                theme={home.theme}
+                data={home}
+                ar={ar}
+                where="product"
+                handlers={{
+                  onOpenCollection: (handle) => go({ type: "collection", handle }),
+                  onOpenProduct: (id) => setOpen(id),
+                  onOpenScreen: (screen) =>
+                    screen === "cart" || screen === "requests" ? onLeave(screen) : undefined,
+                }}
+              />
+            }
           />
         </div>
       )}

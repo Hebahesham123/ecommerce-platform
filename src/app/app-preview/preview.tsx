@@ -642,6 +642,7 @@ export function Cart({
   screens,
   accent,
   startAtCheckout = false,
+  cartExtras,
   onNeedSignIn,
   onPlaced,
 }: {
@@ -654,6 +655,8 @@ export function Cart({
   accent: string;
   /** The editor opens straight onto the checkout when that page is selected. */
   startAtCheckout?: boolean;
+  /** Sections the merchant put on the basket. */
+  cartExtras?: React.ReactNode;
   onNeedSignIn: () => void;
   onPlaced: () => void;
 }) {
@@ -835,7 +838,12 @@ export function Cart({
       )}
 
       {priced.lines.length === 0 ? (
-        <Empty>{screens.cart.emptyText || (ar ? "السلة فارغة" : "The basket is empty")}</Empty>
+        <>
+          <Empty>{screens.cart.emptyText || (ar ? "السلة فارغة" : "The basket is empty")}</Empty>
+          {/* An empty basket is the moment "you might also like" is worth
+              the most, so the sections stand here too. */}
+          {cartExtras}
+        </>
       ) : (
         <>
           <ul className="space-y-2">
@@ -944,6 +952,11 @@ export function Cart({
               )}
             </div>
           )}
+
+          {/* Whatever the merchant put on the basket: something else she
+              might like, a reason to come back, a line about delivery. The
+              same sections the home screen draws, drawn here. */}
+          {cartExtras}
 
           {screens.cart.showCoupon && (
           <div className="rounded-2xl border border-slate-200 bg-white p-3">

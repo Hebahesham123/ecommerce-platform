@@ -4,10 +4,12 @@ import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import {
   ALL_ROWS_CAP,
   DEFAULT_SETTINGS,
+  blocksFor,
   itemsOf,
   type AppTheme,
   type Block,
   type Item,
+  type Placement,
 } from "@/lib/app-theme";
 
 /**
@@ -4493,6 +4495,7 @@ export function AppHome({
   ar,
   handlers = {},
   showPlaceholders = false,
+  where = "home",
 }: {
   theme: AppTheme;
   data: HomeData;
@@ -4500,8 +4503,14 @@ export function AppHome({
   handlers?: HomeHandlers;
   /** The editor wants to see unfinished blocks; a shopper does not. */
   showPlaceholders?: boolean;
+  /**
+   * Which screen is being drawn. The product screen and the basket draw the
+   * sections put on them through the same renderer, so a section behaves the
+   * same wherever a merchant places it.
+   */
+  where?: Placement;
 }) {
-  const blocks = theme.blocks ?? [];
+  const blocks = blocksFor(theme.blocks ?? [], where);
   const cardStyle = useMemo(
     () => ({ nameWords: theme.settings.cardNameWords, photoBg: theme.settings.cardPhotoBg }),
     [theme.settings.cardNameWords, theme.settings.cardPhotoBg],
@@ -4530,7 +4539,7 @@ export function AppHome({
           </SectionBand>
         );
       })}
-      {blocks.length === 0 && (
+      {blocks.length === 0 && where === "home" && (
         <p className="py-12 text-center text-sm text-slate-400">
           {ar ? "الصفحة الرئيسية فارغة" : "The home screen is empty"}
         </p>
