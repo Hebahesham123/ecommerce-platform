@@ -484,8 +484,12 @@ export function Preview({
               <button
                 key={tb.key}
                 onClick={() => setTab(tb.key)}
-                className="relative flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium transition"
-                style={{ color: activeTab === tb.key ? accent : "#94a3b8" }}
+                // slate-400 on white is about 2.5:1 - under the 4.5:1 a label
+                // this size needs, and the reason four of the five tabs read as
+                // disabled. slate-600 clears it while still sitting behind the
+                // one that is selected.
+                className="relative flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[11px] font-semibold transition"
+                style={{ color: activeTab === tb.key ? accent : "#475569" }}
               >
                 <span className="text-lg leading-none">{tb.icon}</span>
                 {tb.label}

@@ -34,9 +34,10 @@ export type PaymentMethod = {
  * instalment providers on the strip of marks in its footer.
  *
  * The instalment ones are all arranged after the order, so each note says so.
- * The two that are not — a card and a wallet — are off until the merchant
- * turns them on, because whether this shop can take either is a fact about
- * the shop and not something a list of defaults gets to decide.
+ * Card on delivery is the courier's machine, not a gateway: nothing in this
+ * checkout charges anybody. InstaPay is a transfer the shop asks for after the
+ * order and waits for before dispatch. Each of the three has its own switch on
+ * the Payments screen for a shop that stops taking one of them.
  */
 export const DEFAULT_METHODS: PaymentMethod[] = [
   {
@@ -109,7 +110,16 @@ export const DEFAULT_METHODS: PaymentMethod[] = [
     logo: "",
     enabled: true,
   },
-  // Off until the Payments screen says otherwise. See CARD_ID / WALLET_ID.
+  {
+    id: "tru",
+    name: "Tru Finance",
+    nameAr: "ترو",
+    kind: "instalment",
+    note: "Instalments through Tru Finance. We confirm the plan with you before dispatch.",
+    noteAr: "تقسيط عبر ترو — نؤكد الخطة معك قبل الشحن.",
+    logo: "",
+    enabled: true,
+  },
   {
     id: "card",
     name: "Card on delivery",
@@ -118,23 +128,23 @@ export const DEFAULT_METHODS: PaymentMethod[] = [
     note: "Pay by card when your order arrives — the courier carries a machine.",
     noteAr: "تدفعين بالبطاقة عند وصول الطلب — المندوب معه ماكينة.",
     logo: "",
-    enabled: false,
+    enabled: true,
   },
   {
-    id: "wallet",
-    name: "InstaPay or Vodafone Cash",
-    nameAr: "إنستاباي أو فودافون كاش",
+    id: "instapay",
+    name: "InstaPay",
+    nameAr: "إنستاباي",
     kind: "wallet",
-    note: "We send you the number to transfer to once the order is placed.",
-    noteAr: "نرسل لك الرقم للتحويل عليه بعد تأكيد الطلب.",
+    note: "We send you the account to transfer to once the order is placed, and dispatch when it lands.",
+    noteAr: "نرسل لك الحساب للتحويل عليه بعد تأكيد الطلب، ونشحن فور وصوله.",
     logo: "",
-    enabled: false,
+    enabled: true,
   },
 ];
 
-/** The two defaults that wait for a switch on the Payments screen. */
+/** The two defaults their own switch on the Payments screen can withdraw. */
 const CARD_ID = "card";
-const WALLET_ID = "wallet";
+const WALLET_ID = "instapay";
 
 const str = (v: unknown, fallback = ""): string => {
   const s = typeof v === "string" ? v.trim() : "";
@@ -170,23 +180,16 @@ export function methodsFrom(raw: unknown): PaymentMethod[] {
       })
     : DEFAULT_METHODS;
 
-  // The toggles on the same screen still mean what they say. Card and wallet
-  // are the other way round from cash: off in the list, and switched on here,
-  // because the shop has no gateway of its own and neither is something to
-  // offer until the merchant says the shop can honour it. A merchant who
-  // writes their own rows is not second-guessed - the switches only reach the
-  // defaults.
-  const codOff = saved.cod_enabled === false || saved.cod_enabled === "false";
-  const on = (v: unknown) => v === true || v === "true";
+  // The three toggles on the same screen mean what they say, and they all
+  // work the same way round: the method is offered unless the merchant has
+  // switched it off. A merchant who has written their own rows is never
+  // second-guessed - the switches only reach the defaults.
+  const off = (v: unknown) => v === false || v === "false";
+  const codOff = off(saved.cod_enabled);
   const usingDefaults = rows.length === 0;
   return list
-    .map((m) =>
-      usingDefaults && m.id === CARD_ID
-        ? { ...m, enabled: on(saved.card_enabled) }
-        : usingDefaults && m.id === WALLET_ID
-          ? { ...m, enabled: on(saved.wallet_enabled) }
-          : m,
-    )
+    .filter((m) => !(usingDefaults && m.id === CARD_ID && off(saved.card_enabled)))
+    .filter((m) => !(usingDefaults && m.id === WALLET_ID && off(saved.wallet_enabled)))
     .filter((m) => m.enabled && m.name && !(codOff && m.kind === "cod"));
 }
 

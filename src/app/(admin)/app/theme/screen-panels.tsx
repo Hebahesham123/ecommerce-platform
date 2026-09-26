@@ -135,6 +135,30 @@ export function TabsPanel({
                 placeholder={ar ? TAB_DEFAULTS[tab.key].ar : TAB_DEFAULTS[tab.key].en}
                 className="h-8 min-w-0 flex-1 rounded-lg border border-line bg-surface px-2 text-xs text-ink outline-none focus:border-brand-600"
               />
+              {/* The same list of places the home sections carry, so a tab
+                  can be moved in one go rather than one step at a time. */}
+              <select
+                value={i}
+                onChange={(e) => {
+                  const to = Number(e.target.value);
+                  if (to === i) return;
+                  const next = [...tabs];
+                  const [moved] = next.splice(i, 1);
+                  next.splice(to, 0, moved);
+                  onChange(next);
+                }}
+                title={ar ? "انقلي التبويب إلى مكان" : "Move this tab to a place"}
+                aria-label={ar ? "ترتيب التبويب" : "Tab position"}
+                className="h-7 w-[4.2rem] shrink-0 rounded-lg border border-line bg-surface px-1 text-[11px] font-medium text-ink-muted"
+              >
+                {tabs.map((t, n) => (
+                  <option key={t.key} value={n}>
+                    {n === i
+                      ? (ar ? "مكان " : "No. ") + (n + 1)
+                      : n + 1 + " · " + (t.label || (ar ? TAB_DEFAULTS[t.key].ar : TAB_DEFAULTS[t.key].en))}
+                  </option>
+                ))}
+              </select>
               <button
                 onClick={() => move(i, -1)}
                 disabled={i === 0}

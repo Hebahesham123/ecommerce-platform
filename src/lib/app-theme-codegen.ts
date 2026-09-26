@@ -1453,7 +1453,7 @@ const styles = StyleSheet.create({
 });
 `,
 
-    hero: `import React, { useState } from "react";
+    hero: `import React, { useEffect, useState } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { colors, radius } from "../theme";
 import { openLink } from "./Pieces";
@@ -1471,7 +1471,11 @@ export type Slide = {
   productId?: string;
   screen?: string;
 };
-export type HeroSettings = { items?: Slide[] };
+export type HeroSettings = {
+  /** Seconds each slide is held before the next. Zero waits to be tapped. */
+  autoplaySeconds?: number;
+  items?: Slide[];
+};
 
 export function Hero({
   settings,
@@ -1488,6 +1492,22 @@ export function Hero({
 }) {
   const slides = settings.items ?? [];
   const [at, setAt] = useState(0);
+  const every = settings.autoplaySeconds === undefined ? 5 : settings.autoplaySeconds;
+
+  /**
+   * The slides move on by themselves.
+   *
+   * A second slide nobody swipes to is a second slide nobody sees, and the
+   * dots underneath are too small to read as an invitation. Picking one
+   * restarts the wait from that choice rather than yanking the carousel out
+   * from under a thumb.
+   */
+  useEffect(() => {
+    if (every <= 0 || slides.length < 2) return;
+    const t = setInterval(() => setAt((i) => (i + 1) % slides.length), every * 1000);
+    return () => clearInterval(t);
+  }, [every, slides.length, at]);
+
   if (!slides.length) return null;
   const slide = slides[Math.min(at, slides.length - 1)];
   // A slide with no picture of its own borrows the collection's.
@@ -5688,9 +5708,12 @@ const styles = StyleSheet.create({
   bar: { flexDirection: "row", borderTopWidth: 1, borderTopColor: colors.line, backgroundColor: colors.surface },
   tab: { flex: 1, alignItems: "center", paddingVertical: 10, gap: 2 },
   icon: { fontSize: 18, lineHeight: 20 },
-  label: { fontSize: 11, fontWeight: "500" },
+  label: { fontSize: 11, fontWeight: "600" },
   on: { color: colors.accent },
-  off: { color: colors.inkSoft },
+  // inkSoft on white is about 2.5:1 - under the 4.5:1 a label this size needs,
+  // and the reason four of the five tabs read as disabled. inkMuted clears it
+  // and still sits behind the one that is selected.
+  off: { color: colors.inkMuted },
   badge: { position: "absolute", top: 4, right: "26%", minWidth: 16, height: 16, borderRadius: radius.pill, backgroundColor: colors.accent, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
   badgeText: { fontSize: 10, fontWeight: "700", color: "#fff" },
 });

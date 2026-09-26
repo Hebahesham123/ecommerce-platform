@@ -1191,7 +1191,9 @@ export function newBlock(type: BlockType): Block {
   const id = `b-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
   const shape = ITEM_SHAPE[type];
   const settings: Record<string, Record<string, unknown>> = {
-    hero: { items: shape ? [shape.blank()] : [] },
+    // Seconds each slide is held. Zero waits to be told, which is what a
+    // one-slide hero does anyway.
+    hero: { autoplaySeconds: 5, items: shape ? [shape.blank()] : [] },
     promo_bar: { lead: "", rest: "", code: "" },
     collection_tabs: {
       kicker: "",

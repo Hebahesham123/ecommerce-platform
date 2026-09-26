@@ -3611,6 +3611,24 @@ function BlockGroup({
         </>
       )}
 
+      {block.type === "hero" && (
+        <Field label={ar ? "ثواني بين الشرائح" : "Seconds between slides"} type="range">
+          <input
+            type="number"
+            min={0}
+            max={20}
+            value={num0("autoplaySeconds", 5)}
+            onChange={(e) => onPatch({ autoplaySeconds: Number(e.target.value) })}
+            className={input}
+          />
+          <p className="mt-1 text-[11px] text-ink-soft">
+            {ar
+              ? "تتحرك الشرائح وحدها. صفر يوقفها فلا تتحرك إلا بالنقر."
+              : "The slides move on by themselves. Zero stops that, and they wait to be tapped."}
+          </p>
+        </Field>
+      )}
+
       {block.type === "moments" && (
         <>
           <Field label={ar ? "العنوان" : "Title"} type="text">

@@ -631,7 +631,16 @@ function BlockView({
     case "hero": {
       const slides = itemsOf(block);
       if (!slides.length) return <Placeholder ar={ar} label={ar ? "لا توجد شرائح" : "No slides yet"} />;
-      return <Hero slides={slides} accent={accent} onOpen={handlers.onOpenCollection} data={data} />;
+      return (
+        <Hero
+          slides={slides}
+          accent={accent}
+          onOpen={handlers.onOpenCollection}
+          data={data}
+          // Seconds between slides. Zero means it waits to be told.
+          every={int(s.autoplaySeconds, 5)}
+        />
+      );
     }
 
     case "promo_bar": {
@@ -1171,13 +1180,35 @@ function Hero({
   accent,
   data,
   onOpen,
+  every = 5,
 }: {
   slides: Item[];
   accent: string;
   data: HomeData;
   onOpen?: (handle: string, title: string) => void;
+  /** Seconds each slide is held before the next one. Zero stands still. */
+  every?: number;
 }) {
   const [at, setAt] = useState(0);
+
+  /**
+   * The slides move on by themselves.
+   *
+   * A second slide nobody scrolls to is a second slide nobody sees, and the
+   * dots underneath are too small to read as an invitation. It stops the
+   * moment a shopper picks a dot herself - the timer restarts from her
+   * choice rather than yanking the carousel out from under her - and it does
+   * not run at all for a single slide or for anyone who has asked their
+   * phone to stop animating things.
+   */
+  useEffect(() => {
+    if (every <= 0 || slides.length < 2) return;
+    if (typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      return;
+    }
+    const t = setInterval(() => setAt((i) => (i + 1) % slides.length), every * 1000);
+    return () => clearInterval(t);
+  }, [every, slides.length, at]);
   const slide = slides[Math.min(at, slides.length - 1)];
   const handle = str(slide.handle);
   const collection = data.collections.find((c) => c.handle === handle);
@@ -1508,7 +1539,12 @@ function LiveNow({
       {title && <Heading title={title} ar={ar} accent={accent} />}
 
       {people.length > 0 && (
-        <div className="-mx-4 mt-2 flex overflow-x-auto px-4 pb-1" style={{ gap: "var(--app-item-gap, 8px)" }}>
+        // No heading above it means no gap above it either: the row was
+        // leaving room for a title this section does not have.
+        <div
+          className={`-mx-4 flex overflow-x-auto px-4 pb-0.5 ${title ? "mt-1.5" : "mt-0"}`}
+          style={{ gap: "var(--app-item-gap, 8px)" }}
+        >
           {people.map((person) => {
             const borrowed = inherit(person, data);
             const name = str(person.name, borrowed.title);
@@ -1570,7 +1606,7 @@ function LiveNow({
                 </span>
                 {name && (
                   <span
-                    className="mt-2 w-full truncate text-center font-semibold text-slate-800"
+                    className="mt-1.5 w-full truncate text-center font-semibold leading-tight text-slate-800"
                     style={{ fontSize: nameSize }}
                   >
                     {name}
