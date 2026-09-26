@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
-import { isLight, levelPalette, withAlpha } from "@/lib/loyalty/level-colors";
+import { levelPalette, withAlpha } from "@/lib/loyalty/level-colors";
 import { useRouter } from "next/navigation";
 import { useI18n, egp } from "@/lib/i18n";
 import { say, type Copy } from "@/lib/page-copy";
@@ -36,75 +36,24 @@ export type PageKey =
 
 /** Each section is its own page. Overview lives at the account root. */
 /**
- * The account column, from the society card down to the way out.
+ * The account column, lit by scrolling.
  *
- * It used to be one dark card and then a stack of near-white ones, so the
- * page broke in half at the second panel. Now the whole column is one fall of
- * light: it starts at the card's own brown and lifts a step with every panel,
- * reaching the page's cream by the bottom. Nothing is a different material to
- * the thing above it — it is the same surface, further from the light.
+ * Every panel is the society card's own brown, all of them the same — it is
+ * one column of one material, not a stack of different boxes. What changes is
+ * the light on it: at the top of the page they sit in shadow, and as the page
+ * moves they come up into it together.
  *
- * Text is chosen from the panel it sits on rather than fixed, so the middle of
- * the ramp is as readable as either end.
+ * It stops at a mid brown rather than running on to cream. Past that point
+ * nothing written on these panels can be read against them, and a menu that
+ * turns illegible at the bottom of a scroll is a worse thing than a menu that
+ * only brightens so far.
  */
-/**
- * The steps themselves, chosen rather than calculated.
- *
- * A straight line from the card's brown to the page's cream runs through grey:
- * the warmth drains out of the middle and the panels halfway down look dirty
- * rather than lit. These are warm the whole way, so every panel is plainly the
- * same material as the one above it.
- */
-const RAMP = [
-  "#241609",
-  "#3C2614",
-  "#5A3D22",
-  "#8A6742",
-  "#B99772",
-  "#DCC7A8",
-  "#F0E4D2",
-  "#F7F1E6",
-];
+const LIFT_DARK = "#241609";
+const LIFT_BRIGHT = "#7C5330";
+/** How far the page must move before the panels are fully lit. */
+const LIFT_DISTANCE = 420;
 
-type Shade = {
-  bg: string;
-  border: string;
-  text: string;
-  muted: string;
-  accent: string;
-  hover: string;
-};
-
-/**
- * Where a panel stands on the ramp, given its place in the column.
- *
- * Not evenly: the middle of any dark-to-light run is the one place where
- * neither cream nor brown text can be read against it. So the column spends
- * its steps at the two ends and crosses that band between panels instead of
- * landing a panel in it. Every panel is still lighter than the one above.
- */
-function placeInRamp(t: number): number {
-  return t < 0.5 ? t * 0.78 : 0.64 + (t - 0.5) * 0.72;
-}
-
-function rampAt(t: number): string {
-  const x = Math.max(0, Math.min(1, t)) * (RAMP.length - 1);
-  const i = Math.min(RAMP.length - 2, Math.floor(x));
-  const f = x - i;
-  const a = RAMP[i];
-  const b = RAMP[i + 1];
-  const part = (from: string, to: string, k: number) =>
-    Math.round(
-      parseInt(from.slice(k, k + 2), 16) +
-        (parseInt(to.slice(k, k + 2), 16) - parseInt(from.slice(k, k + 2), 16)) * f,
-    )
-      .toString(16)
-      .padStart(2, "0");
-  return `#${part(a, b, 1)}${part(a, b, 3)}${part(a, b, 5)}`;
-}
-
-/** Two colours, mixed. */
-function blend(a: string, b: string, amount: number): string {
+function mixHex(a: string, b: string, amount: number): string {
   const part = (k: number) =>
     Math.round(
       parseInt(a.slice(k, k + 2), 16) +
@@ -116,40 +65,58 @@ function blend(a: string, b: string, amount: number): string {
 }
 
 /**
- * The Society's panel: its place in the ramp, wearing her tier's colour.
+ * The light, as five custom properties on one element.
  *
- * Lifting it out of the ramp altogether left a near-white block between two
- * brown ones, which read as a mistake rather than as emphasis. Pushing its own
- * step towards the tier colour keeps the fall of light unbroken and still says
- * which level she is on — which is the only thing that colour is there to say.
+ * Every panel reads them, so a frame of scrolling is a single write to the
+ * column rather than one per card — and React is not asked to render anything
+ * while a finger is moving.
  */
-function tintedShade(t: number, accent: string): Shade {
-  const bg = blend(rampAt(t), accent, 0.22);
-  const light = isLight(bg);
-  return {
-    bg,
-    border: blend(rampAt(Math.max(0, t - 0.1)), accent, 0.45),
-    text: light ? "#3C2A1A" : "#F6EDE0",
-    muted: light ? "#7E6A54" : "#CBB69A",
-    accent: light ? blend(accent, "#3A2614", 0.35) : blend(accent, "#FBF7F1", 0.55),
-    hover: light ? "rgba(60,42,26,0.09)" : "rgba(255,255,255,0.1)",
-  };
+function useScrollLift(tierAccent: string | null) {
+  const ref = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let frame = 0;
+
+    const paint = () => {
+      frame = 0;
+      const t = Math.min(1, Math.max(0, window.scrollY / LIFT_DISTANCE));
+      el.style.setProperty("--card-bg", mixHex(LIFT_DARK, LIFT_BRIGHT, t));
+      el.style.setProperty("--card-edge", mixHex(LIFT_DARK, LIFT_BRIGHT, Math.min(1, t + 0.22)));
+      if (tierAccent) {
+        // The Society's panel is lit the same way, in its own colour. It stops
+        // short of the pure tier colour: some of the five are light enough that
+        // the words on them would go.
+        el.style.setProperty("--tier-bg", mixHex(LIFT_DARK, tierAccent, 0.45 + 0.37 * t));
+        el.style.setProperty("--tier-edge", mixHex(LIFT_DARK, tierAccent, 0.62 + 0.38 * t));
+      }
+    };
+
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(paint);
+    };
+
+    paint();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [tierAccent]);
+
+  return ref;
 }
 
-function shadeAt(t: number): Shade {
-  const bg = rampAt(t);
-  const light = isLight(bg);
-  return {
-    bg,
-    // One step back up the ramp, so a panel keeps an edge against the page
-    // even once it has nearly become the page.
-    border: rampAt(Math.max(0, t - 0.1)),
-    text: light ? "#4A3524" : "#F6EDE0",
-    muted: light ? "#8A745C" : "#C6AE90",
-    accent: light ? "#A46C3C" : "#E4BC74",
-    hover: light ? "rgba(74,53,36,0.08)" : "rgba(255,255,255,0.09)",
-  };
-}
+/** What is written on a panel, at every level of light it reaches. */
+const ON_CARD = {
+  text: "#F7EFE2",
+  muted: "#C9AE8C",
+  accent: "#E4BC74",
+  hover: "rgba(255,255,255,0.09)",
+};
 function hrefFor(p: PageKey): string {
   return p === "overview" ? "/store/account" : `/store/account/${p}`;
 }
@@ -253,21 +220,33 @@ export default function AccountApp({
 
   const initials = (account.name || account.phone).trim().slice(0, 2).toUpperCase();
 
-  // The society panels only exist for a member, so a shop without loyalty
-  // does not leave two steps of the ramp unwalked.
-  const panelRows = loyalty ? 2 : 0;
-  const steps = panelRows + nav.length + 1;
-  const shade = (i: number) => shadeAt(placeInRamp((i + 1) / steps));
   // Every stage of the Society has its own colour. The Society's own menu
   // wears the one she has reached, so the page quietly changes as she climbs.
   const tier = loyalty ? levelPalette(loyalty.levels, loyalty.progress.currentLevel) : null;
+  const column = useScrollLift(tier?.accent ?? null);
 
   return (
     <div className="min-h-screen bg-[#F2E8DA] text-[#3A291B]" dir={ar ? "rtl" : "ltr"}>
       <div className="mx-auto grid max-w-[1180px] gap-6 px-4 py-8 lg:grid-cols-[260px_1fr]">
         {/* Sidebar / account menu. On mobile it IS the account home; a section
             page hides it and shows only that section (with a Menu link). */}
-        <aside className={`${section === "overview" ? "flex" : "hidden lg:flex"} flex-col gap-1.5`}>
+        <aside
+          ref={column}
+          className={`${section === "overview" ? "flex" : "hidden lg:flex"} flex-col gap-1.5`}
+          style={
+            {
+              // Where the light starts, and what the server renders.
+              "--card-bg": LIFT_DARK,
+              "--card-edge": "#3A2614",
+              ...(tier
+                ? {
+                    "--tier-bg": mixHex(LIFT_DARK, tier.accent, 0.45),
+                    "--tier-edge": mixHex(LIFT_DARK, tier.accent, 0.62),
+                  }
+                : {}),
+            } as React.CSSProperties
+          }
+        >
           {/*
             The society card, built like the Society screens themselves.
 
@@ -289,34 +268,29 @@ export default function AccountApp({
             onAvatar={setAvatar}
           />
 
-          {loyalty && <SocietyPanels ar={ar} loyalty={loyalty} tones={[shade(0), shade(1)]} />}
+          {loyalty && <SocietyPanels ar={ar} loyalty={loyalty} />}
 
           {nav.map((g, gi) => {
-            // Two panels of society above these, so the ramp carries on from
-            // where they left it rather than starting again.
             // Only the Society group is coloured. A page where every panel is
             // coloured says nothing; one panel that is says exactly one thing —
-            // which level she has reached. It keeps its place in the ramp.
-            const step = placeInRamp((gi + panelRows + 1) / steps);
-            const tone =
-              g.society && tier ? tintedShade(step, tier.accent) : shadeAt(step);
+            // which level she has reached. It takes the same light as the rest.
             const t = g.society ? tier : null;
             return (
               <div
                 key={gi}
-                className="rounded-2xl border p-1 shadow-sm"
+                className="rounded-2xl border p-1 shadow-sm transition-colors duration-200"
                 style={
                   {
-                    backgroundColor: tone.bg,
-                    borderColor: tone.border,
-                    "--row-hover": tone.hover,
+                    backgroundColor: t ? "var(--tier-bg)" : "var(--card-bg)",
+                    borderColor: t ? "var(--tier-edge)" : "var(--card-edge)",
+                    "--row-hover": ON_CARD.hover,
                   } as React.CSSProperties
                 }
               >
                 {g.title && (
                   <div
                     className="px-2.5 pb-0.5 pt-1 text-[9px] font-semibold uppercase tracking-[0.2em]"
-                    style={{ color: tone.accent }}
+                    style={{ color: ON_CARD.accent }}
                   >
                     {g.title}
                   </div>
@@ -341,14 +315,14 @@ export default function AccountApp({
                                 ? undefined
                                 : "linear-gradient(135deg, #C08E5C, #7A4B27)",
                             }
-                          : { color: tone.text }
+                          : { color: ON_CARD.text }
                       }
                     >
                       <span className="flex-1">{ar ? arLbl : en}</span>
                       {navValue[key] ? (
                         <span
                           className="text-[10px]"
-                          style={{ color: on ? "#F1D9BE" : tone.muted }}
+                          style={{ color: on ? "#F1D9BE" : ON_CARD.muted }}
                         >
                           {navValue[key]}
                         </span>
@@ -360,17 +334,14 @@ export default function AccountApp({
             );
           })}
 
-          {/* The last step of the ramp, and the palest. */}
           <div
-            className="rounded-2xl border p-1 shadow-sm"
-            style={{
-              backgroundColor: shade(panelRows + nav.length).bg,
-              borderColor: shade(panelRows + nav.length).border,
-            }}
+            className="rounded-2xl border p-1 shadow-sm transition-colors duration-200"
+            style={{ backgroundColor: "var(--card-bg)", borderColor: "var(--card-edge)" }}
           >
             <button
               onClick={() => start(async () => { await logout(); (window.top ?? window).location.assign("/shop"); })}
-              className="flex w-full items-center gap-2.5 rounded-xl px-3 py-1 text-start text-sm leading-5 text-[#9B4B41] hover:bg-[#F3E9DC]"
+              className="flex w-full items-center gap-2.5 rounded-xl px-3 py-1 text-start text-sm leading-5 hover:bg-[var(--row-hover)]"
+              style={{ color: "#E9A79C", ["--row-hover" as string]: ON_CARD.hover } as React.CSSProperties}
             >
               {ar ? "تسجيل الخروج" : "Sign out"}
             </button>
@@ -792,20 +763,18 @@ function AvatarPicker({
 function SocietyPanel({
   title,
   count,
-  tone,
   children,
 }: {
   title: string;
   /** Shown beside the title while shut, so it is worth opening. */
   count?: string | number;
-  tone: Shade;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   return (
     <div
-      className="overflow-hidden rounded-2xl border"
-      style={{ backgroundColor: tone.bg, borderColor: tone.border }}
+      className="overflow-hidden rounded-2xl border transition-colors duration-200"
+      style={{ backgroundColor: "var(--card-bg)", borderColor: "var(--card-edge)" }}
     >
       <button
         onClick={() => setOpen((v) => !v)}
@@ -814,12 +783,12 @@ function SocietyPanel({
       >
         <span
           className="min-w-0 flex-1 truncate text-[12px] font-semibold uppercase tracking-[0.12em]"
-          style={{ color: tone.text }}
+          style={{ color: ON_CARD.text }}
         >
           {title}
         </span>
         {count != null && count !== "" && (
-          <span className="shrink-0 text-[11px] font-semibold" style={{ color: tone.accent }}>
+          <span className="shrink-0 text-[11px] font-semibold" style={{ color: ON_CARD.accent }}>
             {count}
           </span>
         )}
@@ -827,7 +796,7 @@ function SocietyPanel({
           viewBox="0 0 24 24"
           className={`h-3.5 w-3.5 shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
           fill="none"
-          stroke={tone.accent}
+          stroke={ON_CARD.accent}
           strokeWidth="2.2"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -864,16 +833,7 @@ function SeeAll({ href, label }: { href: string; label: string }) {
  * column is too narrow to split in two, so they stack — the arrangement is
  * worth keeping, but not at the cost of four words to a line.
  */
-function SocietyPanels({
-  ar,
-  loyalty,
-  tones,
-}: {
-  ar: boolean;
-  loyalty: LoyaltySummary;
-  /** One for the tiers, one for the pair beneath them. */
-  tones: [Shade, Shade];
-}) {
+function SocietyPanels({ ar, loyalty }: { ar: boolean; loyalty: LoyaltySummary }) {
   const levels = loyalty.levels;
   const mySort = levels.find((l) => l.key === loyalty.progress.currentLevel)?.sort ?? 1;
   const perks = loyalty.privileges.filter((p) => p.unlocked);
@@ -891,7 +851,7 @@ function SocietyPanels({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <SocietyPanel title={ar ? "مستوياتي" : "My Tiers"} count={`${mySort}/${levels.length}`} tone={tones[0]}>
+      <SocietyPanel title={ar ? "مستوياتي" : "My Tiers"} count={`${mySort}/${levels.length}`}>
         <ul className="space-y-1">
           {levels.map((l) => {
             const active = l.key === loyalty.progress.currentLevel;
@@ -929,7 +889,7 @@ function SocietyPanels({
       </SocietyPanel>
 
       <div className="grid grid-cols-2 items-start gap-1.5 lg:grid-cols-1">
-        <SocietyPanel title={ar ? "مهام الولاء" : "Loyalty Tasks"} count={loyalty.tasks.length || ""} tone={tones[1]}>
+        <SocietyPanel title={ar ? "مهام الولاء" : "Loyalty Tasks"} count={loyalty.tasks.length || ""}>
           {loyalty.tasks.length === 0 ? (
             <p className="text-[11px] text-[#8C755A]">{ar ? "لا توجد مهام." : "Nothing listed yet."}</p>
           ) : (
@@ -952,7 +912,7 @@ function SocietyPanels({
           <SeeAll href={hrefFor("activity")} label={ar ? "الكل" : "See all"} />
         </SocietyPanel>
 
-        <SocietyPanel title={ar ? "المزايا المفتوحة" : "Unlocked Perks"} count={perks.length || ""} tone={tones[1]}>
+        <SocietyPanel title={ar ? "المزايا المفتوحة" : "Unlocked Perks"} count={perks.length || ""}>
           {perks.length === 0 ? (
             <p className="text-[11px] text-[#8C755A]">
               {ar ? "لم تُفتح مزايا بعد." : "None unlocked yet."}
