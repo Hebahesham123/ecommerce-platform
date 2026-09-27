@@ -541,11 +541,11 @@ export type AppSettings = {
  * one is a screen the app knows how to draw, and a tab pointing at a screen
  * that does not exist is a tab that crashes.
  */
-export type TabKey = "shop" | "live" | "cart" | "orders" | "account";
+export type TabKey = "shop" | "live" | "reels" | "cart" | "orders" | "account";
 
 export type Tab = { key: TabKey; label: string; visible: boolean };
 
-export const TAB_KEYS: TabKey[] = ["shop", "live", "cart", "orders", "account"];
+export const TAB_KEYS: TabKey[] = ["shop", "live", "reels", "cart", "orders", "account"];
 
 /**
  * The five tabs.
@@ -560,6 +560,7 @@ export const TAB_KEYS: TabKey[] = ["shop", "live", "cart", "orders", "account"];
 export const TAB_DEFAULTS: Record<TabKey, { ar: string; en: string; icon: string }> = {
   shop: { ar: "المتجر", en: "Shop", icon: "🛍️" },
   live: { ar: "البث", en: "Live", icon: "🔴" },
+  reels: { ar: "الريلز", en: "Reels", icon: "🎬" },
   cart: { ar: "السلة", en: "Cart", icon: "🛒" },
   orders: { ar: "طلباتي", en: "Orders", icon: "🧾" },
   account: { ar: "حسابي", en: "Account", icon: "👤" },

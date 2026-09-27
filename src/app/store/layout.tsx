@@ -105,6 +105,9 @@ function StoreHeader() {
   const links: [string, string, string][] = [
     ["/shop", "Home", "الرئيسية"],
     ["/store", "Shop all", "كل المنتجات"],
+    // The lives that were kept. A page nobody can reach from the shop is a
+    // page nobody watches, however good the feed is.
+    ["/store/reels", "Reels", "الريلز"],
     ["/store/account", "My Account", "حسابي"],
     ["/store/society", "Society", "سوسايتي"],
   ];

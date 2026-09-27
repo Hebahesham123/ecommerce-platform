@@ -1731,7 +1731,10 @@ export function ThemeEditor() {
                           setPage("home");
                           setStack([{ kind: "orders" }]);
                         } else {
-                          setPage(t.key === "shop" ? "home" : t.key);
+                          // Reels is one of the shop's own pages rather than
+                          // a screen assembled here, so there is nothing for
+                          // this editor to open for it.
+                          setPage(t.key === "shop" || t.key === "reels" ? "home" : t.key);
                         }
                       }}
                       className="flex flex-1 flex-col items-center gap-0.5 py-2 text-[10px] font-medium"

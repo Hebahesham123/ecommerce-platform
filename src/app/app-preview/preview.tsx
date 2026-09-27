@@ -54,7 +54,42 @@ import {
  * is on screen.
  */
 
-type Tab = "shop" | "live" | "cart" | "orders" | "account";
+type Tab = "shop" | "live" | "reels" | "cart" | "orders" | "account";
+
+/**
+ * The tabs that are the website, rather than a second version of it.
+ *
+ * The cart, the orders and the account existed twice — once on the site and
+ * once here — and two of anything drift. These open the shop's own pages, so
+ * there is one of each to build and one to fix. Reels is here for the same
+ * reason rather than a different one: it is a page, and it already exists.
+ *
+ * Shop is not in this list and should not be: it is the screen the merchant
+ * arranges in this very editor, and pointing it at the website would leave
+ * nothing to arrange. Live is not either — it was asked to be left alone.
+ */
+const WEB_TABS: Partial<Record<Tab, string>> = {
+  reels: "/store/reels",
+  cart: "/store/checkout",
+  orders: "/store/account/orders",
+  account: "/store/account",
+};
+
+/**
+ * One of the shop's own pages, inside the phone.
+ *
+ * The real app opens these in a web view; a frame is the same thing in a
+ * browser, which keeps the preview an honest picture of what ships.
+ */
+function WebTab({ src, title }: { src: string; title: string }) {
+  return (
+    <iframe
+      src={src}
+      title={title}
+      className="h-full w-full border-0 bg-white"
+    />
+  );
+}
 export type CartLine = { itemId: string; quantity: number };
 
 /**
@@ -439,42 +474,17 @@ export function Preview({
                 }}
               />
             )}
+            {activeTab === "reels" && (
+              <WebTab src={WEB_TABS.reels!} title={ar ? "الريلز" : "Reels"} />
+            )}
             {activeTab === "cart" && (
-              <Cart
-                ar={ar}
-                cart={cart}
-                setCart={setCart}
-                signedIn={signedIn}
-                phone={phone}
-                screens={screens}
-                accent={accent}
-                onNeedSignIn={() => setSheet("signin")}
-                onPlaced={() => {
-                  setCart([]);
-                  setTab("orders");
-                }}
-              />
+              <WebTab src={WEB_TABS.cart!} title={ar ? "السلة" : "Cart"} />
             )}
             {activeTab === "orders" && (
-              <div className="p-4">
-                <Orders ar={ar} signedIn={signedIn} />
-              </div>
+              <WebTab src={WEB_TABS.orders!} title={ar ? "طلباتي" : "Orders"} />
             )}
             {activeTab === "account" && (
-              <AccountTab
-                ar={ar}
-                signedIn={signedIn}
-                phone={phone}
-                screens={screens}
-                accent={accent}
-                onSignIn={() => setSheet("signin")}
-                onSignOut={() => {
-                  setToken(null);
-                  setPhone(null);
-                }}
-                onReturns={() => setSheet("returns")}
-                onEnquiry={() => setSheet("enquiry")}
-              />
+              <WebTab src={WEB_TABS.account!} title={ar ? "حسابي" : "Account"} />
             )}
           </div>
 

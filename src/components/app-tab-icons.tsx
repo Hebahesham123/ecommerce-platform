@@ -83,9 +83,20 @@ function IcAccount({ className, on }: Props) {
   );
 }
 
+/** A play mark inside a frame: a recording, not a broadcast. */
+function IcReels({ className, on }: Props) {
+  return (
+    <svg {...box} className={className}>
+      <rect x="3.4" y="4.6" width="17.2" height="14.8" rx="3.2" fill={on ? "currentColor" : "none"} fillOpacity={on ? 0.12 : 0} />
+      <path d="M10.4 9.6 15 12l-4.6 2.4Z" fill="currentColor" />
+    </svg>
+  );
+}
+
 const ICONS: Record<TabKey, (p: Props) => React.ReactElement> = {
   shop: IcShop,
   live: IcLive,
+  reels: IcReels,
   cart: IcCart,
   orders: IcOrders,
   account: IcAccount,
