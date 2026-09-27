@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useI18n, egp } from "@/lib/i18n";
 import type { LiveProduct, WatchableLive } from "@/lib/live";
 import { say, type Copy } from "@/lib/page-copy";
+import { useHlsSource } from "@/lib/use-hls";
 import { useCart } from "../cart";
 
 /**
@@ -76,7 +77,9 @@ export function Reels({
     const ahead = reels.slice(current, current + 3);
     for (const r of ahead) {
       const url = r.recordingUrl;
-      if (!url || warmed.current.has(url)) continue;
+      // A playlist needs no warming: it is already in pieces, and its player
+      // asks for the one it wants. This is for the whole files.
+      if (!url || /\.m3u8(\?|$)/i.test(url) || warmed.current.has(url)) continue;
       warmed.current.add(url);
       fetch(url, {
         headers: { Range: "bytes=0-2097151" },
@@ -169,6 +172,11 @@ function Reel({
   const [added, setAdded] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
 
+  // A playlist where there is one, the whole file where there is not. Only
+  // for reels near enough to be watched — the rest are not given a source at
+  // all, which is the cheapest possible way of not loading them.
+  useHlsSource(videoRef, reel.recordingUrl, active || warm);
+
   /**
    * Start the one being watched, and keep asking until it does.
    *
@@ -248,7 +256,6 @@ function Reel({
       {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
       <video
         ref={videoRef}
-        src={reel.recordingUrl ?? undefined}
         poster={reel.coverUrl ?? undefined}
         // The near ones in full; the rest just far enough to have their
         // connection made and their length known, which costs a few kilobytes

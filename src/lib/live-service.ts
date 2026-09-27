@@ -241,7 +241,7 @@ export async function getLive(id: string): Promise<Result<LiveStream>> {
 export async function listPublicLives(): Promise<Result<LiveStream[]>> {
   const all = await listLives();
   if (!all.ok) return all;
-  const lives = await healRecordings(all.data);
+  const lives = await healStreams(await healRecordings(all.data));
   const rank = (s: LiveStream) =>
     s.status === "live"
       ? 0
@@ -270,7 +270,7 @@ export async function listPublicLives(): Promise<Result<LiveStream[]>> {
 export async function listReplays(limit = 50): Promise<Result<LiveStream[]>> {
   const all = await listLives();
   if (!all.ok) return all;
-  const healed = await healRecordings(all.data, 8);
+  const healed = await healStreams(await healRecordings(all.data, 8), 6);
   const replays = healed
     .filter((l) => l.status === "ended" && l.replayEnabled && Boolean(l.recordingUrl))
     .sort((a, b) =>
@@ -331,7 +331,7 @@ export async function getPublicLive(id: string): Promise<Result<LiveStream>> {
   const res = await getLive(id);
   if (!res.ok) return res;
   const [stocked, watching] = await Promise.all([
-    withAvailability(await healRecording(res.data)),
+    withAvailability(await healStream(await healRecording(res.data))),
     res.data.status === "live" ? watchingNow(id) : Promise.resolve(0),
   ]);
   return { ok: true, data: { ...stocked, watching } };
@@ -625,6 +625,129 @@ export async function reportViewers(id: string, viewers: number): Promise<void> 
   }
 }
 
+// ---- Making a replay streamable --------------------------------------------
+
+/**
+ * Hand a finished recording to the provider to be cut into segments.
+ *
+ * The provider fetches it from its own public URL rather than us reading a
+ * few hundred megabytes into a serverless function and posting them back —
+ * the file is already somewhere it can reach, so the only thing that has to
+ * travel is the address.
+ *
+ * Returns the provider's id for the copy. Nothing about the original
+ * changes, so a replay goes on playing from the file for the minutes this
+ * takes.
+ */
+async function beginTranscode(url: string, name: string): Promise<Result<string>> {
+  if (!providerConfigured()) return { ok: false, error: "provider_not_configured" };
+  try {
+    const res = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT}/stream/copy`,
+      {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${CF_TOKEN}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ url, meta: { name } }),
+      },
+    );
+    const body = (await res.json()) as {
+      success?: boolean;
+      errors?: { message?: string }[];
+      result?: { uid?: string };
+    };
+    if (!res.ok || !body.success || !body.result?.uid) {
+      return { ok: false, error: body.errors?.[0]?.message || `cloudflare_${res.status}` };
+    }
+    return { ok: true, data: String(body.result.uid) };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+/** The playlist for a copy, once the provider has finished with it. */
+async function transcodedPlaylist(uid: string): Promise<string | null> {
+  if (!providerConfigured()) return null;
+  try {
+    const res = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT}/stream/${uid}`,
+      { headers: { authorization: `Bearer ${CF_TOKEN}` } },
+    );
+    const body = (await res.json()) as {
+      success?: boolean;
+      result?: { readyToStream?: boolean; playback?: { hls?: string } };
+    };
+    if (!res.ok || !body.success) return null;
+    const r = body.result;
+    if (!r?.readyToStream) return null;
+    if (r.playback?.hls) return r.playback.hls;
+    const code = customerCodeFrom(r.playback?.hls) || CF_CUSTOMER_CODE;
+    return code
+      ? `https://customer-${code}.cloudflarestream.com/${uid}/manifest/video.m3u8`
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Move one replay along: start the copy, or collect it.
+ *
+ * Called wherever a live is read, so nothing has to be pressed and no job
+ * has to be scheduled. Every step is at most one request, and once the
+ * playlist is stored there is nothing left to do and this costs nothing.
+ */
+async function healStream(live: LiveStream): Promise<LiveStream> {
+  const wanted =
+    live.status === "ended" &&
+    live.replayEnabled &&
+    Boolean(live.recordingUrl) &&
+    !live.streamUrl &&
+    providerConfigured();
+  if (!wanted) return live;
+
+  // Only ours: a recording already served by the provider is already
+  // segmented, and asking it to copy its own output would be absurd.
+  if (/cloudflarestream\.com/i.test(live.recordingUrl ?? "")) return live;
+
+  try {
+    const supabase = getServerSupabase();
+    if (!live.streamUid) {
+      const started = await beginTranscode(live.recordingUrl!, live.title);
+      if (!started.ok) return live;
+      await supabase.from(TABLE).update({ stream_uid: started.data }).eq("id", live.id);
+      return { ...live, streamUid: started.data };
+    }
+    const playlist = await transcodedPlaylist(live.streamUid);
+    if (!playlist) return live;
+    await supabase.from(TABLE).update({ stream_url: playlist }).eq("id", live.id);
+    return { ...live, streamUrl: playlist };
+  } catch {
+    return live;
+  }
+}
+
+/** The same for a list, and only for the few that could want it. */
+async function healStreams(lives: LiveStream[], max = 4): Promise<LiveStream[]> {
+  if (!providerConfigured()) return lives;
+  const pending = lives.filter(
+    (l) =>
+      l.status === "ended" && l.replayEnabled && l.recordingUrl && !l.streamUrl,
+  );
+  if (!pending.length) return lives;
+  const attempt = pending.slice(0, max);
+  const done = new Map<string, LiveStream>();
+  await Promise.all(
+    attempt.map(async (l) => {
+      const next = await healStream(l);
+      if (next !== l) done.set(l.id, next);
+    }),
+  );
+  return done.size ? lives.map((l) => done.get(l.id) ?? l) : lives;
+}
+
 // ---- Recording it ourselves -------------------------------------------------
 
 /**
@@ -721,9 +844,19 @@ export async function deleteRecording(liveId: string): Promise<Result<LiveStream
       }
     }
 
+    // And the segmented copy of it. A replay deleted from storage while its
+    // transcode stayed behind would be invisible and still billed — which is
+    // the one outcome nobody would ever notice.
+    if (current.data.streamUid && providerConfigured()) {
+      await fetch(
+        `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT}/stream/${current.data.streamUid}`,
+        { method: "DELETE", headers: { authorization: `Bearer ${CF_TOKEN}` } },
+      ).catch(() => {});
+    }
+
     const { data, error } = await supabase
       .from(TABLE)
-      .update({ recording_url: null })
+      .update({ recording_url: null, stream_uid: null, stream_url: null })
       .eq("id", liveId)
       .select(SELECT)
       .single();

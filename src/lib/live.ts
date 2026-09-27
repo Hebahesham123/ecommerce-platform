@@ -44,6 +44,14 @@ export type LiveStream = {
   whepUrl: string | null;
   playbackUrl: string | null;
   recordingUrl: string | null;
+  /** The provider's handle for the transcoded replay. Dashboard only. */
+  streamUid: string | null;
+  /**
+   * The replay as an adaptive playlist: a few seconds at a time, at a
+   * quality that follows the connection. Null until the transcode is done,
+   * and the whole file plays until then.
+   */
+  streamUrl: string | null;
   replayEnabled: boolean;
   peakViewers: number;
   /** Watching right now, when the caller asked for a live one. */
@@ -144,6 +152,8 @@ export function mapLiveStream(r: Row): LiveStream {
     whepUrl: s(r.whep_url),
     playbackUrl: s(r.playback_url),
     recordingUrl: s(r.recording_url),
+    streamUid: s(r.stream_uid),
+    streamUrl: s(r.stream_url),
     replayEnabled: r.replay_enabled == null ? true : Boolean(r.replay_enabled),
     peakViewers: n(r.peak_viewers),
     notes: s(r.notes),
@@ -217,7 +227,10 @@ export function publicLive(s: LiveStream): PublicLive {
     // Only hand over a URL the viewer may actually play right now.
     playbackUrl: watchable === "live" ? s.playbackUrl : null,
     whepUrl: watchable === "live" ? s.whepUrl : null,
-    recordingUrl: watchable === "replay" ? s.recordingUrl : null,
+    // The playlist if it is ready, the original file if it is not. A replay
+    // is never unwatchable while it converts.
+    recordingUrl:
+      watchable === "replay" ? (s.streamUrl || s.recordingUrl) : null,
     peakViewers: s.peakViewers,
     watching: s.watching ?? 0,
     href: `/store/live/${s.id}`,
