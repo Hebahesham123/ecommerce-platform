@@ -63,10 +63,10 @@ export function BottomNav() {
         <div className="fixed inset-0 z-50 lg:hidden">
           <button
             aria-label={t("nav_more")}
-            className="absolute inset-0 bg-ink/40"
+            className="absolute inset-0 z-0 bg-ink/40"
             onClick={() => setOpen(false)}
           />
-          <div className="absolute inset-x-0 bottom-0 max-h-[82%] overflow-y-auto rounded-t-3xl border-t border-line bg-surface pb-[env(safe-area-inset-bottom)]">
+          <div className="absolute inset-x-0 bottom-0 z-10 max-h-[82%] overflow-y-auto overscroll-contain rounded-t-3xl border-t border-line bg-surface pb-[env(safe-area-inset-bottom)]">
             <div className="sticky top-0 flex justify-center bg-surface py-2">
               <span className="h-1 w-10 rounded-full bg-line" />
             </div>

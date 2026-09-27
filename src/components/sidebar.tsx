@@ -172,13 +172,16 @@ function useIsActive(href: string): boolean {
   return !ALL_HREFS.some((other) => other !== href && matches(other) && other.length > href.length);
 }
 
-function NavLink({ item }: { item: Item }) {
+function NavLink({ item, onNavigate }: { item: Item; onNavigate?: () => void }) {
   const { t } = useI18n();
   const active = useIsActive(item.href);
   const Icon = item.icon;
   return (
     <Link
       href={item.href}
+      onClick={onNavigate}
+      // No tap delay, and no double-tap zoom stealing the second tap.
+      style={{ touchAction: "manipulation" }}
       className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
         active
           ? "bg-brand-50 text-brand-700"
@@ -200,7 +203,7 @@ function NavLink({ item }: { item: Item }) {
   );
 }
 
-function CollapsibleGroup({ group }: { group: Group }) {
+function CollapsibleGroup({ group, onNavigate }: { group: Group; onNavigate?: () => void }) {
   const { t } = useI18n();
   const pathname = usePathname();
   const hasActive = group.items.some(
@@ -219,6 +222,7 @@ function CollapsibleGroup({ group }: { group: Group }) {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
+        style={{ touchAction: "manipulation" }}
         className="flex w-full items-center gap-1.5 px-3 pb-1 pt-0.5 text-[11px] font-semibold uppercase tracking-wide text-ink-soft transition-colors hover:text-ink-muted"
       >
         <IcChevron
@@ -229,7 +233,7 @@ function CollapsibleGroup({ group }: { group: Group }) {
       {expanded && (
         <div className="space-y-1">
           {group.items.map((i) => (
-            <NavLink key={i.href} item={i} />
+            <NavLink key={i.href} item={i} onNavigate={onNavigate} />
           ))}
         </div>
       )}
@@ -241,9 +245,13 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const { t } = useI18n();
   const sidebarPath = usePathname();
   const pathnameSettingsActive = sidebarPath.startsWith("/settings");
+  // Closing is the links' job. Hanging it on the drawer's own body meant
+  // every touch inside it — a scroll that ended in a tap, a press on a group
+  // heading — tore the drawer out from under the finger, and on a phone the
+  // tap that was meant for a link went with it.
   return (
-    <div className="flex h-full flex-col gap-5 px-3 py-5" onClick={onNavigate}>
-      <Link href="/dashboard" className="flex items-center gap-2.5 px-2">
+    <div className="flex h-full flex-col gap-5 px-3 py-5">
+      <Link href="/dashboard" onClick={onNavigate} className="flex items-center gap-2.5 px-2">
         <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand text-base font-bold text-white">
           B
         </div>
@@ -255,12 +263,14 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
 
       <nav className="flex flex-1 flex-col gap-5 overflow-y-auto">
         {groups.map((g) => (
-          <CollapsibleGroup key={g.id} group={g} />
+          <CollapsibleGroup key={g.id} group={g} onNavigate={onNavigate} />
         ))}
       </nav>
 
       <Link
         href="/settings"
+        onClick={onNavigate}
+        style={{ touchAction: "manipulation" }}
         className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors ${
           pathnameSettingsActive ? "bg-brand-50 text-brand-700" : "text-ink-muted hover:bg-surface-hover hover:text-ink"
         }`}

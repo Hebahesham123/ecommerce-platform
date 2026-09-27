@@ -101,10 +101,13 @@ export function Topbar() {
       {mobileOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
           <div
-            className="absolute inset-0 bg-ink/40 backdrop-blur-sm"
+            className="absolute inset-0 z-0 bg-ink/40 backdrop-blur-sm"
             onClick={() => setMobileOpen(false)}
           />
-          <div className="absolute inset-y-0 start-0 w-72 bg-surface shadow-pop">
+          {/* Above its own backdrop by number, not by the order it happens
+              to be written in — the backdrop blurs, which makes it a layer of
+              its own, and a layer is a thing a tap can land on. */}
+          <div className="absolute inset-y-0 start-0 z-10 w-72 bg-surface shadow-pop">
             <Sidebar onNavigate={() => setMobileOpen(false)} />
           </div>
         </div>
