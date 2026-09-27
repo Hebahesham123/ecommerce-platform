@@ -31,6 +31,7 @@ export function Reels({
   const { count } = useCart();
 
   const [current, setCurrent] = useState(0);
+  const warmed = useRef(new Set<string>());
   const [muted, setMuted] = useState(true);
   const trackRef = useRef<HTMLDivElement | null>(null);
 
@@ -58,6 +59,39 @@ export function Reels({
     return () => observer.disconnect();
   }, []);
 
+  /**
+   * Fetch the front of the next few videos before they are asked for.
+   *
+   * This is the difference between a feed that plays on the swipe and one
+   * that starts thinking about it then. A video element will not do this on
+   * its own without also deciding to download the whole file, so the first
+   * couple of megabytes are pulled by hand — enough for the opening seconds —
+   * and the browser and the CDN both keep them. By the time the reel is on
+   * screen the bytes it needs have already arrived.
+   *
+   * Two ahead, once each. Further than that is a shopper's data spent on
+   * videos she will never reach.
+   */
+  useEffect(() => {
+    const ahead = reels.slice(current, current + 3);
+    for (const r of ahead) {
+      const url = r.recordingUrl;
+      if (!url || warmed.current.has(url)) continue;
+      warmed.current.add(url);
+      fetch(url, {
+        headers: { Range: "bytes=0-2097151" },
+        credentials: "omit",
+      })
+        // Read it to the end so it lands in the cache rather than being
+        // abandoned half-received.
+        .then((res) => res.arrayBuffer())
+        .catch(() => {
+          // A warm-up that fails costs nothing: the video element will ask
+          // for the same bytes itself when its turn comes.
+        });
+    }
+  }, [current, reels]);
+
   return (
     <div className="fixed inset-0 bg-black text-white">
       <div
@@ -70,9 +104,10 @@ export function Reels({
             index={i}
             reel={reel}
             active={i === current}
-            // The next one is fetched while this one plays, so a swipe lands
-            // on a video that has already started rather than on a spinner.
-            warm={i === current + 1}
+            // The two after this one are already loading, so a swipe lands on
+            // a video that has started rather than one that is beginning to
+            // think about it.
+            warm={i > current && i <= current + 2}
             muted={muted}
             onToggleSound={() => setMuted((m) => !m)}
             ar={ar}
@@ -215,10 +250,10 @@ function Reel({
         ref={videoRef}
         src={reel.recordingUrl ?? undefined}
         poster={reel.coverUrl ?? undefined}
-        // The one being watched and the one after it. Further down the feed
-        // nothing is fetched at all: twenty videos at once is a shopper's data
-        // spent on nineteen she is not watching.
-        preload={active || warm ? "auto" : "none"}
+        // The near ones in full; the rest just far enough to have their
+        // connection made and their length known, which costs a few kilobytes
+        // and saves the handshake later.
+        preload={active || warm ? "auto" : "metadata"}
         playsInline
         loop
         muted={muted}
