@@ -1673,7 +1673,17 @@ function LiveNow({
 
           {showReplays && (
             <button
-              onClick={() => go(s, "replays")}
+              onClick={() => {
+                // The shop has a page of every replay it has kept. Unless the
+                // merchant has pointed this somewhere of her own, that is where
+                // it goes — a tile labelled Replays that opened nothing was the
+                // alternative.
+                if (str(s.replaysUrl) || str(s.replaysHandle) || str(s.replaysScreen)) {
+                  go(s, "replays");
+                } else if (typeof window !== "undefined") {
+                  window.location.assign("/store/reels");
+                }
+              }}
               className="flex shrink-0 flex-col items-center"
               style={{ width: cell }}
             >

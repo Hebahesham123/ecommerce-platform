@@ -257,6 +257,69 @@ export async function listPublicLives(): Promise<Result<LiveStream[]>> {
 }
 
 /**
+ * Every replay there is, newest first, ready to be shopped.
+ *
+ * The lives are over; what is left of them is a video and the things that
+ * were held up in it. That is a shoppable reel, so this returns exactly the
+ * ones that can be one: ended, keeping their replay, and with a file to play.
+ *
+ * Stock is looked up for all of them in a single query rather than one each.
+ * A feed of twenty reels would otherwise open twenty round trips before it
+ * could show the first frame.
+ */
+export async function listReplays(limit = 50): Promise<Result<LiveStream[]>> {
+  const all = await listLives();
+  if (!all.ok) return all;
+  const healed = await healRecordings(all.data, 8);
+  const replays = healed
+    .filter((l) => l.status === "ended" && l.replayEnabled && Boolean(l.recordingUrl))
+    .sort((a, b) =>
+      String(b.endedAt ?? b.createdAt).localeCompare(String(a.endedAt ?? a.createdAt)),
+    )
+    .slice(0, Math.max(1, limit));
+  return { ok: true, data: await withAvailabilityAll(replays) };
+}
+
+/** Availability for a whole list, in one query. */
+async function withAvailabilityAll(lives: LiveStream[]): Promise<LiveStream[]> {
+  const ids = [
+    ...new Set(
+      lives.flatMap((l) => l.products.map((p) => p.itemId).filter((v): v is string => Boolean(v))),
+    ),
+  ];
+  if (!ids.length) return lives;
+  try {
+    const supabase = getServerSupabase();
+    const { data } = await supabase
+      .from("inventory_items")
+      .select("id,tracked,inventory_levels(on_hand,committed)")
+      .in("id", ids);
+    const stock = new Map<string, number>();
+    for (const row of (data ?? []) as Record<string, unknown>[]) {
+      const levels = Array.isArray(row.inventory_levels)
+        ? (row.inventory_levels as Record<string, unknown>[])
+        : [];
+      const onShelf = levels.reduce(
+        (sum, l) => sum + Math.max(0, Number(l.on_hand ?? 0) - Number(l.committed ?? 0)),
+        0,
+      );
+      stock.set(String(row.id), row.tracked === false ? 999 : onShelf);
+    }
+    return lives.map((l) => ({
+      ...l,
+      products: l.products.map((p) => ({
+        ...p,
+        available: p.itemId ? (stock.get(p.itemId) ?? 0) : 0,
+      })),
+    }));
+  } catch {
+    // Without stock every product simply stays addable, which is the same
+    // answer an untracked item gives.
+    return lives;
+  }
+}
+
+/**
  * One live, priced and stocked as a viewer needs it.
  *
  * The products were chosen before the live was created, so their stock has

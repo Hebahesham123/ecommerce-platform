@@ -43,6 +43,9 @@ export default function StoreLayout({ children }: { children: ReactNode }) {
     // on every app people already watch lives in. A header above it would
     // be a band of nothing during the one thing they came for.
     (pathname?.startsWith("/store/live") ||
+      // The reels feed is the same argument: the video is the page, and a
+      // header above a feed you swipe through is a band of nothing.
+      pathname?.startsWith("/store/reels") ||
       pathname?.startsWith("/store/checkout") ||
       pathname?.startsWith("/store/requests") ||
       pathname?.startsWith("/store/happy-customers") ||
