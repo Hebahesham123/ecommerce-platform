@@ -32,6 +32,69 @@ export type PageCopySpec = {
 };
 
 export const PAGE_COPY: Record<string, PageCopySpec> = {
+  "web-reels": {
+    section: "page_reels",
+    hint: {
+      ar: "الفيديوهات نفسها هي البثوث التي احتفظتِ بتسجيلها — تُدار من صفحة البث المباشر. هنا الكلمات فقط.",
+      en: "The videos themselves are whichever lives you kept a recording of, managed under Lives. This is the wording.",
+    },
+    fields: [
+      {
+        key: "productsButton",
+        label: { ar: "زر المنتجات", en: "Products button" },
+        type: "text",
+        fallback: { ar: "المنتجات", en: "Products" },
+      },
+      {
+        key: "sheetTitle",
+        label: { ar: "عنوان قائمة المنتجات", en: "Products list heading" },
+        type: "text",
+        fallback: { ar: "منتجات هذا البث", en: "In this live" },
+      },
+      {
+        key: "add",
+        label: { ar: "زر الإضافة", en: "Add button" },
+        type: "text",
+        fallback: { ar: "أضيفي", en: "Add" },
+      },
+      {
+        key: "added",
+        label: { ar: "بعد الإضافة", en: "After adding" },
+        type: "text",
+        fallback: { ar: "تمت", en: "Added" },
+      },
+      {
+        key: "soldOut",
+        label: { ar: "نفد المخزون", en: "Sold out" },
+        type: "text",
+        fallback: { ar: "نفدت", en: "Sold out" },
+      },
+      {
+        key: "keepWatching",
+        label: { ar: "زر العودة للفيديو", en: "Back to the video" },
+        type: "text",
+        fallback: { ar: "متابعة المشاهدة", en: "Keep watching" },
+      },
+      {
+        key: "tapForSound",
+        label: { ar: "الضغط للصوت", en: "Tap for sound" },
+        type: "text",
+        fallback: { ar: "اضغطي للصوت", en: "Tap for sound" },
+      },
+      {
+        key: "emptyTitle",
+        label: { ar: "عنوان لا يوجد شيء", en: "Nothing here yet — heading" },
+        type: "text",
+        fallback: { ar: "لا يوجد ما يُشاهد بعد", en: "Nothing to watch yet" },
+      },
+      {
+        key: "emptyText",
+        label: { ar: "شرح لا يوجد شيء", en: "Nothing here yet — line underneath" },
+        type: "textarea",
+        fallback: { ar: "تظهر تسجيلات البثوث هنا بعد انتهاء البث.", en: "Recordings of our lives show up here once a live has ended." },
+      },
+    ],
+  },
   "web-login": {
     section: "page_login",
     fields: [

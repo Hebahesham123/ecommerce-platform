@@ -201,10 +201,9 @@ export const PAGES: PageEntry[] = [
       en: "Every kept live, and what it was selling",
     },
     preview: "/store/reels",
-    how: "none",
-    // Its design is in code, but which lives end up in it is a real setting —
-    // and it is kept on the Lives screen, so that is where this points.
-    editHref: "/lives",
+    // Its wording is edited here; the videos in it come from Lives, which is
+    // what the hint on the copy fields says.
+    how: "copy",
     note: {
       ar: "محتواها هو البثوث المنتهية التي احتفظتِ بتسجيلها — تُدار من صفحة البث المباشر.",
       en: "Its content is whichever lives you kept a recording of — managed under Lives.",

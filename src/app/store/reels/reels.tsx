@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useI18n, egp } from "@/lib/i18n";
 import type { LiveProduct, WatchableLive } from "@/lib/live";
+import { say, type Copy } from "@/lib/page-copy";
 import { useCart } from "../cart";
 
 /**
@@ -17,7 +18,14 @@ import { useCart } from "../cart";
  * video at once spends the viewer's data on twenty things they are not
  * watching, and on a phone it stutters the one they are.
  */
-export function Reels({ reels }: { reels: WatchableLive[] }) {
+export function Reels({
+  reels,
+  copy,
+}: {
+  reels: WatchableLive[];
+  /** The merchant's wording for this page, from the Pages screen. */
+  copy: Copy;
+}) {
   const { lang } = useI18n();
   const ar = lang === "ar";
   const { count } = useCart();
@@ -69,6 +77,7 @@ export function Reels({ reels }: { reels: WatchableLive[] }) {
             onToggleSound={() => setMuted((m) => !m)}
             ar={ar}
             lang={lang}
+            copy={copy}
           />
         ))}
       </div>
@@ -107,6 +116,7 @@ function Reel({
   onToggleSound,
   ar,
   lang,
+  copy,
 }: {
   index: number;
   reel: WatchableLive;
@@ -116,6 +126,7 @@ function Reel({
   onToggleSound: () => void;
   ar: boolean;
   lang: string;
+  copy: Copy;
 }) {
   const { add, items, setQty, remove } = useCart();
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -227,7 +238,7 @@ function Reel({
           className="absolute inset-x-0 top-1/2 z-10 mx-auto flex w-fit -translate-y-1/2 items-center gap-2 rounded-full bg-black/65 px-5 py-3 text-sm font-semibold backdrop-blur"
         >
           <SoundIcon />
-          {ar ? "اضغطي للصوت" : "Tap for sound"}
+          {say(copy, "tapForSound", ar) || (ar ? "اضغطي للصوت" : "Tap for sound")}
         </button>
       )}
 
@@ -264,7 +275,9 @@ function Reel({
                   added === pinned.id ? "bg-emerald-600" : "bg-rose-600"
                 }`}
               >
-                {added === pinned.id ? (ar ? "تمت" : "Added") : ar ? "أضيفي" : "Add"}
+                {added === pinned.id
+                  ? say(copy, "added", ar) || (ar ? "تمت" : "Added")
+                  : say(copy, "add", ar) || (ar ? "أضيفي" : "Add")}
               </span>
             </button>
           )}
@@ -289,7 +302,7 @@ function Reel({
                   )}
                 </span>
                 <span className="truncate text-sm font-bold">
-                  {ar ? "المنتجات" : "Products"}
+                  {say(copy, "productsButton", ar) || (ar ? "المنتجات" : "Products")}
                   <span className="ms-1 text-ink-soft">{reel.products.length}</span>
                 </span>
               </button>
@@ -319,7 +332,7 @@ function Reel({
           >
             <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-slate-300" />
             <h3 className="mb-3 text-base font-bold text-ink">
-              {ar ? "منتجات هذا البث" : "In this live"}
+              {say(copy, "sheetTitle", ar) || (ar ? "منتجات هذا البث" : "In this live")}
             </h3>
             <ul className="space-y-2">
               {reel.products.map((p) => {
@@ -345,7 +358,9 @@ function Reel({
                           </span>
                         )}
                         {soldOut && (
-                          <span className="ms-2 text-rose-600">{ar ? "نفدت" : "Sold out"}</span>
+                          <span className="ms-2 text-rose-600">
+                            {say(copy, "soldOut", ar) || (ar ? "نفدت" : "Sold out")}
+                          </span>
                         )}
                       </span>
                     </span>
@@ -386,7 +401,9 @@ function Reel({
                           added === p.id ? "bg-emerald-600" : "bg-rose-600"
                         }`}
                       >
-                        {added === p.id ? (ar ? "تمت" : "Added") : ar ? "أضيفي" : "Add"}
+                        {added === p.id
+                          ? say(copy, "added", ar) || (ar ? "تمت" : "Added")
+                          : say(copy, "add", ar) || (ar ? "أضيفي" : "Add")}
                       </button>
                     )}
                   </li>
@@ -397,7 +414,7 @@ function Reel({
               onClick={() => setSheet(false)}
               className="mt-4 h-12 w-full rounded-xl border border-line text-sm font-semibold text-ink"
             >
-              {ar ? "متابعة المشاهدة" : "Keep watching"}
+              {say(copy, "keepWatching", ar) || (ar ? "متابعة المشاهدة" : "Keep watching")}
             </button>
           </div>
         </div>
