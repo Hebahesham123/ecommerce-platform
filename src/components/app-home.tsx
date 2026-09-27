@@ -1404,8 +1404,20 @@ function useCountdown(minutes: number): string {
  * two play in place; the third opens where it lives, which is better than a
  * black rectangle and an apology.
  */
-function playerFor(url: string): { kind: "video" | "embed" | "away"; src: string } {
+/**
+ * What to do with whatever was pasted into the recording field.
+ *
+ * A merchant copying a replay link from her own dashboard gets the page the
+ * shopper watches it on, not the video file underneath it — that is the link
+ * the Copy link button hands her, and it is the reasonable thing to paste.
+ * A page is not something a <video> can play, so this used to end at "this
+ * recording lives outside the app" for the one case that is most inside it.
+ * Ours are recognised by their address and the file is looked up.
+ */
+function playerFor(url: string): { kind: "video" | "embed" | "ours" | "away"; src: string } {
   const clean = url.trim();
+  const ours = clean.match(/\/store\/live\/([0-9a-zA-Z-]{8,})/);
+  if (ours) return { kind: "ours", src: ours[1] };
   if (/\.(mp4|webm|ogg|m3u8|mov)(\?|$)/i.test(clean)) return { kind: "video", src: clean };
   const yt = clean.match(/(?:youtube\.com\/(?:watch\?v=|live\/|embed\/)|youtu\.be\/)([\w-]{6,})/i);
   if (yt) return { kind: "embed", src: `https://www.youtube.com/embed/${yt[1]}?autoplay=1&rel=0` };
@@ -1426,6 +1438,31 @@ function ReplayPlayer({
   onClose: () => void;
 }) {
   const player = playerFor(url);
+
+  // One of ours: ask the shop where the file is. Until it answers there is
+  // nothing truthful to say except that it is being fetched.
+  const [ours, setOurs] = useState<{ state: "loading" | "ready" | "none"; src?: string }>(
+    player.kind === "ours" ? { state: "loading" } : { state: "none" },
+  );
+  useEffect(() => {
+    if (player.kind !== "ours") return;
+    let cancelled = false;
+    fetch(`/api/storefront/lives/${player.src}`)
+      .then((r) => r.json())
+      .then((r) => {
+        if (cancelled) return;
+        const found = r?.ok ? str(r.data?.recordingUrl) : "";
+        setOurs(found ? { state: "ready", src: found } : { state: "none" });
+      })
+      .catch(() => !cancelled && setOurs({ state: "none" }));
+    return () => {
+      cancelled = true;
+    };
+  }, [player.kind, player.src]);
+
+  const kind = player.kind === "ours" ? (ours.state === "ready" ? "video" : ours.state) : player.kind;
+  const src = player.kind === "ours" ? (ours.src ?? url) : player.src;
+
   return (
     <div className="absolute inset-0 z-40 flex flex-col justify-end bg-black/70" onClick={onClose}>
       <div
@@ -1442,12 +1479,16 @@ function ReplayPlayer({
             ✕
           </button>
         </div>
-        {player.kind === "video" ? (
+        {kind === "loading" ? (
+          <div className="grid aspect-[9/16] w-full place-items-center bg-black">
+            <span className="h-7 w-7 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+          </div>
+        ) : kind === "video" ? (
           // eslint-disable-next-line jsx-a11y/media-has-caption
-          <video src={player.src} controls autoPlay playsInline className="block aspect-[9/16] w-full bg-black" />
-        ) : player.kind === "embed" ? (
+          <video src={src} controls autoPlay playsInline className="block aspect-[9/16] w-full bg-black" />
+        ) : kind === "embed" ? (
           <iframe
-            src={player.src}
+            src={src}
             title={title}
             allow="autoplay; fullscreen; picture-in-picture"
             allowFullScreen
@@ -1456,12 +1497,16 @@ function ReplayPlayer({
         ) : (
           <div className="p-5 text-center">
             <p className="text-[12px] leading-relaxed text-white/80">
-              {ar
-                ? "هذا التسجيل محفوظ خارج التطبيق."
-                : "This recording lives outside the app."}
+              {player.kind === "ours"
+                ? ar
+                  ? "لا يوجد تسجيل لهذا البث بعد."
+                  : "There is no recording for this live yet."
+                : ar
+                  ? "هذا التسجيل محفوظ خارج التطبيق."
+                  : "This recording lives outside the app."}
             </p>
             <a
-              href={player.src}
+              href={url}
               target="_blank"
               rel="noreferrer"
               className="mt-3 inline-block rounded-full bg-white px-4 py-2 text-[12px] font-bold text-slate-900"
