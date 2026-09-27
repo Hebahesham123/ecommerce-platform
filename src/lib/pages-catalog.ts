@@ -192,6 +192,25 @@ export const PAGES: PageEntry[] = [
     },
   },
   {
+    id: "web-reels",
+    surface: "web",
+    group: G.shopping,
+    title: { ar: "الريلز", en: "Reels" },
+    what: {
+      ar: "تسجيلات البث، وما كان يُباع فيها",
+      en: "Every kept live, and what it was selling",
+    },
+    preview: "/store/reels",
+    how: "none",
+    // Its design is in code, but which lives end up in it is a real setting —
+    // and it is kept on the Lives screen, so that is where this points.
+    editHref: "/lives",
+    note: {
+      ar: "محتواها هو البثوث المنتهية التي احتفظتِ بتسجيلها — تُدار من صفحة البث المباشر.",
+      en: "Its content is whichever lives you kept a recording of — managed under Lives.",
+    },
+  },
+  {
     id: "web-reviews",
     surface: "web",
     group: G.service,
