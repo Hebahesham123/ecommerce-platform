@@ -34,6 +34,7 @@ import {
   type OrderConversion,
 } from "./actions";
 import type { ReturnableLine } from "@/lib/returns-service";
+import { createPaymobCheckout } from "../payments/actions";
 import {
   paymentMeta,
   fulfillMeta,
@@ -149,7 +150,7 @@ export function OrderDetailPage({ orderNumber, basePath }: { orderNumber: string
                 <IcLink className="h-4 w-4" /> {ar ? "صفحة حالة الطلب" : "View order status page"}
               </a>
               <MenuItem onClick={() => window.print()}><IcFile className="h-4 w-4" /> {ar ? "طباعة الطلب" : "Print order page"}</MenuItem>
-              <MenuItem onClick={() => window.print()}><IcFile className="h-4 w-4" /> {ar ? "طباعة قسيمة التغليف" : "Print packing slip"}</MenuItem>
+              <MenuItem onClick={() => d && openPackingSlip(d, ar)}><IcFile className="h-4 w-4" /> {ar ? "طباعة قسيمة التغليف" : "Print packing slip"}</MenuItem>
             </DropMenu>
           </div>
         )}
@@ -265,7 +266,7 @@ export function OrderDetailPage({ orderNumber, basePath }: { orderNumber: string
                     <div className="flex">
                       <button onClick={() => setModal("collect")} className="btn-primary h-9 rounded-e-none">{ar ? "تحصيل الدفع" : "Collect payment"}</button>
                       <DropMenu trigger={<span className="btn-primary flex h-9 cursor-pointer items-center rounded-s-none border-s border-white/20 px-2"><IcChevron className="h-4 w-4 rotate-90" /></span>}>
-                        <MenuItem onClick={() => setFlash(ar ? "بطاقة (باي موب) — قريباً في إعداد الدفع" : "Credit card (Paymob) — set it up in Payment integration")}>{ar ? "بطاقة ائتمان (باي موب)" : "Credit card (Paymob)"}</MenuItem>
+                        <MenuItem onClick={payByCard}>{ar ? "بطاقة ائتمان (باي موب)" : "Credit card (Paymob)"}</MenuItem>
                         <MenuItem onClick={() => run(() => markOrderPaid(orderNumber), ar ? "تم التعليم كمدفوع" : "Marked as paid")}>{ar ? "تعليم كمدفوع" : "Mark as paid"}</MenuItem>
                       </DropMenu>
                     </div>
@@ -467,11 +468,99 @@ export function OrderDetailPage({ orderNumber, basePath }: { orderNumber: string
     flashOk(ar ? "تم التراجع" : "Fulfillment undone");
     await load();
   }
+  async function payByCard() {
+    setBusy(true);
+    const res = await createPaymobCheckout(orderNumber);
+    setBusy(false);
+    if (res.ok) {
+      window.open(res.data.url, "_blank", "noopener");
+      flashOk(ar ? "تم فتح صفحة الدفع بالبطاقة" : "Opened Paymob card checkout");
+    } else setErr(res.error);
+  }
 }
 
 function ordinal(n: number): string {
   const s = ["th", "st", "nd", "rd"], v = n % 100;
   return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+// A proper, print-ready packing slip in its own window: shop header, ship-to,
+// the items and quantities a picker actually needs, and a clean total.
+function openPackingSlip(d: OrderDetail, ar: boolean) {
+  const esc = (str: string) => str.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]!));
+  const money = (v: number) => `LE ${v.toLocaleString("en-EG", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const date = new Date(d.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+  const totalQty = d.items.reduce((s, li) => s + li.quantity, 0);
+  const addr = [d.address, d.city, d.governorate].filter(Boolean).map((x) => esc(String(x))).join("<br>");
+
+  const rows = d.items.map((li) => `
+    <tr>
+      <td class="it">${esc(li.productName)}${li.variantTitle ? `<span class="v"> · ${esc(li.variantTitle)}</span>` : ""}</td>
+      <td class="sku">${li.sku ? esc(li.sku) : "—"}</td>
+      <td class="q">${li.quantity}</td>
+    </tr>`).join("");
+
+  const html = `<!doctype html><html lang="${ar ? "ar" : "en"}"><head><meta charset="utf-8">
+<title>${ar ? "قسيمة تغليف" : "Packing slip"} #${esc(d.orderNumber)}</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111;background:#fff}
+  .sheet{max-width:720px;margin:0 auto;padding:40px}
+  .top{display:flex;justify-content:space-between;align-items:flex-start;gap:24px}
+  .brand{font-size:24px;font-weight:800;letter-spacing:.06em}
+  .brand span{font-style:italic;font-weight:600;color:#7a4b27}
+  .meta{text-align:right;color:#555;font-size:13px}
+  .meta .n{color:#111;font-weight:700;font-size:15px}
+  .label{margin:26px 0 6px;font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#888}
+  .ship{font-size:14px;line-height:1.7}
+  .ship .name{font-weight:700}
+  table{width:100%;border-collapse:collapse;margin-top:8px}
+  th{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#888;text-align:left;padding:8px 10px;border-bottom:2px solid #111}
+  th.q,td.q{text-align:center;width:64px}
+  th.sku,td.sku{width:180px;color:#777}
+  td{padding:12px 10px;border-bottom:1px solid #eee;vertical-align:top}
+  td.it{font-weight:600}
+  td.it .v{font-weight:400;color:#888}
+  .totrow{display:flex;justify-content:space-between;align-items:center;margin-top:18px;padding-top:14px;border-top:2px solid #111}
+  .totrow .k{color:#555}
+  .totrow .val{font-size:22px;font-weight:800}
+  .count{margin-top:10px;color:#666;font-size:13px}
+  .thanks{margin-top:40px;text-align:center;color:#777}
+  @media print{.sheet{padding:24px}@page{margin:14mm}}
+</style></head>
+<body onload="window.print()">
+  <div class="sheet">
+    <div class="top">
+      <div class="brand">BEAUTY <span>BAR</span></div>
+      <div class="meta"><div class="n">${ar ? "طلب" : "Order"} #${esc(d.orderNumber)}</div><div>${esc(date)}</div></div>
+    </div>
+
+    <div class="label">${ar ? "الشحن إلى" : "Ship to"}</div>
+    <div class="ship" dir="auto">
+      <div class="name">${esc(d.customerName || "")}</div>
+      ${addr ? `<div>${addr}</div>` : ""}
+      <div>${ar ? "مصر" : "Egypt"}</div>
+      ${d.phone ? `<div dir="ltr">${esc(d.phone)}</div>` : ""}
+    </div>
+
+    <div class="label">${ar ? "الأصناف" : "Items"}</div>
+    <table>
+      <thead><tr><th>${ar ? "الصنف" : "Item"}</th><th class="sku">SKU</th><th class="q">${ar ? "الكمية" : "Qty"}</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    <div class="count">${totalQty} ${ar ? "قطعة في هذا الطلب" : `item${totalQty === 1 ? "" : "s"} in this order`}</div>
+
+    <div class="totrow"><div class="k">${ar ? "الإجمالي" : "Total"}</div><div class="val">${money(d.total)}</div></div>
+
+    <div class="thanks">${ar ? "شكراً لتسوقك معنا!" : "Thank you for shopping with us!"}</div>
+  </div>
+</body></html>`;
+
+  const w = window.open("", "_blank", "width=800,height=900");
+  if (!w) return;
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
 }
 
 // ---- Small dropdown menu primitive ------------------------------------------

@@ -63,6 +63,11 @@ export function orderErrorText(code: string, ar: boolean): string {
     no_replacement: { ar: "اختاري بديلاً واحداً على الأقل.", en: "Choose at least one replacement." },
     nothing_returnable: { ar: "لا يوجد ما يُرتجع في هذا الطلب.", en: "Nothing left to return on this order." },
     replacement_out_of_stock: { ar: "البديل غير متوفر بالمخزون.", en: "That replacement is out of stock." },
+    paymob_not_configured: { ar: "أضيفي مفاتيح باي موب في «تكامل الدفع» أولاً.", en: "Set up Paymob keys in Payment integration first." },
+    paymob_no_client_secret: { ar: "لم يرد باي موب برمز الدفع. راجعي المفاتيح.", en: "Paymob didn't return a checkout secret — check the keys." },
+    smtp_not_configured: { ar: "أضيفي بيانات البريد (Outlook) أولاً.", en: "Set up the email (Outlook) mailbox first." },
+    no_customer_email: { ar: "لا يوجد بريد لهذا العميل لإرسال الفاتورة.", en: "This customer has no email to send the invoice to." },
+    send_failed: { ar: "تعذّر إرسال البريد.", en: "Couldn't send the email." },
   };
   const e = map[code];
   return e ? (ar ? e.ar : e.en) : ar ? "حدث خطأ." : "Something went wrong.";

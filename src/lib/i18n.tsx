@@ -39,6 +39,7 @@ const dict = {
   nav_products: { ar: "المنتجات", en: "Products" },
   nav_customers: { ar: "العملاء", en: "Customers" },
   nav_couriers: { ar: "الشحن والمندوبين", en: "Couriers" },
+  nav_payments: { ar: "تكامل الدفع", en: "Payment integration" },
   nav_inbox: { ar: "المحادثات", en: "Inbox" },
   nav_marketing: { ar: "التسويق", en: "Marketing" },
   nav_nudges: { ar: "التنبيهات الذكية", en: "Smart popups" },
