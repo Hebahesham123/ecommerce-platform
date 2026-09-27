@@ -62,6 +62,9 @@ export function Reels({ reels }: { reels: WatchableLive[] }) {
             index={i}
             reel={reel}
             active={i === current}
+            // The next one is fetched while this one plays, so a swipe lands
+            // on a video that has already started rather than on a spinner.
+            warm={i === current + 1}
             muted={muted}
             onToggleSound={() => setMuted((m) => !m)}
             ar={ar}
@@ -99,6 +102,7 @@ function Reel({
   index,
   reel,
   active,
+  warm,
   muted,
   onToggleSound,
   ar,
@@ -107,6 +111,7 @@ function Reel({
   index: number;
   reel: WatchableLive;
   active: boolean;
+  warm: boolean;
   muted: boolean;
   onToggleSound: () => void;
   ar: boolean;
@@ -118,18 +123,36 @@ function Reel({
   const [added, setAdded] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
 
-  // Play the one being watched; stop the rest and wind them back, so returning
-  // to a reel starts it again rather than resuming a video nobody remembers.
+  /**
+   * Start the one being watched, and keep asking until it does.
+   *
+   * A single play() the moment a reel becomes current is a request made
+   * before there is anything to play — the file has not been fetched yet, so
+   * it is refused and the reel sits on its cover forever. Asking again as
+   * soon as the browser says it can play is what turns a poster into a video.
+   */
   useEffect(() => {
     const el = videoRef.current;
     if (!el) return;
-    if (active) {
-      el.play().catch(() => {});
-    } else {
+
+    if (!active) {
       el.pause();
       el.currentTime = 0;
       setSheet(false);
+      return;
     }
+
+    // preload="none" means nothing has been asked for yet; say so plainly
+    // rather than hoping play() implies it.
+    if (el.readyState === 0) el.load();
+    const start = () => el.play().catch(() => {});
+    start();
+    el.addEventListener("canplay", start);
+    el.addEventListener("loadeddata", start);
+    return () => {
+      el.removeEventListener("canplay", start);
+      el.removeEventListener("loadeddata", start);
+    };
   }, [active]);
 
   useEffect(() => {
@@ -181,23 +204,22 @@ function Reel({
         ref={videoRef}
         src={reel.recordingUrl ?? undefined}
         poster={reel.coverUrl ?? undefined}
-        // Only the visible reel is allowed to fetch: metadata is enough for
-        // the ones waiting their turn.
-        preload={active ? "auto" : "none"}
+        // The one being watched and the one after it. Further down the feed
+        // nothing is fetched at all: twenty videos at once is a shopper's data
+        // spent on nineteen she is not watching.
+        preload={active || warm ? "auto" : "none"}
         playsInline
         loop
         muted={muted}
+        // Once it has frames it has frames. A reel that flashes a spinner
+        // every time the buffer dips is a reel that looks broken while it is
+        // working perfectly well.
+        onLoadedData={() => setPlaying(true)}
         onPlaying={() => setPlaying(true)}
-        onWaiting={() => setPlaying(false)}
         onClick={onToggleSound}
         className="absolute inset-0 h-full w-full object-contain"
       />
 
-      {!playing && (
-        <div className="pointer-events-none absolute inset-0 grid place-items-center bg-black/30">
-          <span className="h-9 w-9 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-        </div>
-      )}
 
       {muted && playing && (
         <button
