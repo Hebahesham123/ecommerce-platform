@@ -499,6 +499,10 @@ export type PlacedOrder = {
   itemsCount: number;
   /** Which surface placed it. Every pre-channel order reads as the website. */
   channel: Channel;
+  /** Free labels the merchant filed the order under. */
+  tags: string[];
+  /** Set when the order was archived (hidden from the default list). */
+  archivedAt: string | null;
 };
 
 export async function listStoreOrders(): Promise<ActionResult<PlacedOrder[]>> {
@@ -524,6 +528,8 @@ export async function listStoreOrders(): Promise<ActionResult<PlacedOrder[]>> {
       createdAt: String(r.created_at ?? ""),
       itemsCount: Array.isArray(r.store_order_items) ? r.store_order_items.length : 0,
       channel: normalizeChannel(r.channel),
+      tags: Array.isArray(r.tags) ? (r.tags as unknown[]).map(String).filter(Boolean) : [],
+      archivedAt: r.archived_at ? String(r.archived_at) : null,
     }));
     return { ok: true, data: rows };
   } catch (e) {

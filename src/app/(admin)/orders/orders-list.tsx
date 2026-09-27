@@ -62,7 +62,7 @@ const flagPill: Record<OrderFlag, PillTone> = {
 };
 
 // Table row = an order plus the extra columns the Shopify-style list shows.
-type Row = Order & { itemsCount: number; channel: Channel };
+type Row = Order & { itemsCount: number; channel: Channel; tags: string[] };
 
 type Pop = { order: Row; kind: "payment" | "fulfillment"; x: number; y: number };
 
@@ -98,6 +98,7 @@ export function OrdersList({ lockChannel }: { lockChannel?: Channel } = {}) {
           date: o.date,
           itemsCount: o.itemsCount,
           channel: o.channel,
+          tags: o.tags,
         })),
       );
     }
@@ -320,6 +321,23 @@ export function OrdersList({ lockChannel }: { lockChannel?: Channel } = {}) {
             cell: (o: (typeof pg.items)[number]) => <ChannelBadge value={o.channel} />,
           },
         ]),
+    {
+      key: "tags",
+      header: ar ? "الوسوم" : "Tags",
+      rank: "secondary",
+      cell: (o) =>
+        o.tags.length ? (
+          <span className="flex flex-wrap gap-1">
+            {o.tags.slice(0, 3).map((tg) => (
+              <span key={tg} className="rounded-md bg-surface-page px-1.5 py-0.5 text-[11px] text-ink-muted">{tg}</span>
+            ))}
+            {o.tags.length > 3 && <span className="text-[11px] text-ink-soft">+{o.tags.length - 3}</span>}
+          </span>
+        ) : (
+          <span className="text-ink-soft">—</span>
+        ),
+      hideBelow: "lg",
+    },
   ];
 
   return (

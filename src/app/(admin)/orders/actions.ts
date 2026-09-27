@@ -9,6 +9,9 @@ import {
   type ReturnableLine,
 } from "@/lib/returns-service";
 import type { ReturnRequest } from "@/lib/returns";
+import { sendOrderInvoiceEmail } from "@/lib/order-invoice";
+import { isMailerReady } from "@/lib/mailer";
+import { phoneVariants } from "@/lib/phone";
 
 export type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -55,6 +58,7 @@ export type OrderFulfillmentRow = {
 export type OrderDetail = {
   orderNumber: string;
   customerName: string;
+  customerEmail: string | null;
   phone: string;
   governorate: string | null;
   city: string | null;
@@ -70,13 +74,28 @@ export type OrderDetail = {
   balance: number;
   paymentStatus: string;
   fulfillmentStatus: string;
+  /** null | 'in_progress' | 'on_hold' — the fulfillment dropdown's soft state. */
+  fulfillmentHold: string | null;
   lifecycle: string;
   paymentMethod: string;
+  discountCode: string | null;
+  discountAmount: number;
+  tags: string[];
+  adminNote: string | null;
+  cancelledAt: string | null;
+  cancelReason: string | null;
+  archivedAt: string | null;
+  invoiceSentAt: string | null;
+  channel: string;
   createdAt: string;
   items: OrderLine[];
   payments: OrderPaymentRow[];
   fulfillments: OrderFulfillmentRow[];
 };
+
+function toTags(v: unknown): string[] {
+  return Array.isArray(v) ? v.map((x) => String(x)).filter(Boolean) : [];
+}
 
 /** The full Shopify-style order view: money ledger + per-item fulfillment. */
 export async function getOrderDetail(orderNumber: string): Promise<ActionResult<OrderDetail>> {
@@ -92,9 +111,10 @@ export async function getOrderDetail(orderNumber: string): Promise<ActionResult<
     if (!order) return { ok: false, error: "order_not_found" };
 
     const orderId = s(order.id);
-    const [{ data: payments, error: pErr }, { data: fulfillments }] = await Promise.all([
+    const [{ data: payments, error: pErr }, { data: fulfillments }, { data: customer }] = await Promise.all([
       supabase.from("order_payments").select("*").eq("order_id", orderId).order("created_at"),
       supabase.from("order_fulfillments").select("*, order_fulfillment_items(*)").eq("order_id", orderId).order("created_at"),
+      supabase.from("store_customers").select("email").in("phone", phoneVariants(s(order.phone))).maybeSingle(),
     ]);
     // A missing payments table means the migration hasn't been applied.
     if (pErr && missing(pErr)) return { ok: false, error: "migration_missing" };
@@ -108,6 +128,7 @@ export async function getOrderDetail(orderNumber: string): Promise<ActionResult<
       data: {
         orderNumber: s(order.order_number),
         customerName: s(order.customer_name),
+        customerEmail: sn(customer?.email),
         phone: s(order.phone),
         governorate: sn(order.governorate),
         city: sn(order.city),
@@ -122,8 +143,18 @@ export async function getOrderDetail(orderNumber: string): Promise<ActionResult<
         balance: Math.max(0, total - amountPaid),
         paymentStatus: s(order.payment_status) || "pending",
         fulfillmentStatus: s(order.fulfillment_status) || "unfulfilled",
+        fulfillmentHold: sn(order.fulfillment_hold),
         lifecycle: s(order.lifecycle) || "placed",
         paymentMethod: s(order.payment_method) || "cod",
+        discountCode: sn(order.discount_code),
+        discountAmount: n(order.discount_amount),
+        tags: toTags(order.tags),
+        adminNote: sn(order.admin_note),
+        cancelledAt: sn(order.cancelled_at),
+        cancelReason: sn(order.cancel_reason),
+        archivedAt: sn(order.archived_at),
+        invoiceSentAt: sn(order.invoice_sent_at),
+        channel: s(order.channel) || "web",
         createdAt: s(order.created_at),
         items: items.map((li): OrderLine => ({
           id: s(li.id),
@@ -345,6 +376,377 @@ export async function createOrderReturn(
         extraDue: created.data.extraAmount,
       },
     };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+// ---- Order lifecycle, tags, notes, timeline ---------------------------------
+
+type OrderRow = { id: string; order_number: string } & Row;
+
+async function loadOrder(
+  supabase: ReturnType<typeof getServerSupabase>,
+  orderNumber: string,
+  cols = "*",
+): Promise<{ ok: true; order: OrderRow } | { ok: false; error: string }> {
+  const { data, error } = await supabase
+    .from("store_orders")
+    .select(cols)
+    .eq("order_number", orderNumber)
+    .maybeSingle();
+  if (error) return { ok: false, error: missing(error) ? "migration_missing" : error.message };
+  if (!data) return { ok: false, error: "order_not_found" };
+  return { ok: true, order: data as unknown as OrderRow };
+}
+
+async function logEvent(
+  supabase: ReturnType<typeof getServerSupabase>,
+  orderId: string,
+  ev: { actor?: "system" | "staff"; type: string; message: string; meta?: Record<string, unknown> },
+): Promise<void> {
+  try {
+    await supabase.from("order_events").insert({
+      order_id: orderId,
+      actor: ev.actor ?? "staff",
+      type: ev.type,
+      message: ev.message,
+      meta: ev.meta ?? {},
+    });
+  } catch {
+    /* the timeline is a log, never the thing that fails the action */
+  }
+}
+
+export type TimelineEntry = {
+  id: string;
+  type: string;
+  actor: "system" | "staff";
+  message: string;
+  createdAt: string;
+  amount?: number | null;
+};
+
+/**
+ * The order's timeline, newest first. Built by merging the money ledger and the
+ * fulfillment log (so even orders from before this feature show their history)
+ * with the explicit events — comments, invoices, cancels, holds.
+ */
+export async function getOrderTimeline(orderNumber: string): Promise<ActionResult<TimelineEntry[]>> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  try {
+    const supabase = getServerSupabase();
+    const loaded = await loadOrder(supabase, orderNumber, "id,order_number,customer_name,channel,payment_method,created_at");
+    if (!loaded.ok) return { ok: false, error: loaded.error };
+    const order = loaded.order;
+    const orderId = s(order.id);
+
+    const [{ data: payments }, { data: fulfillments }, { data: events }] = await Promise.all([
+      supabase.from("order_payments").select("*").eq("order_id", orderId),
+      supabase.from("order_fulfillments").select("*, order_fulfillment_items(*)").eq("order_id", orderId),
+      supabase.from("order_events").select("*").eq("order_id", orderId),
+    ]);
+
+    const entries: TimelineEntry[] = [];
+
+    entries.push({
+      id: `placed-${orderId}`,
+      type: "placed",
+      actor: "system",
+      message: `${s(order.customer_name) || "Customer"} placed this order`,
+      createdAt: s(order.created_at),
+    });
+
+    for (const p of (payments ?? []) as Row[]) {
+      const kind = s(p.kind) || "payment";
+      entries.push({
+        id: `pay-${s(p.id)}`,
+        type: kind === "refund" ? "refund" : "payment",
+        actor: "system",
+        message: kind === "refund" ? "A refund was issued" : "A payment was recorded",
+        amount: n(p.amount),
+        createdAt: s(p.created_at),
+      });
+    }
+
+    for (const f of (fulfillments ?? []) as Row[]) {
+      const items = Array.isArray(f.order_fulfillment_items) ? (f.order_fulfillment_items as Row[]) : [];
+      const qty = items.reduce((sum, i) => sum + n(i.quantity), 0);
+      entries.push({
+        id: `ful-${s(f.id)}`,
+        type: "fulfilled",
+        actor: "staff",
+        message: `${qty} item${qty === 1 ? "" : "s"} fulfilled${f.tracking ? ` · ${s(f.tracking)}` : ""}`,
+        createdAt: s(f.created_at),
+      });
+    }
+
+    for (const e of (events ?? []) as Row[]) {
+      entries.push({
+        id: s(e.id),
+        type: s(e.type),
+        actor: (s(e.actor) as "system" | "staff") || "system",
+        message: s(e.message),
+        createdAt: s(e.created_at),
+      });
+    }
+
+    entries.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return { ok: true, data: entries };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+/** Post a staff comment onto the timeline. */
+export async function addOrderComment(orderNumber: string, text: string): Promise<ActionResult<TimelineEntry>> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  const body = text.trim();
+  if (!body) return { ok: false, error: "empty_comment" };
+  try {
+    const supabase = getServerSupabase();
+    const loaded = await loadOrder(supabase, orderNumber, "id");
+    if (!loaded.ok) return { ok: false, error: loaded.error };
+    const { data, error } = await supabase
+      .from("order_events")
+      .insert({ order_id: s(loaded.order.id), actor: "staff", type: "comment", message: body })
+      .select("*")
+      .single();
+    if (error) return { ok: false, error: missing(error) ? "migration_missing" : error.message };
+    return {
+      ok: true,
+      data: { id: s(data.id), type: "comment", actor: "staff", message: body, createdAt: s(data.created_at) },
+    };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+/** Replace the order's tags. */
+export async function updateOrderTags(orderNumber: string, tags: string[]): Promise<ActionResult<{ tags: string[] }>> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  const clean = Array.from(new Set(tags.map((t) => t.trim()).filter(Boolean))).slice(0, 40);
+  try {
+    const supabase = getServerSupabase();
+    const { error } = await supabase.from("store_orders").update({ tags: clean }).eq("order_number", orderNumber);
+    if (error) return { ok: false, error: missing(error) ? "migration_missing" : error.message };
+    return { ok: true, data: { tags: clean } };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+/** Save the staff-facing note. */
+export async function saveAdminNote(orderNumber: string, note: string): Promise<ActionResult> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  try {
+    const supabase = getServerSupabase();
+    const { error } = await supabase.from("store_orders").update({ admin_note: note.trim() || null }).eq("order_number", orderNumber);
+    if (error) return { ok: false, error: missing(error) ? "migration_missing" : error.message };
+    return { ok: true, data: undefined };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+/** The fulfillment dropdown's "in progress" / "on hold" / clear. */
+export async function setOrderHold(orderNumber: string, hold: "in_progress" | "on_hold" | null): Promise<ActionResult> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  try {
+    const supabase = getServerSupabase();
+    const loaded = await loadOrder(supabase, orderNumber, "id");
+    if (!loaded.ok) return { ok: false, error: loaded.error };
+    const { error } = await supabase.from("store_orders").update({ fulfillment_hold: hold }).eq("order_number", orderNumber);
+    if (error) return { ok: false, error: missing(error) ? "migration_missing" : error.message };
+    await logEvent(supabase, s(loaded.order.id), {
+      type: "note",
+      message: hold === "in_progress" ? "Marked as in progress" : hold === "on_hold" ? "Placed on hold" : "Hold removed",
+    });
+    return { ok: true, data: undefined };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+/** Cancel the order, optionally restocking its items. */
+export async function cancelOrder(
+  orderNumber: string,
+  input?: { reason?: string; restock?: boolean },
+): Promise<ActionResult<{ restocked: number }>> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  try {
+    const supabase = getServerSupabase();
+    const loaded = await loadOrder(supabase, orderNumber, "id,lifecycle");
+    if (!loaded.ok) return { ok: false, error: loaded.error };
+    const orderId = s(loaded.order.id);
+
+    let restocked = 0;
+    if (input?.restock) {
+      const { data, error } = await supabase.rpc("order_restock", { p_order_number: orderNumber });
+      if (error) return { ok: false, error: mapRpcError(error.message) };
+      restocked = Number(data ?? 0);
+    }
+
+    const { error: upErr } = await supabase
+      .from("store_orders")
+      .update({ lifecycle: "cancelled", cancelled_at: new Date().toISOString(), cancel_reason: input?.reason?.trim() || null })
+      .eq("order_number", orderNumber);
+    if (upErr) return { ok: false, error: upErr.message };
+
+    await logEvent(supabase, orderId, {
+      type: "cancelled",
+      message: `Order cancelled${input?.reason ? ` · ${input.reason}` : ""}${restocked > 0 ? ` · restocked ${restocked}` : ""}`,
+    });
+    return { ok: true, data: { restocked } };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+/** Archive / unarchive (hides from the default list, Shopify-style). */
+export async function archiveOrder(orderNumber: string, archived: boolean): Promise<ActionResult> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  try {
+    const supabase = getServerSupabase();
+    const loaded = await loadOrder(supabase, orderNumber, "id");
+    if (!loaded.ok) return { ok: false, error: loaded.error };
+    const { error } = await supabase
+      .from("store_orders")
+      .update({ archived_at: archived ? new Date().toISOString() : null })
+      .eq("order_number", orderNumber);
+    if (error) return { ok: false, error: missing(error) ? "migration_missing" : error.message };
+    await logEvent(supabase, s(loaded.order.id), {
+      type: archived ? "archived" : "unarchived",
+      message: archived ? "Order archived" : "Order unarchived",
+    });
+    return { ok: true, data: undefined };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+/** Restock every tracked line back to stock (idempotent via restocked_at). */
+export async function restockOrder(orderNumber: string): Promise<ActionResult<{ restocked: number }>> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  try {
+    const supabase = getServerSupabase();
+    const loaded = await loadOrder(supabase, orderNumber, "id");
+    if (!loaded.ok) return { ok: false, error: loaded.error };
+    const { data, error } = await supabase.rpc("order_restock", { p_order_number: orderNumber });
+    if (error) return { ok: false, error: mapRpcError(error.message) };
+    const restocked = Number(data ?? 0);
+    await logEvent(supabase, s(loaded.order.id), { type: "restocked", message: `Restocked ${restocked} item${restocked === 1 ? "" : "s"}` });
+    return { ok: true, data: { restocked } };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+/** "Mark as paid" — record the whole outstanding balance as a manual payment. */
+export async function markOrderPaid(orderNumber: string, method = "manual"): Promise<ActionResult<PaymentResult>> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  try {
+    const supabase = getServerSupabase();
+    const { data: order, error } = await supabase
+      .from("store_orders")
+      .select("total,amount_paid")
+      .eq("order_number", orderNumber)
+      .maybeSingle();
+    if (error) return { ok: false, error: missing(error) ? "migration_missing" : error.message };
+    if (!order) return { ok: false, error: "order_not_found" };
+    const balance = Math.max(0, n(order.total) - n(order.amount_paid));
+    if (balance <= 0) return { ok: false, error: "invalid_amount" };
+    return collectPayment(orderNumber, { amount: balance, method, note: "Marked as paid" });
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+export type OrderConversion = {
+  orderIndex: number;      // 1-based: this is their Nth order
+  totalOrders: number;
+  totalSpent: number;
+  firstOrderAt: string | null;
+  lastOrderAt: string | null;
+  risk: "low" | "medium" | "high";
+  riskReason: string;
+};
+
+/**
+ * The "Conversion summary" + "Order risk" cards, from data we actually have:
+ * how many orders this phone has placed and their spend, and a simple risk read
+ * from the order's own signals (a fraud flag, or a first-time COD order).
+ */
+export async function getOrderConversion(orderNumber: string): Promise<ActionResult<OrderConversion>> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  try {
+    const supabase = getServerSupabase();
+    const loaded = await loadOrder(supabase, orderNumber, "id,phone,payment_method,created_at,total");
+    if (!loaded.ok) return { ok: false, error: loaded.error };
+    const order = loaded.order;
+
+    const { data: theirs } = await supabase
+      .from("store_orders")
+      .select("order_number,total,created_at")
+      .eq("phone", s(order.phone))
+      .order("created_at", { ascending: true });
+
+    const rows = (theirs ?? []) as Row[];
+    const totalOrders = rows.length || 1;
+    const totalSpent = rows.reduce((sum, r) => sum + n(r.total), 0);
+    const idx = Math.max(1, rows.findIndex((r) => s(r.order_number) === orderNumber) + 1);
+    const firstOrderAt = rows.length ? s(rows[0].created_at) : null;
+    const lastOrderAt = rows.length ? s(rows[rows.length - 1].created_at) : null;
+
+    // Risk: a returning customer who pays is low; a brand-new COD order carries
+    // the most chargeback/bounce risk this shop actually sees.
+    const isCod = (s(order.payment_method) || "cod").toLowerCase().includes("cod");
+    let risk: OrderConversion["risk"] = "low";
+    let riskReason = "Returning customer";
+    if (idx === 1 && isCod && n(order.total) >= 5000) {
+      risk = "high";
+      riskReason = "First order, high-value, cash on delivery";
+    } else if (idx === 1) {
+      risk = "medium";
+      riskReason = "First-time customer";
+    }
+
+    return {
+      ok: true,
+      data: { orderIndex: idx, totalOrders, totalSpent, firstOrderAt, lastOrderAt, risk, riskReason },
+    };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+/** Is the shop's mailbox set up, so "Send invoice" can actually deliver? */
+export async function getMailerStatus(): Promise<ActionResult<{ ready: boolean }>> {
+  try {
+    return { ok: true, data: { ready: await isMailerReady() } };
+  } catch {
+    return { ok: true, data: { ready: false } };
+  }
+}
+
+/** Email the customer this order's invoice, then stamp it on the timeline. */
+export async function sendOrderInvoice(orderNumber: string): Promise<ActionResult<{ to: string }>> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  try {
+    const res = await sendOrderInvoiceEmail(orderNumber);
+    if (!res.ok) return { ok: false, error: res.error };
+
+    const supabase = getServerSupabase();
+    await supabase.from("store_orders").update({ invoice_sent_at: new Date().toISOString() }).eq("order_number", orderNumber);
+    const loaded = await loadOrder(supabase, orderNumber, "id");
+    if (loaded.ok) {
+      await logEvent(supabase, s(loaded.order.id), {
+        type: "invoice_sent",
+        message: `Invoice email sent to ${res.to}`,
+        meta: { to: res.to },
+      });
+    }
+    return { ok: true, data: { to: res.to } };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }
