@@ -683,6 +683,53 @@ function askedRecently(key: string): boolean {
   return false;
 }
 
+/**
+ * Ask the provider whether we can actually talk to it, and say what it said.
+ *
+ * Every other answer here is indirect: a replay that has not converted could
+ * be a missing variable, a token without write permission, a deploy that
+ * happened before the variable was added, or simply a conversion that has not
+ * finished. Those need different things done about them and they all look the
+ * same from the outside, which is the worst property a problem can have.
+ *
+ * So this makes one real request of the kind the transcode makes, and reports
+ * the outcome plainly.
+ */
+export type ProviderCheck =
+  | { state: "ok"; videos: number }
+  | { state: "not_configured"; missing: string[] }
+  | { state: "refused"; status: number; detail: string };
+
+export async function checkProvider(): Promise<ProviderCheck> {
+  const missing = providerMissing();
+  if (missing.length) return { state: "not_configured", missing };
+  try {
+    const res = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT}/stream?per_page=1`,
+      { headers: { authorization: `Bearer ${CF_TOKEN}` } },
+    );
+    const body = (await res.json()) as {
+      success?: boolean;
+      errors?: { message?: string }[];
+      result?: unknown[];
+      result_info?: { total_count?: number };
+    };
+    if (!res.ok || body.success === false) {
+      return {
+        state: "refused",
+        status: res.status,
+        detail: body.errors?.[0]?.message || "no reason given",
+      };
+    }
+    return {
+      state: "ok",
+      videos: Number(body.result_info?.total_count ?? (body.result?.length ?? 0)),
+    };
+  } catch (e) {
+    return { state: "refused", status: 0, detail: (e as Error).message };
+  }
+}
+
 // ---- Making a replay streamable --------------------------------------------
 
 /**

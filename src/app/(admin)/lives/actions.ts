@@ -22,6 +22,8 @@ import {
   setLiveStatus,
   useTestStream,
   type LiveCollection,
+  checkProvider,
+  type ProviderCheck,
   type ReplayState,
   type LiveProductInput,
   type Result,
@@ -80,6 +82,11 @@ export async function pinLiveProductAction(
   productId: string | null,
 ): Promise<Result<LiveStream>> {
   return pinLiveProduct(liveId, productId);
+}
+
+/** Can the server reach the video provider, and what does it say if not. */
+export async function checkProviderAction(): Promise<ProviderCheck> {
+  return checkProvider();
 }
 
 export async function refreshRecordingAction(id: string): Promise<Result<ReplayState>> {

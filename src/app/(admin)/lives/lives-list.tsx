@@ -17,6 +17,7 @@ import {
   postHostMessageAction,
   prepareLiveAction,
   providerStatusAction,
+  checkProviderAction,
   deleteRecordingAction,
   refreshRecordingAction,
   saveLiveAction,
@@ -27,7 +28,7 @@ import {
   useTestStreamAction,
 } from "./actions";
 import { listStoreProducts, type StoreProduct } from "../../store/actions";
-import type { LiveCollection } from "@/lib/live-service";
+import type { LiveCollection, ProviderCheck } from "@/lib/live-service";
 import { CameraCheck } from "./camera-check";
 import { Broadcast } from "./broadcast";
 import { HostComments } from "./host-comments";
@@ -81,6 +82,8 @@ export function LivesList() {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState<LiveStream | null>(null);
   const [creating, setCreating] = useState(false);
+  const [checking, setChecking] = useState<"idle" | "running" | "done">("idle");
+  const [check, setCheck] = useState<ProviderCheck | null>(null);
 
   async function load() {
     const [res, prov] = await Promise.all([listLivesAction(), providerStatusAction()]);
@@ -203,6 +206,53 @@ export function LivesList() {
           </div>
         </Card>
       )}
+
+      {/*
+        One real request to the provider, of the kind the transcode makes.
+
+        Everything else about this is indirect: a replay that has not converted
+        could be a missing variable, a token without write permission, a deploy
+        that happened before the variable was added, or a conversion that has
+        simply not finished. They need different things done about them and
+        they look identical from the outside — so this asks, and repeats the
+        answer rather than guessing at it.
+      */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <button
+          onClick={async () => {
+            setChecking("running");
+            setCheck(await checkProviderAction());
+            setChecking("done");
+          }}
+          disabled={checking === "running"}
+          className="btn-outline h-9 px-3 text-xs"
+        >
+          {checking === "running"
+            ? (ar ? "جارٍ الفحص…" : "Checking…")
+            : ar ? "فحص اتصال الفيديو" : "Test video connection"}
+        </button>
+        {check && (
+          <span
+            className={`rounded-lg px-2.5 py-1.5 text-[11px] ${
+              check.state === "ok"
+                ? "bg-emerald-50 text-emerald-800"
+                : "bg-amber-50 text-amber-900"
+            }`}
+          >
+            {check.state === "ok"
+              ? ar
+                ? `الاتصال يعمل · ${check.videos} فيديو لدى المزوّد`
+                : `Connected · ${check.videos} video${check.videos === 1 ? "" : "s"} at the provider`
+              : check.state === "not_configured"
+                ? ar
+                  ? `غير مهيّأ: ${check.missing.join(", ")}`
+                  : `Not configured: ${check.missing.join(", ")}`
+                : ar
+                  ? `رفض المزوّد (${check.status}): ${check.detail}`
+                  : `The provider refused (${check.status}): ${check.detail}`}
+          </span>
+        )}
+      </div>
 
       <div className="mb-4">
         <KpiRow cols={4}>
