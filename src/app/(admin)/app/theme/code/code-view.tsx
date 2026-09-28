@@ -7,7 +7,8 @@ import { useI18n } from "@/lib/i18n";
 import { Card } from "@/components/ui";
 import { IcChevron, IcCopy, IcSearch, IcAlert, IcFile, IcCode } from "@/components/icons";
 import type { GeneratedFile } from "@/lib/app-theme-codegen";
-import { generatedFiles, loadThemeEditor } from "../actions";
+import type { AppTheme } from "@/lib/app-theme";
+import { downloadApp, generatedFiles, loadThemeEditor } from "../actions";
 
 /**
  * The app's code.
@@ -24,7 +25,13 @@ import { generatedFiles, loadThemeEditor } from "../actions";
  */
 
 function languageOf(path: string) {
-  return path.endsWith(".tsx") ? "typescriptreact" : path.endsWith(".ts") ? "typescript" : "json";
+  if (path.endsWith(".tsx")) return "typescriptreact";
+  if (path.endsWith(".ts")) return "typescript";
+  if (path.endsWith(".js")) return "javascript";
+  if (path.endsWith(".md")) return "markdown";
+  if (path.endsWith(".json")) return "json";
+  // .gitignore and anything else without an extension.
+  return "text";
 }
 
 const formatBytes = (n: number) => (n < 1024 ? `${n} B` : `${(n / 1024).toFixed(1)} KB`);
@@ -35,6 +42,8 @@ export function CodeView() {
   const params = useSearchParams();
 
   const [files, setFiles] = useState<GeneratedFile[] | null>(null);
+  const [theme, setTheme] = useState<AppTheme | null>(null);
+  const [zipping, setZipping] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [path, setPath] = useState<string>(params.get("file") ?? "HomeScreen.tsx");
   const [q, setQ] = useState("");
@@ -45,6 +54,7 @@ export function CodeView() {
     (async () => {
       const editor = await loadThemeEditor();
       if (!editor.ok) return setError(editor.error);
+      setTheme(editor.data.theme);
       const gen = await generatedFiles(editor.data.theme);
       if (!gen.ok) return setError(gen.error);
       setFiles(gen.data);
@@ -69,18 +79,35 @@ export function CodeView() {
     setTimeout(() => setCopied(false), 1500);
   }
 
-  function downloadAll() {
-    // One file, because a zip needs a library and this is meant to be pasted
-    // into a project rather than unpacked into one.
-    const body = (files ?? [])
-      .map((f) => `// ===== ${f.path} ${"=".repeat(Math.max(0, 60 - f.path.length))}\n\n${f.contents}`)
-      .join("\n\n");
-    const url = URL.createObjectURL(new Blob([body], { type: "text/plain" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "app-home-screen.txt";
-    a.click();
-    URL.revokeObjectURL(url);
+  /**
+   * The project, as a folder.
+   *
+   * This used to hand over one long text file of every screen concatenated,
+   * which was honest when there was no project to make — the code existed to
+   * be read and pasted. There is one now: package.json, app.json, an entry
+   * point and a README. So it comes out as a zip that unpacks into something
+   * npm install understands, rather than something still to be assembled.
+   */
+  async function downloadAll() {
+    if (!theme || zipping) return;
+    setZipping(true);
+    try {
+      const res = await downloadApp(theme);
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      // Base64 back into bytes: an action returns a value, not a stream.
+      const bytes = Uint8Array.from(atob(res.data.base64), (c) => c.charCodeAt(0));
+      const url = URL.createObjectURL(new Blob([bytes], { type: "application/zip" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = res.data.name;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setZipping(false);
+    }
   }
 
   if (error) {
@@ -108,8 +135,14 @@ export function CodeView() {
               : "Written from the theme on every edit. To copy, not to edit"}
           </div>
         </div>
-        <button onClick={downloadAll} className="btn-outline ms-auto h-9 px-3 text-xs">
-          {ar ? "تنزيل الكل" : "Download all"}
+        <button
+          onClick={downloadAll}
+          disabled={!theme || zipping}
+          className="btn-outline ms-auto h-9 px-3 text-xs"
+        >
+          {zipping
+            ? (ar ? "جارٍ التجهيز…" : "Preparing…")
+            : ar ? "تنزيل المشروع" : "Download project"}
         </button>
         <button onClick={copy} disabled={!current} className="btn-primary h-9 gap-1.5 px-3 text-xs">
           <IcCopy className="h-3.5 w-3.5" />

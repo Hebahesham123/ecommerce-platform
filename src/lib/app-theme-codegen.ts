@@ -10,6 +10,7 @@ import {
   type BlockType,
   type Item,
 } from "@/lib/app-theme";
+import { projectFiles } from "@/lib/app-project-files";
 
 /**
  * The app's code, written by the editor.
@@ -34,7 +35,8 @@ import {
 
 export type GeneratedFile = {
   path: string;
-  language: "tsx" | "ts" | "json";
+  /** What to colour it as, and what extension the file already carries. */
+  language: "tsx" | "ts" | "json" | "js" | "md";
   contents: string;
 };
 
@@ -8115,6 +8117,9 @@ const styles = StyleSheet.create({
 export function generateApp(theme: AppTheme, baseUrl: string): GeneratedFile[] {
   const used = [...new Set(theme.blocks.map((b) => b.type))];
   return [
+    // The project first. Without these the rest is a folder of TypeScript
+    // that nothing knows how to install, run or name.
+    ...projectFiles(theme, baseUrl),
     themeFile(theme),
     screensFile(theme),
     apiFile(baseUrl),

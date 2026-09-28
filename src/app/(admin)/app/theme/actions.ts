@@ -1,5 +1,6 @@
 "use server";
 
+import JSZip from "jszip";
 import { revalidatePath } from "next/cache";
 import { getAppTheme, saveAppTheme } from "@/lib/app-theme-service";
 import { getCatalog } from "@/lib/storefront-data";
@@ -70,6 +71,55 @@ export async function saveTheme(theme: AppTheme): Promise<ActionResult> {
  * show what an unsaved edit would produce, which is the whole point of showing
  * it at all.
  */
+/**
+ * The whole project as one file, ready to unzip and install.
+ *
+ * Reading the code on screen is useful for seeing what a section produces;
+ * it is no use at all for actually having an app. This is the same files,
+ * zipped, so the folder that comes out is one `npm install` from running on
+ * a phone.
+ *
+ * Base64 rather than a stream: a server action returns a value, and the app
+ * is a few hundred kilobytes of text — small enough that the simple thing is
+ * also the right one.
+ */
+export async function downloadApp(
+  theme: AppTheme,
+): Promise<ActionResult<{ name: string; base64: string }>> {
+  const made = await generatedFiles(theme);
+  if (!made.ok) return made;
+  try {
+    const zip = new JSZip();
+    for (const f of made.data) zip.file(f.path, f.contents);
+
+    // Somewhere for the pictures the build needs, with a note rather than an
+    // empty folder a zip would drop on the way out.
+    zip.file(
+      "assets/README.txt",
+      [
+        "Put three images here before building:",
+        "",
+        "  icon.png           1024x1024, no transparency",
+        "  splash.png         about 1284x2778, your logo centred",
+        "  adaptive-icon.png  1024x1024, the middle two thirds kept clear",
+        "",
+        "The build fails without them, and that is the right behaviour: an app",
+        "shipped with Expo's placeholder icon is worse than one that would not",
+        "build.",
+      ].join("\n"),
+    );
+
+    const base64 = await zip.generateAsync({ type: "base64" });
+    const name = (theme.settings.storeName || "shop")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "shop";
+    return { ok: true, data: { name: `${name}-app.zip`, base64 } };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
 export async function generatedFiles(theme: AppTheme): Promise<ActionResult<GeneratedFile[]>> {
   try {
     // The base URL is this deployment's, so the generated api.ts points at the
