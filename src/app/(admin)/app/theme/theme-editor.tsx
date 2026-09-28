@@ -1464,6 +1464,14 @@ export function ThemeEditor() {
                 }}
                 cartCount={cartCount}
                 onBag={() => setPage("cart")}
+                onHome={() => {
+                  // The shop's name goes home here too. It is the same header
+                  // the app draws, and a control that works in one copy of a
+                  // component and not the other is the worst kind of broken:
+                  // it looks like it works.
+                  setStack([]);
+                  setPage("home");
+                }}
                 wishlistCount={wishlist.length}
                 onWishlist={() => setSavedOpen(true)}
               />
