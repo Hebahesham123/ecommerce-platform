@@ -2469,6 +2469,60 @@ function BlockGroup({
         </>
       )}
 
+      {block.type === "bundle_save" && (
+        <>
+          <Field label={ar ? "السطر الصغير" : "The small line"} type="text">
+            <input value={text("eyebrow")} onChange={(e) => onPatch({ eyebrow: e.target.value })} placeholder="Bundle & save" className={input} />
+          </Field>
+          <Field label={ar ? "العنوان" : "Title"} type="text">
+            <input value={text("title")} onChange={(e) => onPatch({ title: e.target.value })} placeholder="Complete the bundle" className={input} />
+          </Field>
+          <Field label={ar ? "عدد القطع" : "How many make a bundle"} type="range">
+            <input type="number" min={2} max={6} value={num("itemCount", 3)} onChange={(e) => onPatch({ itemCount: Number(e.target.value) })} className={input} />
+          </Field>
+          <Field label={ar ? "نسبة الخصم" : "Per cent off"} type="range">
+            <input type="number" min={0} max={90} value={num("percentOff", 10)} onChange={(e) => onPatch({ percentOff: Number(e.target.value) })} className={input} />
+            <p className="mt-1 text-[11px] text-ink-soft">
+              {ar
+                ? "ينزل على أرخص قطعة اختارتها العميلة — نفس قاعدة الموقع."
+                : "Comes off the cheapest item she picked, the same rule the website states."}
+            </p>
+          </Field>
+          <Field label={ar ? "كود الخصم" : "The code that does it"} type="text">
+            <input value={text("code")} onChange={(e) => onPatch({ code: e.target.value.toUpperCase() })} placeholder="BUNDLE10" className={input} dir="ltr" />
+            <p className="mt-1 text-[11px] text-ink-soft">
+              {ar
+                ? "لا يخصم هذا القسم شيئاً بنفسه — الكود هو ما يخصم عند الدفع، فاصنعيه في الخصومات بنفس النسبة."
+                : "This section takes nothing off by itself: the code does, at checkout. Make it in Discounts at the same per cent, or the total it shows will not be honoured."}
+            </p>
+          </Field>
+          <Field label={ar ? "من أي قسم تُختار القطع" : "What she picks from"} type="link">
+            <LinkPicker
+              pages={pages}
+              value={{ handle: text("handle"), url: "", productId: "", screen: "" }}
+              onChange={(next) => onPatch({ handle: next.handle ?? "" })}
+              collections={collections}
+              input={input}
+              ar={ar}
+            />
+            <p className="mt-1 text-[11px] text-ink-soft">
+              {ar ? "اتركيه فارغاً فتظهر الجديدة." : "Leave it empty and it offers what is new."}
+            </p>
+          </Field>
+          <Field label={ar ? "كم قطعة تظهر" : "How many to offer"} type="range">
+            <input type="number" min={3} max={24} value={num("limit", 12)} onChange={(e) => onPatch({ limit: Number(e.target.value) })} className={input} />
+          </Field>
+          <Field label={ar ? "نص الزر" : "Button text"} type="text">
+            <input value={text("addLabel")} onChange={(e) => onPatch({ addLabel: e.target.value })} placeholder="Add bundle" className={input} />
+          </Field>
+          <Field label={ar ? "السطر تحت الزر" : "The line under the button"} type="text">
+            <input value={text("note")} onChange={(e) => onPatch({ note: e.target.value })} placeholder="Use the code at checkout" className={input} />
+          </Field>
+          <ColorRow label={ar ? "خلفية البطاقة" : "Card background"} value={text("bg")} fallback="#fffaf3" onChange={(v) => onPatch({ bg: v })} input={input} ar={ar} />
+          <ColorRow label={ar ? "لون الكتابة" : "Ink"} value={text("inkColor")} fallback="#2b1b10" onChange={(v) => onPatch({ inkColor: v })} input={input} ar={ar} />
+        </>
+      )}
+
       {block.type === "review_summary" && (
         <>
           <Field label={ar ? "السطر العلوي الصغير" : "Small line above"} type="text">

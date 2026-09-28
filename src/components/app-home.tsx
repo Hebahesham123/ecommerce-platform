@@ -672,6 +672,26 @@ function BlockView({
       );
     }
 
+    case "bundle_save": {
+      const handle = str(s.handle).toLowerCase();
+      // Whatever the shop actually has: the collection chosen, else what is
+      // new, else the first row with anything in it. A merchant who adds this
+      // section should see it working before she has configured it, not a
+      // grey box telling her it is empty.
+      const pool =
+        (handle ? data.rows[handle] : undefined) ??
+        (data.newArrivals?.length ? data.newArrivals : undefined) ??
+        Object.values(data.rows ?? {}).find((row) => row?.length) ??
+        [];
+      const picks = pool.slice(0, int(s.limit, 12));
+      if (!picks.length) {
+        return <Placeholder ar={ar} label={ar ? "لا منتجات لهذا العرض" : "Nothing to bundle yet"} />;
+      }
+      return (
+        <BundleSave block={block} cards={picks} data={data} ar={ar} accent={accent} handlers={handlers} />
+      );
+    }
+
     case "live_now": {
       // Whoever is genuinely on air comes first, with the cover the host chose
       // when she created them — a row that advertises a live nobody can watch
@@ -1517,6 +1537,172 @@ function ReplayPlayer({
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Buy three, the cheapest comes down.
+ *
+ * The one device on the website's product page that asks a shopper to add
+ * something she was not already looking at, and the app did not have it.
+ *
+ * It does not invent a total. The saving is a real discount code the shopper
+ * uses at checkout, so this says the code and the checkout does the
+ * arithmetic - a section that quotes a price the checkout will not honour is
+ * worse than no section. A card that needs a size opens instead of being
+ * picked, for the same reason the product cards do: guessing on her behalf is
+ * how you earn a return.
+ */
+function BundleSave({
+  block,
+  cards,
+  data,
+  ar,
+  accent,
+  handlers,
+}: {
+  block: Block;
+  cards: Card[];
+  data: HomeData;
+  ar: boolean;
+  accent: string;
+  handlers: HomeHandlers;
+}) {
+  const s = block.settings ?? {};
+  const want = Math.max(2, int(s.itemCount, 3));
+  const off = Math.max(0, Math.min(90, int(s.percentOff, 10)));
+  const code = str(s.code);
+  const radius = int(s.radius, 16);
+  const ink = str(s.inkColor) || "#2b1b10";
+  const paper = str(s.bg) || "#fffaf3";
+
+  const [picked, setPicked] = useState<string[]>([]);
+  const [added, setAdded] = useState(false);
+  const chosen = cards.filter((c) => picked.includes(c.id));
+  const prices = chosen.map((c) => c.priceMin ?? 0);
+  const total = prices.reduce((a, b) => a + b, 0);
+  // The cheapest of what she picked is what comes down, which is the rule the
+  // website states and the only one a shopper can check herself.
+  const saving = prices.length ? Math.round((Math.min(...prices) * off) / 100) : 0;
+  const full = picked.length >= want;
+
+  const toggle = (card: Card) => {
+    const single = card.variantId != null && (card.variantCount ?? 1) === 1;
+    if (!single) return handlers.onOpenProduct?.(card.id);
+    setPicked((p) => (p.includes(card.id) ? p.filter((x) => x !== card.id) : [...p, card.id]));
+  };
+
+  const addAll = () => {
+    for (const c of chosen) if (c.variantId) handlers.onAddToCart?.(c.variantId, c.id);
+    setAdded(true);
+    setTimeout(() => setAdded(false), 2200);
+  };
+
+  return (
+    <section>
+      <div
+        className="overflow-hidden border"
+        style={{ background: paper, borderColor: `${accent}33`, borderRadius: radius }}
+      >
+        {/* The offer, said once, in the loudest line on the card. */}
+        <div className="flex items-center gap-2 px-3 py-2" style={{ background: `${accent}14` }}>
+          <span dir="auto" className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: accent }}>
+            {str(s.eyebrow, ar ? "اشتري معاً ووفّري" : "Bundle & save")}
+          </span>
+          <span className="ms-auto rounded-full px-2 py-0.5 text-[11px] font-bold text-white" style={{ background: accent }}>
+            {off}% {ar ? "خصم" : "OFF"}
+          </span>
+        </div>
+
+        <div className="px-3 pb-3 pt-2.5">
+          {str(s.title) && (
+            <h3 dir="auto" className="app-display text-[17px] font-bold leading-tight" style={{ color: ink }}>
+              {str(s.title)}
+            </h3>
+          )}
+          <p dir="auto" className="mt-0.5 text-[11px]" style={{ color: `${ink}99` }}>
+            {ar
+              ? `اختاري ${want} قطع — الأرخص ينزل ${off}%`
+              : `Pick ${want} — the cheapest comes down ${off}%`}
+          </p>
+
+          {/* What she can pick from. */}
+          <div className="-mx-3 mt-2.5 flex overflow-x-auto px-3 pb-1" style={{ gap: "calc(var(--app-item-gap, 8px) * 0.75)" }}>
+            {cards.map((card) => {
+              const on = picked.includes(card.id);
+              return (
+                <button
+                  key={card.id}
+                  onClick={() => toggle(card)}
+                  className="relative w-[86px] shrink-0 overflow-hidden rounded-xl border bg-white text-start transition"
+                  style={{ borderColor: on ? accent : "#e2e8f0", borderWidth: on ? 2 : 1 }}
+                >
+                  <Thumb src={card.image} className="aspect-square rounded-none" blend />
+                  {on && (
+                    <span
+                      className="absolute end-1 top-1 grid h-[18px] w-[18px] place-items-center rounded-full text-[11px] font-bold text-white"
+                      style={{ background: accent }}
+                    >
+                      ✓
+                    </span>
+                  )}
+                  <span className="block px-1.5 pb-1.5 pt-1">
+                    <span className="block truncate text-[9px] leading-tight text-slate-500">
+                      {shortName(withoutVendor(card.name, card.vendor), 2)}
+                    </span>
+                    <span className="block text-[11px] font-bold" style={{ color: ink }}>
+                      {money(card.priceMin, ar)}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* What that comes to. */}
+          <div className="mt-2.5 flex items-end justify-between gap-2">
+            <span className="min-w-0">
+              <span dir="auto" className="block text-[11px]" style={{ color: `${ink}99` }}>
+                {ar ? `اخترتِ ${picked.length} من ${want}` : `${picked.length} of ${want} picked`}
+              </span>
+              {picked.length > 0 && (
+                <span dir="auto" className="block text-[15px] font-bold" style={{ color: ink }}>
+                  {money(total - saving, ar)}
+                  {saving > 0 && (
+                    <span className="ms-1.5 text-[11px] font-semibold" style={{ color: accent }}>
+                      {ar ? "توفّرين " : "save "}
+                      {money(saving, ar)}
+                    </span>
+                  )}
+                </span>
+              )}
+            </span>
+            <button
+              onClick={addAll}
+              disabled={!full || !handlers.onAddToCart}
+              className="h-10 shrink-0 rounded-xl px-4 text-[12px] font-bold uppercase tracking-[0.12em] text-white transition disabled:opacity-40"
+              style={{ background: added ? "#4a7858" : accent }}
+            >
+              {added
+                ? ar ? "أُضيفت ✓" : "Added ✓"
+                : str(s.addLabel, ar ? "أضيفي الباقة" : "Add bundle")}
+            </button>
+          </div>
+
+          {/* The code is what actually takes the money off, so it is said
+              plainly rather than implied by a total. */}
+          {code && (
+            <p dir="auto" className="mt-2 text-[10px]" style={{ color: `${ink}99` }}>
+              {str(s.note, ar ? "استخدمي الكود عند الدفع" : "Use the code at checkout")}
+              {": "}
+              <span className="font-mono font-bold" style={{ color: accent }}>
+                {code}
+              </span>
+            </p>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
 

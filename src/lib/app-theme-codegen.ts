@@ -2,6 +2,7 @@ import {
   BLOCK_META,
   blocksFor,
   itemsOf,
+  TAB_KEYS,
   liveSessionsOf,
   TAB_DEFAULTS,
   type AppTheme,
@@ -2268,6 +2269,191 @@ const styles = StyleSheet.create({
   scrimTight: { position: "absolute", left: 0, right: 0, bottom: 0, height: "42%", backgroundColor: "rgba(0,0,0,0.4)" },
   word: { position: "absolute", left: 12, right: 12, bottom: 10, fontSize: 13, fontWeight: "600" },
   wordTight: { position: "absolute", left: 5, right: 5, bottom: 5, fontSize: 9, fontWeight: "700" },
+});
+`,
+
+    bundle_save: `import React, { useState } from "react";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { colors, gap, radius, spacing, theme } from "../theme";
+import { money } from "./Pieces";
+import type { HomePayload } from "../api";
+
+type Card = HomePayload["newArrivals"][number];
+
+export type BundleSaveSettings = {
+  eyebrow?: string;
+  title?: string;
+  itemCount?: number;
+  percentOff?: number;
+  code?: string;
+  handle?: string;
+  limit?: number;
+  addLabel?: string;
+  note?: string;
+  radius?: number;
+  bg?: string;
+  inkColor?: string;
+};
+
+/**
+ * Buy three, the cheapest comes down.
+ *
+ * It does not invent a total: the saving is a real discount code the shopper
+ * uses at checkout, so this says the code and the checkout does the
+ * arithmetic. A card that needs a size opens instead of being picked, for the
+ * same reason the product cards do - guessing on her behalf is how you earn a
+ * return.
+ */
+export function BundleSave({
+  settings,
+  rows,
+  newArrivals,
+  onOpenProduct,
+  onAdd,
+}: {
+  settings: BundleSaveSettings;
+  rows: HomePayload["rows"];
+  newArrivals: HomePayload["newArrivals"];
+  onOpenProduct?: (id: string) => void;
+  onAdd?: (variantId: string, productId: string) => void;
+}) {
+  const handle = (settings.handle || "").toLowerCase();
+  const pool = (handle ? rows[handle] : undefined) || newArrivals || [];
+  const cards = pool.slice(0, settings.limit && settings.limit > 0 ? settings.limit : 12);
+  const want = Math.max(2, settings.itemCount || 3);
+  const off = Math.max(0, Math.min(90, settings.percentOff === undefined ? 10 : settings.percentOff));
+  const ink = settings.inkColor || "#2b1b10";
+  const paper = settings.bg || "#fffaf3";
+  const r = settings.radius === undefined ? 16 : settings.radius;
+
+  const [picked, setPicked] = useState<string[]>([]);
+  const [added, setAdded] = useState(false);
+  if (!cards.length) return null;
+
+  const chosen = cards.filter((c) => picked.indexOf(c.id) >= 0);
+  const prices = chosen.map((c) => c.priceMin || 0);
+  const total = prices.reduce((a, b) => a + b, 0);
+  const saving = prices.length ? Math.round((Math.min.apply(null, prices) * off) / 100) : 0;
+  const full = picked.length >= want;
+
+  const toggle = (card: Card) => {
+    const single = card.variantId != null && (card.variantCount || 1) === 1;
+    if (!single) return onOpenProduct && onOpenProduct(card.id);
+    setPicked((p) => (p.indexOf(card.id) >= 0 ? p.filter((x) => x !== card.id) : p.concat(card.id)));
+  };
+
+  return (
+    <View style={[styles.card, { backgroundColor: paper, borderColor: colors.accent + "33", borderRadius: r }]}>
+      <View style={[styles.band, { backgroundColor: colors.accent + "14" }]}>
+        <Text style={[styles.eyebrow, { color: colors.accent }]}>
+          {(settings.eyebrow || "Bundle & save").toUpperCase()}
+        </Text>
+        <View style={[styles.pill, { backgroundColor: colors.accent }]}>
+          <Text style={styles.pillText}>{off + "% OFF"}</Text>
+        </View>
+      </View>
+
+      <View style={styles.body}>
+        {settings.title ? (
+          <Text style={[styles.title, { color: ink, fontFamily: theme.titleFont }]}>{settings.title}</Text>
+        ) : null}
+        <Text style={[styles.rule, { color: ink }]}>
+          {"Pick " + want + " — the cheapest comes down " + off + "%"}
+        </Text>
+
+        <View style={styles.row}>
+          {cards.map((card) => {
+            const on = picked.indexOf(card.id) >= 0;
+            return (
+              <Pressable
+                key={card.id}
+                onPress={() => toggle(card)}
+                style={[styles.pick, { borderColor: on ? colors.accent : colors.line, borderWidth: on ? 2 : 1 }]}
+              >
+                {card.image ? (
+                  <Image source={{ uri: card.image }} style={styles.pickImage} resizeMode="cover" />
+                ) : (
+                  <View style={styles.pickImage} />
+                )}
+                {on ? (
+                  <View style={[styles.tick, { backgroundColor: colors.accent }]}>
+                    <Text style={styles.tickText}>{"✓"}</Text>
+                  </View>
+                ) : null}
+                <View style={styles.pickBody}>
+                  <Text style={styles.pickName} numberOfLines={1}>{card.name}</Text>
+                  <Text style={[styles.pickPrice, { color: ink }]}>{money(card.priceMin)}</Text>
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <View style={styles.foot}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.count}>{picked.length + " of " + want + " picked"}</Text>
+            {picked.length ? (
+              <Text style={[styles.total, { color: ink }]}>
+                {money(total - saving)}
+                {saving > 0 ? <Text style={[styles.saving, { color: colors.accent }]}>{"  save " + money(saving)}</Text> : null}
+              </Text>
+            ) : null}
+          </View>
+          <Pressable
+            disabled={!full || !onAdd}
+            onPress={() => {
+              chosen.forEach((c) => c.variantId && onAdd && onAdd(c.variantId, c.id));
+              setAdded(true);
+              setTimeout(() => setAdded(false), 2200);
+            }}
+            style={[
+              styles.cta,
+              { backgroundColor: added ? "#4a7858" : colors.accent },
+              !full || !onAdd ? { opacity: 0.4 } : null,
+            ]}
+          >
+            <Text style={styles.ctaText}>
+              {added ? "ADDED ✓" : (settings.addLabel || "Add bundle").toUpperCase()}
+            </Text>
+          </Pressable>
+        </View>
+
+        {settings.code ? (
+          <Text style={styles.note}>
+            {(settings.note || "Use the code at checkout") + ": "}
+            <Text style={[styles.code, { color: colors.accent }]}>{settings.code}</Text>
+          </Text>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  card: { overflow: "hidden", borderWidth: 1 },
+  band: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 8 },
+  eyebrow: { flex: 1, fontSize: 10, fontWeight: "800", letterSpacing: 1.8 },
+  pill: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
+  pillText: { fontSize: 11, fontWeight: "800", color: "#fff" },
+  body: { paddingHorizontal: 12, paddingTop: 10, paddingBottom: 12 },
+  title: { fontSize: 17, fontWeight: "700" },
+  rule: { marginTop: 2, fontSize: 11, opacity: 0.6 },
+  row: { flexDirection: "row", flexWrap: "wrap", gap: gap.itemTight, marginTop: 10 },
+  pick: { width: 86, borderRadius: radius.md, overflow: "hidden", backgroundColor: colors.surface },
+  pickImage: { width: "100%", height: 86, backgroundColor: theme.card.photoBg },
+  tick: { position: "absolute", top: 4, right: 4, width: 18, height: 18, borderRadius: 9, alignItems: "center", justifyContent: "center" },
+  tickText: { fontSize: 11, fontWeight: "800", color: "#fff" },
+  pickBody: { paddingHorizontal: 6, paddingTop: 4, paddingBottom: 6 },
+  pickName: { fontSize: 9, color: colors.inkSoft },
+  pickPrice: { fontSize: 11, fontWeight: "700" },
+  foot: { flexDirection: "row", alignItems: "flex-end", gap: spacing.sm, marginTop: 10 },
+  count: { fontSize: 11, color: colors.inkSoft },
+  total: { fontSize: 15, fontWeight: "700" },
+  saving: { fontSize: 11, fontWeight: "700" },
+  cta: { height: 40, justifyContent: "center", borderRadius: radius.md, paddingHorizontal: 16 },
+  ctaText: { fontSize: 12, fontWeight: "800", letterSpacing: 1.2, color: "#fff" },
+  note: { marginTop: 8, fontSize: 10, color: colors.inkSoft },
+  code: { fontWeight: "800" },
 });
 `,
 
@@ -4893,11 +5079,13 @@ export function ${name}({
   onOpenCollection,
   onOpenProduct,
   onOpenScreen,
+  onAdd,
   signedIn,
 }: {
   onOpenCollection?: (handle: string) => void;
   onOpenProduct?: (id: string) => void;
   onOpenScreen?: (screen: string) => void;
+  onAdd?: (variantId: string, productId: string) => void;
   signedIn?: boolean;
 }) {
   const [data, setData] = useState<HomePayload | null>(null);
@@ -4943,11 +5131,14 @@ ${search ? 'import { SearchResults } from "./components/SearchResults";\n' : ""}
 export default function HomeScreen({
   onOpenCollection,
   onOpenProduct,
-  onOpenScreen,${recsUsed ? "\n  signedIn," : ""}
+  onOpenScreen,
+  onAdd,${recsUsed ? "\n  signedIn," : ""}
 }: {
   onOpenCollection?: (handle: string) => void;
   onOpenProduct?: (id: string) => void;
   onOpenScreen?: (screen: string) => void;
+  /** Put a single-variant product in the basket, for a section that can. */
+  onAdd?: (variantId: string, productId: string) => void;
   /** Whether someone is signed in - what Complete your look is built from. */
   signedIn?: boolean;
 }) {
@@ -5106,6 +5297,7 @@ function renderCall(block: Block, indent: number): string {
   const extras: Record<BlockType, string[]> = {
     hero: ["collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     promo_bar: [],
+    bundle_save: ["rows={data.rows}", "newArrivals={data.newArrivals}", "onOpenProduct={onOpenProduct}", "onAdd={onAdd}"],
     collection_tabs: ["rows={data.rows}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}"],
     cards: ["collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     sale_seal: ["onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
@@ -5185,6 +5377,20 @@ const SIZE_KEYS = new Set([
 function settingsLiteral(block: Block): string {
   const keep: Record<BlockType, string[]> = {
     hero: [],
+    bundle_save: [
+      "eyebrow",
+      "title",
+      "itemCount",
+      "percentOff",
+      "code",
+      "handle",
+      "limit",
+      "addLabel",
+      "note",
+      "radius",
+      "bg",
+      "inkColor",
+    ],
     promo_bar: ["lead", "rest", "code"],
     collection_tabs: [
       "title",
@@ -5730,7 +5936,7 @@ import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { colors, radius } from "../theme";
 
-export type TabKey = "shop" | "live" | "cart" | "orders" | "account";
+export type TabKey = ${TAB_KEYS.map((k) => q(k)).join(" | ")};
 
 /** Order, wording and which appear are the merchant's; the keys are not. */
 export const TABS: { key: TabKey; label: string; icon: string }[] = [
@@ -5845,6 +6051,7 @@ export function CartScreen({
   onOpenCollection,
   onOpenProduct,
   onOpenScreen,
+  onAddBundle,
 }: {
   lines: CartLine[];
   subtotal: number;
@@ -5862,6 +6069,8 @@ export function CartScreen({
   onOpenCollection?: (handle: string) => void;
   onOpenProduct?: (id: string) => void;
   onOpenScreen?: (screen: string) => void;
+  /** A section placed here that fills the basket itself, like a bundle. */
+  onAddBundle?: (variantId: string, productId: string) => void;
 }) {
   const c = screens.cart;
   const [code, setCode] = useState("");
@@ -5908,7 +6117,7 @@ export function CartScreen({
           </View>
         ))}
 
-${placed ? "        {/* What the merchant put beside the basket. */}\n        <CartSections onOpenCollection={onOpenCollection} onOpenProduct={onOpenProduct} onOpenScreen={onOpenScreen} signedIn />\n" : ""}        {(gifts.length || giftNote) && onUseGift && !discount ? (
+${placed ? "        {/* What the merchant put beside the basket. */}\n        <CartSections onOpenCollection={onOpenCollection} onOpenProduct={onOpenProduct} onOpenScreen={onOpenScreen} onAdd={onAddBundle} signedIn />\n" : ""}        {(gifts.length || giftNote) && onUseGift && !discount ? (
           <View style={styles.gifts}>
             <Text style={styles.giftsTitle}>YOUR REWARDS</Text>
             {gifts.map((g) => (
@@ -6790,6 +6999,7 @@ export function ProductScreen({
   onOpenCollection,
   onOpenProduct,
   onOpenScreen,
+  onAddBundle,
 }: {
   id: string;
   onAdd: (variantId: string, product: Product) => void;
@@ -6799,6 +7009,8 @@ export function ProductScreen({
   onOpenCollection?: (handle: string) => void;
   onOpenProduct?: (id: string) => void;
   onOpenScreen?: (screen: string) => void;
+  /** A section placed here that fills the basket itself, like a bundle. */
+  onAddBundle?: (variantId: string, productId: string) => void;
 }) {
   const p = screens.product;
   const [product, setProduct] = useState<Product | null>(null);
@@ -7110,7 +7322,7 @@ export function ProductScreen({
             </ScrollView>
           </View>
         ) : null}
-${placed ? "\n        {/* What the merchant put on the product screen. */}\n        <ProductSections onOpenCollection={onOpenCollection} onOpenProduct={onOpenProduct} onOpenScreen={onOpenScreen} signedIn />\n" : ""}      </ScrollView>
+${placed ? "\n        {/* What the merchant put on the product screen. */}\n        <ProductSections onOpenCollection={onOpenCollection} onOpenProduct={onOpenProduct} onOpenScreen={onOpenScreen} onAdd={onAddBundle} signedIn />\n" : ""}      </ScrollView>
 
       {/* the bar that stays */}
       <View style={styles.footer}>
@@ -7460,7 +7672,7 @@ function appFile(theme: AppTheme): GeneratedFile {
   const first = (theme.tabs.find((t) => t.visible) ?? theme.tabs[0]).key;
   // The Live tab's screen is only generated when the merchant shows the tab, so
   // nothing above may name it otherwise.
-  const live = theme.tabs.some((t) => t.key === "live" && t.visible);
+  const live = theme.tabs.some((t) => (t.key === "live" || t.key === "reels") && t.visible);
   return {
     path: "App.tsx",
     language: "tsx",
@@ -7505,7 +7717,7 @@ import { CheckoutScreen, type Address } from "./components/CheckoutScreen";
 import { AccountScreen, type AccountRow } from "./components/AccountScreen";
 import { OrdersScreen } from "./components/OrdersScreen";
 import { SignInScreen } from "./components/SignInScreen";${
-      theme.tabs.some((t) => t.key === "live" && t.visible)
+      theme.tabs.some((t) => (t.key === "live" || t.key === "reels") && t.visible)
         ? '\nimport { LiveScreen } from "./components/LiveScreen";'
         : ""
     }
@@ -7792,11 +8004,12 @@ export default function App() {
       onOpenCollection={(handle) => push({ kind: "collection", handle })}
       onOpenProduct={(id) => push({ kind: "product", id })}
       onOpenScreen={goScreen}
+      onAdd={(variantId) => add(variantId)}
       signedIn={Boolean(phone)}
     />
   )${
     live
-      ? ' : tab === "live" ? (\n    <LiveScreen onOpenCollection={(handle) => push({ kind: "collection", handle })} onOpenProduct={(id) => push({ kind: "product", id })} onOpenScreen={goScreen} />\n  )'
+      ? ' : tab === "live" || tab === "reels" ? (\n    <LiveScreen onOpenCollection={(handle) => push({ kind: "collection", handle })} onOpenProduct={(id) => push({ kind: "product", id })} onOpenScreen={goScreen} />\n  )'
       : ""
   } : tab === "cart" ? (
     <CartScreen
@@ -7813,6 +8026,7 @@ export default function App() {
       onOpenCollection={(handle) => push({ kind: "collection", handle })}
       onOpenProduct={(id) => push({ kind: "product", id })}
       onOpenScreen={goScreen}
+      onAddBundle={(variantId) => add(variantId)}
     />
   ) : tab === "orders" ? (
     <OrdersScreen signedIn={Boolean(phone)} onSignIn={() => push({ kind: "signin" })} />
@@ -7912,7 +8126,9 @@ export function generateApp(theme: AppTheme, baseUrl: string): GeneratedFile[] {
     accountScreenFile(),
     ordersScreenFile(),
     signInScreenFile(),
-    ...(theme.tabs.some((t) => t.key === "live" && t.visible) ? [liveScreenFile()] : []),
+    ...(theme.tabs.some((t) => (t.key === "live" || t.key === "reels") && t.visible)
+      ? [liveScreenFile()]
+      : []),
     ...used.map(sectionFile).sort((a, b) => a.path.localeCompare(b.path)),
   ];
 }

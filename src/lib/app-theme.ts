@@ -49,6 +49,7 @@ export type BlockType =
   | "complete_look"
   | "brand_timeline"
   | "review_summary"
+  | "bundle_save"
   | "showcase"
   | "reviews"
   | "text";
@@ -1082,6 +1083,12 @@ export const BLOCK_META: Record<
     hintAr: "وسوم تصف ذوق العميلة، كل وسم يفتح ما يناسبه",
     hintEn: "Tags describing the shopper's taste, each opening what matches it",
   },
+  bundle_save: {
+    ar: "اشتري معاً ووفّري",
+    en: "Bundle & Save",
+    hintAr: "اختاري عدداً من القطع فينزل سعر الأرخص — تُضاف كلها بضغطة واحدة مع كود الخصم",
+    hintEn: "Pick a few and the cheapest comes down. One tap adds them all, with the code to use at checkout",
+  },
   review_summary: {
     ar: "ملخص التقييمات",
     en: "Rating summary",
@@ -1481,6 +1488,26 @@ export function newBlock(type: BlockType): Block {
       cardBg: "",
       radius: 14,
       items: shape ? [shape.blank()] : [],
+    },
+    bundle_save: {
+      kicker: "",
+      eyebrow: "Bundle & save",
+      title: "Complete the bundle",
+      // How many make a bundle, and what comes off. The discount is a real
+      // code the shopper uses at checkout, not a price this section invents:
+      // nothing here is allowed to promise a total the checkout will not
+      // honour, so it says the code and the checkout does the arithmetic.
+      itemCount: 3,
+      percentOff: 10,
+      code: "BUNDLE10",
+      // Where the choices come from. Empty means whatever is new.
+      handle: "",
+      limit: 12,
+      addLabel: "Add bundle to cart",
+      note: "Use the code at checkout",
+      radius: 16,
+      bg: "",
+      inkColor: "",
     },
     review_summary: {
       kicker: "",
