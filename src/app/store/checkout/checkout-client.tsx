@@ -1106,7 +1106,10 @@ function CheckoutHeader({ ar }: { ar: boolean }) {
   useEffect(() => {
     try {
       const wanted = new URLSearchParams(window.location.search).get("back") ?? "";
-      setBack(/^\/[A-Za-z0-9/_-]*$/.test(wanted) ? wanted : null);
+      // A path on this site, query and all — but never a second slash at
+      // the front, which is how "//evil.com" is smuggled past a check that
+      // only looks for a leading "/".
+      setBack(/^\/(?!\/)[A-Za-z0-9/_\-?=&.%]*$/.test(wanted) ? wanted : null);
     } catch {
       setBack(null);
     }

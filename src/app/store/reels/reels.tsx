@@ -109,6 +109,30 @@ export function Reels({
   }, [reels]);
 
   /**
+   * Keep the address on the reel being watched.
+   *
+   * Everything that leaves this page and comes back — a product, checkout, a
+   * refresh, the browser's own back button — reads the address to know where
+   * it was. If it still says the reel the visitor arrived on, all of them
+   * return her to that one however far she has swiped since.
+   *
+   * replaceState rather than push: swiping through a feed should not fill the
+   * back button with every video she passed.
+   */
+  useEffect(() => {
+    const reel = reels[current];
+    if (!reel) return;
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get("reel") === reel.id) return;
+      url.searchParams.set("reel", reel.id);
+      window.history.replaceState(null, "", url.toString());
+    } catch {
+      /* an address we cannot rewrite is not worth failing over */
+    }
+  }, [current, reels]);
+
+  /**
    * Fetch the front of the next few videos before they are asked for.
    *
    * This is the difference between a feed that plays on the swipe and one
@@ -327,6 +351,10 @@ function Reel({
     if (el) el.muted = muted;
   }, [muted]);
 
+  // Where to send whatever leaves this reel, so it comes back to this reel
+  // rather than to the top of the feed.
+  const here = `/store/reels?reel=${encodeURIComponent(reel.id)}`;
+
   const ordered = [...reel.products].sort(
     (a, b) => Number(b.pinned) - Number(a.pinned) || a.sortOrder - b.sortOrder,
   );
@@ -543,7 +571,7 @@ function Reel({
                     <Link
                       href={
                         p.itemId
-                          ? `/store/product/${encodeURIComponent(p.itemId)}?back=/store/reels`
+                          ? `/store/product/${encodeURIComponent(p.itemId)}?back=${encodeURIComponent(here)}`
                           : "/store"
                       }
                       onClick={(e) => {
@@ -614,7 +642,7 @@ function Reel({
             <Action
               // Carrying where she came from, so the page she lands on can
               // offer her the way back instead of leaving her to find it.
-              href="/store/checkout?back=/store/reels"
+              href={`/store/checkout?back=${encodeURIComponent(here)}`}
               label={String(count)}
               highlight
               icon={<CheckoutIcon />}
@@ -654,7 +682,7 @@ function Reel({
                     <Link
                       href={
                         p.itemId
-                          ? `/store/product/${encodeURIComponent(p.itemId)}?back=/store/reels`
+                          ? `/store/product/${encodeURIComponent(p.itemId)}?back=${encodeURIComponent(here)}`
                           : "/store"
                       }
                       onClick={(e) => {
@@ -814,10 +842,11 @@ function pinnedProductHref(reel: WatchableLive): string {
   // The item the reel was holding up, so the form opens on the thing she
   // just watched rather than on an empty choice of everything in the shop.
   const p = reel.products.find((x) => x.pinned) ?? reel.products[0];
-  const back = "&back=%2Fstore%2Freels";
+
+  const back = `back=${encodeURIComponent(`/store/reels?reel=${reel.id}`)}`;
   return p?.itemId
-    ? `/shop/reviews?product=${encodeURIComponent(p.itemId)}${back}`
-    : `/shop/reviews?${back.slice(1)}`;
+    ? `/shop/reviews?product=${encodeURIComponent(p.itemId)}&${back}`
+    : `/shop/reviews?${back}`;
 }
 
 /* --------------------------------- icons ---------------------------------- */

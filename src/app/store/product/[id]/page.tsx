@@ -15,7 +15,7 @@ import { IcChevron } from "@/components/icons";
  * unchecked it is an open redirect with a friendly name: a link that looks
  * like this shop and lands somewhere that is not.
  */
-const SAFE_BACK = /^\/[A-Za-z0-9/_-]*$/;
+const SAFE_BACK = /^\/(?!\/)[A-Za-z0-9/_\-?=&.%]*$/;
 
 export default function ProductPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
