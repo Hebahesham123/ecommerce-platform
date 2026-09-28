@@ -279,6 +279,31 @@ function Reel({
     if (el) el.muted = muted;
   }, [muted]);
 
+  const ordered = [...reel.products].sort(
+    (a, b) => Number(b.pinned) - Number(a.pinned) || a.sortOrder - b.sortOrder,
+  );
+
+  /**
+   * The same products, laid end to end enough times to make a ring.
+   *
+   * A row that stops at its last item has to jump back to the first, and a
+   * jump is the one thing that tells everybody it is a trick. Repeating the
+   * list means there is always another copy of it coming up on the right, so
+   * the drift never reaches an end — and when it has travelled exactly one
+   * copy's width it is wound back by exactly that, onto a picture identical
+   * to the one it was already showing. Nothing moves; the ring just carries
+   * on.
+   *
+   * Two products need this as much as six do: two do not fill the strip, so
+   * without copies there is nowhere to scroll to at all.
+   */
+  const CARD = 112; // 104 wide, 8 of gap
+  const STRIP = 260; // the widest the strip is ever allowed to be
+  const copies = ordered.length
+    ? Math.min(8, Math.max(2, Math.ceil((STRIP * 2) / (CARD * ordered.length))))
+    : 0;
+  const ring = Array.from({ length: copies }, () => ordered).flat();
+
   /**
    * The products carry themselves past, and begin again.
    *
@@ -303,16 +328,18 @@ function Reel({
 
     const step = () => {
       frame = requestAnimationFrame(step);
-      const room = el.scrollWidth - el.clientWidth;
-      // One product, or a row that already fits: there is nothing to show.
-      if (room < 8 || Date.now() < idleUntil) return;
+      if (Date.now() < idleUntil) return;
 
-      if (el.scrollLeft >= room - 1) {
-        // Back to the beginning, gently, and a breath before it sets off.
-        el.scrollTo({ left: 0, behavior: "smooth" });
-        idleUntil = Date.now() + 1400;
-        leftOver = 0;
-        return;
+      // One copy of the list. Measured rather than calculated, so a card that
+      // is a pixel wider than it was designed to be does not slowly drag the
+      // wrap out of alignment.
+      const lap = el.scrollWidth / Math.max(1, copies);
+      if (lap < 1) return;
+
+      if (el.scrollLeft >= lap) {
+        // Wound back one whole copy, onto the identical picture. There is
+        // nothing to see here, which is the entire point.
+        el.scrollLeft -= lap;
       }
 
       // Sub-pixel movement accumulates rather than being rounded away, which
@@ -339,7 +366,7 @@ function Reel({
       el.removeEventListener("touchstart", hold);
       el.removeEventListener("wheel", hold);
     };
-  }, [active, reel.products.length]);
+  }, [active, copies]);
 
   const addToCart = useCallback(
     (p: LiveProduct) => {
@@ -364,9 +391,6 @@ function Reel({
 
   // Whatever she held up goes first; the rest keep the order they were
   // given. Nobody should have to scroll to reach the thing on screen.
-  const ordered = [...reel.products].sort(
-    (a, b) => Number(b.pinned) - Number(a.pinned) || a.sortOrder - b.sortOrder,
-  );
 
   async function share() {
     const url =
@@ -443,13 +467,20 @@ function Reel({
               className="pointer-events-auto -mx-1 flex gap-2 overflow-x-auto px-1 pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
               style={{ maxWidth: "min(72vw, 260px)" }}
             >
-              {ordered.map((p) => {
+              {ring.map((p, i) => {
                 const soldOut = (p.available ?? 0) <= 0;
                 return (
                   // The picture and the name open the product; only the pill
                   // buys it. They were one button before, which made every
                   // glance at something cost a line in the cart.
-                  <div key={p.id} className="w-[104px] shrink-0">
+                  <div
+                    key={`${p.id}-${i}`}
+                    // Only the first time round is read out; the rest are the
+                    // same things again and a screen reader should not have to
+                    // sit through them.
+                    aria-hidden={i >= ordered.length}
+                    className="w-[104px] shrink-0"
+                  >
                     <Link
                       href={
                         p.itemId
