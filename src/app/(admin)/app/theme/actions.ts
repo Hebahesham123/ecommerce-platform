@@ -92,6 +92,52 @@ export async function downloadApp(
     const zip = new JSZip();
     for (const f of made.data) zip.file(f.path, f.contents);
 
+    /*
+     * The shop's own logo as the splash screen.
+     *
+     * It is already uploaded, it is already the thing customers recognise,
+     * and a splash is exactly what a wordmark is for: centred on a colour
+     * while the app starts. Asking a merchant to produce a second copy of a
+     * picture the shop is already using is asking her to do the computer's
+     * job.
+     *
+     * The icon is deliberately not done this way. An icon is a square read at
+     * the size of a fingernail, and a wide wordmark squeezed into one is
+     * unreadable — worse than Expo's placeholder, which at least looks
+     * deliberate.
+     */
+    const logo = theme.settings.logoUrl;
+    if (logo) {
+      try {
+        const res = await fetch(logo, { signal: AbortSignal.timeout(8000) });
+        const type = res.headers.get("content-type") ?? "";
+        const bytes = res.ok && type.startsWith("image/") ? await res.arrayBuffer() : null;
+        // A logo larger than this is not a logo, and a zip is not a good
+        // place to discover that.
+        if (bytes && bytes.byteLength > 0 && bytes.byteLength < 4_000_000) {
+          zip.file("assets/splash.png", bytes);
+
+          // Name it, now that it is actually there.
+          const appJson = made.data.find((f) => f.path === "app.json");
+          if (appJson) {
+            const config = JSON.parse(appJson.contents) as {
+              expo: { splash?: Record<string, unknown> };
+            };
+            config.expo.splash = {
+              ...(config.expo.splash ?? {}),
+              image: "./assets/splash.png",
+            };
+            zip.file("app.json", `${JSON.stringify(config, null, 2)}
+`);
+          }
+        }
+      } catch {
+        // No logo in the zip, and the build still succeeds on Expo's own
+        // placeholder. A download that fails because a picture would not
+        // load is a worse outcome than a plain splash screen.
+      }
+    }
+
     // Somewhere for the pictures the build needs, with a note rather than an
     // empty folder a zip would drop on the way out.
     zip.file(
