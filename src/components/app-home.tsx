@@ -5020,8 +5020,13 @@ function isPlaceholder(node: React.ReactElement): boolean {
       return itemsOf(block).filter((i) => str(i.name) && str(i.months)).length === 0;
     case "offer_cards":
       return itemsOf(block).filter((i) => str(i.badge) || str(i.title)).length === 0;
+    // Judged by the same thing the section is drawn from. It used to be
+    // judged by the merchant's own typed list while the section itself drew
+    // the shop's real schedule, so a merchant who had typed a line once and
+    // had nothing scheduled now showed shoppers the editor's grey box saying
+    // "nothing scheduled yet" - a note meant for her, in front of them.
     case "coming_up_live":
-      return itemsOf(block).filter((i) => str(i.title) || str(i.imageUrl) || str(i.handle)).length === 0;
+      return (data.lives ?? []).filter((l) => l.status === "scheduled").length === 0;
     case "countdown_deals":
       return itemsOf(block).filter((i) => str(i.price) || str(i.imageUrl) || str(i.handle)).length === 0;
     case "info_rows":

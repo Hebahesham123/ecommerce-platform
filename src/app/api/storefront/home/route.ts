@@ -126,6 +126,15 @@ export async function GET() {
         case "new_arrivals":
           newArrivalsLimit = Math.max(newArrivalsLimit, int(s.limit, 12, 40));
           break;
+        // A bundle offers whatever collection it was pointed at, and falls back
+        // to what is new. Both have to be asked for here or the section quietly
+        // offers something else instead.
+        case "bundle_save": {
+          const handle = String(s.handle ?? "").trim().toLowerCase();
+          if (handle) want(handle, int(s.limit, 12, PER_ROW_MAX));
+          else newArrivalsLimit = Math.max(newArrivalsLimit, int(s.limit, 12, 40));
+          break;
+        }
         case "reviews":
           reviewsLimit = Math.max(reviewsLimit, int(s.limit, 6, 20));
           break;
