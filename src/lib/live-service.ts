@@ -986,7 +986,25 @@ export async function attachRecording(liveId: string, url: string): Promise<Resu
       .select(SELECT)
       .single();
     if (error) return { ok: false, error: error.message };
-    return { ok: true, data: mapLiveStream(data) };
+
+    /*
+     * Start converting it now rather than when somebody next opens a page.
+     *
+     * This is the moment the file exists and the moment it is furthest from
+     * being wanted — the host has just finished and nobody is watching a
+     * replay of a live that ended thirty seconds ago. Waiting for a reader to
+     * trigger it spends those quiet minutes doing nothing and then makes the
+     * first viewer wait for the whole file.
+     *
+     * Not awaited: the host is waiting on this response with a phone in her
+     * hand, and whether Cloudflare has accepted the copy yet is no business
+     * of hers. If it fails, the healer picks it up on the next read exactly
+     * as before.
+     */
+    const live = mapLiveStream(data);
+    void healStream(live).catch(() => {});
+
+    return { ok: true, data: live };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }
