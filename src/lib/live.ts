@@ -54,6 +54,8 @@ export type LiveStream = {
   streamUrl: string | null;
   replayEnabled: boolean;
   peakViewers: number;
+  /** How many have liked the replay. */
+  likes: number;
   /** Watching right now, when the caller asked for a live one. */
   watching?: number;
   notes: string | null;
@@ -156,6 +158,7 @@ export function mapLiveStream(r: Row): LiveStream {
     streamUrl: s(r.stream_url),
     replayEnabled: r.replay_enabled == null ? true : Boolean(r.replay_enabled),
     peakViewers: n(r.peak_viewers),
+    likes: n(r.likes),
     notes: s(r.notes),
     products: products.map(mapLiveProduct).sort((a, b) => a.sortOrder - b.sortOrder),
     createdAt: String(r.created_at ?? ""),
@@ -196,6 +199,7 @@ export type PublicLive = {
   whepUrl: string | null;
   recordingUrl: string | null;
   peakViewers: number;
+  likes: number;
   watching: number;
   /** Where tapping it goes. Part of the payload so no caller has to invent it. */
   href: string;
@@ -232,6 +236,7 @@ export function publicLive(s: LiveStream): PublicLive {
     recordingUrl:
       watchable === "replay" ? (s.streamUrl || s.recordingUrl) : null,
     peakViewers: s.peakViewers,
+    likes: s.likes,
     watching: s.watching ?? 0,
     href: `/store/live/${s.id}`,
     products: s.products,

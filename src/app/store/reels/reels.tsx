@@ -148,14 +148,8 @@ export function Reels({
         >
           <CloseIcon />
         </button>
-        {count > 0 && (
-          <Link
-            href="/store/checkout"
-            className="pointer-events-auto rounded-full bg-rose-600 px-4 py-2.5 text-sm font-bold"
-          >
-            {ar ? `الدفع (${count})` : `Checkout (${count})`}
-          </Link>
-        )}
+        {/* Checkout used to sit up here; it is in the rail with everything
+            else she can do now, where a thumb already is. */}
       </div>
     </div>
   );
@@ -184,7 +178,51 @@ function Reel({
   lang: string;
   copy: Copy;
 }) {
-  const { add, items, setQty, remove } = useCart();
+  const { add, items, setQty, remove, count } = useCart();
+
+  /**
+   * The like, remembered by the browser that made it.
+   *
+   * There is no row of who liked what — that would attach a name to a
+   * gesture somebody made without signing in, for a number nobody ever reads
+   * per person. The shop keeps the total; this keeps the fact that this
+   * phone has already added to it.
+   */
+  const [likes, setLikes] = useState(reel.likes);
+  const [liked, setLiked] = useState(false);
+  useEffect(() => {
+    try {
+      setLiked(localStorage.getItem(`bb_reel_like_${reel.id}`) === "1");
+    } catch {
+      /* private browsing */
+    }
+  }, [reel.id]);
+
+  function like() {
+    if (liked) return;
+    // Counted here at once and confirmed by the shop afterwards: a heart
+    // that waits for a round trip before it fills is a heart that feels
+    // broken.
+    setLiked(true);
+    setLikes((n) => n + 1);
+    try {
+      localStorage.setItem(`bb_reel_like_${reel.id}`, "1");
+    } catch {
+      /* private browsing */
+    }
+    fetch(`/api/storefront/reels/${reel.id}/like`, { method: "POST" })
+      .then((r) => r.json())
+      .then((r) => {
+        if (r?.ok && typeof r.data?.likes === "number") setLikes(r.data.likes);
+      })
+      .catch(() => {
+        /* the tap is kept; the total catches up on the next read */
+      });
+  }
+
+  // Where a shopper says what she thought of it, about the thing she was
+  // just shown rather than the shop in general.
+  const reviewHref = pinnedProductHref(reel);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [sheet, setSheet] = useState(false);
   const [added, setAdded] = useState<string | null>(null);
@@ -302,81 +340,82 @@ function Reel({
         </button>
       )}
 
-      {/* Everything below floats over the video. */}
-      <div className="pointer-events-none absolute inset-0 flex flex-col justify-end">
-        <div className="bg-gradient-to-t from-black/85 via-black/45 to-transparent px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-10">
-          <h2 className="truncate text-[15px] font-semibold drop-shadow">{reel.title}</h2>
-          {reel.hostName && (
-            <p className="truncate text-xs text-white/70 drop-shadow">{reel.hostName}</p>
-          )}
+      {/*
+        The furniture, arranged the way a reel is read: the thing being sold in
+        the bottom left where the account and caption sit on every feed anyone
+        already uses, and the actions in a column on the right under the thumb.
+        Nothing crosses the middle of the picture.
+      */}
+      <div className="pointer-events-none absolute inset-0 flex items-end justify-between gap-3 bg-gradient-to-t from-black/80 via-transparent to-transparent p-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
+        {/* ---- bottom left: what this reel is selling ---- */}
+        <div className="min-w-0 flex-1">
+          <h2 className="mb-2 truncate text-[13px] font-semibold text-white/90 drop-shadow">
+            {reel.title}
+          </h2>
 
-          {/* The thing held up in this reel, within thumb reach. */}
           {pinned && (
             <button
               onClick={() => addToCart(pinned)}
-              className="pointer-events-auto mt-2.5 flex w-full max-w-sm items-center gap-3 rounded-2xl bg-white/95 p-2 text-start shadow-lg backdrop-blur"
+              className="pointer-events-auto block w-[112px] text-start"
             >
-              <span className="h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-slate-100">
+              {/* The picture is the point — it is what she is deciding about,
+                  so it gets the room and the words go underneath it small. */}
+              <span className="block h-[112px] w-[112px] overflow-hidden rounded-2xl bg-white/10 ring-1 ring-white/25 backdrop-blur">
                 {pinned.imageUrl && (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={pinned.imageUrl} alt="" className="h-full w-full object-cover" />
                 )}
               </span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-[13px] font-semibold text-ink">
-                  {pinned.productName}
-                </span>
-                <span className="block text-xs text-ink-muted">
+              <span className="mt-1.5 block truncate text-[11px] font-medium leading-tight text-white drop-shadow">
+                {pinned.productName}
+              </span>
+              <span className="mt-0.5 flex items-center gap-1.5">
+                <span className="text-[11px] font-bold text-white drop-shadow">
                   {pinned.price != null ? egp(pinned.price, lang as never) : ""}
                 </span>
-              </span>
-              <span
-                className={`shrink-0 rounded-xl px-3 py-2 text-xs font-bold text-white ${
-                  added === pinned.id ? "bg-emerald-600" : "bg-rose-600"
-                }`}
-              >
-                {added === pinned.id
-                  ? say(copy, "added", ar) || (ar ? "تمت" : "Added")
-                  : say(copy, "add", ar) || (ar ? "أضيفي" : "Add")}
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                    added === pinned.id ? "bg-emerald-500 text-white" : "bg-white text-black"
+                  }`}
+                >
+                  {added === pinned.id
+                    ? say(copy, "added", ar) || (ar ? "تمت" : "Added")
+                    : say(copy, "add", ar) || (ar ? "أضيفي" : "Add")}
+                </span>
               </span>
             </button>
           )}
+        </div>
 
-          <div className="pointer-events-auto mt-2.5 flex items-center gap-2">
-            {reel.products.length > 0 && (
-              // A photograph of the first item and the word for what it opens.
-              // A bag glyph and a number meant nothing to half the people who
-              // saw it on the live page either.
-              <button
-                onClick={() => setSheet(true)}
-                className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-full bg-white/95 ps-1.5 pe-3.5 text-ink shadow-lg"
-              >
-                <span className="h-8 w-8 shrink-0 overflow-hidden rounded-full bg-slate-100">
-                  {reel.products[0]?.imageUrl && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={reel.products[0].imageUrl}
-                      alt=""
-                      className="h-full w-full object-cover"
-                    />
-                  )}
-                </span>
-                <span className="truncate text-sm font-bold">
-                  {say(copy, "productsButton", ar) || (ar ? "المنتجات" : "Products")}
-                  <span className="ms-1 text-ink-soft">{reel.products.length}</span>
-                </span>
-              </button>
-            )}
-            <button
-              onClick={share}
-              className="h-11 w-11 shrink-0 rounded-full bg-white/15 backdrop-blur"
-              aria-label={ar ? "مشاركة" : "Share"}
-            >
-              <span className="mx-auto block w-fit">
-                <ShareIcon />
-              </span>
-            </button>
-          </div>
+        {/* ---- right: the things she can do about it ---- */}
+        <div className="pointer-events-auto flex shrink-0 flex-col items-center gap-4 pb-1">
+          <Action
+            onClick={like}
+            label={likes > 0 ? compact(likes) : ""}
+            active={liked}
+            icon={<HeartIcon filled={liked} />}
+          />
+          {reel.products.length > 0 && (
+            <Action
+              onClick={() => setSheet(true)}
+              label={String(reel.products.length)}
+              icon={<BagIcon />}
+            />
+          )}
+          {count > 0 && (
+            <Action
+              href="/store/checkout"
+              label={String(count)}
+              highlight
+              icon={<CheckoutIcon />}
+            />
+          )}
+          <Action
+            href={reviewHref}
+            label={ar ? "تقييم" : "Review"}
+            icon={<StarIcon />}
+          />
+          <Action onClick={share} label="" icon={<ShareIcon />} />
         </div>
       </div>
 
@@ -483,7 +522,107 @@ function Reel({
   );
 }
 
+/* -------------------------------- the rail --------------------------------- */
+
+/**
+ * One thing she can do, as a circle with a word under it.
+ *
+ * A link when it goes somewhere and a button when it does something — the
+ * difference matters for a long press, for opening in a new tab, and for
+ * anyone reading the page rather than looking at it.
+ */
+function Action({
+  icon,
+  label,
+  onClick,
+  href,
+  active,
+  highlight,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  onClick?: () => void;
+  href?: string;
+  active?: boolean;
+  highlight?: boolean;
+}) {
+  const body = (
+    <>
+      <span
+        className={`grid h-11 w-11 place-items-center rounded-full backdrop-blur transition-colors ${
+          highlight
+            ? "bg-rose-600 text-white"
+            : active
+              ? "bg-rose-600/90 text-white"
+              : "bg-black/40 text-white"
+        }`}
+      >
+        {icon}
+      </span>
+      {label && (
+        <span className="mt-1 block text-[10px] font-semibold text-white drop-shadow">
+          {label}
+        </span>
+      )}
+    </>
+  );
+  const cls = "flex w-12 flex-col items-center";
+  return href ? (
+    <Link href={href} className={cls}>
+      {body}
+    </Link>
+  ) : (
+    <button onClick={onClick} className={cls}>
+      {body}
+    </button>
+  );
+}
+
+/** 1.2k rather than 1200: a count is read at a glance or not at all. */
+function compact(n: number): string {
+  if (n < 1000) return String(n);
+  if (n < 1_000_000) return `${(n / 1000).toFixed(n < 10_000 ? 1 : 0).replace(/\.0$/, "")}k`;
+  return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, "")}m`;
+}
+
+/** The review form, pointed at whatever this reel was holding up. */
+function pinnedProductHref(reel: WatchableLive): string {
+  // The item the reel was holding up, so the form opens on the thing she
+  // just watched rather than on an empty choice of everything in the shop.
+  const p = reel.products.find((x) => x.pinned) ?? reel.products[0];
+  return p?.itemId
+    ? `/shop/reviews?product=${encodeURIComponent(p.itemId)}`
+    : "/shop/reviews";
+}
+
 /* --------------------------------- icons ---------------------------------- */
+
+const HeartIcon = ({ filled }: { filled?: boolean }) => (
+  <svg viewBox="0 0 24 24" className="h-6 w-6" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
+    <path d="M12 20s-7.2-4.5-9.1-8.4C1.3 8.3 3.1 5 6.4 5c2 0 3.3 1.1 4.1 2.2l1.5 2 1.5-2C14.3 6.1 15.6 5 17.6 5c3.3 0 5.1 3.3 3.5 6.6C19.2 15.5 12 20 12 20Z" />
+  </svg>
+);
+
+const BagIcon = () => (
+  <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M5.5 8h13l-1 11.5a1 1 0 0 1-1 .9H7.5a1 1 0 0 1-1-.9L5.5 8Z" />
+    <path d="M9 8V6.5a3 3 0 0 1 6 0V8" />
+  </svg>
+);
+
+const CheckoutIcon = () => (
+  <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 7h13l-1.2 7.5a1 1 0 0 1-1 .8H7.6a1 1 0 0 1-1-.8L5 4.5H2.8" />
+    <circle cx="9" cy="19" r="1.3" fill="currentColor" stroke="none" />
+    <circle cx="16" cy="19" r="1.3" fill="currentColor" stroke="none" />
+  </svg>
+);
+
+const StarIcon = () => (
+  <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
+    <path d="m12 4 2.3 4.9 5.2.7-3.8 3.7 1 5.3-4.7-2.6-4.7 2.6 1-5.3L4.5 9.6l5.2-.7L12 4Z" />
+  </svg>
+);
 
 const CloseIcon = () => (
   <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">

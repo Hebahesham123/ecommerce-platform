@@ -625,6 +625,31 @@ export async function reportViewers(id: string, viewers: number): Promise<void> 
   }
 }
 
+/**
+ * One more like on a replay.
+ *
+ * The counting is done in the database, not by reading the number and
+ * writing it back: two people tapping at the same moment would each
+ * overwrite the other, and one of them would silently not count. Returns
+ * the new total so the tap can be confirmed rather than assumed.
+ */
+export async function likeReplay(liveId: string): Promise<Result<number>> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  try {
+    const supabase = getServerSupabase();
+    const { data, error } = await supabase.rpc("live_like", { p_id: liveId });
+    if (error) {
+      return {
+        ok: false,
+        error: missingTable(error.message) ? "migration_missing" : error.message,
+      };
+    }
+    return { ok: true, data: Number(data ?? 0) };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
 // ---- Making a replay streamable --------------------------------------------
 
 /**
