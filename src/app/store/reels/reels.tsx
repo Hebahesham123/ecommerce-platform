@@ -82,6 +82,33 @@ export function Reels({
   }, []);
 
   /**
+   * A shared link opens on the reel it was shared from.
+   *
+   * Without this the address carries the reel and the feed ignores it: every
+   * link anybody sends lands on whatever happens to be newest, which is the
+   * one thing a shared link must not do.
+   */
+  useEffect(() => {
+    const root = trackRef.current;
+    if (!root) return;
+    let wanted = "";
+    try {
+      wanted = new URLSearchParams(window.location.search).get("reel") ?? "";
+    } catch {
+      return;
+    }
+    if (!wanted) return;
+    const i = reels.findIndex((r) => r.id === wanted);
+    if (i < 1) return; // not found, or already the one on screen
+    const slide = root.querySelector<HTMLElement>(`[data-reel="${i}"]`);
+    if (!slide) return;
+    // Instantly, not smoothly: this is where the page opens, not somewhere
+    // it travels to while the viewer watches.
+    slide.scrollIntoView({ block: "start", behavior: "auto" });
+    setCurrent(i);
+  }, [reels]);
+
+  /**
    * Fetch the front of the next few videos before they are asked for.
    *
    * This is the difference between a feed that plays on the swipe and one
@@ -417,9 +444,19 @@ function Reel({
   // Whatever she held up goes first; the rest keep the order they were
   // given. Nobody should have to scroll to reach the thing on screen.
 
+  /**
+   * Share the reel, at the reel.
+   *
+   * This used to hand over the live's own page — the broadcast this
+   * recording came from, with its chat, its viewer count and its title still
+   * on it. Whoever opened it got the room after everyone had left, which is
+   * not what was being shared.
+   */
   async function share() {
     const url =
-      typeof window !== "undefined" ? `${window.location.origin}/store/live/${reel.id}` : "";
+      typeof window !== "undefined"
+        ? `${window.location.origin}/store/reels?reel=${encodeURIComponent(reel.id)}`
+        : "";
     try {
       if (navigator.share) await navigator.share({ title: reel.title, url });
       else await navigator.clipboard.writeText(url);
