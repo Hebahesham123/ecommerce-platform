@@ -95,6 +95,24 @@ export function Reels({
     }
   }, [current, reels]);
 
+  /**
+   * Where closing goes depends on where this is being shown.
+   *
+   * On the website it is a page, and closing means the shop. Inside the app
+   * it is a tab in a frame, and sending the frame to the website would leave
+   * the shopper looking at a whole second storefront inside her app with no
+   * way back. So when it is framed it asks to be closed rather than going
+   * anywhere itself, and the app puts her back on the tab she came from.
+   */
+  function close() {
+    const framed = typeof window !== "undefined" && window.parent !== window;
+    if (framed) {
+      window.parent.postMessage({ source: "beautybar-app", action: "close" }, "*");
+      return;
+    }
+    window.location.assign("/shop");
+  }
+
   return (
     <div className="fixed inset-0 bg-black text-white">
       <div
@@ -123,13 +141,13 @@ export function Reels({
       {/* Out, and on to paying — the two things that must never be a swipe
           away from wherever the feed happens to have stopped. */}
       <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
-        <Link
-          href="/shop"
+        <button
+          onClick={close}
           className="pointer-events-auto rounded-full bg-black/45 p-2.5 backdrop-blur"
           aria-label={ar ? "إغلاق" : "Close"}
         >
           <CloseIcon />
-        </Link>
+        </button>
         {count > 0 && (
           <Link
             href="/store/checkout"

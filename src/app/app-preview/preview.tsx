@@ -347,6 +347,23 @@ export function Preview({
       label: t.label || TAB_DEFAULTS[t.key][ar ? "ar" : "en"],
     }));
 
+  /**
+   * A framed page asking to be closed.
+   *
+   * The shop's own pages fill these tabs, and one of them — reels — is a
+   * full-screen thing with a close button on it. Pressed inside the app, that
+   * has to mean "back to the shop", not "send this frame to the website".
+   */
+  useEffect(() => {
+    const onMessage = (e: MessageEvent) => {
+      if (e.origin !== window.location.origin) return;
+      const data = e.data as { source?: string; action?: string } | null;
+      if (data?.source === "beautybar-app" && data.action === "close") setTab("shop");
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, []);
+
   // A tab that has been hidden must not stay selected underneath it.
   const activeTab = tabs.some((t) => t.key === tab) ? tab : (tabs[0]?.key ?? "shop");
 
