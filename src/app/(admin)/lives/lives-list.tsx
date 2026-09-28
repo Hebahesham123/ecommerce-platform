@@ -1027,12 +1027,27 @@ function LiveDrawer({
               />
               <Stat
                 label={ar ? "التسجيل" : "Replay"}
+                /*
+                 * Which of the two a shopper is actually being served, because
+                 * they are not the same thing to watch. "Streaming" is the
+                 * recording cut into segments and delivered from the video
+                 * network: it starts on the first one and drops its quality to
+                 * suit the phone. "Whole file" is the original, served entire
+                 * from our own storage — watchable, but the viewer waits for
+                 * the front of it and gets one quality whatever her connection
+                 * is. It converts by itself within a few minutes of ending;
+                 * this says whether that has happened yet.
+                 */
                 value={
-                  live.recordingUrl
-                    ? (ar ? "جاهز" : "Ready")
-                    : live.status === "ended" && live.replayEnabled
-                      ? (ar ? "جارٍ التجهيز" : "Preparing")
-                      : ar ? "غير متاح" : "Not yet"
+                  live.streamUrl
+                    ? (ar ? "بث متدرّج" : "Streaming")
+                    : live.recordingUrl
+                      ? live.streamUid
+                        ? (ar ? "ملف كامل · جارٍ التحويل" : "Whole file · converting")
+                        : (ar ? "ملف كامل" : "Whole file")
+                      : live.status === "ended" && live.replayEnabled
+                        ? (ar ? "جارٍ التجهيز" : "Preparing")
+                        : ar ? "غير متاح" : "Not yet"
                 }
               />
             </div>

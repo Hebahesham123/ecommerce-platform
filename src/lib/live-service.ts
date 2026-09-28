@@ -270,7 +270,11 @@ export async function listPublicLives(): Promise<Result<LiveStream[]>> {
 export async function listReplays(limit = 50): Promise<Result<LiveStream[]>> {
   const all = await listLives();
   if (!all.ok) return all;
-  const healed = await healStreams(await healRecordings(all.data, 8), 6);
+  // Three and three, not eight and six. The ones that matter are the newest,
+  // they are already at the front, and the rest will be asked about on the
+  // next load — by which time a minute will have passed and there may even be
+  // an answer.
+  const healed = await healStreams(await healRecordings(all.data, 3), 3);
   const replays = healed
     .filter((l) => l.status === "ended" && l.replayEnabled && Boolean(l.recordingUrl))
     .sort((a, b) =>
@@ -538,6 +542,7 @@ async function healRecording(live: LiveStream): Promise<LiveStream> {
   const wanted =
     live.status === "ended" && live.replayEnabled && !live.recordingUrl && providerConfigured();
   if (!wanted) return live;
+  if (askedRecently(`recording:${live.id}`)) return live;
   const res = await refreshRecording(live.id);
   return res.ok && res.data.state === "ready" ? { ...live, recordingUrl: res.data.url } : live;
 }
@@ -650,6 +655,34 @@ export async function likeReplay(liveId: string, delta: 1 | -1 = 1): Promise<Res
   }
 }
 
+/**
+ * How recently we asked the provider about something.
+ *
+ * Both healers run wherever a live is read, which is the right place for
+ * them — no job to schedule, nothing to press. But it also meant every
+ * visitor to the reels page paid for a fresh round of questions: up to
+ * fourteen requests to Cloudflare before the first frame, for the whole time
+ * anything was still converting. A conversion takes minutes; asking about it
+ * more than once a minute tells us nothing and costs the shopper the wait.
+ *
+ * Per server instance, and lost when it restarts. That is fine: the worst a
+ * forgotten entry causes is one extra question.
+ */
+const lastAsked = new Map<string, number>();
+const ASK_EVERY_MS = 60_000;
+
+function askedRecently(key: string): boolean {
+  const at = lastAsked.get(key) ?? 0;
+  if (Date.now() - at < ASK_EVERY_MS) return true;
+  lastAsked.set(key, Date.now());
+  // Somewhere to stop it growing for a shop that runs a live every day for
+  // a year: the oldest entries are the ones least likely to be asked again.
+  if (lastAsked.size > 500) {
+    for (const k of [...lastAsked.keys()].slice(0, 100)) lastAsked.delete(k);
+  }
+  return false;
+}
+
 // ---- Making a replay streamable --------------------------------------------
 
 /**
@@ -732,6 +765,8 @@ async function healStream(live: LiveStream): Promise<LiveStream> {
     !live.streamUrl &&
     providerConfigured();
   if (!wanted) return live;
+
+  if (askedRecently(`stream:${live.id}`)) return live;
 
   // Only ours: a recording already served by the provider is already
   // segmented, and asking it to copy its own output would be absurd.
