@@ -446,29 +446,39 @@ function Reel({
               {ordered.map((p) => {
                 const soldOut = (p.available ?? 0) <= 0;
                 return (
-                  <button
-                    key={p.id}
-                    onClick={() => !soldOut && addToCart(p)}
-                    className="w-[104px] shrink-0 text-start"
-                  >
-                    <span className="block h-[104px] w-[104px] overflow-hidden rounded-2xl bg-white/10 ring-1 ring-white/25 backdrop-blur">
-                      {p.imageUrl && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={p.imageUrl}
-                          alt=""
-                          className={`h-full w-full object-cover ${soldOut ? "opacity-45" : ""}`}
-                        />
-                      )}
-                    </span>
-                    <span className="mt-1.5 block truncate text-[11px] font-medium leading-tight text-white drop-shadow">
-                      {p.productName}
-                    </span>
-                    <span className="mt-0.5 flex items-center gap-1.5">
+                  // The picture and the name open the product; only the pill
+                  // buys it. They were one button before, which made every
+                  // glance at something cost a line in the cart.
+                  <div key={p.id} className="w-[104px] shrink-0">
+                    <Link
+                      href={
+                        p.itemId
+                          ? `/store/product/${encodeURIComponent(p.itemId)}`
+                          : "/store"
+                      }
+                      className="block text-start"
+                    >
+                      <span className="block h-[104px] w-[104px] overflow-hidden rounded-2xl bg-white/10 ring-1 ring-white/25 backdrop-blur">
+                        {p.imageUrl && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={p.imageUrl}
+                            alt=""
+                            className={`h-full w-full object-cover ${soldOut ? "opacity-45" : ""}`}
+                          />
+                        )}
+                      </span>
+                      <span className="mt-1.5 block truncate text-[11px] font-medium leading-tight text-white drop-shadow">
+                        {p.productName}
+                      </span>
+                    </Link>
+                    <div className="mt-0.5 flex items-center gap-1.5">
                       <span className="text-[11px] font-bold text-white drop-shadow">
                         {p.price != null ? egp(p.price, lang as never) : ""}
                       </span>
-                      <span
+                      <button
+                        onClick={() => !soldOut && addToCart(p)}
+                        disabled={soldOut}
                         className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
                           soldOut
                             ? "bg-white/25 text-white/80"
@@ -482,9 +492,9 @@ function Reel({
                           : added === p.id
                             ? say(copy, "added", ar) || (ar ? "تمت" : "Added")
                             : say(copy, "add", ar) || (ar ? "أضيفي" : "Add")}
-                      </span>
-                    </span>
-                  </button>
+                      </button>
+                    </div>
+                  </div>
                 );
               })}
             </div>
@@ -545,13 +555,21 @@ function Reel({
                 const inCart = p.itemId ? items.find((i) => i.itemId === p.itemId) : undefined;
                 return (
                   <li key={p.id} className="flex items-center gap-3">
-                    <span className="h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-slate-100">
-                      {p.imageUrl && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={p.imageUrl} alt="" className="h-full w-full object-cover" />
-                      )}
-                    </span>
-                    <span className="min-w-0 flex-1">
+                    {/* The same rule as the strip: the picture and the name are
+                        the way in, the button is the way to buy. */}
+                    <Link
+                      href={
+                        p.itemId ? `/store/product/${encodeURIComponent(p.itemId)}` : "/store"
+                      }
+                      className="flex min-w-0 flex-1 items-center gap-3"
+                    >
+                      <span className="h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-slate-100">
+                        {p.imageUrl && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={p.imageUrl} alt="" className="h-full w-full object-cover" />
+                        )}
+                      </span>
+                      <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium text-ink">
                         {p.productName}
                       </span>
@@ -568,7 +586,8 @@ function Reel({
                           </span>
                         )}
                       </span>
-                    </span>
+                      </span>
+                    </Link>
                     {/* Once something is in, this is how many — and one step
                         below one takes it out again. */}
                     {inCart && p.itemId ? (
