@@ -1576,6 +1576,13 @@ function BundleSave({
   const ink = str(s.inkColor) || "#2b1b10";
   const paper = str(s.bg) || "#fffaf3";
 
+  // The code is what actually takes money off, so without one this section
+  // claims nothing: no per cent, no saving, just a faster way to add several
+  // things at once. An offer the checkout will not honour is worse than no
+  // offer, and a merchant typing a code is a smaller step than a shopper
+  // being let down at the till.
+  const offers = Boolean(code) && off > 0;
+
   const [picked, setPicked] = useState<string[]>([]);
   const [added, setAdded] = useState(false);
   const chosen = cards.filter((c) => picked.includes(c.id));
@@ -1583,7 +1590,7 @@ function BundleSave({
   const total = prices.reduce((a, b) => a + b, 0);
   // The cheapest of what she picked is what comes down, which is the rule the
   // website states and the only one a shopper can check herself.
-  const saving = prices.length ? Math.round((Math.min(...prices) * off) / 100) : 0;
+  const saving = offers && prices.length ? Math.round((Math.min(...prices) * off) / 100) : 0;
   const full = picked.length >= want;
 
   const toggle = (card: Card) => {
@@ -1609,9 +1616,11 @@ function BundleSave({
           <span dir="auto" className="text-[10px] font-bold uppercase tracking-[0.18em]" style={{ color: accent }}>
             {str(s.eyebrow, ar ? "اشتري معاً ووفّري" : "Bundle & save")}
           </span>
-          <span className="ms-auto rounded-full px-2 py-0.5 text-[11px] font-bold text-white" style={{ background: accent }}>
-            {off}% {ar ? "خصم" : "OFF"}
-          </span>
+          {offers && (
+            <span className="ms-auto rounded-full px-2 py-0.5 text-[11px] font-bold text-white" style={{ background: accent }}>
+              {off}% {ar ? "خصم" : "OFF"}
+            </span>
+          )}
         </div>
 
         <div className="px-3 pb-3 pt-2.5">
@@ -1621,9 +1630,13 @@ function BundleSave({
             </h3>
           )}
           <p dir="auto" className="mt-0.5 text-[11px]" style={{ color: `${ink}99` }}>
-            {ar
-              ? `اختاري ${want} قطع — الأرخص ينزل ${off}%`
-              : `Pick ${want} — the cheapest comes down ${off}%`}
+            {offers
+              ? ar
+                ? `اختاري ${want} قطع — الأرخص ينزل ${off}%`
+                : `Pick ${want} — the cheapest comes down ${off}%`
+              : ar
+                ? `اختاري ${want} قطع وأضيفيها معاً`
+                : `Pick ${want} and add them together`}
           </p>
 
           {/* What she can pick from. */}

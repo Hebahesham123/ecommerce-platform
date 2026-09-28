@@ -2330,10 +2330,14 @@ export function BundleSave({
   const [added, setAdded] = useState(false);
   if (!cards.length) return null;
 
+  // The code is what actually takes money off, so without one this section
+  // claims nothing: no per cent, no saving, just a faster way to add several
+  // things at once. An offer the checkout will not honour is worse than none.
+  const offers = Boolean(settings.code) && off > 0;
   const chosen = cards.filter((c) => picked.indexOf(c.id) >= 0);
   const prices = chosen.map((c) => c.priceMin || 0);
   const total = prices.reduce((a, b) => a + b, 0);
-  const saving = prices.length ? Math.round((Math.min.apply(null, prices) * off) / 100) : 0;
+  const saving = offers && prices.length ? Math.round((Math.min.apply(null, prices) * off) / 100) : 0;
   const full = picked.length >= want;
 
   const toggle = (card: Card) => {
@@ -2348,9 +2352,11 @@ export function BundleSave({
         <Text style={[styles.eyebrow, { color: colors.accent }]}>
           {(settings.eyebrow || "Bundle & save").toUpperCase()}
         </Text>
-        <View style={[styles.pill, { backgroundColor: colors.accent }]}>
-          <Text style={styles.pillText}>{off + "% OFF"}</Text>
-        </View>
+        {offers ? (
+          <View style={[styles.pill, { backgroundColor: colors.accent }]}>
+            <Text style={styles.pillText}>{off + "% OFF"}</Text>
+          </View>
+        ) : null}
       </View>
 
       <View style={styles.body}>
@@ -2358,7 +2364,7 @@ export function BundleSave({
           <Text style={[styles.title, { color: ink, fontFamily: theme.titleFont }]}>{settings.title}</Text>
         ) : null}
         <Text style={[styles.rule, { color: ink }]}>
-          {"Pick " + want + " — the cheapest comes down " + off + "%"}
+          {offers ? "Pick " + want + " — the cheapest comes down " + off + "%" : "Pick " + want + " and add them together"}
         </Text>
 
         <View style={styles.row}>
