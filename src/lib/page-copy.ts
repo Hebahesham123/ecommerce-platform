@@ -53,9 +53,9 @@ export const PAGE_COPY: Record<string, PageCopySpec> = {
       },
       {
         key: "add",
-        label: { ar: "زر الإضافة", en: "Add button" },
+        label: { ar: "زر الشراء", en: "Buy button" },
         type: "text",
-        fallback: { ar: "أضيفي", en: "Add" },
+        fallback: { ar: "تسوّقي الآن", en: "Shop now" },
       },
       {
         key: "added",

@@ -320,9 +320,12 @@ function Reel({
    */
   const CARD = 112; // 104 wide, 8 of gap
   const STRIP = 260; // the widest the strip is ever allowed to be
-  const copies = ordered.length
-    ? Math.min(8, Math.max(2, Math.ceil((STRIP * 2) / (CARD * ordered.length))))
-    : 0;
+  // One product has nowhere to go and no reason to: a single thing sliding
+  // back and forth under a still picture is movement for its own sake.
+  const copies =
+    ordered.length > 1
+      ? Math.min(8, Math.max(2, Math.ceil((STRIP * 2) / (CARD * ordered.length))))
+      : 1;
   const ring = Array.from({ length: copies }, () => ordered).flat();
 
   /**
@@ -340,7 +343,8 @@ function Reel({
    */
   useEffect(() => {
     const el = stripRef.current;
-    if (!el || !active) return;
+    // Nothing to go round: one product, or none.
+    if (!el || !active || copies < 2) return;
     if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
 
     let frame = 0;
@@ -469,9 +473,6 @@ function Reel({
       <div className="pointer-events-none absolute inset-0 flex items-end justify-between gap-3 bg-gradient-to-t from-black/80 via-transparent to-transparent p-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
         {/* ---- bottom left: what this reel is selling ---- */}
         <div className="min-w-0 flex-1">
-          <h2 className="mb-2 truncate text-[13px] font-semibold text-white/90 drop-shadow">
-            {reel.title}
-          </h2>
 
           {/*
             One product or six, in the same strip of screen. They scroll
@@ -523,32 +524,33 @@ function Reel({
                           />
                         )}
                       </span>
-                      <span className="mt-1.5 block truncate text-[11px] font-medium leading-tight text-white drop-shadow">
+                      <span className="mt-1.5 block truncate text-center text-[11px] font-medium leading-tight text-white drop-shadow">
                         {p.productName}
                       </span>
-                    </Link>
-                    <div className="mt-0.5 flex items-center gap-1.5">
-                      <span className="text-[11px] font-bold text-white drop-shadow">
+                      <span className="mt-0.5 block text-center text-[11px] font-bold text-white drop-shadow">
                         {p.price != null ? egp(p.price, lang as never) : ""}
                       </span>
-                      <button
-                        onClick={() => !soldOut && addToCart(p)}
-                        disabled={soldOut}
-                        className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                          soldOut
-                            ? "bg-white/25 text-white/80"
-                            : added === p.id
-                              ? "bg-emerald-500 text-white"
-                              : "bg-white text-black"
-                        }`}
-                      >
-                        {soldOut
-                          ? say(copy, "soldOut", ar) || (ar ? "نفدت" : "Sold out")
+                    </Link>
+                    {/* The shop's own button, the width of the card it belongs
+                        to, so a row of them reads as a row rather than as
+                        pills scattered under pictures. */}
+                    <button
+                      onClick={() => !soldOut && addToCart(p)}
+                      disabled={soldOut}
+                      className={`mt-1.5 block w-full rounded-lg px-2 py-1.5 text-[9px] font-bold uppercase tracking-[0.12em] ${
+                        soldOut
+                          ? "bg-white/25 text-white/70"
                           : added === p.id
-                            ? say(copy, "added", ar) || (ar ? "تمت" : "Added")
-                            : say(copy, "add", ar) || (ar ? "أضيفي" : "Add")}
-                      </button>
-                    </div>
+                            ? "bg-emerald-600 text-white"
+                            : "bg-[#8a5a2b] text-white"
+                      }`}
+                    >
+                      {soldOut
+                        ? say(copy, "soldOut", ar) || (ar ? "نفدت" : "Sold out")
+                        : added === p.id
+                          ? say(copy, "added", ar) || (ar ? "تمت" : "Added")
+                          : say(copy, "add", ar) || (ar ? "تسوّقي الآن" : "Shop now")}
+                    </button>
                   </div>
                 );
               })}
