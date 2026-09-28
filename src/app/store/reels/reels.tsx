@@ -232,6 +232,7 @@ function Reel({
   // just shown rather than the shop in general.
   const reviewHref = pinnedProductHref(reel);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const stripRef = useRef<HTMLDivElement | null>(null);
   const [sheet, setSheet] = useState(false);
   const [added, setAdded] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -277,6 +278,68 @@ function Reel({
     const el = videoRef.current;
     if (el) el.muted = muted;
   }, [muted]);
+
+  /**
+   * The products carry themselves past, and begin again.
+   *
+   * A row that has to be pushed is a row most people never push: what is off
+   * the right-hand edge may as well not be there. So it drifts, slowly enough
+   * to read and slowly enough to tap, and returns to the first when it
+   * reaches the last.
+   *
+   * It moves only on the reel being watched, stops the moment a finger lands
+   * on it, and waits a couple of seconds after she lets go before taking over
+   * again — nothing should slide out from under a thumb that is reaching for
+   * it. A phone asking for less motion gets none.
+   */
+  useEffect(() => {
+    const el = stripRef.current;
+    if (!el || !active) return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+
+    let frame = 0;
+    let idleUntil = 0;
+    let leftOver = 0;
+
+    const step = () => {
+      frame = requestAnimationFrame(step);
+      const room = el.scrollWidth - el.clientWidth;
+      // One product, or a row that already fits: there is nothing to show.
+      if (room < 8 || Date.now() < idleUntil) return;
+
+      if (el.scrollLeft >= room - 1) {
+        // Back to the beginning, gently, and a breath before it sets off.
+        el.scrollTo({ left: 0, behavior: "smooth" });
+        idleUntil = Date.now() + 1400;
+        leftOver = 0;
+        return;
+      }
+
+      // Sub-pixel movement accumulates rather than being rounded away, which
+      // is the difference between a drift and a stutter.
+      leftOver += 0.32;
+      const whole = Math.floor(leftOver);
+      if (whole >= 1) {
+        el.scrollLeft += whole;
+        leftOver -= whole;
+      }
+    };
+
+    const hold = () => {
+      idleUntil = Date.now() + 2500;
+    };
+
+    frame = requestAnimationFrame(step);
+    el.addEventListener("pointerdown", hold, { passive: true });
+    el.addEventListener("touchstart", hold, { passive: true });
+    el.addEventListener("wheel", hold, { passive: true });
+    return () => {
+      cancelAnimationFrame(frame);
+      el.removeEventListener("pointerdown", hold);
+      el.removeEventListener("touchstart", hold);
+      el.removeEventListener("wheel", hold);
+    };
+  }, [active, reel.products.length]);
 
   const addToCart = useCallback(
     (p: LiveProduct) => {
@@ -374,7 +437,10 @@ function Reel({
           */}
           {reel.products.length > 0 && (
             <div
-              className="pointer-events-auto -mx-1 flex snap-x snap-mandatory gap-2 overflow-x-auto px-1 pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              ref={stripRef}
+              // No scroll snapping: it would keep pulling the row back onto a
+              // product while the drift is trying to move it off one.
+              className="pointer-events-auto -mx-1 flex gap-2 overflow-x-auto px-1 pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
               style={{ maxWidth: "min(72vw, 260px)" }}
             >
               {ordered.map((p) => {
@@ -383,7 +449,7 @@ function Reel({
                   <button
                     key={p.id}
                     onClick={() => !soldOut && addToCart(p)}
-                    className="w-[104px] shrink-0 snap-start text-start"
+                    className="w-[104px] shrink-0 text-start"
                   >
                     <span className="block h-[104px] w-[104px] overflow-hidden rounded-2xl bg-white/10 ring-1 ring-white/25 backdrop-blur">
                       {p.imageUrl && (
