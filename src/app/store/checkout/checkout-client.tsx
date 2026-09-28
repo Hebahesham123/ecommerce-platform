@@ -1100,6 +1100,17 @@ export default function CheckoutClient({
 /* --------------------------------- header --------------------------------- */
 
 function CheckoutHeader({ ar }: { ar: boolean }) {
+  // Only somewhere inside this shop, and only a path — a `back` that could be
+  // any address at all is an open redirect with a friendly name.
+  const [back, setBack] = useState<string | null>(null);
+  useEffect(() => {
+    try {
+      const wanted = new URLSearchParams(window.location.search).get("back") ?? "";
+      setBack(/^\/[A-Za-z0-9/_-]*$/.test(wanted) ? wanted : null);
+    } catch {
+      setBack(null);
+    }
+  }, []);
   // Shoppers reach checkout from the published theme at /shop, so "home" is
   // there — not /store, which is the separate React storefront. The footer's
   // policy links already point at /shop, so the header was the odd one out.
@@ -1108,7 +1119,22 @@ function CheckoutHeader({ ar }: { ar: boolean }) {
   // skips — so the bag goes to the cart page rather than opening a dead drawer.
   return (
     <header className="border-b border-[var(--co-line-soft)] bg-white">
-      <div className="mx-auto flex w-full max-w-[600px] items-center justify-between px-5 py-5 lg:max-w-[1120px] lg:px-10">
+      <div className="mx-auto flex w-full max-w-[600px] items-center justify-between gap-3 px-5 py-5 lg:max-w-[1120px] lg:px-10">
+        {/* Where she came from, if she came from somewhere worth returning
+            to. A reel is a place a shopper was in the middle of, not a list
+            she happened to pass through, so checkout offers the way back
+            rather than leaving the browser's own button to do it. */}
+        {back && (
+          <Link
+            href={back}
+            aria-label={ar ? "رجوع" : "Back"}
+            className="-ms-1 shrink-0 text-[var(--co-muted)] transition hover:text-[var(--co-text)]"
+          >
+            <svg viewBox="0 0 24 24" className="h-5 w-5 rtl:-scale-x-100" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 5l-7 7 7 7" />
+            </svg>
+          </Link>
+        )}
         <Link
           href={STOREFRONT_HOME}
           aria-label={ar ? "الصفحة الرئيسية" : "Home"}

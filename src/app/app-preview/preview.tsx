@@ -433,6 +433,12 @@ export function Preview({
               setTab("shop");
               setOpenMenu({ at: Date.now() });
             }}
+            onHome={() => {
+              // Out of whatever page she is on and back to the shop, which is
+              // what a shop's name has meant since there were shops online.
+              setSheet(null);
+              setTab("shop");
+            }}
             onBag={() => setTab("cart")}
             wishlistCount={wishlist.length}
             onWishlist={() => setSheet("wishlist")}

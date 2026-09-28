@@ -17,22 +17,28 @@ alter table public.live_streams
   add column if not exists likes integer not null default 0;
 
 -- Counting in the database rather than by reading and writing back: two people
--- tapping at the same moment on a phone each would otherwise overwrite each
--- other and one of them would silently not count.
-create or replace function public.live_like(p_id uuid)
+-- tapping at the same moment would otherwise each overwrite the other, and one
+-- of them would silently not count.
+--
+-- It takes a direction, because a heart that cannot be un-tapped turns a slip
+-- of the thumb into a permanent one. It never goes below zero: an un-tap that
+-- arrives twice, or one from a browser whose tap was counted somewhere else,
+-- should leave the total alone rather than push it negative.
+create or replace function public.live_like(p_id uuid, p_delta integer default 1)
 returns integer
 language plpgsql
 security definer
 set search_path = public
-as $$
+as $fn$
 declare
   v_total integer;
 begin
   update public.live_streams
-     set likes = coalesce(likes, 0) + 1
+     set likes = greatest(0, coalesce(likes, 0) + sign(p_delta)::integer)
    where id = p_id
   returning likes into v_total;
   return coalesce(v_total, 0);
-end $$;
+end
+$fn$;
 
-grant execute on function public.live_like(uuid) to anon, authenticated;
+grant execute on function public.live_like(uuid, integer) to anon, authenticated;

@@ -34,6 +34,7 @@ export function AppHeader({
   onWishlist,
   onBag,
   onMenu,
+  onHome,
 }: {
   settings: AppSettings;
   accent: string;
@@ -46,6 +47,8 @@ export function AppHeader({
   onBag?: () => void;
   /** Opens the shop's menu. The website keeps this in the header; so does this. */
   onMenu?: () => void;
+  /** Tapping the name goes home, the way it does on every shop. */
+  onHome?: () => void;
 }) {
   const ink = settings.headerInk || "#191614";
   const bg = settings.headerBg || "#ffffff";
@@ -71,22 +74,34 @@ export function AppHeader({
         </button>
       )}
 
-      {settings.logoUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={settings.logoUrl} alt="" className="h-5 w-auto shrink-0 object-contain" />
-      ) : (
-        (wordmark || settings.logoAccentText) && (
-          <span
-            className="shrink-0 text-[13px] font-extrabold tracking-tight"
-            style={{ color: ink }}
-          >
-            {wordmark}
-            {settings.logoAccentText && (
-              <span style={{ color: accent }}>{settings.logoAccentText}</span>
-            )}
-          </span>
-        )
-      )}
+      {/*
+        The shop's name is the way home. It is the oldest convention there is,
+        and it was the one thing up here that did nothing when pressed.
+      */}
+      <button
+        type="button"
+        onClick={onHome}
+        disabled={!onHome}
+        aria-label={wordmark || "Home"}
+        className="flex shrink-0 items-center disabled:cursor-default"
+      >
+        {settings.logoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={settings.logoUrl} alt="" className="h-5 w-auto shrink-0 object-contain" />
+        ) : (
+          (wordmark || settings.logoAccentText) && (
+            <span
+              className="shrink-0 text-[13px] font-extrabold tracking-tight"
+              style={{ color: ink }}
+            >
+              {wordmark}
+              {settings.logoAccentText && (
+                <span style={{ color: accent }}>{settings.logoAccentText}</span>
+              )}
+            </span>
+          )
+        )}
+      </button>
 
       {settings.showSearch && (
         <span className="relative flex min-w-0 flex-1 items-center">

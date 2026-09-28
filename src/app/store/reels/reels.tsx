@@ -198,19 +198,27 @@ function Reel({
     }
   }, [reel.id]);
 
+  /**
+   * Liking, and changing your mind.
+   *
+   * A heart that cannot be un-tapped turns a slip of the thumb into a
+   * permanent one, so the same tap does both. It fills at once and the shop
+   * is told afterwards — a heart that waits for a round trip before it
+   * fills is a heart that feels broken.
+   */
   function like() {
-    if (liked) return;
-    // Counted here at once and confirmed by the shop afterwards: a heart
-    // that waits for a round trip before it fills is a heart that feels
-    // broken.
-    setLiked(true);
-    setLikes((n) => n + 1);
+    const next = !liked;
+    setLiked(next);
+    setLikes((n) => Math.max(0, n + (next ? 1 : -1)));
     try {
-      localStorage.setItem(`bb_reel_like_${reel.id}`, "1");
+      if (next) localStorage.setItem(`bb_reel_like_${reel.id}`, "1");
+      else localStorage.removeItem(`bb_reel_like_${reel.id}`);
     } catch {
       /* private browsing */
     }
-    fetch(`/api/storefront/reels/${reel.id}/like`, { method: "POST" })
+    fetch(`/api/storefront/reels/${reel.id}/like`, {
+      method: next ? "POST" : "DELETE",
+    })
       .then((r) => r.json())
       .then((r) => {
         if (r?.ok && typeof r.data?.likes === "number") setLikes(r.data.likes);
@@ -291,7 +299,11 @@ function Reel({
     [add],
   );
 
-  const pinned = reel.products.find((p) => p.pinned) ?? reel.products[0] ?? null;
+  // Whatever she held up goes first; the rest keep the order they were
+  // given. Nobody should have to scroll to reach the thing on screen.
+  const ordered = [...reel.products].sort(
+    (a, b) => Number(b.pinned) - Number(a.pinned) || a.sortOrder - b.sortOrder,
+  );
 
   async function share() {
     const url =
@@ -353,37 +365,63 @@ function Reel({
             {reel.title}
           </h2>
 
-          {pinned && (
-            <button
-              onClick={() => addToCart(pinned)}
-              className="pointer-events-auto block w-[112px] text-start"
+          {/*
+            One product or six, in the same strip of screen. They scroll
+            sideways rather than stacking, so a live that sold a whole rail
+            of things does not bury the video it is selling them from — and
+            each one still leads with its photograph, which is what she is
+            deciding about.
+          */}
+          {reel.products.length > 0 && (
+            <div
+              className="pointer-events-auto -mx-1 flex snap-x snap-mandatory gap-2 overflow-x-auto px-1 pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+              style={{ maxWidth: "min(72vw, 260px)" }}
             >
-              {/* The picture is the point — it is what she is deciding about,
-                  so it gets the room and the words go underneath it small. */}
-              <span className="block h-[112px] w-[112px] overflow-hidden rounded-2xl bg-white/10 ring-1 ring-white/25 backdrop-blur">
-                {pinned.imageUrl && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={pinned.imageUrl} alt="" className="h-full w-full object-cover" />
-                )}
-              </span>
-              <span className="mt-1.5 block truncate text-[11px] font-medium leading-tight text-white drop-shadow">
-                {pinned.productName}
-              </span>
-              <span className="mt-0.5 flex items-center gap-1.5">
-                <span className="text-[11px] font-bold text-white drop-shadow">
-                  {pinned.price != null ? egp(pinned.price, lang as never) : ""}
-                </span>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                    added === pinned.id ? "bg-emerald-500 text-white" : "bg-white text-black"
-                  }`}
-                >
-                  {added === pinned.id
-                    ? say(copy, "added", ar) || (ar ? "تمت" : "Added")
-                    : say(copy, "add", ar) || (ar ? "أضيفي" : "Add")}
-                </span>
-              </span>
-            </button>
+              {ordered.map((p) => {
+                const soldOut = (p.available ?? 0) <= 0;
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => !soldOut && addToCart(p)}
+                    className="w-[104px] shrink-0 snap-start text-start"
+                  >
+                    <span className="block h-[104px] w-[104px] overflow-hidden rounded-2xl bg-white/10 ring-1 ring-white/25 backdrop-blur">
+                      {p.imageUrl && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={p.imageUrl}
+                          alt=""
+                          className={`h-full w-full object-cover ${soldOut ? "opacity-45" : ""}`}
+                        />
+                      )}
+                    </span>
+                    <span className="mt-1.5 block truncate text-[11px] font-medium leading-tight text-white drop-shadow">
+                      {p.productName}
+                    </span>
+                    <span className="mt-0.5 flex items-center gap-1.5">
+                      <span className="text-[11px] font-bold text-white drop-shadow">
+                        {p.price != null ? egp(p.price, lang as never) : ""}
+                      </span>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                          soldOut
+                            ? "bg-white/25 text-white/80"
+                            : added === p.id
+                              ? "bg-emerald-500 text-white"
+                              : "bg-white text-black"
+                        }`}
+                      >
+                        {soldOut
+                          ? say(copy, "soldOut", ar) || (ar ? "نفدت" : "Sold out")
+                          : added === p.id
+                            ? say(copy, "added", ar) || (ar ? "تمت" : "Added")
+                            : say(copy, "add", ar) || (ar ? "أضيفي" : "Add")}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           )}
         </div>
 
@@ -404,7 +442,9 @@ function Reel({
           )}
           {count > 0 && (
             <Action
-              href="/store/checkout"
+              // Carrying where she came from, so the page she lands on can
+              // offer her the way back instead of leaving her to find it.
+              href="/store/checkout?back=/store/reels"
               label={String(count)}
               highlight
               icon={<CheckoutIcon />}
@@ -590,9 +630,10 @@ function pinnedProductHref(reel: WatchableLive): string {
   // The item the reel was holding up, so the form opens on the thing she
   // just watched rather than on an empty choice of everything in the shop.
   const p = reel.products.find((x) => x.pinned) ?? reel.products[0];
+  const back = "&back=%2Fstore%2Freels";
   return p?.itemId
-    ? `/shop/reviews?product=${encodeURIComponent(p.itemId)}`
-    : "/shop/reviews";
+    ? `/shop/reviews?product=${encodeURIComponent(p.itemId)}${back}`
+    : `/shop/reviews?${back.slice(1)}`;
 }
 
 /* --------------------------------- icons ---------------------------------- */
@@ -610,11 +651,11 @@ const BagIcon = () => (
   </svg>
 );
 
+/** The shop's own cart mark: a tote, with its handle inside the box. */
 const CheckoutIcon = () => (
-  <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M4 7h13l-1.2 7.5a1 1 0 0 1-1 .8H7.6a1 1 0 0 1-1-.8L5 4.5H2.8" />
-    <circle cx="9" cy="19" r="1.3" fill="currentColor" stroke="none" />
-    <circle cx="16" cy="19" r="1.3" fill="currentColor" stroke="none" />
+  <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3.2" y="6.4" width="17.6" height="13.2" rx="3" />
+    <path d="M9 10.2a3 3 0 0 0 6 0" />
   </svg>
 );
 

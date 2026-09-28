@@ -14,7 +14,15 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(_req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
-  const res = await likeReplay(id);
+  const res = await likeReplay(id, 1);
+  if (!res.ok) return fail(res.error, res.error === "migration_missing" ? 503 : 400);
+  return ok({ likes: res.data });
+}
+
+/** And taking it back, because a heart that cannot be un-tapped is a trap. */
+export async function DELETE(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+  const { id } = await ctx.params;
+  const res = await likeReplay(id, -1);
   if (!res.ok) return fail(res.error, res.error === "migration_missing" ? 503 : 400);
   return ok({ likes: res.data });
 }

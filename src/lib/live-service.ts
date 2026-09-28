@@ -633,11 +633,11 @@ export async function reportViewers(id: string, viewers: number): Promise<void> 
  * overwrite the other, and one of them would silently not count. Returns
  * the new total so the tap can be confirmed rather than assumed.
  */
-export async function likeReplay(liveId: string): Promise<Result<number>> {
+export async function likeReplay(liveId: string, delta: 1 | -1 = 1): Promise<Result<number>> {
   if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
   try {
     const supabase = getServerSupabase();
-    const { data, error } = await supabase.rpc("live_like", { p_id: liveId });
+    const { data, error } = await supabase.rpc("live_like", { p_id: liveId, p_delta: delta });
     if (error) {
       return {
         ok: false,
