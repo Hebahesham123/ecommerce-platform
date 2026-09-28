@@ -97,15 +97,15 @@ export async function downloadApp(
     zip.file(
       "assets/README.txt",
       [
-        "Put three images here before building:",
+        "Nothing here is required to build. app.json names no icon and no",
+        "splash image on purpose, so the first build cannot fail on a missing",
+        "file — Expo uses its own placeholder in your accent colour.",
         "",
-        "  icon.png           1024x1024, no transparency",
-        "  splash.png         about 1284x2778, your logo centred",
-        "  adaptive-icon.png  1024x1024, the middle two thirds kept clear",
+        "When you are ready to look like yourself rather than like Expo, put",
+        "these here and name them in app.json:",
         "",
-        "The build fails without them, and that is the right behaviour: an app",
-        "shipped with Expo's placeholder icon is worse than one that would not",
-        "build.",
+        "  icon.png     1024x1024, no transparency",
+        "  splash.png   about 1284x2778, your logo centred",
       ].join("\n"),
     );
 

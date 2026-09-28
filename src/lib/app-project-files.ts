@@ -97,20 +97,20 @@ function appJson(theme: AppTheme): GeneratedFile {
       slug: slug(theme.settings.storeName),
       version: "1.0.0",
       orientation: "portrait",
-      icon: "./assets/icon.png",
       userInterfaceStyle: "light",
+      // No icon or splash image is named, and that is deliberate. Naming a file
+      // that is not there fails the build, and the first build is the one that
+      // has to succeed — it is how anyone finds out whether this works on a
+      // real phone at all. Expo's placeholder carries it until there is
+      // something better. The colours are set either way, so even the
+      // placeholder opens in the shop's own colour rather than in white.
       splash: {
-        image: "./assets/splash.png",
         resizeMode: "contain",
         backgroundColor: theme.settings.accent || "#ffffff",
       },
-      assetBundlePatterns: ["**/*"],
       ios: { supportsTablet: true, bundleIdentifier: id },
       android: {
-        adaptiveIcon: {
-          foregroundImage: "./assets/adaptive-icon.png",
-          backgroundColor: theme.settings.accent || "#ffffff",
-        },
+        adaptiveIcon: { backgroundColor: theme.settings.accent || "#ffffff" },
         package: id,
       },
     },
@@ -221,8 +221,12 @@ link. It is the fastest way to put this in a real person's hands.
 
 ## Before you submit to a store
 
-- Replace \`assets/icon.png\`, \`assets/splash.png\` and
-  \`assets/adaptive-icon.png\` with your own. The build fails without them.
+- Add your own icon and splash. This project deliberately names neither, so
+  the first build cannot fail on a missing file — it uses Expo's placeholder
+  in your accent colour. To replace it: put \`icon.png\` (1024x1024, no
+  transparency) and \`splash.png\` in \`assets/\`, then add
+  \`"icon": "./assets/icon.png"\` and \`"image": "./assets/splash.png"\`
+  (inside \`splash\`) to \`app.json\`.
 - Check the bundle id in \`app.json\`. **It can never be changed after
   publishing** — a different one is a different listing, with none of the
   reviews or installs.
