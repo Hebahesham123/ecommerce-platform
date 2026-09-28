@@ -357,8 +357,12 @@ export function Preview({
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
       if (e.origin !== window.location.origin) return;
-      const data = e.data as { source?: string; action?: string } | null;
-      if (data?.source === "beautybar-app" && data.action === "close") setTab("shop");
+      const data = e.data as { source?: string; action?: string; id?: string } | null;
+      if (data?.source !== "beautybar-app") return;
+      if (data.action === "close") setTab("shop");
+      // A product tapped inside a framed page opens the app's own product
+      // screen, not the website's page inside the phone.
+      if (data.action === "product" && data.id) openProductLink(data.id);
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);

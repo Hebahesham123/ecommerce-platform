@@ -9,6 +9,27 @@ import { useHlsSource } from "@/lib/use-hls";
 import { useCart } from "../cart";
 
 /**
+ * Opening a product, from wherever this is being shown.
+ *
+ * On the website it is a page and the product is another page. Inside the
+ * app it is a tab in a frame, and following the link there loaded the
+ * whole website product page — header, breadcrumb, announcement bar and
+ * all — inside the phone, which is a second storefront wearing the app's
+ * chrome. So it asks the app to open its own product screen instead.
+ */
+function openProduct(itemId: string) {
+  const framed = typeof window !== "undefined" && window.parent !== window;
+  if (framed) {
+    window.parent.postMessage(
+      { source: "beautybar-app", action: "product", id: itemId },
+      "*",
+    );
+    return true;
+  }
+  return false;
+}
+
+/**
  * The replays, one after another, the way reels are watched.
  *
  * A live sells for an hour and then stops; the recording is the same hour with
@@ -484,9 +505,12 @@ function Reel({
                     <Link
                       href={
                         p.itemId
-                          ? `/store/product/${encodeURIComponent(p.itemId)}`
+                          ? `/store/product/${encodeURIComponent(p.itemId)}?back=/store/reels`
                           : "/store"
                       }
+                      onClick={(e) => {
+                        if (p.itemId && openProduct(p.itemId)) e.preventDefault();
+                      }}
                       className="block text-start"
                     >
                       <span className="block h-[104px] w-[104px] overflow-hidden rounded-2xl bg-white/10 ring-1 ring-white/25 backdrop-blur">
@@ -590,8 +614,13 @@ function Reel({
                         the way in, the button is the way to buy. */}
                     <Link
                       href={
-                        p.itemId ? `/store/product/${encodeURIComponent(p.itemId)}` : "/store"
+                        p.itemId
+                          ? `/store/product/${encodeURIComponent(p.itemId)}?back=/store/reels`
+                          : "/store"
                       }
+                      onClick={(e) => {
+                        if (p.itemId && openProduct(p.itemId)) e.preventDefault();
+                      }}
                       className="flex min-w-0 flex-1 items-center gap-3"
                     >
                       <span className="h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-slate-100">

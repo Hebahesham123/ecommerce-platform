@@ -8,6 +8,15 @@ import { getStoreProduct, type StoreProduct, type StoreVariant } from "../../act
 import { useCart } from "../../cart";
 import { IcChevron } from "@/components/icons";
 
+/**
+ * A path inside this shop, and nothing else.
+ *
+ * `back` arrives in the address bar, where anyone can write anything. Left
+ * unchecked it is an open redirect with a friendly name: a link that looks
+ * like this shop and lands somewhere that is not.
+ */
+const SAFE_BACK = /^\/[A-Za-z0-9/_-]*$/;
+
 export default function ProductPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { lang } = useI18n();
@@ -19,6 +28,17 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
   const [variant, setVariant] = useState<StoreVariant | null>(null);
   const [active, setActive] = useState(0);
   const [qty, setQty] = useState(1);
+  // Only a path inside this shop: a `back` that could be any address at
+  // all is an open redirect with a friendly name.
+  const [back, setBack] = useState<string | null>(null);
+  useEffect(() => {
+    try {
+      const wanted = new URLSearchParams(window.location.search).get("back") ?? "";
+      setBack(SAFE_BACK.test(wanted) ? wanted : null);
+    } catch {
+      setBack(null);
+    }
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -58,6 +78,18 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
 
   return (
     <>
+      {/* Where she came from, when she came from somewhere she was in the
+          middle of. A reel is not a list you pass through. */}
+      {back && (
+        <Link
+          href={back}
+          className="mb-3 inline-flex items-center gap-1.5 text-sm font-medium text-ink-muted hover:text-ink"
+        >
+          <IcChevron className="h-4 w-4 rotate-180 rtl:rotate-0" />
+          {ar ? "رجوع" : "Back"}
+        </Link>
+      )}
+
       <div className="mb-4 text-sm text-ink-soft">
         <Link href="/store" className="hover:text-ink">{ar ? "المتجر" : "Store"}</Link>
         <span className="mx-1.5">/</span>
