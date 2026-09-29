@@ -66,6 +66,10 @@ function packageJson(theme: AppTheme): GeneratedFile {
     dependencies: {
       expo: "~52.0.0",
       "expo-status-bar": "~2.0.0",
+      // Metro's asset plugin needs this at build time even when nothing in
+      // the app imports it directly — a release build fails without it, with
+      // an error that does not mention the icon or splash it is really about.
+      "expo-asset": "~11.0.1",
       react: "18.3.1",
       "react-native": "0.76.6",
       "react-native-safe-area-context": "4.12.0",
