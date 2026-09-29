@@ -2436,9 +2436,9 @@ const styles = StyleSheet.create({
 `,
 
     bundle_save: `import React, { useState } from "react";
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { colors, gap, radius, spacing, theme } from "../theme";
-import { money } from "./Pieces";
+import { money, shortName } from "./Pieces";
 import type { HomePayload } from "../api";
 
 type Card = HomePayload["newArrivals"][number];
@@ -2467,6 +2467,14 @@ export type BundleSaveSettings = {
  * same reason the product cards do - guessing on her behalf is how you earn a
  * return.
  */
+/** The brand is already on the photo; the card's two words are for the piece. */
+function withoutVendor(name: string, vendor?: string | null) {
+  const v = (vendor || "").trim();
+  const n = String(name || "").trim();
+  if (!v || n.toLowerCase().indexOf(v.toLowerCase()) !== 0) return n;
+  return n.slice(v.length).trim() || n;
+}
+
 export function BundleSave({
   settings,
   rows,
@@ -2530,7 +2538,7 @@ export function BundleSave({
           {offers ? "Pick " + want + " — the cheapest comes down " + off + "%" : "Pick " + want + " and add them together"}
         </Text>
 
-        <View style={styles.row}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.rail} contentContainerStyle={styles.row}>
           {cards.map((card) => {
             const on = picked.indexOf(card.id) >= 0;
             return (
@@ -2550,13 +2558,13 @@ export function BundleSave({
                   </View>
                 ) : null}
                 <View style={styles.pickBody}>
-                  <Text style={styles.pickName} numberOfLines={1}>{card.name}</Text>
+                  <Text style={styles.pickName} numberOfLines={1}>{shortName(withoutVendor(card.name, card.vendor), 2)}</Text>
                   <Text style={[styles.pickPrice, { color: ink }]}>{money(card.priceMin)}</Text>
                 </View>
               </Pressable>
             );
           })}
-        </View>
+        </ScrollView>
 
         <View style={styles.foot}>
           <View style={{ flex: 1 }}>
@@ -2607,13 +2615,14 @@ const styles = StyleSheet.create({
   body: { paddingHorizontal: 12, paddingTop: 10, paddingBottom: 12 },
   title: { fontSize: 17, fontWeight: "700" },
   rule: { marginTop: 2, fontSize: 11, opacity: 0.6 },
-  row: { flexDirection: "row", flexWrap: "wrap", gap: gap.itemTight, marginTop: 10 },
+  rail: { marginHorizontal: -12, marginTop: 10 },
+  row: { flexDirection: "row", gap: gap.itemTight, paddingHorizontal: 12, paddingBottom: 4 },
   pick: { width: 86, borderRadius: radius.md, overflow: "hidden", backgroundColor: colors.surface },
   pickImage: { width: "100%", height: 86, backgroundColor: theme.card.photoBg },
   tick: { position: "absolute", top: 4, right: 4, width: 18, height: 18, borderRadius: 9, alignItems: "center", justifyContent: "center" },
   tickText: { fontSize: 11, fontWeight: "800", color: "#fff" },
   pickBody: { paddingHorizontal: 6, paddingTop: 4, paddingBottom: 6 },
-  pickName: { fontSize: 9, color: colors.inkSoft },
+  pickName: { fontSize: 9, color: "#64748b" },
   pickPrice: { fontSize: 11, fontWeight: "700" },
   foot: { flexDirection: "row", alignItems: "flex-end", gap: spacing.sm, marginTop: 10 },
   count: { fontSize: 11, color: colors.inkSoft },
@@ -5968,13 +5977,27 @@ function liveScreenFile(): GeneratedFile {
     contents: `/**
  * The Live tab. Generated from the dashboard - App - App theme.
  *
- * The sessions come from the Live now and Coming up live sections, so there is
- * one list to keep rather than two that drift apart.
+ * The shop's real lives, as the editor shows them: whoever is on air first,
+ * then what is scheduled. Under them, the recordings, each of which opens in
+ * the app's reels feed on that reel. The sessions typed into the editor only
+ * stand in while the shop has no lives at all.
  */
-import React from "react";
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useState } from "react";
+import { ActivityIndicator, Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { colors, radius, spacing, theme } from "../theme";
+import { SITE_ORIGIN, fetchHome, type HomePayload } from "../api";
 import { openLink, type LinkTo } from "./Pieces";
+
+type Live = HomePayload["lives"][number];
+
+function when(iso: string | null) {
+  if (!iso) return "";
+  try {
+    return new Date(iso).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return "";
+  }
+}
 
 export function LiveScreen({
   onOpenCollection,
@@ -5985,50 +6008,120 @@ export function LiveScreen({
   onOpenProduct?: (id: string) => void;
   onOpenScreen?: (screen: string) => void;
 }) {
-  const sessions = theme.live;
-  if (!sessions.length) {
+  const [lives, setLives] = useState<Live[] | null>(null);
+  useEffect(() => {
+    fetchHome()
+      .then((d) => setLives(d.lives || []))
+      .catch(() => setLives([]));
+  }, []);
+
+  if (!lives) {
     return (
       <View style={styles.empty}>
-        <Text style={styles.emptyText}>
-          Nothing live yet. Add a Live now or Coming up live section to the home screen.
-        </Text>
+        <ActivityIndicator color={colors.accent} />
       </View>
     );
   }
+
+  const rank = (st: string) => (st === "live" ? 0 : 1);
+  const upcoming = lives
+    .filter((l) => l.status === "live" || l.status === "scheduled")
+    .sort((a, b) => rank(a.status) - rank(b.status) || String(a.scheduledAt || "").localeCompare(String(b.scheduledAt || "")));
+  const replays = lives.filter((l) => l.status === "ended");
   const go = (to: LinkTo) => openLink(to, { onOpenCollection, onOpenProduct, onOpenScreen });
+
+  // Nothing real yet: the sessions the merchant typed into the editor.
+  if (!upcoming.length && !replays.length) {
+    const sessions = theme.live;
+    if (!sessions.length) {
+      return (
+        <View style={styles.empty}>
+          <Text style={styles.emptyText}>Nothing live yet.</Text>
+        </View>
+      );
+    }
+    return (
+      <ScrollView contentContainerStyle={styles.wrap}>
+        {sessions.map((s) => (
+          <Row key={s.id} image={s.imageUrl} badge={s.live ? "LIVE" : ""} name={s.name} detail={s.detail} cta={s.live ? "Watch" : "Remind me"} onPress={() => go(s)} />
+        ))}
+      </ScrollView>
+    );
+  }
+
   return (
     <ScrollView contentContainerStyle={styles.wrap}>
-      {sessions.map((s) => (
-        <Pressable key={s.id} style={styles.row} onPress={() => go(s)}>
-          <View>
-            {s.imageUrl ? (
-              <Image source={{ uri: s.imageUrl }} style={styles.thumb} />
-            ) : (
-              <View style={styles.thumb} />
-            )}
-            {s.live ? (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>LIVE</Text>
-              </View>
-            ) : null}
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.name} numberOfLines={1}>{s.name}</Text>
-            {s.detail ? <Text style={styles.detail} numberOfLines={1}>{s.detail}</Text> : null}
-          </View>
-          <View style={styles.cta}>
-            <Text style={styles.ctaText}>{s.live ? "Watch" : "Remind me"}</Text>
-          </View>
-        </Pressable>
+      {upcoming.map((l) => (
+        <Row
+          key={l.id}
+          image={l.coverUrl}
+          badge={l.status === "live" ? "LIVE" : ""}
+          name={l.hostName || l.title}
+          detail={l.status === "live" ? (l.peakViewers ? String(l.peakViewers) : "") : when(l.scheduledAt)}
+          cta={l.status === "live" ? "Watch" : "Remind me"}
+          onPress={() => Linking.openURL(SITE_ORIGIN + l.href).catch(() => {})}
+        />
+      ))}
+      {replays.length ? <Text style={styles.heading}>REPLAYS</Text> : null}
+      {replays.map((l) => (
+        <Row
+          key={l.id}
+          image={l.coverUrl}
+          badge="REPLAY"
+          dark
+          name={l.title || l.hostName || ""}
+          detail={l.hostName && l.title ? "with " + l.hostName : ""}
+          cta="Play"
+          onPress={() => onOpenScreen?.("reel:" + l.id)}
+        />
       ))}
     </ScrollView>
   );
 }
 
+function Row({
+  image,
+  badge,
+  dark,
+  name,
+  detail,
+  cta,
+  onPress,
+}: {
+  image?: string | null;
+  badge: string;
+  dark?: boolean;
+  name: string;
+  detail?: string;
+  cta: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable style={styles.row} onPress={onPress}>
+      <View>
+        {image ? <Image source={{ uri: image }} style={styles.thumb} /> : <View style={styles.thumb} />}
+        {badge ? (
+          <View style={[styles.badge, dark ? { backgroundColor: "#211a15" } : null]}>
+            <Text style={styles.badgeText}>{badge}</Text>
+          </View>
+        ) : null}
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.name} numberOfLines={1}>{name}</Text>
+        {detail ? <Text style={styles.detail} numberOfLines={1}>{detail}</Text> : null}
+      </View>
+      <View style={styles.cta}>
+        <Text style={styles.ctaText}>{cta}</Text>
+      </View>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   wrap: { padding: spacing.lg, gap: spacing.md },
-  empty: { padding: 32 },
+  empty: { flex: 1, padding: 32, alignItems: "center" },
   emptyText: { fontSize: 12, lineHeight: 18, color: colors.inkSoft, textAlign: "center" },
+  heading: { marginTop: spacing.sm, fontSize: 10, fontWeight: "700", letterSpacing: 1.8, color: colors.accent },
   row: { flexDirection: "row", alignItems: "center", gap: spacing.md, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, padding: spacing.md },
   thumb: { width: 56, height: 56, borderRadius: 12, backgroundColor: colors.page },
   badge: { position: "absolute", bottom: -4, alignSelf: "center", borderRadius: 4, backgroundColor: "#e11d48", paddingHorizontal: 5, paddingVertical: 1 },
@@ -6231,7 +6324,7 @@ function chromeFile(): GeneratedFile {
  * App → App theme.
  */
 import React, { useEffect, useRef, useState } from "react";
-import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Animated, Easing, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { colors, theme } from "../theme";
 import { HeaderIcon } from "./Icons";
 import { openLink } from "./Pieces";
@@ -6278,30 +6371,38 @@ export function AppChrome({
   }, []);
 
   // The shortcut row drifts while there is more of it than fits, slowly enough
-  // to read, and stops for good the moment a thumb lands on it.
+  // to read, and stops for good the moment a thumb lands on it. The drift runs
+  // on the native thread: stepping the scroll position from JavaScript every
+  // few milliseconds is what made it stutter.
   const [stripOn, setStripOn] = useState(0);
   const [stripHeld, setStripHeld] = useState(false);
+  const [far, setFar] = useState(0);
   const strip = useRef<ScrollView | null>(null);
   const stripSize = useRef({ rail: 0, content: 0 });
+  const drift = useRef(new Animated.Value(0)).current;
+  const measure = () => setFar(Math.max(0, stripSize.current.content - stripSize.current.rail));
   useEffect(() => {
+    if (stripHeld || far <= 1) return;
+    // The editor's pace: about twenty-five points a second, there and back.
+    const ms = (far / 25) * 1000;
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(drift, { toValue: -far, duration: ms, easing: Easing.linear, useNativeDriver: true }),
+        Animated.timing(drift, { toValue: 0, duration: ms, easing: Easing.linear, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [stripHeld, far, drift]);
+  // Hand the row to the thumb exactly where the drift left it.
+  const hold = () => {
     if (stripHeld) return;
-    let at = 0;
-    let way = 1;
-    const drift = setInterval(() => {
-      const far = stripSize.current.content - stripSize.current.rail;
-      if (far <= 1) return;
-      at = at + way * 0.8;
-      if (at >= far) {
-        at = far;
-        way = -1;
-      } else if (at <= 0) {
-        at = 0;
-        way = 1;
-      }
-      strip.current?.scrollTo({ x: at, animated: false });
-    }, 30);
-    return () => clearInterval(drift);
-  }, [stripHeld]);
+    drift.stopAnimation((at) => {
+      drift.setValue(0);
+      strip.current?.scrollTo({ x: -at, animated: false });
+    });
+    setStripHeld(true);
+  };
 
   return (
     <View>
@@ -6370,14 +6471,17 @@ export function AppChrome({
           ref={strip}
           onLayout={(e) => {
             stripSize.current.rail = e.nativeEvent.layout.width;
+            measure();
           }}
           onContentSizeChange={(w) => {
             stripSize.current.content = w;
+            measure();
           }}
-          onTouchStart={() => setStripHeld(true)}
+          onTouchStart={hold}
           style={styles.strip}
-          contentContainerStyle={styles.stripRow}
+          contentContainerStyle={styles.stripPad}
         >
+          <Animated.View style={[styles.stripRow, { transform: [{ translateX: drift }] }]}>
           {theme.strip.items.map((item, i) => {
             const on = i === stripOn;
             return (
@@ -6393,6 +6497,7 @@ export function AppChrome({
               </Pressable>
             );
           })}
+          </Animated.View>
         </ScrollView>
       ) : null}
     </View>
@@ -6412,7 +6517,8 @@ const styles = StyleSheet.create({
   badge: { position: "absolute", top: -4, right: -4, minWidth: 16, height: 16, borderRadius: 999, paddingHorizontal: 4, alignItems: "center", justifyContent: "center", backgroundColor: colors.accent },
   badgeText: { color: "#ffffff", fontSize: 9, fontWeight: "700" },
   strip: { flexGrow: 0, backgroundColor: "#ffffff", borderBottomWidth: 1, borderBottomColor: "#e2e8f0" },
-  stripRow: { paddingHorizontal: 16, gap: 16 },
+  stripPad: { paddingHorizontal: 16 },
+  stripRow: { flexDirection: "row", gap: 16 },
   stripItem: { paddingVertical: 8, borderBottomWidth: 2 },
   stripText: { fontSize: 12, fontWeight: "600" },
 });
