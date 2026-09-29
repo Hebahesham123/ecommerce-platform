@@ -70,6 +70,9 @@ function packageJson(theme: AppTheme): GeneratedFile {
       // the app imports it directly — a release build fails without it, with
       // an error that does not mention the icon or splash it is really about.
       "expo-asset": "~11.0.1",
+      // The editor's gradients and icons, drawn natively rather than faked.
+      "expo-linear-gradient": "~14.0.2",
+      "react-native-svg": "15.8.0",
       react: "18.3.1",
       "react-native": "0.76.6",
       "react-native-safe-area-context": "4.12.0",

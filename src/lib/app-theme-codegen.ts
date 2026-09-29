@@ -234,6 +234,9 @@ function apiFile(baseUrl: string): GeneratedFile {
 import { Dimensions, PixelRatio, Platform } from "react-native";
 
 export const API_BASE = ${q(baseUrl)};
+// The website itself, for the screens that are simply the real site shown in
+// the app: the origin is the API base with its /api/storefront tail cut off.
+export const SITE_ORIGIN = API_BASE.replace(/\\/api\\/storefront\\/?$/, "");
 
 let token: string | null = null;
 export const setToken = (t: string | null) => { token = t; };
@@ -1759,6 +1762,7 @@ const styles = StyleSheet.create({
 
     sale_seal: `import React, { useEffect, useRef } from "react";
 import { Animated, Easing, Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { Fade } from "./Fade";
 import { colors, theme } from "../theme";
 import { openLink, type LinkTo } from "./Pieces";
 
@@ -1824,6 +1828,7 @@ export function SaleSeal({
 
   const panel = (
     <View style={[styles.panel, { backgroundColor: bg }]}>
+      <Fade angle={150} colors={[bg, settings.bg2 || colors.accent]} style={StyleSheet.absoluteFill} />
       <View style={[styles.seal, { width: seal, height: seal }]}>
         <Animated.View style={[styles.ring, { transform: [{ rotate: turn }] }]}>
           {letters.map((ch, i) => (
@@ -1905,8 +1910,9 @@ const styles = StyleSheet.create({
 });
 `,
 
-    free_shipping: `import React, { useEffect, useRef } from "react";
-import { Animated, Easing, Image, Pressable, StyleSheet, Text, View } from "react-native";
+    free_shipping: `import React, { useEffect, useRef, useState } from "react";
+import { Animated, Easing, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Fade, mix } from "./Fade";
 import { colors, theme } from "../theme";
 import { openLink, type LinkTo } from "./Pieces";
 
@@ -1948,6 +1954,44 @@ function useStripes() {
   return shift.interpolate({ inputRange: [0, 1], outputRange: [0, 44] });
 }
 
+/** The ribbon's line, twice over, so the second copy is already on screen
+ *  when the first leaves and the line never seems to end. */
+function Ribbon({ text, color }: { text: string; color: string }) {
+  const [half, setHalf] = useState(0);
+  const move = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!half) return;
+    move.setValue(0);
+    const loop = Animated.loop(
+      Animated.timing(move, { toValue: -half, duration: 18000, easing: Easing.linear, useNativeDriver: true }),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [half, move]);
+  const copy = (k: number) => (
+    <View
+      key={k}
+      style={styles.ribbonHalf}
+      onLayout={k === 0 ? (e) => setHalf(e.nativeEvent.layout.width) : undefined}
+    >
+      {[0, 1, 2, 3].map((i) => (
+        <View key={i} style={styles.ribbonHalf}>
+          <Text style={[styles.ribbonText, { color }]}>{text.toUpperCase()}</Text>
+          <Text style={[styles.ribbonStar, { color }]}>✦</Text>
+        </View>
+      ))}
+    </View>
+  );
+  return (
+    <ScrollView horizontal scrollEnabled={false} showsHorizontalScrollIndicator={false}>
+      <Animated.View style={[styles.ribbonHalf, { transform: [{ translateX: move }] }]}>
+        {copy(0)}
+        {copy(1)}
+      </Animated.View>
+    </ScrollView>
+  );
+}
+
 export function FreeShipping({
   settings,
   onOpenCollection,
@@ -1962,7 +2006,7 @@ export function FreeShipping({
   const travel = useStripes();
   if (!settings.title && !settings.subtitle) return null;
 
-  const look = settings.style || "photo";
+  const look = settings.style || "ribbon";
   const strip = look === "strip";
   const paper = settings.bg || "#fffaf3";
   const ink = settings.inkColor || "#2b1b10";
@@ -2000,6 +2044,11 @@ export function FreeShipping({
     const was = settings.wasPrice || "";
     return (
       <Pressable disabled={!opens} onPress={go} style={[styles.ticket, { backgroundColor: settings.bg || "#2b1b10", borderRadius: r, minHeight: settings.height || undefined }]}>
+        <Fade
+          angle={115}
+          colors={[settings.bg || "#2b1b10", mix(settings.bg || "#2b1b10", settings.bg2 || colors.accent, 1 / 1.4)]}
+          style={[StyleSheet.absoluteFill, { borderRadius: r }]}
+        />
         <View style={styles.ticketBody}>
           {settings.kicker ? (
             <Text style={[styles.ticketKicker, { color: air }]}>{settings.kicker.toUpperCase()}</Text>
@@ -2023,6 +2072,82 @@ export function FreeShipping({
     );
   }
 
+  // Priced, not described: the word, and what delivery would have cost.
+  if (look === "bold") {
+    const big = settings.bigWord || "FREE";
+    const small = settings.smallWord || "Delivery";
+    const was = settings.wasPrice || "";
+    return (
+      <View>
+        <Pressable disabled={!opens} onPress={go} style={[styles.bold, { borderRadius: r, minHeight: settings.height || undefined }]}>
+          <Fade
+            angle={120}
+            colors={[settings.bg || "#2b1b10", settings.bg2 || colors.accent]}
+            style={[StyleSheet.absoluteFill, { borderRadius: r }]}
+          />
+          <View style={styles.boldCopy}>
+            <Text style={[styles.boldBig, { fontFamily: theme.titleFont }]}>{big}</Text>
+            <View style={styles.boldWords}>
+              <Text style={styles.boldSmall}>{small.toUpperCase()}</Text>
+              {settings.subtitle ? <Text style={styles.boldSub}>{settings.subtitle}</Text> : null}
+            </View>
+          </View>
+          {was ? (
+            <View style={styles.boldWas}>
+              <Text style={[styles.boldWasLabel, { color: air }]}>{(settings.wasLabel || "was").toUpperCase()}</Text>
+              <Text style={[styles.boldWasPrice, { textDecorationColor: air }]}>{was}</Text>
+            </View>
+          ) : null}
+        </Pressable>
+        {settings.note ? <Text style={styles.boldNote}>{settings.note}</Text> : null}
+      </View>
+    );
+  }
+
+  // A line between two hairlines - a fact, not a banner.
+  if (look === "rule") {
+    return (
+      <Pressable disabled={!opens} onPress={go} style={[styles.rule, { borderColor: ink + "1f" }]}>
+        <View style={styles.ruleLine}>
+          <Text style={[styles.ruleStar, { color: air }]}>✦</Text>
+          <Text style={[styles.ruleTitle, { color: ink }]}>{(settings.title || "").toUpperCase()}</Text>
+          <Text style={[styles.ruleStar, { color: air }]}>✦</Text>
+        </View>
+        {settings.subtitle ? <Text style={[styles.ruleSub, { color: ink }]}>{settings.subtitle.toUpperCase()}</Text> : null}
+      </Pressable>
+    );
+  }
+
+  // One line of type crossing the screen.
+  if (look === "ribbon") {
+    const run = [settings.title, settings.subtitle].filter(Boolean).join(" ") || settings.kicker || "";
+    return (
+      <Pressable disabled={!opens} onPress={go} style={[styles.ribbon, { backgroundColor: air }]}>
+        <Ribbon text={run} color={paper} />
+      </Pressable>
+    );
+  }
+
+  // The editorial line: no ornament at all.
+  if (look === "editorial") {
+    return (
+      <Pressable disabled={!opens} onPress={go} style={[styles.editorial, { backgroundColor: paper, borderRadius: r }]}>
+        {settings.kicker ? (
+          <View style={styles.ruleLine}>
+            <View style={[styles.hair, { backgroundColor: ink + "33" }]} />
+            <Text style={[styles.edKicker, { color: air }]}>{settings.kicker.toUpperCase()}</Text>
+            <View style={[styles.hair, { backgroundColor: ink + "33" }]} />
+          </View>
+        ) : null}
+        {settings.title ? <Text style={[styles.edTitle, { color: ink, fontFamily: theme.titleFont }]}>{settings.title}</Text> : null}
+        {settings.subtitle ? <Text style={[styles.edSub, { color: ink }]}>{settings.subtitle.toUpperCase()}</Text> : null}
+        {settings.buttonLabel ? (
+          <Text style={[styles.edCta, { color: ink, borderBottomColor: air }]}>{settings.buttonLabel.toUpperCase() + " →"}</Text>
+        ) : null}
+      </Pressable>
+    );
+  }
+
   // The promise over a photograph: the shape everything else in this shop
   // takes, because the shop is a photographed one.
   if (look === "photo") {
@@ -2033,7 +2158,12 @@ export function FreeShipping({
         ) : (
           <View style={[styles.photo, { backgroundColor: air }]} />
         )}
-        <View style={styles.scrim} />
+        <Fade
+          angle={0}
+          colors={["rgba(20,12,7,0.78)", "rgba(20,12,7,0.35)", "rgba(20,12,7,0)"]}
+          locations={[0, 0.45, 0.78]}
+          style={styles.scrim}
+        />
         <View style={styles.photoBody}>
           <View style={{ flex: 1 }}>
             {settings.kicker ? (
@@ -2115,10 +2245,35 @@ export function FreeShipping({
 }
 
 const styles = StyleSheet.create({
+  bold: { flexDirection: "row", alignItems: "center", gap: 12, overflow: "hidden", paddingHorizontal: 16, paddingVertical: 14 },
+  boldCopy: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "flex-end", gap: 10 },
+  boldWords: { flexShrink: 1, paddingBottom: 4 },
+  boldBig: { fontSize: 42, lineHeight: 44, fontWeight: "700", color: "#ffffff" },
+  boldSmall: { fontSize: 13, fontWeight: "700", letterSpacing: 2.3, color: "#ffffff" },
+  boldSub: { marginTop: 2, fontSize: 11, color: "rgba(255,255,255,0.8)" },
+  boldWas: { borderRadius: 12, paddingHorizontal: 10, paddingVertical: 6, alignItems: "center", backgroundColor: "rgba(20,12,7,0.28)" },
+  boldWasLabel: { fontSize: 9, fontWeight: "700", letterSpacing: 1.3 },
+  boldWasPrice: { marginTop: 2, fontSize: 15, fontWeight: "700", color: "#ffffff", textDecorationLine: "line-through" },
+  boldNote: { marginTop: 6, textAlign: "center", fontSize: 10, color: "#64748b" },
+  rule: { borderTopWidth: 1, borderBottomWidth: 1, paddingVertical: 12, alignItems: "center" },
+  ruleLine: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
+  ruleStar: { fontSize: 10 },
+  ruleTitle: { fontSize: 10, fontWeight: "700", letterSpacing: 1.6 },
+  ruleSub: { marginTop: 4, fontSize: 9, fontWeight: "600", letterSpacing: 1.3, opacity: 0.55 },
+  ribbon: { marginHorizontal: -16, paddingVertical: 12, overflow: "hidden" },
+  ribbonHalf: { flexDirection: "row", alignItems: "center" },
+  ribbonText: { fontSize: 13, fontWeight: "700", letterSpacing: 1.8 },
+  ribbonStar: { paddingHorizontal: 12, fontSize: 11, opacity: 0.7 },
+  editorial: { paddingHorizontal: 16, paddingVertical: 24, alignItems: "center" },
+  hair: { height: 1, width: 32 },
+  edKicker: { fontSize: 9, fontWeight: "700", letterSpacing: 2 },
+  edTitle: { marginTop: 8, fontSize: 27, fontWeight: "700", textAlign: "center" },
+  edSub: { marginTop: 6, fontSize: 10, fontWeight: "600", letterSpacing: 1.8, opacity: 0.6, textAlign: "center" },
+  edCta: { marginTop: 12, borderBottomWidth: 1, paddingBottom: 2, fontSize: 11, fontWeight: "700", letterSpacing: 1.5 },
   banner: { overflow: "hidden" },
   photoWrap: { marginHorizontal: -16, overflow: "hidden" },
   photo: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, width: "100%", height: "100%" },
-  scrim: { position: "absolute", left: 0, right: 0, bottom: 0, height: "70%", backgroundColor: "rgba(20,12,7,0.5)" },
+  scrim: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0 },
   photoBody: { position: "absolute", left: 0, right: 0, bottom: 0, flexDirection: "row", alignItems: "flex-end", gap: 12, padding: 16 },
   photoKicker: { fontSize: 9, fontWeight: "700", letterSpacing: 1.9, color: "#e7c9a9" },
   photoTitle: { marginTop: 4, fontSize: 24, fontWeight: "700", color: "#ffffff" },
@@ -2164,6 +2319,7 @@ const styles = StyleSheet.create({
 
     moments: `import React from "react";
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Fade } from "./Fade";
 import { colors, gap, spacing } from "../theme";
 import { SectionHeading, openLink, type LinkTo } from "./Pieces";
 
@@ -2214,7 +2370,7 @@ export function Moments({
   const h = settings.cardHeight && settings.cardHeight > 0 ? settings.cardHeight : 210;
   const r = settings.radius && settings.radius >= 0 ? settings.radius : 14;
   const word = settings.labelColor || "#ffffff";
-  const across = settings.perRow === undefined ? 5 : Math.max(0, Math.round(settings.perRow));
+  const across = !settings.perRow ? 5 : Math.max(0, Math.round(settings.perRow));
   const grid = across >= 2;
   // Five across leaves about sixty pixels a card, and a word set at thirteen
   // would not fit in it. The shade over the picture shrinks with the card too:
@@ -2237,7 +2393,12 @@ export function Moments({
             ) : (
               <View style={[styles.img, { backgroundColor: colors.line }]} />
             )}
-            <View style={tight ? styles.scrimTight : styles.scrim} />
+            <Fade
+              angle={0}
+              colors={tight ? ["rgba(0,0,0,0.68)", "rgba(0,0,0,0.26)", "rgba(0,0,0,0)"] : ["rgba(0,0,0,0.58)", "rgba(0,0,0,0.22)", "rgba(0,0,0,0)"]}
+              locations={tight ? [0, 0.55, 1] : [0, 0.45, 1]}
+              style={tight ? styles.scrimTight : styles.scrim}
+            />
             {m.label ? (
               <Text style={[tight ? styles.wordTight : styles.word, { color: word }]} numberOfLines={1}>
                 {m.label}
@@ -2267,8 +2428,8 @@ const styles = StyleSheet.create({
   grid: { flexDirection: "row", gap: gap.itemTight, paddingVertical: spacing.sm },
   card: { overflow: "hidden", backgroundColor: colors.line },
   img: { position: "absolute", left: 0, top: 0, right: 0, bottom: 0 },
-  scrim: { position: "absolute", left: 0, right: 0, bottom: 0, height: "50%", backgroundColor: "rgba(0,0,0,0.34)" },
-  scrimTight: { position: "absolute", left: 0, right: 0, bottom: 0, height: "42%", backgroundColor: "rgba(0,0,0,0.4)" },
+  scrim: { position: "absolute", left: 0, right: 0, bottom: 0, height: "50%" },
+  scrimTight: { position: "absolute", left: 0, right: 0, bottom: 0, height: "42%" },
   word: { position: "absolute", left: 12, right: 12, bottom: 10, fontSize: 13, fontWeight: "600" },
   wordTight: { position: "absolute", left: 5, right: 5, bottom: 5, fontSize: 9, fontWeight: "700" },
 });
@@ -2326,7 +2487,7 @@ export function BundleSave({
   const off = Math.max(0, Math.min(90, settings.percentOff === undefined ? 10 : settings.percentOff));
   const ink = settings.inkColor || "#2b1b10";
   const paper = settings.bg || "#fffaf3";
-  const r = settings.radius === undefined ? 16 : settings.radius;
+  const r = settings.radius ? settings.radius : 16;
 
   const [picked, setPicked] = useState<string[]>([]);
   const [added, setAdded] = useState(false);
@@ -2699,6 +2860,20 @@ function personalise(template: string, name: string | null): string {
 
 const pad = (n: number) => (n < 10 ? "0" + n : String(n));
 
+/**
+ * The live a replay link points at, when it is one of ours.
+ *
+ * A replay circle here is something the merchant set up by hand, so its own
+ * id is the editor's, not the live's. What she pasted into it is usually the
+ * live's link from the dashboard - /store/live/<id> - or a shared reel
+ * link with ?reel=<id>, and that is where the real id is.
+ */
+function reelIdOf(url?: string): string | null {
+  if (!url) return null;
+  const m = url.match(/\\/store\\/live\\/([^/?#]+)/) || url.match(/[?&]reel=([^&#]+)/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
 export function LiveNow({
   settings,
   lives,
@@ -2806,7 +2981,19 @@ export function LiveNow({
               <Pressable
                 key={p.id}
                 style={[styles.person, { width: cell }]}
-                onPress={() => (p.videoUrl ? Linking.openURL(p.videoUrl) : go(p))}
+                onPress={() => {
+                  // A live on air now is a broadcast, not a reel: it keeps the
+                  // way in it always had.
+                  if (p.onAir) return go(p);
+                  // A recording opens in the app's own reels feed, on the reel
+                  // it is - not a bare video file in the system browser.
+                  const id = reelIdOf(p.videoUrl);
+                  if (id) return onOpenScreen?.(\`reel:\${id}\`);
+                  // A recording with no id of ours still belongs in the feed
+                  // rather than in Chrome.
+                  if (p.videoUrl) return onOpenScreen?.("reels");
+                  go(p);
+                }}
               >
                 <View
                   style={{
@@ -4147,6 +4334,7 @@ const styles = StyleSheet.create({
 
     style_profile: `import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Fade } from "./Fade";
 import { colors, spacing, theme } from "../theme";
 import { SectionHeading, openLink, type LinkTo } from "./Pieces";
 
@@ -4210,8 +4398,8 @@ export function StyleProfile({
   const onDeep = settings.onDeep || "#f0e6d8";
   const onDeepSoft = settings.onDeepSoft || "#c9b79f";
   const opens = Boolean(settings.handle || settings.url || settings.productId || settings.screen);
-  const kicker = settings.kicker === undefined ? "Your society" : settings.kicker;
-  const glyph = settings.glyph === undefined ? "✦" : settings.glyph;
+  const kicker = settings.kicker || "Your society";
+  const glyph = settings.glyph || "✦";
 
   return (
     <>
@@ -4225,7 +4413,9 @@ export function StyleProfile({
             : { backgroundColor: settings.cardBg || colors.surface, borderColor: colors.line, borderRadius: r },
         ]}
       >
-        {society ? <View style={[styles.wash, { backgroundColor: deepTo }]} /> : null}
+        {society ? (
+          <Fade angle={135} colors={[deep, deep, deepTo]} locations={[0, 0.45, 1]} style={[StyleSheet.absoluteFill, { borderRadius: r }]} />
+        ) : null}
         {society && kicker ? (
           <Text style={[styles.kicker, { color: gold }]}>{(glyph ? glyph + " " : "") + kicker.toUpperCase()}</Text>
         ) : null}
@@ -4284,6 +4474,7 @@ const styles = StyleSheet.create({
 
     promo_card: `import React, { useEffect, useRef } from "react";
 import { Animated, Easing, Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { Fade } from "./Fade";
 import { colors, spacing } from "../theme";
 import { openLink } from "./Pieces";
 
@@ -4369,6 +4560,7 @@ function MysteryBanner({ settings, onOpen }: { settings: PromoCardSettings; onOp
 
   return (
     <Pressable onPress={onOpen} style={[styles.banner, { minHeight: h, borderRadius: r, backgroundColor: bg }]}>
+      <Fade angle={135} colors={[bg, bg, bg2]} locations={[0, 0.4, 1]} style={[StyleSheet.absoluteFill, { borderRadius: r }]} />
       <View style={[styles.glowBig, { backgroundColor: bg2 }]} />
       <View style={[styles.glowSmall, { backgroundColor: glow }]} />
 
@@ -4464,6 +4656,7 @@ const styles = StyleSheet.create({
 
     review_summary: `import React, { useEffect, useRef } from "react";
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from "react-native";
+import { Fade } from "./Fade";
 import { theme } from "../theme";
 import { openLink } from "./Pieces";
 
@@ -4553,12 +4746,16 @@ export function ReviewSummary({
         style={[
           styles.card,
           {
-            borderRadius: typeof settings.radius === "number" ? settings.radius : 18,
+            borderRadius: settings.radius || 18,
             backgroundColor: settings.panelFrom || "#fdf9f3",
           },
         ]}
       >
-        <View style={[styles.cardLower, { backgroundColor: settings.panelTo || "#f3e9db" }]} />
+        <Fade
+          angle={160}
+          colors={[settings.panelFrom || "#fdf9f3", settings.panelTo || "#f3e9db"]}
+          style={[StyleSheet.absoluteFill, { borderRadius: settings.radius || 18 }]}
+        />
         <View style={styles.score}>
           {settings.average ? (
             <Text style={[styles.average, { color: ink, fontSize: settings.avgSize && settings.avgSize > 0 ? settings.avgSize : 58 }]}>
@@ -4588,7 +4785,7 @@ export function ReviewSummary({
                     },
                   ]}
                 >
-                  <View style={[styles.fillStart, { backgroundColor: settings.barFrom || "#c9a227" }]} />
+                  <Fade angle={90} colors={[settings.barFrom || "#c9a227", settings.barTo || caramel]} style={StyleSheet.absoluteFill} />
                 </Animated.View>
               </View>
               <Text style={[styles.pct, { color: muted }]}>{pct(n) + "%"}</Text>
@@ -4636,6 +4833,7 @@ const styles = StyleSheet.create({
 
     brand_timeline: `import React, { useEffect, useRef, useState } from "react";
 import { Animated, Easing, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Fade } from "./Fade";
 import { theme } from "../theme";
 import { openLink, type LinkTo } from "./Pieces";
 
@@ -4771,9 +4969,12 @@ export function BrandTimeline({
           {items.map((b) => (
             <Pressable key={b.id} onPress={() => go(b)} style={{ width: width || 1, height: h }}>
               {b.imageUrl ? <Image source={{ uri: b.imageUrl }} style={styles.fill} resizeMode="cover" /> : null}
-              <View style={[styles.shadeFull, { opacity: shade * 0.25 }]} />
-              <View style={[styles.shadeHalf, { opacity: shade * 0.45 }]} />
-              <View style={[styles.shadeEdge, { opacity: shade * 0.4 }]} />
+              <Fade
+                angle={90}
+                colors={["rgba(28,18,12," + shade + ")", "rgba(28,18,12," + shade * 0.47 + ")", "rgba(28,18,12,0.02)"]}
+                locations={[0, 0.46, 0.74]}
+                style={StyleSheet.absoluteFill}
+              />
               <View style={styles.copy}>
                 <Text style={styles.cardTitle}>{b.title || b.label}</Text>
                 {b.description ? <Text style={styles.cardDesc}>{b.description}</Text> : null}
@@ -4892,6 +5093,7 @@ const styles = StyleSheet.create({
 
     showcase: `import React from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { Fade } from "./Fade";
 import { colors, spacing } from "../theme";
 import { openLink } from "./Pieces";
 import type { HomePayload } from "../api";
@@ -4941,19 +5143,22 @@ export function Showcase({
       ) : (
         <View style={[styles.image, { backgroundColor: colors.page }]} />
       )}
-      {/* React Native has no gradient without a library, so the scrim is a
-          plain wash over the lower half - enough to keep the words legible. */}
-      <View style={[styles.scrim, { backgroundColor: "rgba(0,0,0," + overlay / 100 + ")" }]} />
+      <Fade
+        angle={0}
+        colors={["rgba(0,0,0," + overlay / 100 + ")", "rgba(0,0,0," + (overlay / 100) * 0.35 + ")", "rgba(0,0,0,0)"]}
+        locations={[0, 0.45, 0.8]}
+        style={styles.scrim}
+      />
       <View style={[styles.body, centred ? styles.centred : styles.bottom]}>
         {settings.heading ? (
-          <Text style={[styles.heading, { color: ink }]}>{settings.heading}</Text>
+          <Text style={[styles.heading, { color: ink }, centred ? styles.middle : null]}>{settings.heading}</Text>
         ) : null}
         {settings.subheading ? (
-          <Text style={[styles.sub, { color: ink }]}>{settings.subheading}</Text>
+          <Text style={[styles.sub, { color: ink }, centred ? styles.middle : null]}>{settings.subheading}</Text>
         ) : null}
         {settings.buttonLabel ? (
-          <Pressable style={[styles.cta, { backgroundColor: ink }]} onPress={go}>
-            <Text style={styles.ctaText}>{settings.buttonLabel}</Text>
+          <Pressable style={[styles.cta, { backgroundColor: ink }, centred ? { alignSelf: "center" } : null]} onPress={go}>
+            <Text style={[styles.ctaText, settings.imageUrl ? null : { color: colors.accent }]}>{settings.buttonLabel}</Text>
           </Pressable>
         ) : null}
       </View>
@@ -4964,10 +5169,11 @@ export function Showcase({
 const styles = StyleSheet.create({
   wrap: { overflow: "hidden" },
   image: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, width: "100%", height: "100%" },
-  scrim: { position: "absolute", left: 0, right: 0, bottom: 0, height: "60%" },
+  scrim: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0 },
   body: { flex: 1, paddingHorizontal: 20, paddingBottom: 28 },
   bottom: { justifyContent: "flex-end" },
   centred: { alignItems: "center", justifyContent: "center" },
+  middle: { textAlign: "center" },
   heading: { fontSize: 26, fontWeight: "700", lineHeight: 30 },
   sub: { marginTop: 4, fontSize: 12, lineHeight: 18, opacity: 0.85 },
   cta: { marginTop: 12, alignSelf: "flex-start", borderRadius: 999, paddingHorizontal: 16, paddingVertical: 9 },
@@ -5014,7 +5220,6 @@ function homeScreenFile(theme: AppTheme): GeneratedFile {
   const imports = used
     .map((t) => `import { ${exportName(t)} } from "./components/${componentName(t)}";`)
     .join("\n");
-  const search = theme.settings.showSearch;
   const recsUsed = used.includes("complete_look");
 
   // A section can carry a line above it and a colour under it. Resolved here,
@@ -5039,10 +5244,7 @@ function homeScreenFile(theme: AppTheme): GeneratedFile {
         : band === "divider"
           ? `, { borderTopWidth: 1, borderTopColor: colors.line, paddingTop: gap.section }`
           : ``
-      const above = kicker
-        ? `\n          <Text style={styles.kicker}>{${q(kicker)}}</Text>`
-        : ``
-      const section = `        <View key=${q(b.id)} style={[styles.block${bandStyle}]}>${above}\n${renderCall(b, 10)}\n        </View>`;
+      const section = `        <Section key=${q(b.id)} style={[styles.block${bandStyle}]}${kicker ? ` kicker={${q(kicker)}}` : ""}>\n${renderCall(b, 10)}\n        </Section>`;
       // Nothing to suggest means no section at all - not an empty band.
       return b.type === "complete_look"
         ? `        {recs && recs.products.length ? (\n${section}\n        ) : null}`
@@ -5120,21 +5322,38 @@ ${sectionsOf(blocks)}
  * The order below is the order of the blocks in the editor. Change it there;
  * anything typed here is replaced the next time a section moves.
  */
-import React, { useEffect, useRef, useState } from "react";
-import {
-  ActivityIndicator,
-  Image,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
-import { colors, gap, radius, spacing, theme } from "./theme";
+import React, { useEffect, useState } from "react";
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
+import { colors, gap, spacing } from "./theme";
 import { fetchHome, ${recsUsed ? "fetchRecommendations, type Recommendations, " : ""}type HomePayload } from "./api";
-import { openLink } from "./components/Pieces";
-${search ? 'import { SearchResults } from "./components/SearchResults";\n' : ""}${imports}
+${imports}
+
+/**
+ * One section, and the line above it.
+ *
+ * A section can have nothing to draw once it is on the phone - no lives
+ * scheduled, no deals running - and a heading over nothing reads as a mistake.
+ * The editor leaves both out, so this measures what the section drew and
+ * does the same, band and all.
+ */
+function Section({
+  kicker,
+  style,
+  children,
+}: {
+  kicker?: string;
+  style?: StyleProp<ViewStyle>;
+  children: React.ReactNode;
+}) {
+  const [drawn, setDrawn] = useState<number | null>(null);
+  const empty = drawn !== null && drawn < 1;
+  return (
+    <View style={empty ? styles.gone : style}>
+      {kicker ? <Text style={[styles.kicker, drawn === null || empty ? styles.hidden : null]}>{kicker.toUpperCase()}</Text> : null}
+      <View onLayout={(e) => setDrawn(e.nativeEvent.layout.height)}>{children}</View>
+    </View>
+  );
+}
 
 export default function HomeScreen({
   onOpenCollection,
@@ -5151,39 +5370,13 @@ export default function HomeScreen({
   signedIn?: boolean;
 }) {
   const [data, setData] = useState<HomePayload | null>(null);
-  const [error, setError] = useState<string | null>(null);${
-    search ? "\n  const [query, setQuery] = useState(\"\");" : ""
-  }
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchHome().then(setData).catch((e) => setError(String(e.message ?? e)));
   }, []);
 
-  // A shortcut row that ends at the screen's edge looks like it ends there,
-  // and the ones past the fold are never seen - so it drifts, slowly enough
-  // to read, and stops for good the moment a thumb lands on it.
-  const strip = useRef<{ scrollTo: (to: { x: number; animated?: boolean }) => void } | null>(null);
-  const stripSize = useRef({ rail: 0, content: 0 });
-  const [stripHeld, setStripHeld] = useState(false);
-  useEffect(() => {
-    if (stripHeld) return;
-    let at = 0;
-    let way = 1;
-    const drift = setInterval(() => {
-      const far = stripSize.current.content - stripSize.current.rail;
-      if (far <= 1) return;
-      at = at + way * 0.8;
-      if (at >= far) {
-        at = far;
-        way = -1;
-      } else if (at <= 0) {
-        at = 0;
-        way = 1;
-      }
-      if (strip.current) strip.current.scrollTo({ x: at, animated: false });
-    }, 30);
-    return () => clearInterval(drift);
-  }, [stripHeld]);${
+${
     recsUsed
       ? "\n\n  // Asked again whenever someone signs in or out; a failure just hides it.\n  const [recs, setRecs] = useState<Recommendations | null>(null);\n  useEffect(() => {\n    if (!signedIn) return setRecs(null);\n    fetchRecommendations().then(setRecs).catch(() => setRecs(null));\n  }, [signedIn]);"
       : ""
@@ -5194,74 +5387,9 @@ export default function HomeScreen({
 
   return (
     <View style={styles.screen}>
-      {theme.announcement.enabled && theme.announcement.text ? (
-        <View style={styles.announcement}>
-          <Text style={styles.announcementText}>{theme.announcement.text}</Text>
-        </View>
-      ) : null}
-      {theme.strip.enabled && theme.strip.items.length ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          ref={(r) => {
-            strip.current = r;
-          }}
-          onLayout={(e) => {
-            stripSize.current.rail = e.nativeEvent.layout.width;
-          }}
-          onContentSizeChange={(w) => {
-            stripSize.current.content = w;
-          }}
-          onTouchStart={() => setStripHeld(true)}
-          style={styles.strip}
-          contentContainerStyle={styles.stripRow}
-        >
-          {theme.strip.items.map((item, i) => (
-            <Pressable
-              key={item.id}
-              onPress={() => openLink(item, { onOpenCollection, onOpenProduct, onOpenScreen })}
-              style={[styles.stripItem, i === 0 ? styles.stripItemOn : null]}
-            >
-              <Text style={[styles.stripText, i === 0 ? styles.stripTextOn : null]}>{item.label}</Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-      ) : null}
-${
-      search
-        ? `      <View style={[styles.appHeader, theme.header.bg ? { backgroundColor: theme.header.bg } : null]}>
-        {theme.logoUrl ? (
-          <Image source={{ uri: theme.logoUrl }} style={styles.logoImg} />
-        ) : (
-          <Text style={[styles.wordmark, theme.header.ink ? { color: theme.header.ink } : null]}>
-            {theme.header.logoText || theme.storeName}
-            <Text style={styles.wordmarkAccent}>{theme.header.logoAccentText}</Text>
-          </Text>
-        )}
-        <TextInput
-          style={[styles.search, { flex: 1 }]}
-          value={query}
-          onChangeText={setQuery}
-          placeholder={theme.header.searchPlaceholder}
-          placeholderTextColor={colors.inkSoft}
-          returnKeyType="search"
-          clearButtonMode="while-editing"
-        />
-        {theme.header.showWishlist ? <Text style={styles.headerIcon}>♡</Text> : null}
-        {theme.header.showBag ? <Text style={styles.headerIcon}>🛍</Text> : null}
-      </View>
-
-      {query.trim() ? (
-        <SearchResults query={query.trim()} onOpenProduct={(id) => onOpenProduct?.(id)} />
-      ) : (
       <ScrollView contentContainerStyle={styles.content}>
 ${rendered}
       </ScrollView>
-      )}`
-        : `      <ScrollView contentContainerStyle={styles.content}>
-${rendered}
-      </ScrollView>`
-    }
     </View>
   );
 }
@@ -5271,23 +5399,12 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.lg, gap: gap.section },
   block: {},
   kicker: { marginBottom: 6, fontSize: 10, fontWeight: "700", letterSpacing: 1.8, color: colors.accent },
+  hidden: { opacity: 0 },
+  // Out of the flow, so the gap between sections closes over it, but still
+  // laid out, so a section whose content arrives later is noticed.
+  gone: { position: "absolute", left: 0, right: 0, opacity: 0 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl },
   error: { color: "#e11d48", fontSize: 13 },
-  announcement: { backgroundColor: colors.accent, paddingVertical: 6, paddingHorizontal: 12 },
-  announcementText: { color: "#fff", fontSize: 11, fontWeight: "600", textAlign: "center" },
-  strip: { flexGrow: 0, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.line },
-  stripRow: { paddingHorizontal: 16, gap: 16 },
-  stripItem: { paddingVertical: 8, borderBottomWidth: 2, borderBottomColor: "transparent" },
-  stripItemOn: { borderBottomColor: colors.accent },
-  stripText: { fontSize: 12, fontWeight: "600", color: colors.inkSoft },
-  stripTextOn: { color: colors.accent },
-  searchWrap: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg },
-  appHeader: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: colors.surface, borderBottomWidth: 1, borderBottomColor: colors.line },
-  logoImg: { height: 20, width: 90, resizeMode: "contain" },
-  wordmark: { fontSize: 13, fontWeight: "800", color: colors.ink },
-  wordmarkAccent: { color: colors.accent },
-  headerIcon: { fontSize: 17, color: colors.ink },
-  search: { height: 40, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, paddingHorizontal: 16, fontSize: 14, color: colors.ink },
   placed: { gap: gap.section, paddingVertical: gap.section },
 });
 ${placedCode}`,
@@ -5925,14 +6042,390 @@ const styles = StyleSheet.create({
   };
 }
 
+// The editor's icons, path for path (src/components/app-tab-icons.tsx and
+// app-header.tsx). Emoji stood in for them before, and looked like someone
+// else's app.
+function iconsFile(): GeneratedFile {
+  return {
+    path: "components/Icons.tsx",
+    language: "tsx",
+    contents: `/**
+ * The editor's own icons, drawn the same way here, so the phone and the
+ * dashboard show the same marks. Generated from the dashboard — App → App theme.
+ */
+import React from "react";
+import Svg, { Circle, Path, Rect } from "react-native-svg";
+import type { TabKey } from "./TabBar";
+
+export function TabIcon({
+  tab,
+  on = false,
+  color,
+  size = 21,
+}: {
+  tab: TabKey;
+  on?: boolean;
+  color: string;
+  size?: number;
+}) {
+  const tint = (opacity: number) => (on ? { fill: "currentColor", fillOpacity: opacity } : {});
+  return (
+    <Svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      color={color}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.7}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      {tab === "live" ? (
+        <>
+          <Circle cx="12" cy="12" r="3.1" fill={on ? "currentColor" : "none"} />
+          <Path d="M7.8 7.8a5.9 5.9 0 0 0 0 8.4M16.2 16.2a5.9 5.9 0 0 0 0-8.4" />
+          <Path d="M5 5a9.9 9.9 0 0 0 0 14M19 19a9.9 9.9 0 0 0 0-14" opacity={0.55} />
+        </>
+      ) : tab === "reels" ? (
+        <>
+          <Rect x="3.4" y="4.6" width="17.2" height="14.8" rx="3.2" {...tint(0.12)} />
+          <Path d="M10.4 9.6 15 12l-4.6 2.4Z" fill="currentColor" />
+        </>
+      ) : tab === "cart" ? (
+        <>
+          <Path d="M5.4 8.4h13.2l-1 11.1a1.6 1.6 0 0 1-1.6 1.5H8a1.6 1.6 0 0 1-1.6-1.5Z" {...tint(0.14)} />
+          <Path d="M8.9 10.4V7.2a3.1 3.1 0 0 1 6.2 0v3.2" />
+        </>
+      ) : tab === "orders" ? (
+        <>
+          <Path d="M6 3.6h12v15.8l-2-1.3-2 1.3-2-1.3-2 1.3-2-1.3-2 1.3Z" {...tint(0.12)} />
+          <Path d="M9 8h6M9 11.6h6M9 15.2h3.5" />
+        </>
+      ) : tab === "account" ? (
+        <>
+          <Circle cx="12" cy="8.4" r="3.4" {...tint(0.18)} />
+          <Path d="M4.9 20.1a7.6 7.6 0 0 1 14.2 0" />
+        </>
+      ) : (
+        <>
+          <Path d="M3.6 9.2 5 4.8h14l1.4 4.4" />
+          <Path d="M3.6 9.2a2.2 2.2 0 0 0 4.2 0 2.2 2.2 0 0 0 4.2 0 2.2 2.2 0 0 0 4.2 0 2.2 2.2 0 0 0 4.2 0" />
+          <Path d="M5 11.4V19h14v-7.6" {...tint(0.14)} />
+          <Path d="M10 19v-4.2h4V19" />
+        </>
+      )}
+    </Svg>
+  );
+}
+
+export type HeaderIconName = "search" | "heart" | "bag" | "back";
+
+export function HeaderIcon({ name, color, size = 18 }: { name: HeaderIconName; color: string; size?: number }) {
+  return (
+    <Svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      color={color}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={name === "search" ? 2 : 1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      {name === "search" ? (
+        <>
+          <Circle cx="11" cy="11" r="7" />
+          <Path d="m20 20-3.2-3.2" />
+        </>
+      ) : name === "heart" ? (
+        <Path d="M12 20s-7-4.4-7-9.3A3.9 3.9 0 0 1 12 8a3.9 3.9 0 0 1 7 2.7C19 15.6 12 20 12 20Z" />
+      ) : name === "bag" ? (
+        <>
+          <Path d="M6 8h12l-1 12H7L6 8Z" />
+          <Path d="M9 8a3 3 0 0 1 6 0" />
+        </>
+      ) : (
+        <Path d="M15 5l-7 7 7 7" />
+      )}
+    </Svg>
+  );
+}
+`,
+  };
+}
+
+// CSS gradients, drawn natively. The sections used to fake them with stacked
+// flat panels, which showed as hard bands and grey boxes over photographs.
+function fadeFile(): GeneratedFile {
+  return {
+    path: "components/Fade.tsx",
+    language: "tsx",
+    contents: `/**
+ * A linear gradient given the way the editor gives one: a CSS angle and its
+ * stops. Generated from the dashboard — App → App theme.
+ */
+import React from "react";
+import type { StyleProp, ViewStyle } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+
+export function Fade({
+  angle = 180,
+  colors,
+  locations,
+  style,
+  children,
+}: {
+  /** CSS degrees: 0 runs bottom to top, 90 left to right, 180 top to bottom. */
+  angle?: number;
+  colors: string[];
+  locations?: number[];
+  style?: StyleProp<ViewStyle>;
+  children?: React.ReactNode;
+}) {
+  const a = (angle * Math.PI) / 180;
+  const dx = Math.sin(a) / 2;
+  const dy = -Math.cos(a) / 2;
+  return (
+    <LinearGradient
+      colors={colors as unknown as readonly [string, string, ...string[]]}
+      locations={locations as unknown as readonly [number, number, ...number[]] | undefined}
+      start={{ x: 0.5 - dx, y: 0.5 - dy }}
+      end={{ x: 0.5 + dx, y: 0.5 + dy }}
+      style={style}
+    >
+      {children}
+    </LinearGradient>
+  );
+}
+
+/** A hex colour part of the way to another - for a CSS stop past 100%. */
+export function mix(from: string, to: string, t: number): string {
+  const rgb = (hex: string) => {
+    let h = hex.replace("#", "");
+    if (h.length === 3) h = h.split("").map((c) => c + c).join("");
+    const n = parseInt(h.slice(0, 6), 16);
+    return Number.isNaN(n) ? null : [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  };
+  const a = rgb(from);
+  const b = rgb(to);
+  if (!a || !b) return to;
+  const part = (i: number) => Math.round(a[i] + (b[i] - a[i]) * t).toString(16).padStart(2, "0");
+  return "#" + part(0) + part(1) + part(2);
+}
+`,
+  };
+}
+
+// The announcement, the header and the shortcut strip, in the editor's order,
+// above every screen - not only Home, which left product pages without a
+// header at all.
+function chromeFile(): GeneratedFile {
+  return {
+    path: "components/AppChrome.tsx",
+    language: "tsx",
+    contents: `/**
+ * What sits above every screen, in the editor's order: the announcement, the
+ * header, and the row of shortcuts under it. Generated from the dashboard —
+ * App → App theme.
+ */
+import React, { useEffect, useRef, useState } from "react";
+import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { colors, theme } from "../theme";
+import { HeaderIcon } from "./Icons";
+import { openLink } from "./Pieces";
+
+const LOGO_HEIGHT = 20;
+
+export function AppChrome({
+  query,
+  onQuery,
+  cartCount = 0,
+  onHome,
+  onBag,
+  onWishlist,
+  onOpenCollection,
+  onOpenProduct,
+  onOpenScreen,
+}: {
+  query: string;
+  onQuery: (value: string) => void;
+  cartCount?: number;
+  onHome?: () => void;
+  onBag?: () => void;
+  onWishlist?: () => void;
+  onOpenCollection?: (handle: string) => void;
+  onOpenProduct?: (id: string) => void;
+  onOpenScreen?: (screen: string) => void;
+}) {
+  const ink = theme.header.ink || "#191614";
+  const bg = theme.header.bg || "#ffffff";
+  const wordmark = theme.header.logoText || theme.storeName;
+
+  // The logo keeps its own proportions at the header's height, as it does in
+  // the editor, rather than being squeezed into a fixed box.
+  const [logoRatio, setLogoRatio] = useState(4.5);
+  useEffect(() => {
+    if (!theme.logoUrl) return;
+    Image.getSize(
+      theme.logoUrl,
+      (w, h) => {
+        if (w > 0 && h > 0) setLogoRatio(w / h);
+      },
+      () => {},
+    );
+  }, []);
+
+  // The shortcut row drifts while there is more of it than fits, slowly enough
+  // to read, and stops for good the moment a thumb lands on it.
+  const [stripOn, setStripOn] = useState(0);
+  const [stripHeld, setStripHeld] = useState(false);
+  const strip = useRef<ScrollView | null>(null);
+  const stripSize = useRef({ rail: 0, content: 0 });
+  useEffect(() => {
+    if (stripHeld) return;
+    let at = 0;
+    let way = 1;
+    const drift = setInterval(() => {
+      const far = stripSize.current.content - stripSize.current.rail;
+      if (far <= 1) return;
+      at = at + way * 0.8;
+      if (at >= far) {
+        at = far;
+        way = -1;
+      } else if (at <= 0) {
+        at = 0;
+        way = 1;
+      }
+      strip.current?.scrollTo({ x: at, animated: false });
+    }, 30);
+    return () => clearInterval(drift);
+  }, [stripHeld]);
+
+  return (
+    <View>
+      {theme.announcement.enabled && theme.announcement.text ? (
+        <View style={styles.announcement}>
+          <Text style={styles.announcementText}>{theme.announcement.text}</Text>
+        </View>
+      ) : null}
+
+      <View style={[styles.header, { backgroundColor: bg }]}>
+        <Pressable onPress={onHome} disabled={!onHome} hitSlop={6} style={styles.home}>
+          {theme.logoUrl ? (
+            <Image
+              source={{ uri: theme.logoUrl }}
+              style={{ height: LOGO_HEIGHT, width: Math.min(160, LOGO_HEIGHT * logoRatio) }}
+              resizeMode="contain"
+            />
+          ) : wordmark || theme.header.logoAccentText ? (
+            <Text style={[styles.wordmark, { color: ink }]}>
+              {wordmark}
+              {theme.header.logoAccentText ? (
+                <Text style={{ color: colors.accent }}>{theme.header.logoAccentText}</Text>
+              ) : null}
+            </Text>
+          ) : null}
+        </Pressable>
+
+        {theme.showSearch ? (
+          <View style={styles.searchWrap}>
+            <View style={styles.searchIcon} pointerEvents="none">
+              <HeaderIcon name="search" color={ink + "80"} size={14} />
+            </View>
+            <TextInput
+              style={[styles.search, { color: ink }]}
+              value={query}
+              onChangeText={onQuery}
+              placeholder={theme.header.searchPlaceholder}
+              placeholderTextColor="#94a3b8"
+              returnKeyType="search"
+              clearButtonMode="while-editing"
+            />
+          </View>
+        ) : null}
+
+        {theme.header.showWishlist ? (
+          <Pressable style={styles.iconButton} onPress={onWishlist} hitSlop={4}>
+            <HeaderIcon name="heart" color={ink} />
+          </Pressable>
+        ) : null}
+        {theme.header.showBag ? (
+          <Pressable style={styles.iconButton} onPress={onBag} hitSlop={4}>
+            <HeaderIcon name="bag" color={ink} />
+            {cartCount > 0 ? (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{cartCount > 99 ? "99+" : cartCount}</Text>
+              </View>
+            ) : null}
+          </Pressable>
+        ) : null}
+      </View>
+
+      {theme.strip.enabled && theme.strip.items.length ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          ref={strip}
+          onLayout={(e) => {
+            stripSize.current.rail = e.nativeEvent.layout.width;
+          }}
+          onContentSizeChange={(w) => {
+            stripSize.current.content = w;
+          }}
+          onTouchStart={() => setStripHeld(true)}
+          style={styles.strip}
+          contentContainerStyle={styles.stripRow}
+        >
+          {theme.strip.items.map((item, i) => {
+            const on = i === stripOn;
+            return (
+              <Pressable
+                key={item.id}
+                onPress={() => {
+                  setStripOn(i);
+                  openLink(item, { onOpenCollection, onOpenProduct, onOpenScreen });
+                }}
+                style={[styles.stripItem, { borderBottomColor: on ? colors.accent : "transparent" }]}
+              >
+                <Text style={[styles.stripText, { color: on ? colors.accent : "#64748b" }]}>{item.label}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      ) : null}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  announcement: { backgroundColor: colors.accent, paddingVertical: 6, paddingHorizontal: 12 },
+  announcementText: { color: "#ffffff", fontSize: 11, fontWeight: "500", textAlign: "center" },
+  header: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: "#e2e8f0" },
+  home: { flexShrink: 0, justifyContent: "center" },
+  wordmark: { fontSize: 13, fontWeight: "800", letterSpacing: -0.3 },
+  searchWrap: { flex: 1, minWidth: 0, justifyContent: "center" },
+  searchIcon: { position: "absolute", left: 10, zIndex: 1 },
+  search: { height: 32, borderRadius: 999, borderWidth: 1, borderColor: "#e2e8f0", backgroundColor: "#f8fafc", paddingLeft: 32, paddingRight: 12, paddingVertical: 0, fontSize: 12 },
+  iconButton: { width: 32, height: 32, alignItems: "center", justifyContent: "center" },
+  badge: { position: "absolute", top: -4, right: -4, minWidth: 16, height: 16, borderRadius: 999, paddingHorizontal: 4, alignItems: "center", justifyContent: "center", backgroundColor: colors.accent },
+  badgeText: { color: "#ffffff", fontSize: 9, fontWeight: "700" },
+  strip: { flexGrow: 0, backgroundColor: "#ffffff", borderBottomWidth: 1, borderBottomColor: "#e2e8f0" },
+  stripRow: { paddingHorizontal: 16, gap: 16 },
+  stripItem: { paddingVertical: 8, borderBottomWidth: 2 },
+  stripText: { fontSize: 12, fontWeight: "600" },
+});
+`,
+  };
+}
+
 function tabBarFile(theme: AppTheme): GeneratedFile {
   const tabs = theme.tabs
     .filter((t) => t.visible)
     .map(
       (t) =>
-        `  { key: ${q(t.key)}, label: ${q(t.label || TAB_DEFAULTS[t.key].en)}, icon: ${q(
-          TAB_DEFAULTS[t.key].icon,
-        )} },`,
+        `  { key: ${q(t.key)}, label: ${q(t.label || TAB_DEFAULTS[t.key].en)} },`,
     )
     .join("\n");
 
@@ -5943,11 +6436,12 @@ function tabBarFile(theme: AppTheme): GeneratedFile {
 import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { colors, radius } from "../theme";
+import { TabIcon } from "./Icons";
 
 export type TabKey = ${TAB_KEYS.map((k) => q(k)).join(" | ")};
 
 /** Order, wording and which appear are the merchant's; the keys are not. */
-export const TABS: { key: TabKey; label: string; icon: string }[] = [
+export const TABS: { key: TabKey; label: string }[] = [
 ${tabs}
 ];
 
@@ -5966,7 +6460,7 @@ export function TabBar({
         const on = t.key === active;
         return (
           <Pressable key={t.key} style={styles.tab} onPress={() => onSelect(t.key)}>
-            <Text style={[styles.icon, on ? styles.on : styles.off]}>{t.icon}</Text>
+            <TabIcon tab={t.key} on={on} color={on ? colors.accent : colors.inkMuted} />
             <Text style={[styles.label, on ? styles.on : styles.off]}>{t.label}</Text>
             {t.key === "cart" && cartCount > 0 ? (
               <View style={styles.badge}>
@@ -5983,7 +6477,6 @@ export function TabBar({
 const styles = StyleSheet.create({
   bar: { flexDirection: "row", borderTopWidth: 1, borderTopColor: colors.line, backgroundColor: colors.surface },
   tab: { flex: 1, alignItems: "center", paddingVertical: 10, gap: 2 },
-  icon: { fontSize: 18, lineHeight: 20 },
   label: { fontSize: 11, fontWeight: "600" },
   on: { color: colors.accent },
   // inkSoft on white is about 2.5:1 - under the 4.5:1 a label this size needs,
@@ -6383,88 +6876,6 @@ const styles = StyleSheet.create({
   };
 }
 
-function accountScreenFile(): GeneratedFile {
-  return {
-    path: "components/AccountScreen.tsx",
-    language: "tsx",
-    contents: `/** The account tab. Wording and rows come from screens.ts — App → App theme. */
-import React from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { colors, radius, spacing } from "../theme";
-import { screens, say } from "../screens";
-
-export type AccountRow = "returns" | "requests" | "reviews";
-
-export function AccountScreen({
-  phone,
-  name,
-  onSignIn,
-  onSignOut,
-  onOpen,
-}: {
-  phone: string | null;
-  name?: string | null;
-  onSignIn: () => void;
-  onSignOut: () => void;
-  onOpen: (row: AccountRow) => void;
-}) {
-  const a = screens.account;
-  const rows: { key: AccountRow; label: string }[] = [
-    ...(a.showReturns ? [{ key: "returns" as const, label: say(a.returnsLabel, "Returns & exchanges") }] : []),
-    ...(a.showRequests ? [{ key: "requests" as const, label: say(a.requestsLabel, "Ask us a question") }] : []),
-    ...(a.showReviews ? [{ key: "reviews" as const, label: say(a.reviewsLabel, "Reviews") }] : []),
-  ];
-
-  return (
-    <ScrollView contentContainerStyle={styles.wrap}>
-      <View style={styles.card}>
-        {phone ? (
-          <>
-            <Text style={styles.name}>{name || "Customer"}</Text>
-            <Text style={styles.phone}>{phone}</Text>
-            <Pressable onPress={onSignOut}>
-              <Text style={styles.signOut}>Sign out</Text>
-            </Pressable>
-          </>
-        ) : (
-          <>
-            <Text style={styles.prompt}>
-              {say(a.signedOutText, "Sign in with your phone number")}
-            </Text>
-            <Pressable style={styles.cta} onPress={onSignIn}>
-              <Text style={styles.ctaText}>Sign in</Text>
-            </Pressable>
-          </>
-        )}
-      </View>
-
-      {rows.map((r) => (
-        <Pressable key={r.key} style={styles.row} onPress={() => onOpen(r.key)}>
-          <Text style={styles.rowText}>{r.label}</Text>
-          <Text style={styles.chevron}>›</Text>
-        </Pressable>
-      ))}
-    </ScrollView>
-  );
-}
-
-const styles = StyleSheet.create({
-  wrap: { padding: spacing.lg, gap: spacing.sm },
-  card: { borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, padding: spacing.lg },
-  name: { fontSize: 14, fontWeight: "700", color: colors.ink },
-  phone: { marginTop: 2, fontSize: 12, color: colors.inkSoft },
-  signOut: { marginTop: 12, fontSize: 12, fontWeight: "600", color: "#e11d48" },
-  prompt: { fontSize: 14, color: colors.inkMuted },
-  cta: { marginTop: spacing.md, borderRadius: radius.md, backgroundColor: colors.accent, paddingVertical: 12, alignItems: "center" },
-  ctaText: { fontSize: 14, fontWeight: "700", color: "#fff" },
-  row: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, paddingHorizontal: spacing.lg, paddingVertical: 14 },
-  rowText: { fontSize: 14, fontWeight: "500", color: colors.ink },
-  chevron: { fontSize: 18, color: colors.inkSoft },
-});
-`,
-  };
-}
-
 // ---------------------------------------------------------- searching --
 function searchScreenFile(): GeneratedFile {
   return {
@@ -6556,6 +6967,7 @@ function collectionScreenFile(): GeneratedFile {
  */
 import React, { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, FlatList, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Fade } from "./Fade";
 import { theme } from "../theme";
 import { screens } from "../screens";
 import { fetchCollection, type Card, type CollectionFilters, type CollectionPayload, type Sort } from "../api";
@@ -6678,7 +7090,7 @@ export function CollectionScreen({
     <View>
       {c.showHero ? (
         <View style={[styles.hero, { backgroundColor: c.heroTo || "#3d2619" }]}>
-          <View style={[styles.heroShade, { backgroundColor: c.heroFrom || "#1c1410" }]} />
+          <Fade angle={135} colors={[c.heroFrom || "#1c1410", c.heroTo || "#3d2619"]} style={StyleSheet.absoluteFill} />
           {c.heroKicker ? <Text style={[styles.heroKicker, { color: c.heroAccent || "#d08159" }]}>{c.heroKicker.toUpperCase()}</Text> : null}
           <Text style={styles.heroTitle}>{data.collection.title.toUpperCase()}</Text>
           {subtitle ? <Text style={styles.heroSub}>{subtitle}</Text> : null}
@@ -7437,6 +7849,104 @@ const styles = StyleSheet.create({
   };
 }
 
+// -------------------------------------------------- the real website, framed --
+/**
+ * A screen that is simply the real website, shown in the app.
+ *
+ * Cart, Orders, Account and Reels are pages that already exist and already
+ * work — a second, native rebuild of each would be a second place for every
+ * future change to be made and a second place for it to be forgotten. So
+ * these four open the real site instead, in the app's own colour while it
+ * loads, and every design or wording change made in the dashboard reaches
+ * the app the moment it reaches the website. No re-generating, no rebuild.
+ *
+ * Product and collection browsing stay native (see HomeScreen,
+ * CollectionScreen, ProductScreen) because that is the app doing something a
+ * browser tab could not, which is the whole point of having an app at all.
+ */
+function webPageFile(): GeneratedFile {
+  return {
+    path: "components/WebPage.tsx",
+    language: "tsx",
+    contents: `import React, { useState } from "react";
+import { ActivityIndicator, StyleSheet, View } from "react-native";
+import { WebView, type WebViewMessageEvent } from "react-native-webview";
+import { colors } from "../theme";
+import { SITE_ORIGIN } from "../api";
+
+export function WebPage({
+  path,
+  onClose,
+  onProduct,
+}: {
+  /** Where on the site this opens, e.g. "/store/reels". */
+  path: string;
+  /**
+   * Fired when the page itself asks to be closed — the reels feed's own X
+   * button, posted across the bridge rather than left to try to navigate a
+   * browser history that a native tab does not have.
+   */
+  onClose?: () => void;
+  /**
+   * Fired when the page asks the app to open a product — the reels feed,
+   * where a product tapped under a video should open the app's own product
+   * screen, not the website's product page inside this one. \`back\` is
+   * the page to come back to, so she lands on the reel she left.
+   */
+  onProduct?: (id: string, back: string) => void;
+}) {
+  const [loading, setLoading] = useState(true);
+
+  function onMessage(e: WebViewMessageEvent) {
+    try {
+      const data = JSON.parse(e.nativeEvent.data);
+      if (data?.source !== "beautybar-app") return;
+      if (data.action === "close") onClose?.();
+      if (data.action === "product" && typeof data.id === "string") {
+        onProduct?.(data.id, typeof data.back === "string" ? data.back : path);
+      }
+    } catch {
+      // A message that is not ours to read. Every page on this site may one
+      // day post one of its own; only this one shape means anything here.
+    }
+  }
+
+  return (
+    <View style={styles.fill}>
+      <WebView
+        source={{ uri: \`\${SITE_ORIGIN}\${path}\` }}
+        style={styles.fill}
+        onLoadEnd={() => setLoading(false)}
+        onMessage={onMessage}
+        // The site keeps her signed in the same way the browser does — a
+        // cookie — and a WebView that threw its cookies away on every open
+        // would ask her to sign in again on every tap of this tab.
+        sharedCookiesEnabled
+        thirdPartyCookiesEnabled
+        allowsBackForwardNavigationGestures
+      />
+      {loading && (
+        <View style={styles.loading} pointerEvents="none">
+          <ActivityIndicator color={colors.accent} />
+        </View>
+      )}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  fill: { flex: 1, backgroundColor: colors.page },
+  loading: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.page,
+  },
+});
+`,
+  };
+}
+
 // ------------------------------------------------------------ signing in --
 function signInScreenFile(): GeneratedFile {
   return {
@@ -7591,96 +8101,14 @@ const styles = StyleSheet.create({
   };
 }
 
-// --------------------------------------------------------------- orders --
-function ordersScreenFile(): GeneratedFile {
-  return {
-    path: "components/OrdersScreen.tsx",
-    language: "tsx",
-    contents: `/** Past orders for the signed-in number. */
-import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { colors, radius, spacing, theme } from "../theme";
-import { fetchOrders, type Order } from "../api";
-import { money } from "./Pieces";
-
-export function OrdersScreen({
-  signedIn,
-  onSignIn,
-}: {
-  signedIn: boolean;
-  onSignIn: () => void;
-}) {
-  const [orders, setOrders] = useState<Order[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!signedIn) return;
-    let live = true;
-    fetchOrders()
-      .then((d) => live && setOrders(d.orders))
-      .catch((e) => live && setError(String(e.message ?? e)));
-    return () => {
-      live = false;
-    };
-  }, [signedIn]);
-
-  if (!signedIn) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.empty}>Sign in to see your orders.</Text>
-        <Pressable style={styles.cta} onPress={onSignIn}>
-          <Text style={styles.ctaText}>Sign in</Text>
-        </Pressable>
-      </View>
-    );
-  }
-  if (error) return <View style={styles.center}><Text style={styles.error}>{error}</Text></View>;
-  if (!orders) return <View style={styles.center}><ActivityIndicator color={colors.accent} /></View>;
-  if (!orders.length)
-    return <View style={styles.center}><Text style={styles.empty}>No orders yet.</Text></View>;
-
-  return (
-    <ScrollView contentContainerStyle={styles.list}>
-      {orders.map((o) => (
-        <View key={o.orderNumber} style={styles.card}>
-          <View style={styles.row}>
-            <Text style={styles.number}>{o.orderNumber}</Text>
-            <Text style={styles.total}>{money(o.total)}</Text>
-          </View>
-          <View style={styles.row}>
-            <Text style={styles.date}>{new Date(o.createdAt).toLocaleDateString()}</Text>
-            <Text style={styles.status}>{o.fulfillmentStatus || o.lifecycle}</Text>
-          </View>
-        </View>
-      ))}
-    </ScrollView>
-  );
-}
-
-const styles = StyleSheet.create({
-  list: { padding: spacing.lg, gap: spacing.sm },
-  card: { borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, padding: spacing.lg, gap: 6 },
-  row: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  number: { fontSize: 14, fontWeight: "700", color: colors.ink },
-  total: { fontSize: 14, fontWeight: "700", color: colors.accent },
-  date: { fontSize: 12, color: colors.inkSoft },
-  status: { fontSize: 11, fontWeight: "600", color: colors.inkMuted, textTransform: "capitalize" },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl, gap: spacing.md },
-  empty: { fontSize: 14, color: colors.inkSoft },
-  error: { color: "#e11d48", fontSize: 13 },
-  cta: { borderRadius: radius.md, backgroundColor: colors.accent, paddingHorizontal: 24, paddingVertical: 12 },
-  ctaText: { fontSize: 14, fontWeight: "700", color: "#fff" },
-});
-`,
-  };
-}
-
 // ------------------------------------------------------- the app itself --
 function appFile(theme: AppTheme): GeneratedFile {
   const first = (theme.tabs.find((t) => t.visible) ?? theme.tabs[0]).key;
   // The Live tab's screen is only generated when the merchant shows the tab, so
   // nothing above may name it otherwise.
-  const live = theme.tabs.some((t) => (t.key === "live" || t.key === "reels") && t.visible);
+  // Reels does not use this screen any more (it opens the real site), so this
+  // is now exactly what it says: is the Live tab itself on.
+  const live = theme.tabs.some((t) => t.key === "live" && t.visible);
   return {
     path: "App.tsx",
     language: "tsx",
@@ -7696,8 +8124,13 @@ function appFile(theme: AppTheme): GeneratedFile {
  * the tabs are the merchant's; edit them there, not here.
  */
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Linking, Pressable, SafeAreaView, StatusBar, StyleSheet, Text, View } from "react-native";
+import { Linking, Pressable, StatusBar, StyleSheet, Text, View } from "react-native";
+// react-native's own SafeAreaView does nothing on Android, which put the
+// header under the phone's status bar.
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { Splash } from "./components/Splash";
+import { AppChrome } from "./components/AppChrome";
+import { HeaderIcon } from "./components/Icons";
 import { AllCollectionsScreen, PageScreen } from "./components/PageScreen";
 import { colors, spacing, theme } from "./theme";
 import { screens, say } from "./screens";
@@ -7722,12 +8155,9 @@ import { SearchResults } from "./components/SearchResults";
 import { ProductScreen } from "./components/ProductScreen";
 import { CartScreen } from "./components/CartScreen";
 import { CheckoutScreen, type Address } from "./components/CheckoutScreen";
-import { AccountScreen, type AccountRow } from "./components/AccountScreen";
-import { OrdersScreen } from "./components/OrdersScreen";
-import { SignInScreen } from "./components/SignInScreen";${
-      theme.tabs.some((t) => (t.key === "live" || t.key === "reels") && t.visible)
-        ? '\nimport { LiveScreen } from "./components/LiveScreen";'
-        : ""
+import { SignInScreen } from "./components/SignInScreen";
+import { WebPage } from "./components/WebPage";${
+      live ? '\nimport { LiveScreen } from "./components/LiveScreen";' : ""
     }
 
 /** A screen pushed on top of a tab. Tabs themselves are not pushed. */
@@ -7754,6 +8184,12 @@ export default function App() {
   const [phone, setPhone] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  // Which reel the feed opens on. Plain "/store/reels" unless a tap on a
+  // replay somewhere else asked for one by name.
+  const [reelPath, setReelPath] = useState("/store/reels");
+  // What is typed in the header's search. The header is above every tab, so
+  // the words belong here rather than to the home screen.
+  const [query, setQuery] = useState("");
 
   const top = stack[stack.length - 1];
 
@@ -7927,14 +8363,10 @@ export default function App() {
     }
   };
 
-  const openAccountRow = (row: AccountRow) => {
-    // Returns, questions and reviews each have their own endpoint; until this
-    // build wires a screen for them, say so rather than doing nothing at all.
-    setNotice(row === "reviews" ? "Reviews are on the home screen." : "Coming soon in the app.");
-  };
 
   const goTab = (k: TabKey) => {
     setStack([]);
+    setQuery("");
     setTab(k);
   };
 
@@ -7947,9 +8379,20 @@ export default function App() {
     // "search:<words>" - a link to the results for those words.
     if (screen.startsWith("search:")) return push({ kind: "search", term: screen.slice(7) });
     if (screen === "home" || screen === "search") return goTab("shop");
-    if (screen === "cart" || screen === "orders" || screen === "account"${
+    // A specific replay, e.g. from a Home tile — open the feed on that one
+    // rather than on whatever is newest.
+    if (screen.startsWith("reel:")) {
+      setReelPath(\`/store/reels?reel=\${encodeURIComponent(screen.slice(5))}\`);
+      return goTab("reels");
+    }
+    if (
+      screen === "cart" ||
+      screen === "orders" ||
+      screen === "account" ||
+      screen === "reels"${
       live ? ' || screen === "live"' : ""
-    }) {
+    }
+    ) {
       return goTab(screen);
     }
     if (screen === "collections") return push({ kind: "collections" });
@@ -8007,6 +8450,8 @@ export default function App() {
         </Pressable>
       </View>
     )
+  ) : tab === "shop" && query.trim() ? (
+    <SearchResults query={query.trim()} onOpenProduct={(id) => push({ kind: "product", id })} />
   ) : tab === "shop" ? (
     <HomeScreen
       onOpenCollection={(handle) => push({ kind: "collection", handle })}
@@ -8017,9 +8462,20 @@ export default function App() {
     />
   )${
     live
-      ? ' : tab === "live" || tab === "reels" ? (\n    <LiveScreen onOpenCollection={(handle) => push({ kind: "collection", handle })} onOpenProduct={(id) => push({ kind: "product", id })} onOpenScreen={goScreen} />\n  )'
+      ? ' : tab === "live" ? (\n    <LiveScreen onOpenCollection={(handle) => push({ kind: "collection", handle })} onOpenProduct={(id) => push({ kind: "product", id })} onOpenScreen={goScreen} />\n  )'
       : ""
-  } : tab === "cart" ? (
+  } : tab === "reels" ? (
+    <WebPage
+      path={reelPath}
+      onClose={() => goTab("shop")}
+      onProduct={(id, back) => {
+        // Coming back from the product remounts this page; remembering the
+        // reel means it reopens on that reel, not at the top of the feed.
+        setReelPath(back);
+        push({ kind: "product", id });
+      }}
+    />
+  ) : tab === "cart" ? (
     <CartScreen
       lines={cart?.lines ?? []}
       subtotal={cart?.subtotal ?? 0}
@@ -8037,14 +8493,9 @@ export default function App() {
       onAddBundle={(variantId) => add(variantId)}
     />
   ) : tab === "orders" ? (
-    <OrdersScreen signedIn={Boolean(phone)} onSignIn={() => push({ kind: "signin" })} />
+    <WebPage path="/store/account/orders" />
   ) : (
-    <AccountScreen
-      phone={phone}
-      onSignIn={() => push({ kind: "signin" })}
-      onSignOut={() => { setToken(null); setPhone(null); }}
-      onOpen={openAccountRow}
-    />
+    <WebPage path="/store/account" />
   );
 
   const heading = top
@@ -8052,19 +8503,48 @@ export default function App() {
       ? say(screens.checkout.title, "Checkout")
       : top.kind === "signin"
         ? "Sign in"
-        : ""
+        : top.kind === "collection"
+          ? top.title ?? ""
+          : ""
     : theme.storeName;
 
+  // The reels feed is a full-screen page with its own header; everything else
+  // wears the shop's, as it does in the editor.
+  const chrome = !(tab === "reels" && !stack.length);
+
   return (
-    <SafeAreaView style={styles.app}>
-      <StatusBar barStyle="dark-content" />
-      {stack.length || tab !== "shop" ? (
+    <SafeAreaProvider>
+    <SafeAreaView style={styles.app} edges={["top", "bottom"]}>
+      <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
+      {chrome ? (
+        <AppChrome
+          query={query}
+          onQuery={(v) => {
+            setQuery(v);
+            if (v) {
+              setStack([]);
+              setTab("shop");
+            }
+          }}
+          cartCount={count}
+          onHome={() => goTab("shop")}
+          onBag={() => goTab("cart")}
+          // The saved list is kept on the website's account page.
+          onWishlist={() => goTab("account")}
+          onOpenCollection={(handle) => {
+            setQuery("");
+            setTab("shop");
+            setStack([{ kind: "collection", handle }]);
+          }}
+          onOpenProduct={(id) => push({ kind: "product", id })}
+          onOpenScreen={goScreen}
+        />
+      ) : null}
+      {stack.length ? (
         <View style={styles.header}>
-          {stack.length ? (
-            <Pressable style={styles.back} onPress={pop} hitSlop={8}>
-              <Text style={styles.backText}>‹</Text>
-            </Pressable>
-          ) : null}
+          <Pressable style={styles.back} onPress={pop} hitSlop={10}>
+            <HeaderIcon name="back" color={colors.ink} size={20} />
+          </Pressable>
           <Text style={styles.heading} numberOfLines={1}>{heading}</Text>
         </View>
       ) : null}
@@ -8092,15 +8572,15 @@ export default function App() {
         onOpenScreen={(screen) => goScreen(screen)}
       />
     </SafeAreaView>
+    </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
   app: { flex: 1, backgroundColor: colors.page },
-  header: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingHorizontal: spacing.lg, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.line, backgroundColor: colors.surface },
-  back: { width: 24 },
-  backText: { fontSize: 26, lineHeight: 28, color: colors.ink },
-  heading: { flex: 1, fontSize: 17, fontWeight: "700", color: colors.ink, fontFamily: theme.titleFont },
+  header: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingHorizontal: 12, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: colors.line, backgroundColor: colors.surface },
+  back: { width: 28, height: 28, alignItems: "center", justifyContent: "center" },
+  heading: { flex: 1, fontSize: 15, fontWeight: "700", color: colors.ink, fontFamily: theme.titleFont },
   notice: { position: "absolute", left: spacing.lg, right: spacing.lg, bottom: 78, borderRadius: 10, backgroundColor: colors.ink, paddingHorizontal: 14, paddingVertical: 10 },
   noticeText: { color: "#fff", fontSize: 12, textAlign: "center" },
   done: { flex: 1, alignItems: "center", justifyContent: "center", gap: spacing.sm, padding: spacing.xl },
@@ -8134,10 +8614,13 @@ export function generateApp(theme: AppTheme, baseUrl: string): GeneratedFile[] {
     searchScreenFile(),
     cartScreenFile(blocksFor(theme.blocks, "cart").length > 0),
     checkoutScreenFile(),
-    accountScreenFile(),
-    ordersScreenFile(),
     signInScreenFile(),
-    ...(theme.tabs.some((t) => (t.key === "live" || t.key === "reels") && t.visible)
+    // Reels, Orders and Account are the real site, shown in the app.
+    webPageFile(),
+    iconsFile(),
+    fadeFile(),
+    chromeFile(),
+    ...(theme.tabs.some((t) => t.key === "live" && t.visible)
       ? [liveScreenFile()]
       : []),
     ...used.map(sectionFile).sort((a, b) => a.path.localeCompare(b.path)),

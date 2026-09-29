@@ -8,25 +8,55 @@ import { say, type Copy } from "@/lib/page-copy";
 import { useHlsSource } from "@/lib/use-hls";
 import { useCart } from "../cart";
 
+declare global {
+  interface Window {
+    /** Present only inside the native app's WebView. */
+    ReactNativeWebView?: { postMessage: (message: string) => void };
+  }
+}
+
+type AppMessage =
+  | { source: "beautybar-app"; action: "close" }
+  | { source: "beautybar-app"; action: "product"; id: string; back: string };
+
 /**
- * Opening a product, from wherever this is being shown.
+ * Say something to the app this page is inside, if it is inside one.
  *
- * On the website it is a page and the product is another page. Inside the
- * app it is a tab in a frame, and following the link there loaded the
- * whole website product page — header, breadcrumb, announcement bar and
- * all — inside the phone, which is a second storefront wearing the app's
- * chrome. So it asks the app to open its own product screen instead.
+ * There are two: the dashboard's phone preview, which frames this page in an
+ * iframe, and the real native app, which shows it in a WebView. They are
+ * reached differently — a WebView has no parent window, only its own bridge
+ * — and a page that only knew about the iframe behaved like the plain
+ * website inside the real app: its X sent the WebView off to the shop page
+ * instead of back to the app's Shop tab.
+ *
+ * Returns false on the plain website, where there is nobody to tell.
  */
-function openProduct(itemId: string) {
-  const framed = typeof window !== "undefined" && window.parent !== window;
-  if (framed) {
-    window.parent.postMessage(
-      { source: "beautybar-app", action: "product", id: itemId },
-      "*",
-    );
+function postToApp(message: AppMessage): boolean {
+  if (typeof window === "undefined") return false;
+  if (window.ReactNativeWebView) {
+    window.ReactNativeWebView.postMessage(JSON.stringify(message));
+    return true;
+  }
+  if (window.parent !== window) {
+    window.parent.postMessage(message, "*");
     return true;
   }
   return false;
+}
+
+/**
+ * Opening a product, from wherever this is being shown.
+ *
+ * On the website it is a page and the product is another page. Inside an
+ * app it asks the app to open its own product screen instead — following
+ * the link there would load the whole website product page, header and
+ * all, which is a second storefront wearing the app's chrome.
+ *
+ * `back` is the reel she was on, so returning from the product lands her
+ * on that reel rather than at the top of the feed.
+ */
+function openProduct(itemId: string, back: string) {
+  return postToApp({ source: "beautybar-app", action: "product", id: itemId, back });
 }
 
 /**
@@ -177,11 +207,7 @@ export function Reels({
    * anywhere itself, and the app puts her back on the tab she came from.
    */
   function close() {
-    const framed = typeof window !== "undefined" && window.parent !== window;
-    if (framed) {
-      window.parent.postMessage({ source: "beautybar-app", action: "close" }, "*");
-      return;
-    }
+    if (postToApp({ source: "beautybar-app", action: "close" })) return;
     window.location.assign("/shop");
   }
 
@@ -575,7 +601,7 @@ function Reel({
                           : "/store"
                       }
                       onClick={(e) => {
-                        if (p.itemId && openProduct(p.itemId)) e.preventDefault();
+                        if (p.itemId && openProduct(p.itemId, here)) e.preventDefault();
                       }}
                       className="block text-start"
                     >
@@ -686,7 +712,7 @@ function Reel({
                           : "/store"
                       }
                       onClick={(e) => {
-                        if (p.itemId && openProduct(p.itemId)) e.preventDefault();
+                        if (p.itemId && openProduct(p.itemId, here)) e.preventDefault();
                       }}
                       className="flex min-w-0 flex-1 items-center gap-3"
                     >
