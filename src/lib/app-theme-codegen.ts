@@ -55,17 +55,152 @@ export function componentName(type: BlockType): string {
 }
 
 // ---------------------------------------------------------------- theme.ts --
-function themeFile(theme: AppTheme): GeneratedFile {
+/**
+ * The shape of the theme the app understands. Raised only when an installed
+ * app could not read the new shape; an app handed a format it does not know
+ * keeps the theme it has rather than half-reading the new one.
+ */
+export const APP_PACK_FORMAT = 1;
+
+/**
+ * The theme as data: everything about the app the merchant changes in the
+ * editor, in the shape the app's theme.ts reads.
+ *
+ * The same object is written into a downloaded project as its starting theme
+ * and served to installed apps by /api/storefront/app-theme, so a change
+ * saved in the editor reaches phones that already have the app, without a new
+ * build. What stays in code is only how each kind of section is drawn.
+ */
+export function appPack(theme: AppTheme) {
   const t = theme.settings;
+  const str = (v: unknown) => String(v ?? "");
+  const place = (where: "home" | "product" | "cart") =>
+    blocksFor(theme.blocks, where).map((b) => {
+      const set = b.settings ?? {};
+      // The mystery box banner and free delivery say their line inside
+      // themselves, so it is not said again above them.
+      const ownsKicker = (b.type === "promo_card" && s(set.style) === "banner") || b.type === "free_shipping";
+      return {
+        id: b.id,
+        type: b.type,
+        settings: settingsObject(b),
+        kicker: ownsKicker ? "" : s(set.kicker),
+        band: s(set.band),
+      };
+    });
+  return {
+    format: APP_PACK_FORMAT,
+    theme: {
+      storeName: str(t.storeName),
+      titleFont: t.titleFont === "serif" ? "serif" : "",
+      logoUrl: t.logoUrl ? str(t.logoUrl) : null,
+      accent: str(t.accent),
+      background: str(t.background),
+      menuHandle: str(t.menuHandle),
+      pages: (t.pages ?? []).map((p) => ({
+        id: str(p.id),
+        handle: str(p.handle),
+        kicker: str(p.kicker),
+        line1: str(p.line1),
+        line2: str(p.line2),
+        layout: str(p.layout),
+        items: p.items.map((i) => ({
+          id: str(i.id),
+          imageUrl: str(i.imageUrl),
+          label: str(i.label),
+          handle: str(i.handle),
+          url: str(i.url),
+          productId: str(i.productId),
+          screen: str(i.screen),
+        })),
+      })),
+      splash: {
+        enabled: Boolean(t.splashEnabled && t.splashImageUrl),
+        imageUrl: str(t.splashImageUrl),
+        bg: str(t.splashBg),
+        seconds: Number(t.splashSeconds) || 0,
+        exit: str(t.splashExit),
+        fit: str(t.splashFit),
+        show: str(t.splashShow),
+        skipLabel: str(t.splashSkipLabel),
+        handle: str(t.splashHandle),
+        url: str(t.splashUrl),
+        productId: str(t.splashProductId),
+        screen: str(t.splashScreen),
+      },
+      showSearch: Boolean(t.showSearch),
+      announcement: {
+        enabled: Boolean(t.announcementEnabled),
+        text: str(t.announcement),
+      },
+      header: {
+        logoText: str(t.logoText),
+        logoAccentText: str(t.logoAccentText),
+        searchPlaceholder: str(t.searchPlaceholder),
+        showWishlist: Boolean(t.showWishlist),
+        showBag: Boolean(t.showBag),
+        bg: str(t.headerBg),
+        ink: str(t.headerInk),
+      },
+      live: liveSessionsOf(theme).map((x) => ({
+        id: str(x.id),
+        name: str(x.name),
+        detail: str(x.detail),
+        imageUrl: str(x.imageUrl),
+        url: str(x.url),
+        handle: str(x.handle),
+        productId: str(x.productId),
+        screen: str(x.screen),
+        live: Boolean(x.live),
+      })),
+      card: {
+        nameWords: Number(t.cardNameWords) || 3,
+        photoBg: str(t.cardPhotoBg),
+      },
+      strip: {
+        enabled: Boolean(t.stripEnabled),
+        items: t.strip.map((i) => ({
+          id: str(i.id),
+          label: str(i.label),
+          handle: str(i.handle),
+          url: str(i.url),
+          productId: str(i.productId),
+          screen: str(i.screen),
+        })),
+      },
+    },
+    gap: {
+      section: Number(t.sectionGap) || 0,
+      item: Number(t.itemGap) || 0,
+      itemTight: Math.max(2, Math.round((Number(t.itemGap) || 0) * 0.67)),
+    },
+    screens: theme.screens,
+    tabs: theme.tabs
+      .filter((x) => x.visible)
+      .map((x) => ({ key: x.key, label: x.label || TAB_DEFAULTS[x.key].en })),
+    home: place("home"),
+    product: place("product"),
+    cart: place("cart"),
+  };
+}
+
+function themeFile(theme: AppTheme): GeneratedFile {
   return {
     path: "theme.ts",
     language: "ts",
     contents: `/**
- * Generated from the dashboard: App → App theme.
- * Edit it there — anything typed here is replaced on the next change.
+ * The app's look, and where it comes from. Generated from the dashboard:
+ * App → App theme.
+ *
+ * The theme written below is the one this project was downloaded with, and
+ * the app starts from it when it has nothing newer. Each time the app opens it
+ * asks the shop for the current theme (Boot.tsx), and applyPack brings these
+ * objects up to date before any screen is drawn - so a change saved in the
+ * editor reaches phones that already have the app, with no new build.
  */
 
 import { Platform } from "react-native";
+import { screens } from "./screens";
 
 /** One session on the Live tab, gathered from the home screen's live sections. */
 export type LiveSession = {
@@ -108,83 +243,83 @@ export type ThemePage = {
   }[];
 };
 
-export const theme = {
-  storeName: ${q(t.storeName)},
-  /** Section titles. undefined means the platform's own face. */
-  titleFont: ${
-    t.titleFont === "serif" ? 'Platform.OS === "ios" ? "Georgia" : "serif"' : "undefined"
-  },
-  logoUrl: ${t.logoUrl ? q(t.logoUrl) : "null"},
-  accent: ${q(t.accent)},
-  background: ${q(t.background)},
-  menuHandle: ${q(t.menuHandle)},
+export type ThemeData = {
+  storeName: string;
+  /** "serif" for the editor's serif titles, "" for the platform's own face. */
+  titleFont: string;
+  logoUrl: string | null;
+  accent: string;
+  background: string;
+  menuHandle: string;
   /** The merchant's own pages - For Her, For Him - behind their handles. */
-  pages: ([${(t.pages ?? []).map((p) => `{ id: ${q(p.id)}, handle: ${q(p.handle)}, kicker: ${q(p.kicker)}, line1: ${q(p.line1)}, line2: ${q(p.line2)}, layout: ${q(p.layout)}, items: [${p.items.map((i) => `{ id: ${q(i.id)}, imageUrl: ${q(i.imageUrl)}, label: ${q(i.label)}, handle: ${q(i.handle)}, url: ${q(i.url)}, productId: ${q(i.productId)}, screen: ${q(i.screen)} }`).join(", ")}] }`).join(",\n    ")}] as ThemePage[]),
+  pages: ThemePage[];
   /** The picture the app opens on, and how it leaves. */
   splash: {
-    enabled: ${t.splashEnabled && t.splashImageUrl ? "true" : "false"},
-    imageUrl: ${q(t.splashImageUrl)},
-    bg: ${q(t.splashBg)},
-    seconds: ${t.splashSeconds},
-    /** Widened on purpose: the component compares it with every option. */
-    exit: ${q(t.splashExit)} as string,
-    fit: ${q(t.splashFit)} as string,
-    show: ${q(t.splashShow)} as string,
-    skipLabel: ${q(t.splashSkipLabel)},
-    handle: ${q(t.splashHandle)},
-    url: ${q(t.splashUrl)},
-    productId: ${q(t.splashProductId)},
-    screen: ${q(t.splashScreen)},
-  },
-  showSearch: ${t.showSearch},
-  announcement: {
-    enabled: ${t.announcementEnabled},
-    text: ${q(t.announcement)},
-  },
+    enabled: boolean;
+    imageUrl: string;
+    bg: string;
+    seconds: number;
+    exit: string;
+    fit: string;
+    show: string;
+    skipLabel: string;
+    handle: string;
+    url: string;
+    productId: string;
+    screen: string;
+  };
+  showSearch: boolean;
+  announcement: { enabled: boolean; text: string };
   header: {
-    logoText: ${q(t.logoText)},
-    logoAccentText: ${q(t.logoAccentText)},
-    searchPlaceholder: ${q(t.searchPlaceholder)},
-    showWishlist: ${t.showWishlist},
-    showBag: ${t.showBag},
-    bg: ${q(t.headerBg)},
-    ink: ${q(t.headerInk)},
-  },
-  live: [${liveSessionsOf(theme)
-    .map(
-      (s) =>
-        `{ id: ${q(s.id)}, name: ${q(s.name)}, detail: ${q(s.detail)}, imageUrl: ${q(
-          s.imageUrl,
-        )}, url: ${q(s.url)}, handle: ${q(s.handle)}, productId: ${q(
-          s.productId,
-        )}, screen: ${q(s.screen)}, live: ${s.live} }`,
-    )
-    .join(", ")}] as LiveSession[],
+    logoText: string;
+    logoAccentText: string;
+    searchPlaceholder: string;
+    showWishlist: boolean;
+    showBag: boolean;
+    bg: string;
+    ink: string;
+  };
+  live: LiveSession[];
   /**
-   * The product card, everywhere one is drawn.
-   *
-   * nameWords is how many words of a name fit the one line the card gives it.
-   * photoBg is the colour behind every product photo - on a phone it shows
-   * through a cut-out shot rather than blending a baked-in background away,
-   * which the web preview can do and React Native cannot, so a photo shot on
-   * its own grey still arrives on its own grey.
+   * The product card, everywhere one is drawn. nameWords is how many words of
+   * a name fit its one line; photoBg is the colour behind every product photo.
    */
-  card: {
-    nameWords: ${t.cardNameWords},
-    photoBg: ${q(t.cardPhotoBg)},
-  },
-  strip: {
-    enabled: ${t.stripEnabled},
-    items: [${t.strip
-      .map(
-        (i) =>
-          `{ id: ${q(i.id)}, label: ${q(i.label)}, handle: ${q(i.handle)}, url: ${q(
-            i.url,
-          )}, productId: ${q(i.productId)}, screen: ${q(i.screen)} }`,
-      )
-      .join(", ")}] as StripShortcut[],
-  },
-} as const;
+  card: { nameWords: number; photoBg: string };
+  strip: { enabled: boolean; items: StripShortcut[] };
+};
+
+/** One section: what kind, what the merchant set on it, the line above it and its band. */
+export type PackBlock = {
+  id: string;
+  type: string;
+  settings: Record<string, unknown>;
+  kicker: string;
+  band: string;
+};
+
+export type AppPack = {
+  format: number;
+  theme: ThemeData;
+  gap: { section: number; item: number; itemTight: number };
+  screens: Record<string, Record<string, unknown>>;
+  tabs: { key: string; label: string }[];
+  home: PackBlock[];
+  product: PackBlock[];
+  cart: PackBlock[];
+};
+
+/** The shape of theme this build reads. A newer shape is ignored rather than half-read. */
+export const PACK_FORMAT = ${APP_PACK_FORMAT};
+
+const bundled: AppPack = ${JSON.stringify(appPack(theme), null, 2)};
+
+/** Section titles. undefined means the platform's own face. */
+const face = (f: string) => (f === "serif" ? (Platform.OS === "ios" ? "Georgia" : "serif") : undefined);
+
+export const theme: Omit<ThemeData, "titleFont"> & { titleFont: string | undefined } = {
+  ...bundled.theme,
+  titleFont: face(bundled.theme.titleFont),
+};
 
 /** Every screen reads these, so a colour change is one edit, not thirty. */
 export const colors = {
@@ -196,25 +331,78 @@ export const colors = {
   // What every screen sits on. Set in the dashboard next to the accent.
   page: theme.background,
   line: "#e2e8f0",
-} as const;
+};
 
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 } as const;
 
 /**
- * How much air the home screen leaves. Set in the dashboard, App - App theme.
- *
- * "section" is the space between one section and the next, and the padding
- * inside a banded one. "item" is the space between cards; "itemTight" is the
- * same number scaled down for chips and small tiles, which read better
- * closer together than cards do - so one control moves the whole set without
- * flattening the rhythm between them.
+ * How much air the home screen leaves. "section" is the space between one
+ * section and the next; "item" the space between cards; "itemTight" the same
+ * scaled down for chips and small tiles.
  */
-export const gap = {
-  section: ${t.sectionGap},
-  item: ${t.itemGap},
-  itemTight: ${Math.max(2, Math.round(t.itemGap * 0.67))},
-} as const;
+export const gap = { ...bundled.gap };
 export const radius = { sm: 8, md: 12, lg: 16, pill: 999 } as const;
+
+/** The parts of the theme that are lists: which tabs show, and which sections go where. */
+export const layout = {
+  tabs: bundled.tabs,
+  home: bundled.home,
+  product: bundled.product,
+  cart: bundled.cart,
+};
+
+/** The theme on screen, as text, so an unchanged one is recognised. */
+let applied = JSON.stringify(bundled);
+
+/**
+ * Bring everything above up to date with a theme from the shop.
+ *
+ * Returns false, changing nothing, for anything that is not a theme this build
+ * understands: a bad answer from the network must not take the app's look
+ * with it.
+ */
+export function applyPack(input: unknown): boolean {
+  const p = input as AppPack | null;
+  if (!p || p.format !== PACK_FORMAT || !p.theme || !p.gap || !Array.isArray(p.tabs) || !Array.isArray(p.home)) {
+    return false;
+  }
+  Object.assign(theme, bundled.theme, p.theme, { titleFont: face(p.theme.titleFont) });
+  colors.accent = theme.accent;
+  colors.page = theme.background;
+  Object.assign(gap, p.gap);
+  layout.tabs = p.tabs;
+  layout.home = p.home;
+  layout.product = Array.isArray(p.product) ? p.product : [];
+  layout.cart = Array.isArray(p.cart) ? p.cart : [];
+  const all = screens as unknown as Record<string, Record<string, unknown>>;
+  for (const key of Object.keys(p.screens || {})) all[key] = { ...all[key], ...p.screens[key] };
+  applied = JSON.stringify(p);
+  return true;
+}
+
+/** Whether a theme is the one already on screen. */
+export const isApplied = (input: unknown) => JSON.stringify(input) === applied;
+
+/**
+ * Whether a theme can be put on screen while the app is open.
+ *
+ * Colours, spacing and the title face are built into each screen's styles
+ * when the app starts, so changing them mid-visit would leave half the app in
+ * the old colour. Those wait for the next start; words, pictures and the order
+ * of sections do not have to.
+ */
+export function canApplyLive(input: unknown): boolean {
+  const p = input as AppPack | null;
+  if (!p || !p.theme || !p.gap) return false;
+  return (
+    p.theme.accent === theme.accent &&
+    p.theme.background === theme.background &&
+    face(p.theme.titleFont) === theme.titleFont &&
+    p.gap.section === gap.section &&
+    p.gap.item === gap.item &&
+    p.gap.itemTight === gap.itemTight
+  );
+}
 `,
   };
 }
@@ -5224,103 +5412,15 @@ ${body[type]}`,
 }
 
 // -------------------------------------------------------------- the screen --
-function homeScreenFile(theme: AppTheme): GeneratedFile {
-  const used = [...new Set(theme.blocks.map((b) => b.type))];
-  const imports = used
+function homeScreenFile(): GeneratedFile {
+  // Every kind of section, not only the ones on the home screen today: which
+  // appear is decided when the app opens, so one added in the editor tomorrow
+  // must already be something this build can draw.
+  const types = Object.keys(BLOCK_META) as BlockType[];
+  const imports = types
     .map((t) => `import { ${exportName(t)} } from "./components/${componentName(t)}";`)
     .join("\n");
-  const recsUsed = used.includes("complete_look");
-
-  // A section can carry a line above it and a colour under it. Resolved here,
-  // at generation time, so the screen stays a plain list of sections rather
-  // than every component having to learn about bands.
-  const sectionsOf = (blocks: typeof theme.blocks) =>
-    blocks
-    .map((b) => {
-      const set = b.settings ?? {};
-      // The mystery box banner carries its line as a tag inside itself.
-      // Said inside the section itself, so not again above it.
-      const ownsKicker = (b.type === "promo_card" && s(set.style) === "banner") || b.type === "free_shipping";
-      const kicker = ownsKicker ? "" : s(set.kicker);
-      const band = s(set.band);
-      const washed = band === "tint" || band === "paper";
-      // A band bleeds to the screen edges, so the page padding comes off and
-      // is put back on inside it.
-      const wash =
-        band === "paper" ? `"#ffffff"` : `colors.accent + "12"`;
-      const bandStyle = washed
-        ? `, { marginHorizontal: -spacing.lg, paddingHorizontal: spacing.lg, paddingVertical: gap.section, backgroundColor: ${wash} }`
-        : band === "divider"
-          ? `, { borderTopWidth: 1, borderTopColor: colors.line, paddingTop: gap.section }`
-          : ``
-      const section = `        <Section key=${q(b.id)} style={[styles.block${bandStyle}]}${kicker ? ` kicker={${q(kicker)}}` : ""}>\n${renderCall(b, 10)}\n        </Section>`;
-      // Nothing to suggest means no section at all - not an empty band.
-      return b.type === "complete_look"
-        ? `        {recs && recs.products.length ? (\n${section}\n        ) : null}`
-        : section;
-    })
-    .join(`\n`);
-
-  const rendered = sectionsOf(blocksFor(theme.blocks, "home"));
-
-  /**
-   * The same sections, placed elsewhere.
-   *
-   * A merchant who puts "complete your look" beside the basket gets the
-   * section she already built, not a second one written to look like it -
-   * which is the only arrangement where the two cannot drift apart. Each one
-   * asks for the catalogue itself rather than being handed it, because the
-   * product screen and the basket have no reason to carry a home payload
-   * around for a section that may not be there.
-   */
-  const placed = ([
-    ["product", "ProductSections"],
-    ["cart", "CartSections"],
-  ] as const).map(([where, name]) => {
-    const blocks = blocksFor(theme.blocks, where);
-    if (!blocks.length) return { name, code: "", used: false };
-    const needsRecs = blocks.some((b) => b.type === "complete_look");
-    const recsBit = needsRecs
-      ? `
-  const [recs, setRecs] = useState<Recommendations | null>(null);
-  useEffect(() => {
-    if (!signedIn) return setRecs(null);
-    fetchRecommendations().then(setRecs).catch(() => setRecs(null));
-  }, [signedIn]);`
-      : "";
-    return {
-      name,
-      used: true,
-      code: `
-
-/** Sections the merchant placed on the ${where} screen. */
-export function ${name}({
-  onOpenCollection,
-  onOpenProduct,
-  onOpenScreen,
-  onAdd,
-  signedIn,
-}: {
-  onOpenCollection?: (handle: string) => void;
-  onOpenProduct?: (id: string) => void;
-  onOpenScreen?: (screen: string) => void;
-  onAdd?: (variantId: string, productId: string) => void;
-  signedIn?: boolean;
-}) {
-  const [data, setData] = useState<HomePayload | null>(null);
-  useEffect(() => {
-    fetchHome().then(setData).catch(() => setData(null));
-  }, []);${recsBit}
-  if (!data) return null;
-  return (
-    <View style={styles.placed}>
-${sectionsOf(blocks)}
-    </View>
-  );
-}`,
-    };
-  });
-  const placedCode = placed.map((p) => p.code).join("");
+  const cases = types.map(blockCase).join("\n");
 
   return {
     path: "HomeScreen.tsx",
@@ -5328,14 +5428,54 @@ ${sectionsOf(blocks)}
     contents: `/**
  * The app's home screen. Generated from the dashboard — App → App theme.
  *
- * The order below is the order of the blocks in the editor. Change it there;
- * anything typed here is replaced the next time a section moves.
+ * Which sections appear, in what order and with what in them, is the theme
+ * the app fetched when it opened (theme.ts), so a change saved in the editor
+ * reaches the phone without a new build. This file only knows how to draw
+ * each kind of section.
  */
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
-import { colors, gap, spacing } from "./theme";
-import { fetchHome, ${recsUsed ? "fetchRecommendations, type Recommendations, " : ""}type HomePayload } from "./api";
+import { colors, gap, layout, spacing, type PackBlock } from "./theme";
+import { fetchHome, fetchRecommendations, type HomePayload, type Recommendations } from "./api";
 ${imports}
+
+type Handlers = {
+  onOpenCollection?: (handle: string) => void;
+  onOpenProduct?: (id: string) => void;
+  onOpenScreen?: (screen: string) => void;
+  /** Put a single-variant product in the basket, for a section that can. */
+  onAdd?: (variantId: string, productId: string) => void;
+  /** Whether someone is signed in - what Complete your look is built from. */
+  signedIn?: boolean;
+};
+
+/** One section of a given kind, drawn with the settings the dashboard sent. */
+function renderBlock(b: PackBlock, data: HomePayload, recs: Recommendations | null, h: Handlers) {
+  const { onOpenCollection, onOpenProduct, onOpenScreen, onAdd } = h;
+  // Each component checks its own settings; these arrive as the editor saved them.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const settings = b.settings as any;
+  switch (b.type) {
+${cases}
+    // A kind of section this build does not know yet is left out, not a crash.
+    default:
+      return null;
+  }
+}
+
+/** A band bleeds to the screen edges, so the page padding comes off and is put back on inside it. */
+function bandStyle(band: string): StyleProp<ViewStyle> {
+  if (band === "tint" || band === "paper") {
+    return {
+      marginHorizontal: -spacing.lg,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: gap.section,
+      backgroundColor: band === "paper" ? "#ffffff" : colors.accent + "12",
+    };
+  }
+  if (band === "divider") return { borderTopWidth: 1, borderTopColor: colors.line, paddingTop: gap.section };
+  return null;
+}
 
 /**
  * One section, and the line above it.
@@ -5364,20 +5504,40 @@ function Section({
   );
 }
 
-export default function HomeScreen({
-  onOpenCollection,
-  onOpenProduct,
-  onOpenScreen,
-  onAdd,${recsUsed ? "\n  signedIn," : ""}
+function Sections({
+  list,
+  data,
+  recs,
+  h,
 }: {
-  onOpenCollection?: (handle: string) => void;
-  onOpenProduct?: (id: string) => void;
-  onOpenScreen?: (screen: string) => void;
-  /** Put a single-variant product in the basket, for a section that can. */
-  onAdd?: (variantId: string, productId: string) => void;
-  /** Whether someone is signed in - what Complete your look is built from. */
-  signedIn?: boolean;
+  list: PackBlock[];
+  data: HomePayload;
+  recs: Recommendations | null;
+  h: Handlers;
 }) {
+  return (
+    <>
+      {list.map((b) => (
+        <Section key={b.id} style={bandStyle(b.band)} kicker={b.kicker || undefined}>
+          {renderBlock(b, data, recs, h)}
+        </Section>
+      ))}
+    </>
+  );
+}
+
+/** Suggestions for whoever is signed in, when a section in the list uses them. */
+function useRecs(list: PackBlock[], signedIn?: boolean) {
+  const wanted = list.some((b) => b.type === "complete_look");
+  const [recs, setRecs] = useState<Recommendations | null>(null);
+  useEffect(() => {
+    if (!wanted || !signedIn) return setRecs(null);
+    fetchRecommendations().then(setRecs).catch(() => setRecs(null));
+  }, [wanted, signedIn]);
+  return recs;
+}
+
+export default function HomeScreen(h: Handlers) {
   const [data, setData] = useState<HomePayload | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -5385,11 +5545,7 @@ export default function HomeScreen({
     fetchHome().then(setData).catch((e) => setError(String(e.message ?? e)));
   }, []);
 
-${
-    recsUsed
-      ? "\n\n  // Asked again whenever someone signs in or out; a failure just hides it.\n  const [recs, setRecs] = useState<Recommendations | null>(null);\n  useEffect(() => {\n    if (!signedIn) return setRecs(null);\n    fetchRecommendations().then(setRecs).catch(() => setRecs(null));\n  }, [signedIn]);"
-      : ""
-  }
+  const recs = useRecs(layout.home, h.signedIn);
 
   if (error) return <View style={styles.center}><Text style={styles.error}>{error}</Text></View>;
   if (!data) return <View style={styles.center}><ActivityIndicator color={colors.accent} /></View>;
@@ -5397,16 +5553,48 @@ ${
   return (
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content}>
-${rendered}
+        <Sections list={layout.home} data={data} recs={recs} h={h} />
       </ScrollView>
     </View>
   );
 }
 
+/**
+ * The same sections, placed elsewhere.
+ *
+ * A merchant who puts "complete your look" beside the basket gets the section
+ * she already built, not a second one written to look like it. Each asks for
+ * the catalogue itself, because the product screen and the basket have no
+ * reason to carry a home payload around for a section that may not be there.
+ */
+function Placed({ list, ...h }: Handlers & { list: PackBlock[] }) {
+  const [data, setData] = useState<HomePayload | null>(null);
+  useEffect(() => {
+    if (!list.length) return;
+    fetchHome().then(setData).catch(() => setData(null));
+  }, [list.length]);
+  const recs = useRecs(list, h.signedIn);
+  if (!list.length || !data) return null;
+  return (
+    <View style={styles.placed}>
+      <Sections list={list} data={data} recs={recs} h={h} />
+    </View>
+  );
+}
+
+/** Sections the merchant placed on the product screen. */
+export function ProductSections(h: Handlers) {
+  return <Placed list={layout.product} {...h} />;
+}
+
+/** Sections the merchant placed on the basket. */
+export function CartSections(h: Handlers) {
+  return <Placed list={layout.cart} {...h} />;
+}
+
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.page },
   content: { paddingHorizontal: spacing.lg, paddingBottom: spacing.lg, gap: gap.section },
-  block: {},
   kicker: { marginBottom: 6, fontSize: 10, fontWeight: "700", letterSpacing: 1.8, color: colors.accent },
   hidden: { opacity: 0 },
   // Out of the flow, so the gap between sections closes over it, but still
@@ -5416,7 +5604,7 @@ const styles = StyleSheet.create({
   error: { color: "#e11d48", fontSize: 13 },
   placed: { gap: gap.section, paddingVertical: gap.section },
 });
-${placedCode}`,
+`,
   };
 }
 
@@ -5424,10 +5612,9 @@ function exportName(type: BlockType): string {
   return type === "text" ? "TextBlock" : componentName(type);
 }
 
-/** How the home screen calls one block: its own settings, plus what it reads. */
-function renderCall(block: Block, indent: number): string {
-  const pad = " ".repeat(indent);
-  const name = exportName(block.type);
+/** How the home screen draws one kind of section: its settings, plus what it reads. */
+function blockCase(type: BlockType): string {
+  const name = exportName(type);
   const extras: Record<BlockType, string[]> = {
     hero: ["collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     promo_bar: [],
@@ -5466,8 +5653,12 @@ function renderCall(block: Block, indent: number): string {
     reviews: ["reviews={data.reviews}"],
     text: [],
   };
-  const props = [`settings={${settingsLiteral(block)}}`, ...extras[block.type]];
-  return `${pad}<${name}\n${props.map((p) => `${pad}  ${p}`).join("\n")}\n${pad}/>`;
+  const props = ["settings={settings}", ...extras[type]].join(" ");
+  // Nothing to suggest means no section at all - not an empty band.
+  if (type === "complete_look") {
+    return `    case "complete_look":\n      return recs && recs.products.length ? <${name} ${props} /> : null;`;
+  }
+  return `    case ${q(type)}:\n      return <${name} ${props} />;`;
 }
 
 /**
@@ -5507,8 +5698,8 @@ const SIZE_KEYS = new Set([
   "overlay",
 ]);
 
-/** A block's settings as a JS object literal, keeping only what it uses. */
-function settingsLiteral(block: Block): string {
+/** A block's settings as plain data, keeping only what it uses. */
+function settingsObject(block: Block): Record<string, unknown> {
   const keep: Record<BlockType, string[]> = {
     hero: [],
     bundle_save: [
@@ -5857,52 +6048,64 @@ function settingsLiteral(block: Block): string {
     text: ["heading", "body"],
   };
   const set = block.settings ?? {};
-  const parts = keep[block.type]
-    .map((k) => {
-      const v = set[k];
-      if (k === "limit") return `${k}: ${n(v, 8)}`;
-      // Not every setting is a string: a toggle that arrived as text would be
-      // truthy in the app whichever way the merchant set it, and a size would
-      // be compared as one.
-      if (k === "offerMinutes") return `${k}: ${n(v, 10)}`;
-      if (k === "endsInMinutes") return `${k}: ${n(v, 135)}`;
-      if (k === "labelBold") return v === true ? `${k}: true` : null;
-      if (
-        k === "showReplays" ||
-        k === "offerEnabled" ||
-        k === "showTimer" ||
-        k === "showClaimed" ||
-        k === "showLabel" ||
-        k === "showNote" ||
-        k === "featureFirst" ||
-        k === "stretchTabs" ||
-        k === "showLink" ||
-        k === "animate"
-      ) {
-        return `${k}: ${v === false ? "false" : "true"}`;
-      }
-      // Sizes are only sent when the merchant actually set one, so the
-      // component's own default stays the single source of that number.
-      if (SIZE_KEYS.has(k)) {
-        const size = Number(v);
-        return Number.isFinite(size) && size >= 0 ? `${k}: ${size}` : null;
-      }
-      const text = s(v);
-      return text ? `${k}: ${q(text)}` : null;
-    })
-    .filter(Boolean);
+  const out: Record<string, unknown> = {};
+  for (const k of keep[block.type] ?? []) {
+    const v = set[k];
+    if (k === "limit") {
+      out[k] = n(v, 8);
+      continue;
+    }
+    // Not every setting is a string: a toggle that arrived as text would be
+    // truthy in the app whichever way the merchant set it, and a size would
+    // be compared as one.
+    if (k === "offerMinutes") {
+      out[k] = n(v, 10);
+      continue;
+    }
+    if (k === "endsInMinutes") {
+      out[k] = n(v, 135);
+      continue;
+    }
+    if (k === "labelBold") {
+      if (v === true) out[k] = true;
+      continue;
+    }
+    if (
+      k === "showReplays" ||
+      k === "offerEnabled" ||
+      k === "showTimer" ||
+      k === "showClaimed" ||
+      k === "showLabel" ||
+      k === "showNote" ||
+      k === "featureFirst" ||
+      k === "stretchTabs" ||
+      k === "showLink" ||
+      k === "animate"
+    ) {
+      out[k] = v !== false;
+      continue;
+    }
+    // Sizes are only sent when the merchant actually set one, so the
+    // component's own default stays the single source of that number.
+    if (SIZE_KEYS.has(k)) {
+      const size = Number(v);
+      if (Number.isFinite(size) && size >= 0) out[k] = size;
+      continue;
+    }
+    const text = s(v);
+    if (text) out[k] = text;
+  }
 
   // Slides, tabs, cards, tiers, panels and badges travel with the block —
   // they are the merchant's content, not the component's business.
   // Pairing rules are read by the shop, not the app.
   const items = block.type === "complete_look" ? [] : itemsOf(block);
-  if (items.length) parts.push(`items: ${itemsLiteral(block.type, items)}`);
-
-  return parts.length ? `{ ${parts.join(", ")} }` : "{}";
+  if (items.length) out.items = itemsObjects(block.type, items);
+  return out;
 }
 
 /** Only the fields a given block type's items actually carry. */
-function itemsLiteral(type: BlockType, items: Item[]): string {
+function itemsObjects(type: BlockType, items: Item[]): Record<string, string>[] {
   const fields: Partial<Record<BlockType, string[]>> = {
     hero: ["imageUrl", "kicker", "heading", "subheading", "handle", "url", "productId", "screen"],
     categories: ["handle", "label", "emoji", "imageUrl", "url", "productId", "screen"],
@@ -5950,15 +6153,14 @@ function itemsLiteral(type: BlockType, items: Item[]): string {
     style_profile: ["label", "color", "handle", "url", "productId", "screen"],
   };
   const keys = fields[type] ?? [];
-  const rendered = items.map((item) => {
-    const parts = [`id: ${q(item.id)}`];
+  return items.map((item) => {
+    const out: Record<string, string> = { id: String(item.id ?? "") };
     for (const k of keys) {
       const text = s(item[k]);
-      if (text) parts.push(`${k}: ${q(text)}`);
+      if (text) out[k] = text;
     }
-    return `{ ${parts.join(", ")} }`;
+    return out;
   });
-  return `[${rendered.join(", ")}]`;
 }
 
 // ------------------------------------------------------- the other screens --
@@ -6526,30 +6728,27 @@ const styles = StyleSheet.create({
   };
 }
 
-function tabBarFile(theme: AppTheme): GeneratedFile {
-  const tabs = theme.tabs
-    .filter((t) => t.visible)
-    .map(
-      (t) =>
-        `  { key: ${q(t.key)}, label: ${q(t.label || TAB_DEFAULTS[t.key].en)} },`,
-    )
-    .join("\n");
-
+function tabBarFile(): GeneratedFile {
   return {
     path: "components/TabBar.tsx",
     language: "tsx",
     contents: `/** The bar along the bottom. Generated from the dashboard — App → App theme. */
 import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { colors, radius } from "../theme";
+import { colors, layout, radius } from "../theme";
 import { TabIcon } from "./Icons";
 
 export type TabKey = ${TAB_KEYS.map((k) => q(k)).join(" | ")};
 
-/** Order, wording and which appear are the merchant's; the keys are not. */
-export const TABS: { key: TabKey; label: string }[] = [
-${tabs}
-];
+const KEYS: string[] = [${TAB_KEYS.map((k) => q(k)).join(", ")}];
+
+/**
+ * Order, wording and which appear are the merchant's, from the theme the app
+ * fetched; the keys are the app's.
+ */
+export function visibleTabs(): { key: TabKey; label: string }[] {
+  return layout.tabs.filter((t) => KEYS.indexOf(t.key) >= 0) as { key: TabKey; label: string }[];
+}
 
 export function TabBar({
   active,
@@ -6562,7 +6761,7 @@ export function TabBar({
 }) {
   return (
     <View style={styles.bar}>
-      {TABS.map((t) => {
+      {visibleTabs().map((t) => {
         const on = t.key === active;
         return (
           <Pressable key={t.key} style={styles.tab} onPress={() => onSelect(t.key)}>
@@ -8208,13 +8407,14 @@ const styles = StyleSheet.create({
 }
 
 // ------------------------------------------------------- the app itself --
-function appFile(theme: AppTheme): GeneratedFile {
-  const first = (theme.tabs.find((t) => t.visible) ?? theme.tabs[0]).key;
+function appFile(): GeneratedFile {
   // The Live tab's screen is only generated when the merchant shows the tab, so
   // nothing above may name it otherwise.
   // Reels does not use this screen any more (it opens the real site), so this
   // is now exactly what it says: is the Live tab itself on.
-  const live = theme.tabs.some((t) => t.key === "live" && t.visible);
+  // Which tabs show is decided when the app opens, so the Live screen is
+  // always part of the build.
+  const live = true;
   return {
     path: "App.tsx",
     language: "tsx",
@@ -8255,7 +8455,7 @@ import {
   type Product,
 } from "./api";
 import HomeScreen from "./HomeScreen";
-import { TabBar, type TabKey } from "./components/TabBar";
+import { TabBar, visibleTabs, type TabKey } from "./components/TabBar";
 import { CollectionScreen } from "./components/CollectionScreen";
 import { SearchResults } from "./components/SearchResults";
 import { ProductScreen } from "./components/ProductScreen";
@@ -8280,7 +8480,7 @@ type Screen =
 type Line = { itemId: string; quantity: number };
 
 export default function App() {
-  const [tab, setTab] = useState<TabKey>(${q(first)});
+  const [tab, setTab] = useState<TabKey>(() => visibleTabs()[0]?.key ?? "shop");
   const [stack, setStack] = useState<Screen[]>([]);
   const [lines, setLines] = useState<Line[]>([]);
   const [cart, setCart] = useState<PricedCart | null>(null);
@@ -8700,8 +8900,105 @@ const styles = StyleSheet.create({
 }
 
 /** Every file the app needs, current as of this theme. */
+// What runs before the app: the shop's current theme, fetched and applied
+// before any screen is loaded, so a change saved in the editor shows without
+// a new build.
+function bootFile(): GeneratedFile {
+  return {
+    path: "Boot.tsx",
+    language: "tsx",
+    contents: `/**
+ * What runs first. Generated from the dashboard — App → App theme.
+ *
+ * It fetches the shop's current theme and applies it, then loads the app.
+ * The order matters: every screen builds its styles from the theme when its
+ * file is first loaded, so the app is only required once the theme is in.
+ *
+ * The last theme fetched is kept on the phone, so a start with no signal still
+ * looks like the shop did last time rather than like the day it was built.
+ */
+import React, { useEffect, useRef, useState } from "react";
+import { AppState, View } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { api } from "./api";
+import { applyPack, canApplyLive, isApplied, theme } from "./theme";
+
+const SAVED = "app_theme_pack";
+/** How long a start waits for the network before going with what it has. */
+const WAIT_MS = 1500;
+/** Coming back to the app checks again, but not more than once a minute. */
+const RECHECK_MS = 60000;
+
+type AppComponent = React.ComponentType;
+
+export default function Boot() {
+  const [App, setApp] = useState<AppComponent | null>(null);
+  // Bumped when a theme is put on screen mid-visit, which redraws the app
+  // without resetting it - the basket and the screen she is on stay put.
+  const [, setRev] = useState(0);
+  const lastCheck = useRef(0);
+
+  useEffect(() => {
+    let started = false;
+    const start = () => {
+      if (started) return;
+      started = true;
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const loaded = require("./App") as { default: AppComponent };
+      setApp(() => loaded.default);
+    };
+    const keep = (pack: unknown) => {
+      AsyncStorage.setItem(SAVED, JSON.stringify(pack)).catch(() => {});
+    };
+    // A theme that arrives once the app is showing goes on screen when it
+    // only changes words, pictures and sections; one that changes colours
+    // waits for the next start (see canApplyLive).
+    const showNow = (pack: unknown) => {
+      if (!isApplied(pack) && canApplyLive(pack) && applyPack(pack)) setRev((r) => r + 1);
+    };
+
+    (async () => {
+      try {
+        const saved = await AsyncStorage.getItem(SAVED);
+        if (saved) applyPack(JSON.parse(saved));
+      } catch {
+        /* nothing kept, or nothing readable: the built-in theme stands */
+      }
+      const timer = setTimeout(start, WAIT_MS);
+      lastCheck.current = Date.now();
+      try {
+        const pack = await api<unknown>("/app-theme");
+        keep(pack);
+        if (!started) applyPack(pack);
+        else showNow(pack);
+      } catch {
+        /* offline: the kept theme stands */
+      }
+      clearTimeout(timer);
+      start();
+    })();
+
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state !== "active" || !started || Date.now() - lastCheck.current < RECHECK_MS) return;
+      lastCheck.current = Date.now();
+      api<unknown>("/app-theme")
+        .then((pack) => {
+          keep(pack);
+          showNow(pack);
+        })
+        .catch(() => {});
+    });
+    return () => sub.remove();
+  }, []);
+
+  if (!App) return <View style={{ flex: 1, backgroundColor: theme.splash.bg || theme.background }} />;
+  return <App />;
+}
+`,
+  };
+}
+
 export function generateApp(theme: AppTheme, baseUrl: string): GeneratedFile[] {
-  const used = [...new Set(theme.blocks.map((b) => b.type))];
   return [
     // The project first. Without these the rest is a folder of TypeScript
     // that nothing knows how to install, run or name.
@@ -8709,16 +9006,19 @@ export function generateApp(theme: AppTheme, baseUrl: string): GeneratedFile[] {
     themeFile(theme),
     screensFile(theme),
     apiFile(baseUrl),
-    homeScreenFile(theme),
+    bootFile(),
+    homeScreenFile(),
     piecesFile(),
     splashFile(),
     pageScreenFile(),
-    tabBarFile(theme),
-    appFile(theme),
+    tabBarFile(),
+    appFile(),
     collectionScreenFile(),
-    productScreenFile(blocksFor(theme.blocks, "product").length > 0),
+    // Sections placed beside a product or the basket are decided when the
+    // app opens too, so both screens always have room for them.
+    productScreenFile(true),
     searchScreenFile(),
-    cartScreenFile(blocksFor(theme.blocks, "cart").length > 0),
+    cartScreenFile(true),
     checkoutScreenFile(),
     signInScreenFile(),
     // Reels, Orders and Account are the real site, shown in the app.
@@ -8726,9 +9026,7 @@ export function generateApp(theme: AppTheme, baseUrl: string): GeneratedFile[] {
     iconsFile(),
     fadeFile(),
     chromeFile(),
-    ...(theme.tabs.some((t) => t.key === "live" && t.visible)
-      ? [liveScreenFile()]
-      : []),
-    ...used.map(sectionFile).sort((a, b) => a.path.localeCompare(b.path)),
+    liveScreenFile(),
+    ...(Object.keys(BLOCK_META) as BlockType[]).map(sectionFile).sort((a, b) => a.path.localeCompare(b.path)),
   ];
 }

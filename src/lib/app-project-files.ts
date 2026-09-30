@@ -143,11 +143,12 @@ function entry(): GeneratedFile {
     language: "js",
     contents: `import { registerRootComponent } from "expo";
 
-import App from "./App";
+// Boot fetches the shop's current theme, then loads App with it.
+import Boot from "./Boot";
 
 // Registers the root component and sets up the dev client in one call, so
 // nothing else has to know which of the two it is running under.
-registerRootComponent(App);
+registerRootComponent(Boot);
 `,
   };
 }
