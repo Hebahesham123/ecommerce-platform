@@ -3430,6 +3430,18 @@ function BlockGroup({
           <div className="mt-3 border-t border-line pt-3 text-[11px] font-semibold text-ink-muted">
             {ar ? "الشكل والمقاس" : "Shape and size"}
           </div>
+          <Field label={ar ? "تشغيل المسجّلة تلقائياً" : "Replays play themselves"} type="checkbox">
+            <input
+              type="checkbox"
+              checked={block.settings?.autoplayReplays !== false}
+              onChange={(e) => onPatch({ autoplayReplays: e.target.checked })}
+            />
+            <p className="mt-1 text-[11px] text-ink-soft">
+              {ar
+                ? "تعمل بلا صوت وتتوقف خارج الشاشة. التي بلا تسجيل تبقى صورة."
+                : "Muted, looping, and stopped while off screen. A replay with no recording stays a picture."}
+            </p>
+          </Field>
           <Field label={ar ? "شكل الصورة" : "Photo shape"} type="select">
             <select
               value={text("avatarShape") || "circle"}

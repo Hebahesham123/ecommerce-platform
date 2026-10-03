@@ -1302,6 +1302,8 @@ export function newBlock(type: BlockType): Block {
       // the brand", so a store that changes its accent takes this with it
       // instead of stranding a hex someone typed once.
       avatarShape: "circle",
+      // Replays move by themselves unless a merchant says otherwise.
+      autoplayReplays: true,
       avatarSize: 56,
       ringWidth: 2,
       ringColor: "",

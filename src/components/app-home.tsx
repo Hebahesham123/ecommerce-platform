@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useHlsSource } from "@/lib/use-hls";
 import {
   ALL_ROWS_CAP,
   DEFAULT_SETTINGS,
@@ -1719,6 +1720,68 @@ function BundleSave({
   );
 }
 
+/**
+ * A thumbnail that plays.
+ *
+ * Muted and looping, because a row of thumbnails that makes noise is a row
+ * nobody scrolls past twice, and stopped while it is off screen, so a long
+ * home page is not playing films nobody can see. The cover stays underneath
+ * as the poster, so the tile is never blank while the first frames arrive,
+ * and anyone who has asked their phone to stop animating things gets the
+ * picture and nothing else.
+ */
+function SelfPlaying({
+  src,
+  poster,
+  size,
+  radius,
+}: {
+  src: string;
+  poster: string | null;
+  size: number;
+  radius: number;
+}) {
+  const ref = useRef<HTMLVideoElement | null>(null);
+  // A recording is a playlist now. Safari reads one; everyone else is handed
+  // the library the reels feed already uses, and only when a playlist turns
+  // up - an ordinary file downloads nothing extra.
+  useHlsSource(ref, src);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      return;
+    }
+    if (typeof IntersectionObserver === "undefined") {
+      el.play().catch(() => {});
+      return;
+    }
+    const io = new IntersectionObserver(
+      (rows) => {
+        if (rows[0]?.isIntersecting) el.play().catch(() => {});
+        else el.pause();
+      },
+      { threshold: 0.4 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [src]);
+
+  return (
+    <video
+      ref={ref}
+      poster={poster ?? undefined}
+      muted
+      loop
+      playsInline
+      preload="metadata"
+      className="border-2 border-white object-cover"
+      style={{ width: size, height: size, borderRadius: radius, background: "#ece8e3" }}
+    />
+  );
+}
+
 function LiveNow({
   block,
   people,
@@ -1780,6 +1843,59 @@ function LiveNow({
 
   const go = opener(data, handlers);
 
+  /**
+   * The file behind each replay.
+   *
+   * A merchant pastes the address of a live from the dashboard, which is a
+   * page, not a video, so the row asks the shop which recording that page is
+   * about. It asks once for the whole row rather than once per tile, and it
+   * matches the start of an id as well as the whole of it, because a merchant
+   * copying one by eye drops the tail. A tile whose file cannot be found
+   * keeps its picture and still opens on a tap.
+   */
+  const autoplay = s.autoplayReplays !== false;
+  const direct = (u: string) => /\.(mp4|webm|ogg|mov)(\?|$)/i.test(u);
+  const [files, setFiles] = useState<Record<string, string>>({});
+  const wanted = people
+    .map((p) => str(p.videoUrl))
+    .filter((u) => u && !direct(u) && /\/store\/live\//.test(u))
+    .join("|");
+  useEffect(() => {
+    if (!autoplay || !wanted) return;
+    let alive = true;
+    fetch("/api/storefront/lives")
+      .then((r) => r.json())
+      .then((r) => {
+        if (!alive) return;
+        const lives = (r?.data?.lives ?? r?.data ?? []) as { id?: string; recordingUrl?: string }[];
+        const found: Record<string, string> = {};
+        for (const url of wanted.split("|")) {
+          const id = (url.match(/\/store\/live\/([0-9a-zA-Z-]{4,})/) ?? [])[1];
+          if (!id) continue;
+          const live =
+            lives.find((l) => String(l.id) === id) ?? lives.find((l) => String(l.id).startsWith(id));
+          // The plain recording only: a playlist needs a player this row has
+          // no business carrying for a thumbnail.
+          if (live?.recordingUrl) found[url] = live.recordingUrl;
+        }
+        setFiles(found);
+      })
+      .catch(() => {
+        /* a row of pictures is a fine answer when the shop cannot be asked */
+      });
+    return () => {
+      alive = false;
+    };
+  }, [autoplay, wanted]);
+
+  /** What this tile can play, if anything. */
+  const movie = (p: Item): string => {
+    if (!autoplay) return "";
+    const u = str(p.videoUrl);
+    if (!u) return "";
+    return direct(u) ? u : (files[u] ?? "");
+  };
+
   return (
     <section>
       {title && <Heading title={title} ar={ar} accent={accent} />}
@@ -1815,11 +1931,20 @@ function LiveNow({
                       borderRadius: photoRadius + ringW,
                     }}
                   >
-                    <Thumb
-                      src={borrowed.image}
-                      className="border-2 border-white"
-                      style={{ width: size, height: size, borderRadius: photoRadius }}
-                    />
+                    {movie(person) ? (
+                      <SelfPlaying
+                        src={movie(person)}
+                        poster={borrowed.image}
+                        size={size}
+                        radius={photoRadius}
+                      />
+                    ) : (
+                      <Thumb
+                        src={borrowed.image}
+                        className="border-2 border-white"
+                        style={{ width: size, height: size, borderRadius: photoRadius }}
+                      />
+                    )}
                   </span>
                   {/* Red for what is happening now; quiet for what already
                       happened. A shopper should be able to tell from the
@@ -1838,7 +1963,7 @@ function LiveNow({
                     </span>
                   )}
                   {/* A recording says so before it is tapped. */}
-                  {!onAir && video && (
+                  {!onAir && video && !movie(person) && (
                     <span
                       aria-hidden
                       className="absolute inset-0 grid place-items-center"
