@@ -6572,30 +6572,41 @@ export function AppChrome({
     );
   }, []);
 
-  // The shortcut row drifts while there is more of it than fits, slowly enough
-  // to read, and stops for good the moment a thumb lands on it. The drift runs
-  // on the native thread: stepping the scroll position from JavaScript every
-  // few milliseconds is what made it stutter.
+  // The shortcut row travels one way and never arrives. Turning round at the
+  // end trades a row that looks finished for a row that visibly bounces off a
+  // wall, so the shortcuts are laid down twice and the travel resets at the
+  // seam: the second copy is the first, so the join cannot be seen. It runs on
+  // the native thread, because stepping the scroll position from JavaScript
+  // every few milliseconds is what made it stutter, and it yields to a thumb
+  // and picks up again a couple of seconds after it lifts.
   const [stripOn, setStripOn] = useState(0);
   const [stripHeld, setStripHeld] = useState(false);
   const [far, setFar] = useState(0);
   const strip = useRef<ScrollView | null>(null);
   const stripSize = useRef({ rail: 0, content: 0 });
   const drift = useRef(new Animated.Value(0)).current;
-  const measure = () => setFar(Math.max(0, stripSize.current.content - stripSize.current.rail));
+  // Half the content, because by then the row is holding two copies of
+  // itself: one copy's width is exactly how far it can travel before the
+  // second copy is standing where the first was.
+  const measure = () => setFar(Math.max(0, stripSize.current.content / 2));
   useEffect(() => {
     if (stripHeld || far <= 1) return;
-    // The editor's pace: about twenty-five points a second, there and back.
+    // The editor's pace: about twenty-five points a second.
     const ms = (far / 25) * 1000;
     const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(drift, { toValue: -far, duration: ms, easing: Easing.linear, useNativeDriver: true }),
-        Animated.timing(drift, { toValue: 0, duration: ms, easing: Easing.linear, useNativeDriver: true }),
-      ]),
+      Animated.timing(drift, { toValue: -far, duration: ms, easing: Easing.linear, useNativeDriver: true }),
     );
+    drift.setValue(0);
     loop.start();
     return () => loop.stop();
   }, [stripHeld, far, drift]);
+  // Stopping for good would leave the shortcuts past the fold unseen for the
+  // rest of the visit, so the row picks itself up again.
+  useEffect(() => {
+    if (!stripHeld) return;
+    const t = setTimeout(() => setStripHeld(false), 2000);
+    return () => clearTimeout(t);
+  }, [stripHeld]);
   // Hand the row to the thumb exactly where the drift left it.
   const hold = () => {
     if (stripHeld) return;
@@ -6684,13 +6695,14 @@ export function AppChrome({
           contentContainerStyle={styles.stripPad}
         >
           <Animated.View style={[styles.stripRow, { transform: [{ translateX: drift }] }]}>
-          {theme.strip.items.map((item, i) => {
-            const on = i === stripOn;
+          {[...theme.strip.items, ...theme.strip.items].map((item, i) => {
+            const which = i % theme.strip.items.length;
+            const on = which === stripOn;
             return (
               <Pressable
-                key={item.id}
+                key={item.id + (i >= theme.strip.items.length ? "-again" : "")}
                 onPress={() => {
-                  setStripOn(i);
+                  setStripOn(which);
                   openLink(item, { onOpenCollection, onOpenProduct, onOpenScreen });
                 }}
                 style={[styles.stripItem, { borderBottomColor: on ? colors.accent : "transparent" }]}
