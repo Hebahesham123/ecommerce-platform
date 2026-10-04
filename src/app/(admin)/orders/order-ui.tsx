@@ -12,6 +12,8 @@
 import { useState } from "react";
 import { egp, num, type Lang } from "@/lib/i18n";
 import { StatusPill, type PillTone } from "@/components/dashboard-ui";
+import { Modal, Field, fieldClass } from "@/components/modal";
+import { IcCash, IcCourier } from "@/components/icons";
 import { collectPayment, refundPayment, fulfillOrder } from "./actions";
 
 export type StatusMeta = { tone: PillTone; hollow: boolean; ar: string; en: string };
@@ -133,61 +135,41 @@ export function PaymentModal({
     kind === "payment" ? (ar ? "تحصيل الدفع" : "Collect payment") : ar ? "استرجاع مبلغ" : "Refund";
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className="w-full max-w-sm rounded-2xl bg-surface p-5" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-3 text-base font-semibold text-ink">{title}</div>
-        <label className="mb-2 block">
-          <span className="mb-1 block text-xs font-medium text-ink-muted">
-            {ar ? "المبلغ" : "Amount"}{" "}
-            <span className="text-ink-soft">({ar ? "بحد أقصى" : "max"} {egp(maxAmount, lang)})</span>
-          </span>
-          <input
-            value={amount}
-            onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ""))}
-            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-brand-600"
-            inputMode="decimal"
-          />
-        </label>
-        <label className="mb-2 block">
-          <span className="mb-1 block text-xs font-medium text-ink-muted">{ar ? "طريقة الدفع" : "Payment method"}</span>
-          <select
-            value={method}
-            onChange={(e) => setMethod(e.target.value)}
-            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm"
-          >
-            {PAY_METHODS.map((m) => (
-              <option key={m.value} value={m.value}>{ar ? m.ar : m.en}</option>
-            ))}
+    <Modal
+      title={title}
+      subtitle={`#${orderNumber} · ${ar ? "بحد أقصى" : "max"} ${egp(maxAmount, lang)}`}
+      icon={IcCash}
+      accent={kind === "refund" ? "rose" : "emerald"}
+      size="sm"
+      onClose={onClose}
+      dir={ar ? "rtl" : "ltr"}
+      footer={
+        <>
+          <button onClick={onClose} className="btn-outline h-9 px-4 text-sm">{ar ? "إلغاء" : "Cancel"}</button>
+          <button onClick={submit} disabled={busy} className="btn-primary h-9 px-5 text-sm disabled:opacity-50">{busy ? "…" : title}</button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <Field label={ar ? "المبلغ" : "Amount"}>
+          <input value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ""))} className={fieldClass} inputMode="decimal" dir="ltr" />
+        </Field>
+        <Field label={ar ? "طريقة الدفع" : "Payment method"}>
+          <select value={method} onChange={(e) => setMethod(e.target.value)} className={fieldClass}>
+            {PAY_METHODS.map((m) => <option key={m.value} value={m.value}>{ar ? m.ar : m.en}</option>)}
           </select>
-        </label>
+        </Field>
         {kind === "payment" && (
-          <label className="mb-2 block">
-            <span className="mb-1 block text-xs font-medium text-ink-muted">{ar ? "مرجع (اختياري)" : "Reference (optional)"}</span>
-            <input
-              value={reference}
-              onChange={(e) => setReference(e.target.value)}
-              placeholder={ar ? "رقم الإيصال / المعاملة" : "Receipt / transaction no."}
-              className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-brand-600"
-            />
-          </label>
+          <Field label={ar ? "مرجع (اختياري)" : "Reference (optional)"}>
+            <input value={reference} onChange={(e) => setReference(e.target.value)} placeholder={ar ? "رقم الإيصال / المعاملة" : "Receipt / transaction no."} className={fieldClass} />
+          </Field>
         )}
-        <label className="mb-3 block">
-          <span className="mb-1 block text-xs font-medium text-ink-muted">{ar ? "ملاحظة (اختياري)" : "Note (optional)"}</span>
-          <input
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-brand-600"
-          />
-        </label>
-        {err && <p className="mb-2 text-xs text-rose-600">{err}</p>}
-        <div className="flex justify-end gap-2">
-          <button onClick={onClose} className="btn-outline h-9 px-3 text-sm">{ar ? "إلغاء" : "Cancel"}</button>
-          <button onClick={submit} disabled={busy} className="btn-primary h-9 px-4 text-sm disabled:opacity-50">
-            {busy ? "…" : title}
-          </button>
-        </div>
+        <Field label={ar ? "ملاحظة (اختياري)" : "Note (optional)"}>
+          <input value={note} onChange={(e) => setNote(e.target.value)} className={fieldClass} />
+        </Field>
+        {err && <p className="text-sm text-rose-600">{err}</p>}
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -232,50 +214,45 @@ export function FulfillModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl bg-surface p-5" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-3 text-base font-semibold text-ink">{ar ? "تنفيذ الأصناف" : "Fulfill items"}</div>
-        <div className="mb-3 space-y-2">
-          {outstanding.map((li) => {
-            const max = li.quantity - li.fulfilledQuantity;
-            return (
-              <div key={li.id} className="flex items-center gap-3 rounded-lg bg-surface-page px-3 py-2">
-                <div className="min-w-0 flex-1">
-                  <div className="line-clamp-1 text-sm text-ink">{li.productName}</div>
-                  <div className="text-xs text-ink-soft">{ar ? `متبقٍ ${num(max, lang)}` : `${max} remaining`}</div>
-                </div>
-                <input
-                  type="number"
-                  min={0}
-                  max={max}
-                  value={qty[li.id] ?? 0}
-                  onChange={(e) =>
-                    setQty((q) => ({ ...q, [li.id]: Math.max(0, Math.min(Number(e.target.value) || 0, max)) }))
-                  }
-                  className="w-16 rounded-lg border border-line bg-surface px-2 py-1.5 text-center text-sm"
-                />
+    <Modal
+      title={ar ? "تنفيذ الأصناف" : "Fulfill items"}
+      subtitle={`#${orderNumber}`}
+      icon={IcCourier}
+      onClose={onClose}
+      dir={ar ? "rtl" : "ltr"}
+      footer={
+        <>
+          <button onClick={onClose} className="btn-outline h-9 px-4 text-sm">{ar ? "إلغاء" : "Cancel"}</button>
+          <button onClick={submit} disabled={busy} className="btn-primary h-9 px-5 text-sm disabled:opacity-50">{busy ? "…" : ar ? "تنفيذ" : "Fulfill"}</button>
+        </>
+      }
+    >
+      <div className="space-y-2">
+        {outstanding.map((li) => {
+          const max = li.quantity - li.fulfilledQuantity;
+          return (
+            <div key={li.id} className="flex items-center gap-3 rounded-xl bg-surface-page px-3 py-2">
+              <div className="min-w-0 flex-1">
+                <div className="line-clamp-1 text-sm text-ink">{li.productName}</div>
+                <div className="text-xs text-ink-soft">{ar ? `متبقٍ ${num(max, lang)}` : `${max} remaining`}</div>
               </div>
-            );
-          })}
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium text-ink-muted">{ar ? "شركة الشحن" : "Carrier"}</span>
-            <input value={carrier} onChange={(e) => setCarrier(e.target.value)} className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-brand-600" />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-xs font-medium text-ink-muted">{ar ? "رقم التتبّع" : "Tracking no."}</span>
-            <input value={tracking} onChange={(e) => setTracking(e.target.value)} dir="ltr" className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-brand-600" />
-          </label>
-        </div>
-        {err && <p className="mt-2 text-xs text-rose-600">{err}</p>}
-        <div className="mt-3 flex justify-end gap-2">
-          <button onClick={onClose} className="btn-outline h-9 px-3 text-sm">{ar ? "إلغاء" : "Cancel"}</button>
-          <button onClick={submit} disabled={busy} className="btn-primary h-9 px-4 text-sm disabled:opacity-50">
-            {busy ? "…" : ar ? "تنفيذ" : "Fulfill"}
-          </button>
-        </div>
+              <input
+                type="number"
+                min={0}
+                max={max}
+                value={qty[li.id] ?? 0}
+                onChange={(e) => setQty((q) => ({ ...q, [li.id]: Math.max(0, Math.min(Number(e.target.value) || 0, max)) }))}
+                className="w-16 rounded-lg border border-line bg-surface px-2 py-1.5 text-center text-sm"
+              />
+            </div>
+          );
+        })}
       </div>
-    </div>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <Field label={ar ? "شركة الشحن" : "Carrier"}><input value={carrier} onChange={(e) => setCarrier(e.target.value)} className={fieldClass} /></Field>
+        <Field label={ar ? "رقم التتبّع" : "Tracking no."}><input value={tracking} onChange={(e) => setTracking(e.target.value)} dir="ltr" className={fieldClass} /></Field>
+      </div>
+      {err && <p className="mt-2 text-sm text-rose-600">{err}</p>}
+    </Modal>
   );
 }

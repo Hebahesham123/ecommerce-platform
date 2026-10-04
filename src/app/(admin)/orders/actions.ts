@@ -221,6 +221,20 @@ export async function collectPayment(
       p_note: input.note || null,
     });
     if (error) return { ok: false, error: mapRpcError(error.message) };
+    // Every payment is cash in — post it to accounting so the books show what
+    // was paid and by which method (courier COD posts its own entry on confirm).
+    try {
+      await supabase.from("accounting_entries").insert({
+        order_number: orderNumber,
+        type: "cash_in",
+        method: input.method || "cash",
+        amount: input.amount,
+        net: input.amount,
+        note: input.note || "Payment collected",
+      });
+    } catch {
+      /* accounting is a ledger, never the thing that fails a payment */
+    }
     return { ok: true, data: { amountPaid: n((data as Row).amount_paid), balance: n((data as Row).balance), paymentStatus: s((data as Row).payment_status) } };
   } catch (e) {
     return { ok: false, error: (e as Error).message };

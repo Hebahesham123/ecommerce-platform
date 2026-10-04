@@ -35,6 +35,9 @@ import {
 } from "./actions";
 import type { ReturnableLine } from "@/lib/returns-service";
 import { createPaymobCheckout } from "../payments/actions";
+import { getShipmentForOrder, assignOrderToCourier, confirmCourierReport, listCouriers } from "../couriers/actions";
+import { SHIPMENT_STATUS, type Shipment, type Courier } from "@/lib/courier";
+import { Modal, Field, fieldClass } from "@/components/modal";
 import {
   paymentMeta,
   fulfillMeta,
@@ -61,27 +64,33 @@ export function OrderDetailPage({ orderNumber, basePath }: { orderNumber: string
   const [returns, setReturns] = useState<ReturnRequest[]>([]);
   const [timeline, setTimeline] = useState<TimelineEntry[]>([]);
   const [conv, setConv] = useState<OrderConversion | null>(null);
+  const [shipment, setShipment] = useState<Shipment | null>(null);
+  const [couriers, setCouriers] = useState<Courier[]>([]);
   const [mailerReady, setMailerReady] = useState(true);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [modal, setModal] = useState<null | "collect" | "refund" | "fulfill" | "return" | "cancel" | "conversion">(null);
+  const [modal, setModal] = useState<null | "collect" | "refund" | "fulfill" | "return" | "cancel" | "conversion" | "assign">(null);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [detail, rq, tl, cv, mail] = await Promise.all([
+    const [detail, rq, tl, cv, mail, sh, cs] = await Promise.all([
       getOrderDetail(orderNumber),
       getOrderReturns(orderNumber),
       getOrderTimeline(orderNumber),
       getOrderConversion(orderNumber),
       getMailerStatus(),
+      getShipmentForOrder(orderNumber),
+      listCouriers(),
     ]);
     if (detail.ok) { setD(detail.data); setErr(null); } else setErr(detail.error);
     if (rq.ok) setReturns(rq.data);
     if (tl.ok) setTimeline(tl.data);
     if (cv.ok) setConv(cv.data);
     if (mail.ok) setMailerReady(mail.data.ready);
+    if (sh.ok) setShipment(sh.data);
+    if (cs.ok) setCouriers(cs.data);
     setLoading(false);
   }, [orderNumber]);
   useEffect(() => { load(); }, [load]);
@@ -312,6 +321,62 @@ export function OrderDetailPage({ orderNumber, basePath }: { orderNumber: string
             )}
           </div>
 
+          {/* Courier / shipping */}
+          {d && (
+            <div className="rounded-2xl border border-line bg-surface">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3">
+                <div className="flex items-center gap-2 text-sm font-semibold text-ink">
+                  <IcCourier className="h-4 w-4 text-ink-soft" />
+                  {ar ? "المندوب" : "Courier"}
+                  {shipment && <StatusPill label={ar ? SHIPMENT_STATUS[shipment.status].ar : SHIPMENT_STATUS[shipment.status].en} tone={SHIPMENT_STATUS[shipment.status].tone} />}
+                </div>
+                {!cancelled && (
+                  <button onClick={() => setModal("assign")} className="btn-outline h-9">
+                    {shipment ? (ar ? "إعادة التعيين" : "Reassign") : (ar ? "تعيين مندوب" : "Assign courier")}
+                  </button>
+                )}
+              </div>
+              {!shipment ? (
+                <div className="px-4 py-4 text-sm text-ink-soft">{ar ? "لم يُعيَّن مندوب لهذا الطلب بعد." : "No courier assigned to this order yet."}</div>
+              ) : (
+                <div className="space-y-3 px-4 py-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                    <span className="font-medium text-ink">{shipment.courierName || "—"}</span>
+                    <span className="text-ink-muted">{ar ? "الأجر" : "Fee"}: {egp(shipment.fee, lang)}</span>
+                  </div>
+
+                  {/* Pending report awaiting confirmation */}
+                  {shipment.reportedStatus ? (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+                      <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-amber-800">
+                        {ar ? "تقرير المندوب — بانتظار التأكيد" : "Courier report — awaiting confirmation"}
+                      </div>
+                      <div className="text-sm text-amber-900">
+                        {ar ? SHIPMENT_STATUS[shipment.reportedStatus].ar : SHIPMENT_STATUS[shipment.reportedStatus].en}
+                        {shipment.reportedStatus === "delivered" && <> · {ar ? "حصّل" : "collected"} {egp(shipment.reportedCash ?? 0, lang)}</>}
+                      </div>
+                      {shipment.reportedNote && <div className="mt-0.5 text-xs text-amber-800/80">{shipment.reportedNote}</div>}
+                      <button
+                        onClick={() => run(() => confirmCourierReport(orderNumber), ar ? "تم تأكيد التقرير" : "Report confirmed")}
+                        disabled={busy}
+                        className="btn-primary mt-2 h-8 px-4 text-xs disabled:opacity-50"
+                      >
+                        {ar ? "تأكيد التقرير" : "Confirm report"}
+                      </button>
+                    </div>
+                  ) : shipment.confirmedAt ? (
+                    <div className="text-xs text-ink-soft">
+                      {ar ? "آخر تأكيد" : "Confirmed"}: {new Date(shipment.confirmedAt).toLocaleString(ar ? "ar-EG" : "en-US", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                      {shipment.cashCollected > 0 && <> · {ar ? "النقد" : "cash"} {egp(shipment.cashCollected, lang)}</>}
+                    </div>
+                  ) : (
+                    <div className="text-xs text-ink-soft">{ar ? "بانتظار تحديث المندوب من بوابته." : "Waiting for the courier to update from their portal."}</div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Returns & exchanges */}
           {returns.length > 0 && (
             <div className="rounded-2xl border border-line bg-surface">
@@ -431,6 +496,16 @@ export function OrderDetailPage({ orderNumber, basePath }: { orderNumber: string
       )}
       {modal === "conversion" && conv && (
         <ConversionModal conv={conv} ar={ar} lang={lang} fmt={fmt} onClose={() => setModal(null)} />
+      )}
+      {modal === "assign" && (
+        <AssignCourierModal
+          orderNumber={orderNumber}
+          ar={ar}
+          couriers={couriers}
+          current={shipment}
+          onClose={() => setModal(null)}
+          onDone={async () => { setModal(null); flashOk(ar ? "تم تعيين المندوب" : "Courier assigned"); await load(); }}
+        />
       )}
       {modal === "return" && d && (
         <ReturnModal
@@ -728,47 +803,107 @@ function CancelModal({ orderNumber, ar, onClose, onDone }: { orderNumber: string
     else setErr(res.error);
   }
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className="w-full max-w-sm rounded-2xl bg-surface p-5" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-3 text-base font-semibold text-ink">{ar ? "إلغاء الطلب" : "Cancel order"}</div>
-        <label className="mb-2 block">
-          <span className="mb-1 block text-xs font-medium text-ink-muted">{ar ? "السبب (اختياري)" : "Reason (optional)"}</span>
-          <input value={reason} onChange={(e) => setReason(e.target.value)} className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-brand-600" />
-        </label>
-        <label className="mb-3 flex items-center gap-2 text-sm text-ink">
+    <Modal
+      title={ar ? "إلغاء الطلب" : "Cancel order"}
+      subtitle={`#${orderNumber}`}
+      icon={IcX}
+      accent="rose"
+      size="sm"
+      onClose={onClose}
+      dir={ar ? "rtl" : "ltr"}
+      footer={
+        <>
+          <button onClick={onClose} className="btn-outline h-9 px-4 text-sm">{ar ? "رجوع" : "Keep order"}</button>
+          <button onClick={submit} disabled={busy} className="btn-primary h-9 px-5 text-sm disabled:opacity-50">{busy ? "…" : ar ? "تأكيد الإلغاء" : "Cancel order"}</button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <Field label={ar ? "السبب (اختياري)" : "Reason (optional)"}>
+          <input value={reason} onChange={(e) => setReason(e.target.value)} className={fieldClass} />
+        </Field>
+        <label className="flex items-center gap-2 text-sm text-ink">
           <input type="checkbox" checked={restock} onChange={(e) => setRestock(e.target.checked)} /> {ar ? "إعادة الأصناف للمخزون" : "Restock the items"}
         </label>
-        {err && <p className="mb-2 text-xs text-rose-600">{orderErrorText(err, ar)}</p>}
-        <div className="flex justify-end gap-2">
-          <button onClick={onClose} className="btn-outline h-9 px-3 text-sm">{ar ? "رجوع" : "Keep order"}</button>
-          <button onClick={submit} disabled={busy} className="btn-primary h-9 px-4 text-sm disabled:opacity-50">{busy ? "…" : ar ? "تأكيد الإلغاء" : "Cancel order"}</button>
-        </div>
+        {err && <p className="text-sm text-rose-600">{orderErrorText(err, ar)}</p>}
       </div>
-    </div>
+    </Modal>
   );
 }
 
 // ---- Conversion details modal -----------------------------------------------
 function ConversionModal({ conv, ar, lang, fmt, onClose }: { conv: OrderConversion; ar: boolean; lang: "ar" | "en"; fmt: (s: string) => string; onClose: () => void }) {
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl bg-surface p-5" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-4 flex items-center justify-between">
-          <div className="text-base font-semibold text-ink">{ar ? "تفاصيل التحويل" : "Conversion details"}</div>
-          <button onClick={onClose} className="btn-ghost h-8 w-8 p-0"><IcX className="h-4 w-4" /></button>
-        </div>
-        <div className="grid grid-cols-2 gap-3 rounded-xl bg-surface-page p-4 text-center">
-          <div><div className="text-2xl font-bold text-ink">{num(conv.totalOrders, lang)}</div><div className="text-xs text-ink-soft">{ar ? "إجمالي الطلبات" : "Total orders"}</div></div>
-          <div><div className="text-2xl font-bold text-ink">{egp(conv.totalSpent, lang)}</div><div className="text-xs text-ink-soft">{ar ? "إجمالي الإنفاق" : "Total spent"}</div></div>
-        </div>
-        <ul className="mt-4 space-y-3 text-sm">
-          <li className="flex items-center justify-between"><span className="text-ink-muted">{ar ? "هذا الطلب" : "This order"}</span><span className="font-medium text-ink">{ar ? `رقم ${num(conv.orderIndex, lang)}` : ordinal(conv.orderIndex)}</span></li>
-          {conv.firstOrderAt && <li className="flex items-center justify-between"><span className="text-ink-muted">{ar ? "أول طلب" : "First order"}</span><span className="font-medium text-ink">{fmt(conv.firstOrderAt)}</span></li>}
-          {conv.lastOrderAt && <li className="flex items-center justify-between"><span className="text-ink-muted">{ar ? "آخر طلب" : "Latest order"}</span><span className="font-medium text-ink">{fmt(conv.lastOrderAt)}</span></li>}
-        </ul>
-        <div className="mt-4 flex justify-end"><button onClick={onClose} className="btn-outline h-9 px-4 text-sm">{ar ? "إغلاق" : "Close"}</button></div>
+    <Modal
+      title={ar ? "تفاصيل التحويل" : "Conversion details"}
+      icon={IcRedo}
+      accent="sky"
+      onClose={onClose}
+      dir={ar ? "rtl" : "ltr"}
+      footer={<button onClick={onClose} className="btn-outline h-9 px-4 text-sm">{ar ? "إغلاق" : "Close"}</button>}
+    >
+      <div className="grid grid-cols-2 gap-3 rounded-2xl bg-surface-page p-4 text-center">
+        <div><div className="text-2xl font-bold text-ink">{num(conv.totalOrders, lang)}</div><div className="text-xs text-ink-soft">{ar ? "إجمالي الطلبات" : "Total orders"}</div></div>
+        <div><div className="text-2xl font-bold text-ink">{egp(conv.totalSpent, lang)}</div><div className="text-xs text-ink-soft">{ar ? "إجمالي الإنفاق" : "Total spent"}</div></div>
       </div>
-    </div>
+      <ul className="mt-4 space-y-3 text-sm">
+        <li className="flex items-center justify-between"><span className="text-ink-muted">{ar ? "هذا الطلب" : "This order"}</span><span className="font-medium text-ink">{ar ? `رقم ${num(conv.orderIndex, lang)}` : ordinal(conv.orderIndex)}</span></li>
+        {conv.firstOrderAt && <li className="flex items-center justify-between"><span className="text-ink-muted">{ar ? "أول طلب" : "First order"}</span><span className="font-medium text-ink">{fmt(conv.firstOrderAt)}</span></li>}
+        {conv.lastOrderAt && <li className="flex items-center justify-between"><span className="text-ink-muted">{ar ? "آخر طلب" : "Latest order"}</span><span className="font-medium text-ink">{fmt(conv.lastOrderAt)}</span></li>}
+      </ul>
+    </Modal>
+  );
+}
+
+// ---- Assign courier modal ---------------------------------------------------
+function AssignCourierModal({ orderNumber, ar, couriers, current, onClose, onDone }: {
+  orderNumber: string; ar: boolean; couriers: Courier[]; current: Shipment | null; onClose: () => void; onDone: () => void;
+}) {
+  const active = couriers.filter((c) => c.active);
+  const [courierId, setCourierId] = useState(current?.courierId ?? active[0]?.id ?? "");
+  const [fee, setFee] = useState(String(current?.fee ?? ""));
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function save() {
+    if (!courierId) { setErr(ar ? "اختاري مندوباً." : "Pick a courier."); return; }
+    setBusy(true); setErr(null);
+    const res = await assignOrderToCourier(orderNumber, courierId, Number(fee) || 0);
+    setBusy(false);
+    if (res.ok) onDone();
+    else setErr(res.error === "courier_not_found" ? (ar ? "المندوب غير موجود." : "Courier not found.") : res.error === "migration_missing" ? (ar ? "شغّلي ترحيل 0045." : "Run migration 0045.") : (ar ? "تعذّر التعيين." : "Couldn't assign."));
+  }
+
+  return (
+    <Modal
+      title={ar ? "تعيين مندوب" : "Assign a courier"}
+      subtitle={`#${orderNumber}`}
+      icon={IcCourier}
+      onClose={onClose}
+      dir={ar ? "rtl" : "ltr"}
+      footer={
+        <>
+          <button onClick={onClose} className="btn-outline h-9 px-4 text-sm">{ar ? "إلغاء" : "Cancel"}</button>
+          <button onClick={save} disabled={busy} className="btn-primary h-9 px-5 text-sm disabled:opacity-50">{busy ? "…" : ar ? "تعيين" : "Assign"}</button>
+        </>
+      }
+    >
+      {active.length === 0 ? (
+        <p className="text-sm text-ink-soft">{ar ? "لا يوجد مندوبون نشطون. أضيفيهم من صفحة المندوبين." : "No active couriers — add them from the Couriers page."}</p>
+      ) : (
+        <div className="space-y-3">
+          <Field label={ar ? "المندوب" : "Courier"}>
+            <select value={courierId} onChange={(e) => setCourierId(e.target.value)} className={fieldClass}>
+              {active.map((c) => <option key={c.id} value={c.id}>{c.name}{c.zone ? ` · ${c.zone}` : ""}</option>)}
+            </select>
+          </Field>
+          <Field label={ar ? "أجر التوصيل" : "Delivery fee"} hint={ar ? "يُخصم من صافي المحاسبة عند التأكيد" : "Netted off in accounting on confirm"}>
+            <input value={fee} onChange={(e) => setFee(e.target.value.replace(/[^\d.]/g, ""))} inputMode="decimal" dir="ltr" className={fieldClass} />
+          </Field>
+          {err && <p className="text-sm text-rose-600">{err}</p>}
+        </div>
+      )}
+    </Modal>
   );
 }
 

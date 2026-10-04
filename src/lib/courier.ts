@@ -1,0 +1,70 @@
+/**
+ * Courier + shipment shapes, shared by the admin screens, the order page and
+ * the courier portal. Pure types and labels — no server imports.
+ */
+
+export type Courier = {
+  id: string;
+  name: string;
+  phone: string;
+  zone: string | null;
+  active: boolean;
+  createdAt: string;
+};
+
+export type ShipmentStatus = "assigned" | "out_for_delivery" | "delivered" | "failed" | "returned";
+export type ReportStatus = "out_for_delivery" | "delivered" | "failed" | "returned";
+
+export type Shipment = {
+  id: string;
+  orderId: string;
+  orderNumber: string;
+  courierId: string | null;
+  courierName: string | null;
+  fee: number;
+  status: ShipmentStatus;
+  cashCollected: number;
+  reportedStatus: ReportStatus | null;
+  reportedCash: number | null;
+  reportedNote: string | null;
+  reportedAt: string | null;
+  confirmedAt: string | null;
+  settledAt: string | null;
+  assignedAt: string;
+  /** Joined from the order, for the courier's own list. */
+  orderTotal?: number;
+  customerName?: string;
+  address?: string | null;
+  city?: string | null;
+  governorate?: string | null;
+  phone?: string | null;
+};
+
+export type AccountingEntry = {
+  id: string;
+  orderNumber: string | null;
+  type: string;
+  method: string | null;
+  amount: number;
+  courierId: string | null;
+  courierName?: string | null;
+  courierFee: number;
+  net: number;
+  note: string | null;
+  createdAt: string;
+};
+
+export const SHIPMENT_STATUS: Record<ShipmentStatus, { ar: string; en: string; tone: "neutral" | "info" | "success" | "warning" | "critical" }> = {
+  assigned: { ar: "تم التعيين", en: "Assigned", tone: "neutral" },
+  out_for_delivery: { ar: "في الطريق", en: "Out for delivery", tone: "info" },
+  delivered: { ar: "تم التسليم", en: "Delivered", tone: "success" },
+  failed: { ar: "فشل التسليم", en: "Failed", tone: "critical" },
+  returned: { ar: "مرتجع", en: "Returned", tone: "warning" },
+};
+
+export const REPORT_OPTIONS: { value: ReportStatus; ar: string; en: string }[] = [
+  { value: "out_for_delivery", ar: "في الطريق", en: "Out for delivery" },
+  { value: "delivered", ar: "تم التسليم", en: "Delivered" },
+  { value: "failed", ar: "فشل التسليم", en: "Failed" },
+  { value: "returned", ar: "مرتجع", en: "Returned" },
+];
