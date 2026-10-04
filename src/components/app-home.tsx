@@ -38,6 +38,8 @@ export type Card = {
   /** The only variant, when there is exactly one — see AppProductCard. */
   variantId?: string | null;
   variantCount?: number;
+  /** How many are left. The one number on a card true of that product alone. */
+  available?: number;
 };
 
 export type HomeCollection = {
@@ -236,6 +238,28 @@ function Thumb({
  * language: "Louis Vuitton Pochette…" rather than "Louis Vuitton Poche…".
  */
 /**
+ * Five stars, filled to a score.
+ *
+ * Drawn rather than written out of ★ and ☆, so a 4.6 is four stars and most
+ * of a fifth instead of being rounded to something the number beside it
+ * contradicts. One gradient, clipped to the width the score earns.
+ */
+function Stars({ score, size = 9, color }: { score: number; size?: number; color: string }) {
+  const part = Math.max(0, Math.min(1, score / 5));
+  return (
+    <span className="relative inline-block leading-none" style={{ fontSize: size }} aria-hidden>
+      <span style={{ color: "#d9d2c9" }}>★★★★★</span>
+      <span
+        className="absolute inset-y-0 start-0 overflow-hidden whitespace-nowrap"
+        style={{ width: `${part * 100}%`, color }}
+      >
+        ★★★★★
+      </span>
+    </span>
+  );
+}
+
+/**
  * The name, minus the brand that is already printed above it.
  *
  * "LOUIS VUITTON" over "Louis Vuitton Pochette Voyage" means the three words
@@ -284,6 +308,14 @@ export function shortName(name: string, words: number): string {
 const CardStyle = createContext({
   nameWords: DEFAULT_SETTINGS.cardNameWords,
   photoBg: DEFAULT_SETTINGS.cardPhotoBg,
+  stars: DEFAULT_SETTINGS.cardStars,
+  stock: DEFAULT_SETTINGS.cardStock,
+  add: DEFAULT_SETTINGS.cardAdd,
+  addLabel: "",
+  /** The shop's standing, as the product screen states it. */
+  rating: "",
+  reviews: "",
+  lowAt: 5,
 });
 
 function tileProps(handlers: HomeHandlers, productId: string) {
@@ -334,7 +366,14 @@ function Tile({
   // behalf is how you earn a return.
   const single = card.variantId != null && (card.variantCount ?? 1) === 1;
   const canAdd = Boolean(onAdd);
-  const { nameWords } = useContext(CardStyle);
+  const style = useContext(CardStyle);
+  const { nameWords } = style;
+  const score = Number(style.rating);
+  const stars = style.stars && Number.isFinite(score) && score > 0;
+  // Only once it is scarce: a full bar on everything says nothing, and a bar
+  // that claims to show sales would be inventing a number nothing records.
+  const left = typeof card.available === "number" ? card.available : null;
+  const scarce = style.stock && left !== null && left > 0 && left <= style.lowAt;
   const ratio =
     shape === "wide" ? "aspect-[4/3]" : shape === "tall" ? "aspect-[3/4]" : "aspect-square";
 
@@ -357,7 +396,7 @@ function Tile({
             </span>
           )}
         </span>
-        <span className={`block ps-2 pb-2 ${canAdd ? "pe-9" : "pe-2"}`}>
+        <span className={`block ps-2 pb-2 ${canAdd && !style.add ? "pe-9" : "pe-2"}`}>
           {card.vendor && (
             <span className="block truncate text-[9px] font-bold uppercase tracking-[0.08em] text-slate-900">
               {card.vendor}
@@ -367,6 +406,19 @@ function Tile({
           <span className="block truncate text-[11px] leading-snug text-slate-500">
             {shortName(withoutVendor(card.name, card.vendor), nameWords)}
           </span>
+          {/* The shop's standing. Every card says the same thing because
+              nothing here records a rating per product; it is the number the
+              product screen already shows, not a second one. */}
+          {stars && (
+            <span className="mt-0.5 flex items-center gap-1">
+              <Stars score={score} color={accent} />
+              <span className="text-[9px] font-semibold text-slate-600">{style.rating}</span>
+              {str(style.reviews) && (
+                <span className="text-[9px] text-slate-400">({style.reviews})</span>
+              )}
+            </span>
+          )}
+
           {/* Was and now on one baseline: the saving reads as one thought, and
               the card keeps the line the second price used to take. */}
           <span className="mt-0.5 flex items-baseline gap-1.5">
@@ -377,6 +429,25 @@ function Tile({
               <span className="text-[10px] text-slate-400 line-through">{money(was, ar)}</span>
             )}
           </span>
+
+          {/* How little is left, which is the one thing on this card true of
+              this product alone. It appears only once that is worth saying. */}
+          {scarce && (
+            <span className="mt-1 block">
+              <span className="block h-[3px] w-full overflow-hidden rounded-full bg-slate-200">
+                <span
+                  className="block h-full rounded-full"
+                  style={{
+                    width: `${Math.max(8, Math.round(((style.lowAt - (left as number) + 1) / style.lowAt) * 100))}%`,
+                    background: accent,
+                  }}
+                />
+              </span>
+              <span className="mt-0.5 block text-[9px] font-semibold" style={{ color: accent }}>
+                {ar ? `باقي ${left} فقط` : `Only ${left} left`}
+              </span>
+            </span>
+          )}
         </span>
       </button>
 
@@ -401,7 +472,37 @@ function Tile({
         </button>
       )}
 
-      {canAdd && (
+      {/* A round plus is a guess; a button that says what it does is not.
+          One that needs a size says so rather than adding the wrong one. */}
+      {canAdd && style.add && (
+        <button
+          onClick={() => (single ? onAdd?.(card.variantId as string, card.id) : onOpen?.(card.id))}
+          className="mx-2 mb-2 flex h-8 w-[calc(100%-1rem)] items-center justify-center gap-1 rounded-lg text-[11px] font-bold uppercase tracking-[0.08em] text-white transition active:scale-[0.98]"
+          style={{ background: accent }}
+        >
+          {single ? (
+            <>
+              <svg
+                viewBox="0 0 24 24"
+                className="h-3 w-3"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="3"
+                strokeLinecap="round"
+                aria-hidden
+              >
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              {str(style.addLabel) || (ar ? "أضيفي" : "Add to bag")}
+            </>
+          ) : ar ? (
+            "اختاري المقاس"
+          ) : (
+            "Choose size"
+          )}
+        </button>
+      )}
+      {canAdd && !style.add && (
         <button
           onClick={() => (single ? onAdd?.(card.variantId as string, card.id) : onOpen?.(card.id))}
           aria-label={
@@ -4891,8 +4992,19 @@ export function AppHome({
 }) {
   const blocks = blocksFor(theme.blocks ?? [], where);
   const cardStyle = useMemo(
-    () => ({ nameWords: theme.settings.cardNameWords, photoBg: theme.settings.cardPhotoBg }),
-    [theme.settings.cardNameWords, theme.settings.cardPhotoBg],
+    () => ({
+      nameWords: theme.settings.cardNameWords,
+      photoBg: theme.settings.cardPhotoBg,
+      stars: theme.settings.cardStars,
+      stock: theme.settings.cardStock,
+      add: theme.settings.cardAdd,
+      addLabel: theme.settings.cardAddLabel,
+      // The product screen's numbers, not a second pair of them.
+      rating: theme.screens.product.ratingValue,
+      reviews: theme.screens.product.reviewCount,
+      lowAt: theme.screens.product.lowStockAt || 5,
+    }),
+    [theme.settings, theme.screens.product],
   );
   return (
     <CardStyle.Provider value={cardStyle}>

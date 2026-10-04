@@ -748,6 +748,50 @@ export function ThemeEditor() {
                     : "A name gets one line on the card; whatever is past this becomes an ellipsis."
                 }
               />
+              <Field label={ar ? "نجوم التقييم على البطاقة" : "Stars on the card"} type="checkbox">
+                <input
+                  type="checkbox"
+                  checked={draft.settings.cardStars}
+                  onChange={(e) => patchSettings({ cardStars: e.target.checked })}
+                />
+                <p className="mt-1 text-[11px] text-ink-soft">
+                  {ar
+                    ? "تستخدم نفس تقييم المتجر الظاهر في صفحة المنتج — لا يوجد تقييم لكل منتج بعد، فكل البطاقات تعرض نفس الرقم."
+                    : "The shop's score from the Product screen. Nothing records a rating per product yet, so every card shows the same number — switch it off if that is not worth saying."}
+                </p>
+              </Field>
+              <Field label={ar ? "شريط «باقي قليل»" : "The 'only a few left' bar"} type="checkbox">
+                <input
+                  type="checkbox"
+                  checked={draft.settings.cardStock}
+                  onChange={(e) => patchSettings({ cardStock: e.target.checked })}
+                />
+                <p className="mt-1 text-[11px] text-ink-soft">
+                  {ar
+                    ? "يظهر فقط عندما يقل المخزون عن الحد المحدد في شاشة المنتج. رقم حقيقي، لا تقدير."
+                    : "Shown only once stock falls under the Product screen's low-stock number. A real count, not an estimate."}
+                </p>
+              </Field>
+              <Field label={ar ? "زر الإضافة للسلة" : "Add-to-bag button"} type="checkbox">
+                <input
+                  type="checkbox"
+                  checked={draft.settings.cardAdd}
+                  onChange={(e) => patchSettings({ cardAdd: e.target.checked })}
+                />
+                <p className="mt-1 text-[11px] text-ink-soft">
+                  {ar
+                    ? "زر بعرض البطاقة بدلاً من علامة + صغيرة. المنتج الذي له مقاسات يفتح بدل أن يُضاف."
+                    : "A button across the card instead of a small plus. A product with sizes opens rather than being added."}
+                </p>
+              </Field>
+              <Field label={ar ? "نص زر الإضافة" : "What the button says"} type="text">
+                <input
+                  value={draft.settings.cardAddLabel}
+                  onChange={(e) => patchSettings({ cardAddLabel: e.target.value })}
+                  placeholder={ar ? "أضيفي" : "Add to bag"}
+                  className={input}
+                />
+              </Field>
               <Field label={ar ? "خلفية صور المنتجات" : "Behind product photos"} type="color">
                 <span className="flex items-center gap-2">
                   <input

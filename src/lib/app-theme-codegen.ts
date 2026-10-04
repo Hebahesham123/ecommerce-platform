@@ -156,6 +156,15 @@ export function appPack(theme: AppTheme) {
       card: {
         nameWords: Number(t.cardNameWords) || 3,
         photoBg: str(t.cardPhotoBg),
+        stars: t.cardStars !== false,
+        stock: t.cardStock !== false,
+        add: t.cardAdd !== false,
+        addLabel: str(t.cardAddLabel),
+        // The product screen's numbers, not a second pair of them: one score
+        // kept in two places is a score that disagrees with itself.
+        rating: str(theme.screens.product.ratingValue),
+        reviews: str(theme.screens.product.reviewCount),
+        lowAt: Number(theme.screens.product.lowStockAt) || 5,
       },
       strip: {
         enabled: Boolean(t.stripEnabled),
@@ -281,10 +290,25 @@ export type ThemeData = {
   };
   live: LiveSession[];
   /**
-   * The product card, everywhere one is drawn. nameWords is how many words of
-   * a name fit its one line; photoBg is the colour behind every product photo.
+   * The product card, everywhere one is drawn.
+   *
+   * nameWords is how many words of a name fit its one line; photoBg is the
+   * colour behind every product photo. The score and the count are the shop's
+   * standing as the product screen states it, because nothing records a
+   * rating per product yet, and lowAt is when "only a few left" is worth
+   * saying.
    */
-  card: { nameWords: number; photoBg: string };
+  card: {
+    nameWords: number;
+    photoBg: string;
+    stars: boolean;
+    stock: boolean;
+    add: boolean;
+    addLabel: string;
+    rating: string;
+    reviews: string;
+    lowAt: number;
+  };
   strip: { enabled: boolean; items: StripShortcut[] };
 };
 
@@ -483,6 +507,8 @@ export type Card = {
   /** The only variant, when there is exactly one - so a card can add it straight away. */
   variantId?: string | null;
   variantCount?: number;
+  /** How many are left. The one number on a card true of that product alone. */
+  available?: number;
 };
 
 export type HomePayload = {
@@ -1247,6 +1273,25 @@ export function money(v: number | null) {
   return v == null ? "—" : \`\${new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(v)} EGP\`;
 }
 
+/**
+ * Five stars, filled to a score.
+ *
+ * Two rows of stars, the lit one clipped to the width the score earns, so a
+ * 4.6 is four stars and most of a fifth rather than a rounding the number
+ * beside it contradicts.
+ */
+function Stars({ score, size = 9 }: { score: number; size?: number }) {
+  const part = Math.max(0, Math.min(1, score / 5));
+  return (
+    <View>
+      <Text style={{ fontSize: size, color: "#d9d2c9" }}>{"★★★★★"}</Text>
+      <View style={{ position: "absolute", left: 0, top: 0, width: (part * 100) + "%", overflow: "hidden" }}>
+        <Text style={{ fontSize: size, color: colors.accent }} numberOfLines={1}>{"★★★★★"}</Text>
+      </View>
+    </View>
+  );
+}
+
 export function ProductTile({
   card,
   width = 128,
@@ -1254,6 +1299,7 @@ export function ProductTile({
   shape = "square",
   fit = "cover",
   onPress,
+  onAdd,
 }: {
   card: Card;
   width?: number;
@@ -1264,7 +1310,16 @@ export function ProductTile({
   /** "cover" crops to fill the frame, "contain" fits the whole picture in. */
   fit?: string;
   onPress?: (id: string) => void;
+  /** Put the one variant in the basket. Without it the card has no button. */
+  onAdd?: (variantId: string, productId: string) => void;
 }) {
+  const score = Number(theme.card.rating);
+  const stars = theme.card.stars && Number.isFinite(score) && score > 0;
+  // Only once it is scarce: a full bar on everything says nothing, and a bar
+  // claiming to show sales would invent a number nothing records.
+  const left = typeof card.available === "number" ? card.available : null;
+  const scarce = theme.card.stock && left !== null && left > 0 && left <= theme.card.lowAt;
+  const single = card.variantId != null && (card.variantCount || 1) === 1;
   const ratio = shape === "wide" ? 0.75 : shape === "tall" ? 1.34 : 1;
   const box = fill ? styles.fillImage : { width, height: Math.round(width * ratio) };
   return (
@@ -1277,12 +1332,42 @@ export function ProductTile({
       <View style={styles.tileBody}>
         {/* One line. A name too long for it stops at a word, not mid-word. */}
         <Text style={styles.tileName} numberOfLines={1}>{shortName(card.name)}</Text>
+        {stars ? (
+          <View style={styles.starRow}>
+            <Stars score={score} />
+            <Text style={styles.scoreText}>{theme.card.rating}</Text>
+            {theme.card.reviews ? <Text style={styles.countText}>{"(" + theme.card.reviews + ")"}</Text> : null}
+          </View>
+        ) : null}
         <View style={styles.priceRow}>
           <Text style={styles.price}>{money(card.priceMin)}</Text>
           {card.compareAt != null && card.priceMin != null && card.compareAt > card.priceMin ? (
             <Text style={styles.compareAt}>{money(card.compareAt)}</Text>
           ) : null}
         </View>
+        {scarce ? (
+          <View style={styles.leftWrap}>
+            <View style={styles.leftTrack}>
+              <View
+                style={[
+                  styles.leftFill,
+                  { width: Math.max(8, Math.round(((theme.card.lowAt - (left as number) + 1) / theme.card.lowAt) * 100)) + "%" },
+                ]}
+              />
+            </View>
+            <Text style={styles.leftText}>{"Only " + left + " left"}</Text>
+          </View>
+        ) : null}
+        {theme.card.add && onAdd ? (
+          <Pressable
+            style={styles.tileCta}
+            onPress={() => (single && card.variantId ? onAdd(card.variantId, card.id) : onPress?.(card.id))}
+          >
+            <Text style={styles.tileCtaText}>
+              {single ? (theme.card.addLabel || "Add to bag").toUpperCase() : "CHOOSE SIZE"}
+            </Text>
+          </Pressable>
+        ) : null}
       </View>
     </Pressable>
   );
@@ -1298,6 +1383,15 @@ const styles = StyleSheet.create({
   tileImage: { backgroundColor: theme.card.photoBg },
   tileBody: { paddingHorizontal: spacing.sm, paddingTop: 6, paddingBottom: spacing.sm },
   tileName: { fontSize: 11, lineHeight: 15, color: colors.ink },
+  starRow: { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 2 },
+  scoreText: { fontSize: 9, fontWeight: "700", color: colors.inkMuted },
+  countText: { fontSize: 9, color: colors.inkSoft },
+  leftWrap: { marginTop: 4 },
+  leftTrack: { height: 3, borderRadius: 2, backgroundColor: colors.line, overflow: "hidden" },
+  leftFill: { height: 3, borderRadius: 2, backgroundColor: colors.accent },
+  leftText: { marginTop: 2, fontSize: 9, fontWeight: "700", color: colors.accent },
+  tileCta: { marginTop: 6, height: 30, borderRadius: radius.sm, backgroundColor: colors.accent, alignItems: "center", justifyContent: "center" },
+  tileCtaText: { fontSize: 10, fontWeight: "800", letterSpacing: 0.8, color: "#fff" },
   priceRow: { flexDirection: "row", alignItems: "baseline", gap: 6, marginTop: 2 },
   price: { fontSize: 14, fontWeight: "700", color: colors.accent },
   compareAt: { fontSize: 10, color: colors.inkSoft, textDecorationLine: "line-through" },

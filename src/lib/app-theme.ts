@@ -531,6 +531,23 @@ export type AppSettings = {
    */
   cardNameWords: number;
   cardPhotoBg: string;
+  /**
+   * The three things a card can carry besides the picture and the price.
+   *
+   * The score and the count are the ones already set for the product screen,
+   * not a second pair: one number in two places is a number that disagrees
+   * with itself within a month. They are the shop's standing rather than this
+   * product's, because nothing in the shop records a rating per product yet —
+   * so a merchant who wants them off has a switch.
+   *
+   * The bar is the one piece of a card that is true of that product alone:
+   * how little is left. It shows only once stock is below the number the
+   * product screen calls low, because a full bar on everything says nothing.
+   */
+  cardStars: boolean;
+  cardStock: boolean;
+  cardAdd: boolean;
+  cardAddLabel: string;
 };
 
 /**
@@ -895,6 +912,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
   itemGap: 8,
   cardNameWords: 3,
   cardPhotoBg: "#ece8e3",
+  cardStars: true,
+  cardStock: true,
+  cardAdd: true,
+  cardAddLabel: "",
 };
 
 /**
@@ -1704,6 +1725,10 @@ export function normalizeTheme(raw: unknown): AppTheme {
     // replaced.
     cardNameWords: size(s.cardNameWords, DEFAULT_SETTINGS.cardNameWords, 1, 8),
     cardPhotoBg: colour(s.cardPhotoBg, DEFAULT_SETTINGS.cardPhotoBg),
+    cardStars: s.cardStars !== false,
+    cardStock: s.cardStock !== false,
+    cardAdd: s.cardAdd !== false,
+    cardAddLabel: str(s.cardAddLabel).slice(0, 24),
     splashEnabled: Boolean(s.splashEnabled),
     splashImageUrl: str(s.splashImageUrl).slice(0, 500),
     splashBg: colour(s.splashBg, DEFAULT_SETTINGS.splashBg),
