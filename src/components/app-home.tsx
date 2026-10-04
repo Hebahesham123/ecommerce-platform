@@ -260,6 +260,25 @@ function Stars({ score, size = 9, color }: { score: number; size?: number; color
 }
 
 /**
+ * The product a merchant-written item points at, if the catalogue holds it.
+ *
+ * A deal is typed by hand - a picture, a price, a link - so it knows nothing
+ * about variants. Finding the product behind the link is what lets the card
+ * put it in the bag instead of only opening it, and a link that matches
+ * nothing simply gets a card that opens.
+ */
+function productFor(item: Item, data: HomeData): Card | null {
+  const pid = str(item.productId);
+  const handle = str(item.handle);
+  if (!pid && !handle) return null;
+  const all = [...(data.newArrivals ?? []), ...Object.values(data.rows ?? {}).flat()];
+  return (
+    all.find((c) => c.id === pid || c.handle === pid) ??
+    (pid ? null : (all.find((c) => c.handle === handle) ?? null))
+  );
+}
+
+/**
  * The name, minus the brand that is already printed above it.
  *
  * "LOUIS VUITTON" over "Louis Vuitton Pochette Voyage" means the three words
@@ -387,14 +406,6 @@ function Tile({
       <button onClick={() => onOpen?.(card.id)} className="block w-full text-start">
         <span className="relative block p-1.5">
           <Thumb src={card.image} className={`${ratio} rounded-xl`} fit={fit} blend />
-          {off > 0 && (
-            <span
-              className="absolute bottom-1 start-1 rounded-md px-1.5 py-0.5 text-[10px] font-bold text-white shadow-sm"
-              style={{ background: accent }}
-            >
-              −{off}%
-            </span>
-          )}
         </span>
         <span className={`block ps-2 pb-2 ${canAdd && !style.add ? "pe-9" : "pe-2"}`}>
           {card.vendor && (
@@ -450,6 +461,18 @@ function Tile({
           )}
         </span>
       </button>
+
+      {/* Across from the heart and measured from the same edge, so the two
+          things stamped on a photo sit on one line. The corner the saving
+          used to sit in is where the eye arrives last. */}
+      {off > 0 && (
+        <span
+          className="pointer-events-none absolute start-2 top-2 rounded-md px-1.5 py-0.5 text-[10px] font-bold text-white shadow-sm"
+          style={{ background: accent }}
+        >
+          −{off}%
+        </span>
+      )}
 
       {onWish && (
         <button
@@ -2336,6 +2359,7 @@ function CountdownDeals({
 }) {
   const s = block.settings ?? {};
   const go = opener(data, handlers);
+  const cards = useContext(CardStyle);
   const parts = useCountdownParts(int(s.endsInMinutes, 135));
   const units = ar ? ["س", "د", "ث"] : ["H", "M", "S"];
   const radius = int(s.radius, 14);
@@ -2400,13 +2424,18 @@ function CountdownDeals({
           const borrowed = inherit(item, data);
           const claimed = str(item.claimed);
           const pct = Math.max(0, Math.min(100, parseInt(claimed, 10) || 0));
+          // What this deal is, as a product, when it points at one. A deal
+          // with a single variant can go straight in the bag; anything else
+          // opens, for the same reason the product cards do.
+          const product = productFor(item, data);
+          const single = product?.variantId != null && (product?.variantCount ?? 1) === 1;
           return (
-            <button
+            <div
               key={item.id}
-              onClick={() => go(item)}
               className="flex shrink-0 flex-col overflow-hidden border border-slate-200 bg-white text-start"
               style={{ borderRadius: radius, width: lead ? 224 : 158 }}
             >
+            <button onClick={() => go(item)} className="flex flex-1 flex-col text-start">
               {/* The picture takes whatever height the row settles on, so the
                   prices line up across it and a featured card leads by being
                   wider rather than by leaving a step behind it. */}
@@ -2450,6 +2479,41 @@ function CountdownDeals({
                 )}
               </span>
             </button>
+            {/* The same button the product cards carry. A deal nobody can add
+                without choosing a size says so and opens instead. */}
+            {cards.add && (handlers.onAddToCart || handlers.onOpenProduct) && (
+              <button
+                onClick={() =>
+                  single && product?.variantId
+                    ? handlers.onAddToCart?.(product.variantId, product.id)
+                    : go(item)
+                }
+                className="mx-2 mb-2 flex h-8 items-center justify-center gap-1 rounded-lg text-[11px] font-bold uppercase tracking-[0.08em] text-white transition active:scale-[0.98]"
+                style={{ background: accent }}
+              >
+                {single ? (
+                  <>
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="h-3 w-3"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                      aria-hidden
+                    >
+                      <path d="M12 5v14M5 12h14" />
+                    </svg>
+                    {str(cards.addLabel) || (ar ? "أضيفي" : "Add to bag")}
+                  </>
+                ) : ar ? (
+                  "تسوّقي"
+                ) : (
+                  "Shop now"
+                )}
+              </button>
+            )}
+            </div>
           );
         })}
       </div>
