@@ -12,6 +12,7 @@ import type { ReturnRequest } from "@/lib/returns";
 import { sendOrderInvoiceEmail } from "@/lib/order-invoice";
 import { isMailerReady } from "@/lib/mailer";
 import { phoneVariants } from "@/lib/phone";
+import { postOrderSaleToJournal } from "@/lib/accounting/post-order";
 
 export type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -221,20 +222,10 @@ export async function collectPayment(
       p_note: input.note || null,
     });
     if (error) return { ok: false, error: mapRpcError(error.message) };
-    // Every payment is cash in — post it to accounting so the books show what
-    // was paid and by which method (courier COD posts its own entry on confirm).
-    try {
-      await supabase.from("accounting_entries").insert({
-        order_number: orderNumber,
-        type: "cash_in",
-        method: input.method || "cash",
-        amount: input.amount,
-        net: input.amount,
-        note: input.note || "Payment collected",
-      });
-    } catch {
-      /* accounting is a ledger, never the thing that fails a payment */
-    }
+    // Every payment is cash in — post a balanced journal entry to the books so
+    // Accounting shows what was paid and by which method (courier COD posts on
+    // confirm instead).
+    await postOrderSaleToJournal({ method: input.method || "cash", amount: input.amount, orderNumber, note: input.note || "تحصيل طلب" });
     return { ok: true, data: { amountPaid: n((data as Row).amount_paid), balance: n((data as Row).balance), paymentStatus: s((data as Row).payment_status) } };
   } catch (e) {
     return { ok: false, error: (e as Error).message };

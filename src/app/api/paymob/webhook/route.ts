@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
 import { getPaymobConfig, verifyPaymobHmac } from "@/lib/paymob-server";
+import { postOrderSaleToJournal } from "@/lib/accounting/post-order";
 
 /**
  * Paymob transaction webhook.
@@ -83,19 +84,8 @@ export async function POST(req: Request) {
     });
     if (!error) {
       await supabase.from("paymob_payments").update({ status: "paid", transaction_id: txnId, updated_at: new Date().toISOString() }).eq("special_reference", mapping.special_reference);
-      // Card payment is cash in — post it to accounting (method: card).
-      try {
-        await supabase.from("accounting_entries").insert({
-          order_number: mapping.order_number,
-          type: "cash_in",
-          method: "card",
-          amount,
-          net: amount,
-          note: "Paymob card payment",
-        });
-      } catch {
-        /* ledger insert is best-effort */
-      }
+      // Card payment is cash in — post a balanced journal entry (Debit card clearing, Credit sales).
+      await postOrderSaleToJournal({ method: "card", amount, orderNumber: mapping.order_number, note: "دفع بالبطاقة (باي موب)" });
     }
   } else {
     await supabase.from("paymob_payments").update({ status: "failed", transaction_id: txnId, updated_at: new Date().toISOString() }).eq("special_reference", mapping.special_reference);

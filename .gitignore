@@ -43,3 +43,8 @@ products_export.csv
 
 # Files Claude delivers into the chat
 Claude outputs/
+
+# Reference app the native /accounting was ported from (not part of the build)
+newaccounting/
+courriersystem-main*.zip
+newaccounting.zip

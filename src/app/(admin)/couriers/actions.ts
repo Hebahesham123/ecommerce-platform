@@ -2,6 +2,7 @@
 
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
 import { hashPin } from "@/lib/courier-session";
+import { postOrderSaleToJournal } from "@/lib/accounting/post-order";
 import type { Courier, Shipment, ShipmentStatus } from "@/lib/courier";
 
 export type ActionResult<T = void> = { ok: true; data: T } | { ok: false; error: string };
@@ -225,17 +226,11 @@ export async function confirmCourierReport(orderNumber: string): Promise<ActionR
       }
       await supabase.from("store_orders").update({ fulfillment_status: "delivered" }).eq("order_number", orderNumber);
 
-      const { error: accErr } = await supabase.from("accounting_entries").insert({
-        order_number: orderNumber,
-        type: "cash_in",
-        method: "cod",
-        amount: cash,
-        courier_id: sn(ship.courier_id),
-        courier_fee: fee,
-        net: cash - fee,
-        note: "COD collected on delivery",
-      });
-      accounted = !accErr;
+      // Post the collected cash to the double-entry books (Debit خزينة, Credit مبيعات).
+      if (cash > 0) {
+        await postOrderSaleToJournal({ method: "cod", amount: cash, orderNumber, note: "تحصيل عند التسليم" });
+        accounted = true;
+      }
     } else if (newStatus === "returned") {
       await supabase.from("store_orders").update({ fulfillment_status: "returned" }).eq("order_number", orderNumber);
     }
