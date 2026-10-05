@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Modal, Field, fieldClass } from "@/components/modal";
-import { IcCourier, IcLocation, IcCash, IcX } from "@/components/icons";
-import { SHIPMENT_STATUS, REPORT_OPTIONS, COLLECTION_METHODS, COLLECTED_STATUSES, type Shipment, type Courier, type ReportStatus, type ShipmentStatus } from "@/lib/courier";
+import { IcCourier, IcLocation, IcCash, IcX, IcPlus, IcTrash } from "@/components/icons";
+import { SHIPMENT_STATUS, REPORT_OPTIONS, COLLECTION_METHODS, COLLECTED_STATUSES, collectionMethodLabel, type Shipment, type Courier, type ReportStatus, type ShipmentStatus } from "@/lib/courier";
 import { courierLogin, courierLogout, getMyAssignments, submitMyReport, uploadCourierProof } from "./actions";
 
 /**
@@ -147,6 +147,29 @@ function ShipmentCard({ s, ar, onReport }: { s: Shipment; ar: boolean; onReport?
       )}
       {s.phone && <a href={`tel:${s.phone}`} className="mt-1 inline-block text-xs font-medium text-brand-600" dir="ltr">{s.phone}</a>}
 
+      {s.items && s.items.length > 0 && (
+        <div className="mt-3 rounded-xl bg-slate-50 p-2.5">
+          <div className="flex items-center gap-2 overflow-x-auto">
+            {s.items.slice(0, 5).map((it, i) => (
+              <div key={i} className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-white">
+                {it.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={it.imageUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <span className="grid h-full w-full place-items-center text-[10px] text-slate-400">—</span>
+                )}
+                <span className="absolute -end-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-brand-600 px-1 text-[9px] font-bold text-white">{it.quantity}</span>
+              </div>
+            ))}
+            {s.items.length > 5 && <span className="shrink-0 text-xs text-slate-400">+{s.items.length - 5}</span>}
+          </div>
+          <div className="mt-2 flex items-center justify-between text-xs">
+            <span className="text-slate-500">{ar ? "المطلوب تحصيله" : "To collect"}</span>
+            <span className="font-bold text-slate-900">{egp(s.collectAmount ?? s.orderTotal ?? 0, ar)}</span>
+          </div>
+        </div>
+      )}
+
       {s.reportedStatus ? (
         <div className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">
           {ar ? "تم الإرسال — بانتظار تأكيد المتجر" : "Submitted — waiting for the shop to confirm"}
@@ -201,10 +224,12 @@ function LoginScreen({ ar, setAr, onLoggedIn }: { ar: boolean; setAr: (v: boolea
   );
 }
 
+type Part = { amount: string; method: string };
+
 function ReportModal({ ar, shipment, onClose, onDone }: { ar: boolean; shipment: Shipment; onClose: () => void; onDone: () => void }) {
+  const target = shipment.collectAmount ?? shipment.orderTotal ?? 0;
   const [status, setStatus] = useState<ReportStatus>("delivered");
-  const [cash, setCash] = useState(String(shipment.orderTotal ?? ""));
-  const [method, setMethod] = useState("cash");
+  const [parts, setParts] = useState<Part[]>([{ amount: target ? String(target) : "", method: "cash" }]);
   const [note, setNote] = useState("");
   const [images, setImages] = useState<string[]>([]);
   const [tags, setTags] = useState<string[]>([]);
@@ -214,6 +239,20 @@ function ReportModal({ ar, shipment, onClose, onDone }: { ar: boolean; shipment:
   const [err, setErr] = useState<string | null>(null);
 
   const collected = COLLECTED_STATUSES.includes(status as ShipmentStatus);
+  const partsSum = parts.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+  const items = shipment.items ?? [];
+  const adminPlan = (shipment.payments ?? []).filter((p) => p.actor === "admin" && p.kind === "payment");
+  const deposit = shipment.depositPlanned ?? 0;
+
+  function setPart(i: number, patch: Partial<Part>) {
+    setParts((prev) => prev.map((p, j) => (j === i ? { ...p, ...patch } : p)));
+  }
+  function addPart() {
+    setParts((prev) => [...prev, { amount: "", method: "cash" }]);
+  }
+  function removePart(i: number) {
+    setParts((prev) => (prev.length <= 1 ? prev : prev.filter((_, j) => j !== i)));
+  }
 
   function addTag(raw: string) {
     const t = raw.trim();
@@ -245,10 +284,14 @@ function ReportModal({ ar, shipment, onClose, onDone }: { ar: boolean; shipment:
 
   async function submit() {
     setBusy(true); setErr(null);
+    const payments = parts
+      .map((p) => ({ amount: Number(p.amount) || 0, method: p.method }))
+      .filter((p) => p.amount > 0);
     const res = await submitMyReport(shipment.id, {
       status,
-      cashCollected: Number(cash) || 0,
-      method,
+      cashCollected: collected ? payments.reduce((sum, p) => sum + p.amount, 0) : 0,
+      method: payments[0]?.method ?? "cash",
+      payments: collected ? payments : undefined,
       note,
       proofUrl: images[0] ?? null,
       images,
@@ -273,6 +316,63 @@ function ReportModal({ ar, shipment, onClose, onDone }: { ar: boolean; shipment:
       }
     >
       <div className="space-y-3">
+        {/* The real order: what the courier is delivering + collecting. */}
+        {items.length > 0 && (
+          <div className="rounded-xl border border-line bg-surface-page/50">
+            <div className="border-b border-line px-3 py-2 text-xs font-semibold text-ink-muted">{ar ? "الأصناف المُسلَّمة" : "Items to deliver"}</div>
+            <div className="divide-y divide-line">
+              {items.map((it, i) => (
+                <div key={i} className="flex items-center gap-2.5 px-3 py-2">
+                  <div className="h-11 w-11 shrink-0 overflow-hidden rounded-lg border border-line bg-white">
+                    {it.imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={it.imageUrl} alt="" className="h-full w-full object-cover" />
+                    ) : null}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="line-clamp-1 text-sm font-medium text-ink">{it.productName}</div>
+                    {it.variantTitle && <div className="text-[11px] text-ink-soft">{it.variantTitle}</div>}
+                  </div>
+                  <div className="text-end text-xs">
+                    <div className="text-ink-muted">{egp(it.price, ar)} × {it.quantity}</div>
+                    <div className="font-semibold text-ink">{egp(it.price * it.quantity, ar)}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="space-y-1 border-t border-line px-3 py-2 text-xs">
+              {(shipment.discountAmount ?? 0) > 0 && (
+                <div className="flex items-center justify-between text-emerald-700">
+                  <span>{ar ? "خصم" : "Discount"}{shipment.discountCode ? ` · ${shipment.discountCode}` : ""}</span>
+                  <span>-{egp(shipment.discountAmount ?? 0, ar)}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between font-bold text-slate-900">
+                <span>{ar ? "المطلوب تحصيله" : "To collect"}</span>
+                <span>{egp(target, ar)}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* The shop's deposit + planned split, so the courier knows the plan. */}
+        {(deposit > 0 || adminPlan.length > 0) && (
+          <div className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            {deposit > 0 && <div className="flex items-center justify-between"><span>{ar ? "وديعة" : "Deposit"}</span><span className="font-semibold">{egp(deposit, ar)}</span></div>}
+            {adminPlan.length > 0 && (
+              <div className="mt-1">
+                <div className="mb-0.5 font-semibold">{ar ? "خطة التحصيل من المتجر" : "Shop's collection plan"}</div>
+                {adminPlan.map((p, i) => (
+                  <div key={i} className="flex items-center justify-between">
+                    <span>{collectionMethodLabel(p.method, ar)}</span>
+                    <span>{egp(p.amount, ar)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         <Field label={ar ? "الحالة" : "Outcome"}>
           <div className="grid grid-cols-2 gap-2">
             {REPORT_OPTIONS.map((o) => (
@@ -283,20 +383,43 @@ function ReportModal({ ar, shipment, onClose, onDone }: { ar: boolean; shipment:
           </div>
         </Field>
         {collected && (
-          <>
-            <Field label={ar ? "المبلغ المُحصَّل" : "Amount collected"}>
-              <input value={cash} onChange={(e) => setCash(e.target.value.replace(/[^\d.]/g, ""))} inputMode="decimal" dir="ltr" className={fieldClass} />
-            </Field>
-            <Field label={ar ? "طريقة التحصيل" : "Collected by"}>
-              <div className="grid grid-cols-3 gap-2">
-                {COLLECTION_METHODS.map((m) => (
-                  <button key={m.value} type="button" onClick={() => setMethod(m.value)} className={`rounded-xl border px-2 py-2 text-xs font-medium transition ${method === m.value ? "border-brand-500 bg-brand-50 text-brand-700" : "border-line text-ink-muted"}`}>
-                    {ar ? m.ar : m.en}
+          <Field label={ar ? "المبلغ المُحصَّل (يمكن تقسيمه)" : "Amount collected (can be split)"}>
+            <div className="space-y-2">
+              {parts.map((p, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <input
+                    value={p.amount}
+                    onChange={(e) => setPart(i, { amount: e.target.value.replace(/[^\d.]/g, "") })}
+                    inputMode="decimal"
+                    dir="ltr"
+                    placeholder="0"
+                    className={`${fieldClass} flex-1`}
+                  />
+                  <select value={p.method} onChange={(e) => setPart(i, { method: e.target.value })} className={`${fieldClass} w-28`}>
+                    {COLLECTION_METHODS.map((m) => (
+                      <option key={m.value} value={m.value}>{ar ? m.ar : m.en}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => removePart(i)}
+                    disabled={parts.length <= 1}
+                    className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-line text-ink-soft disabled:opacity-30"
+                    aria-label={ar ? "إزالة" : "Remove"}
+                  >
+                    <IcTrash className="h-4 w-4" />
                   </button>
-                ))}
+                </div>
+              ))}
+              <button type="button" onClick={addPart} className="flex items-center gap-1 text-xs font-medium text-brand-600">
+                <IcPlus className="h-3.5 w-3.5" /> {ar ? "إضافة طريقة دفع" : "Add a payment method"}
+              </button>
+              <div className={`flex items-center justify-between rounded-lg px-2.5 py-1.5 text-xs ${Math.abs(partsSum - target) < 0.01 ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
+                <span>{ar ? "الإجمالي" : "Total"}: <span className="font-bold">{egp(partsSum, ar)}</span></span>
+                <span>{ar ? "المطلوب" : "Target"}: {egp(target, ar)}</span>
               </div>
-            </Field>
-          </>
+            </div>
+          </Field>
         )}
 
         {/* Proof of delivery photos (one or more) */}

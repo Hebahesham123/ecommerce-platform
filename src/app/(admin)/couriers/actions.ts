@@ -4,7 +4,7 @@ import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
 import { hashPin } from "@/lib/courier-session";
 import { queuePendingEntry } from "@/lib/accounting/post-order";
 import { logCourierAction } from "@/lib/courier-log";
-import { COLLECTED_STATUSES, type Courier, type Shipment, type ShipmentStatus } from "@/lib/courier";
+import { COLLECTED_STATUSES, type Courier, type Shipment, type ShipmentPayment, type ShipmentStatus } from "@/lib/courier";
 
 export type ActionResult<T = void> = { ok: true; data: T } | { ok: false; error: string };
 
@@ -23,7 +23,38 @@ function mapCourier(r: Row): Courier {
   return { id: s(r.id), name: s(r.name), phone: s(r.phone), zone: sn(r.zone), active: r.active !== false, createdAt: s(r.created_at) };
 }
 
-function mapShipment(r: Row): Shipment {
+function mapPayment(r: Row): ShipmentPayment {
+  return {
+    amount: n(r.amount),
+    method: s(r.method) || "cash",
+    kind: (s(r.kind) as ShipmentPayment["kind"]) || "payment",
+    actor: sn(r.actor),
+  };
+}
+
+/** Load the split-payment rows for a set of shipments, grouped by shipment id. */
+async function paymentsByShipment(shipmentIds: string[]): Promise<Map<string, ShipmentPayment[]>> {
+  const map = new Map<string, ShipmentPayment[]>();
+  const ids = Array.from(new Set(shipmentIds.filter(Boolean)));
+  if (!ids.length) return map;
+  const supabase = getServerSupabase();
+  for (let i = 0; i < ids.length; i += 300) {
+    const { data, error } = await supabase
+      .from("shipment_payments")
+      .select("shipment_id,amount,method,kind,actor")
+      .in("shipment_id", ids.slice(i, i + 300));
+    if (error) return map; // migration 0051 not applied → no splits
+    for (const p of (data ?? []) as Row[]) {
+      const sid = s(p.shipment_id);
+      const arr = map.get(sid) ?? [];
+      arr.push(mapPayment(p));
+      map.set(sid, arr);
+    }
+  }
+  return map;
+}
+
+function mapShipment(r: Row, payments?: ShipmentPayment[]): Shipment {
   const courier = (r.couriers ?? null) as Row | null;
   return {
     id: s(r.id),
@@ -53,6 +84,8 @@ function mapShipment(r: Row): Shipment {
     confirmedAt: sn(r.confirmed_at),
     settledAt: sn(r.settled_at),
     assignedAt: s(r.assigned_at),
+    payments: payments ?? undefined,
+    depositPlanned: n(r.deposit_fee),
   };
 }
 
@@ -131,7 +164,9 @@ export async function listShipments(): Promise<ActionResult<Shipment[]>> {
       .order("assigned_at", { ascending: false })
       .limit(500);
     if (error) return { ok: false, error: missing(error) ? "migration_missing" : error.message };
-    return { ok: true, data: (data ?? []).map(mapShipment) };
+    const rows = (data ?? []) as Row[];
+    const pays = await paymentsByShipment(rows.map((r) => s(r.id)));
+    return { ok: true, data: rows.map((r) => mapShipment(r, pays.get(s(r.id)))) };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }
@@ -146,7 +181,9 @@ export async function getShipmentForOrder(orderNumber: string): Promise<ActionRe
       .eq("order_number", orderNumber)
       .maybeSingle();
     if (error) return { ok: false, error: missing(error) ? "migration_missing" : error.message };
-    return { ok: true, data: data ? mapShipment(data as Row) : null };
+    if (!data) return { ok: true, data: null };
+    const pays = await paymentsByShipment([s((data as Row).id)]);
+    return { ok: true, data: mapShipment(data as Row, pays.get(s((data as Row).id))) };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }
@@ -233,6 +270,67 @@ export async function updateShipmentFees(
   }
 }
 
+/**
+ * The admin's split-payment PLAN for an order's shipment: how the collection
+ * should be broken down across methods, plus an optional deposit. Replaces any
+ * previous admin plan (actor='admin') and is what the courier sees in their
+ * portal. The courier's own parts (actor='courier') are left untouched.
+ */
+export async function setShipmentPayments(
+  orderNumber: string,
+  input: { parts: { amount: number; method: string }[]; deposit?: number },
+): Promise<ActionResult> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  try {
+    const supabase = getServerSupabase();
+    const { data: ship, error: shErr } = await supabase
+      .from("courier_shipments")
+      .select("id,order_id")
+      .eq("order_number", orderNumber)
+      .maybeSingle();
+    if (shErr) return { ok: false, error: missing(shErr) ? "migration_missing" : shErr.message };
+    if (!ship) return { ok: false, error: "not_assigned" };
+    const shipmentId = s(ship.id);
+
+    const parts = (Array.isArray(input.parts) ? input.parts : [])
+      .map((p) => ({ amount: Math.max(0, n(p.amount)), method: String(p.method || "cash") }))
+      .filter((p) => p.amount > 0);
+
+    // Replace the admin plan rows.
+    const { error: delErr } = await supabase.from("shipment_payments").delete().eq("shipment_id", shipmentId).eq("actor", "admin");
+    if (delErr) return { ok: false, error: missing(delErr) ? "migration_missing" : delErr.message };
+    if (parts.length) {
+      const { error: insErr } = await supabase.from("shipment_payments").insert(
+        parts.map((p) => ({
+          shipment_id: shipmentId,
+          order_number: orderNumber,
+          amount: p.amount,
+          method: p.method,
+          kind: "payment",
+          actor: "admin",
+        })),
+      );
+      if (insErr) return { ok: false, error: insErr.message };
+    }
+
+    if (input.deposit !== undefined) {
+      await supabase.from("courier_shipments").update({ deposit_fee: Math.max(0, n(input.deposit)) }).eq("id", shipmentId);
+    }
+
+    const planSum = parts.reduce((sum, p) => sum + p.amount, 0);
+    await logCourierAction({
+      actor: "staff",
+      action: "shipment_payments",
+      targetType: "shipment",
+      orderNumber,
+      detail: `plan ${parts.length} part(s) · ${planSum}${input.deposit !== undefined ? ` · deposit ${Math.max(0, n(input.deposit))}` : ""}`,
+    });
+    return { ok: true, data: undefined };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
 export type ConfirmResult = { status: ShipmentStatus; recorded: number; accounted: boolean };
 
 /**
@@ -309,9 +407,30 @@ export async function confirmCourierReport(orderNumber: string): Promise<ActionR
       }
 
       // Queue the collected cash for the accountant to confirm into the books,
-      // tagged by how the courier collected it (cash / visa / wallet / …).
+      // tagged by how the courier collected it. If the courier split the
+      // collection, queue one entry per part (each with its own method);
+      // otherwise fall back to the single collected method. The sum equals
+      // cash_collected either way.
       if (cash > 0) {
-        await queuePendingEntry({ source: "cod", method, amount: cash, orderNumber, courierId: sn(ship.courier_id), note: "تحصيل عند التسليم" });
+        let courierParts: { amount: number; method: string }[] = [];
+        const { data: pays, error: payErr } = await supabase
+          .from("shipment_payments")
+          .select("amount,method")
+          .eq("shipment_id", s(ship.id))
+          .eq("actor", "courier")
+          .eq("kind", "payment");
+        if (!payErr) {
+          courierParts = (pays ?? [])
+            .map((p: Row) => ({ amount: n(p.amount), method: s(p.method) || "cash" }))
+            .filter((p) => p.amount > 0);
+        }
+        if (courierParts.length) {
+          for (const p of courierParts) {
+            await queuePendingEntry({ source: "cod", method: p.method, amount: p.amount, orderNumber, courierId: sn(ship.courier_id), note: "تحصيل عند التسليم" });
+          }
+        } else {
+          await queuePendingEntry({ source: "cod", method, amount: cash, orderNumber, courierId: sn(ship.courier_id), note: "تحصيل عند التسليم" });
+        }
         accounted = true;
       }
     }

@@ -9,7 +9,7 @@ import {
   verifyPin,
 } from "@/lib/courier-session";
 import { logCourierAction } from "@/lib/courier-log";
-import { COLLECTED_STATUSES, type Courier, type Shipment, type ReportStatus, type ShipmentStatus } from "@/lib/courier";
+import { COLLECTED_STATUSES, type Courier, type Shipment, type ShipmentItem, type ShipmentPayment, type ReportStatus, type ShipmentStatus } from "@/lib/courier";
 
 export type ActionResult<T = void> = { ok: true; data: T } | { ok: false; error: string };
 
@@ -55,12 +55,75 @@ export async function getMyAssignments(): Promise<ActionResult<CourierHome>> {
 
     const { data: ships } = await supabase
       .from("courier_shipments")
-      .select("*, store_orders(total,customer_name,address,city,governorate,phone)")
+      .select("*, store_orders(total,amount_paid,discount_amount,discount_code,shipping,customer_name,address,city,governorate,phone)")
       .eq("courier_id", courierId)
       .order("assigned_at", { ascending: false });
 
+    // The real order the courier delivers: line items (with images) per order,
+    // and the split-payment plan / collected parts per shipment. Both are
+    // best-effort — a missing migration or empty order simply shows nothing.
+    const orderIds = Array.from(new Set((ships ?? []).map((r: Row) => s(r.order_id)).filter(Boolean)));
+    const shipIds = Array.from(new Set((ships ?? []).map((r: Row) => s(r.id)).filter(Boolean)));
+
+    const itemsByOrder = new Map<string, Row[]>();
+    if (orderIds.length) {
+      const { data: items } = await supabase
+        .from("store_order_items")
+        .select("order_id,product_name,variant_title,sku,image_url,price,quantity,fulfilled_quantity")
+        .in("order_id", orderIds);
+      for (const it of (items ?? []) as Row[]) {
+        const oid = s(it.order_id);
+        const arr = itemsByOrder.get(oid) ?? [];
+        arr.push(it);
+        itemsByOrder.set(oid, arr);
+      }
+    }
+
+    const paymentsByShip = new Map<string, ShipmentPayment[]>();
+    if (shipIds.length) {
+      const { data: pays } = await supabase
+        .from("shipment_payments")
+        .select("shipment_id,amount,method,kind,actor")
+        .in("shipment_id", shipIds);
+      for (const p of (pays ?? []) as Row[]) {
+        const sid = s(p.shipment_id);
+        const arr = paymentsByShip.get(sid) ?? [];
+        arr.push({ amount: n(p.amount), method: s(p.method) || "cash", kind: (s(p.kind) as ShipmentPayment["kind"]) || "payment", actor: sn(p.actor) });
+        paymentsByShip.set(sid, arr);
+      }
+    }
+
     const shipments: Shipment[] = (ships ?? []).map((r: Row): Shipment => {
       const o = (r.store_orders ?? null) as Row | null;
+
+      // Build the delivered line items. If anything on the order is fulfilled,
+      // the courier delivers ONLY the fulfilled lines (shown at their fulfilled
+      // quantity) and collects just that amount. Otherwise it's a normal COD:
+      // the whole order, collecting the outstanding balance. Zero-qty lines drop.
+      const allLines: ShipmentItem[] = (itemsByOrder.get(s(r.order_id)) ?? [])
+        .map((it): ShipmentItem => ({
+          productName: s(it.product_name) || "—",
+          variantTitle: sn(it.variant_title),
+          sku: sn(it.sku),
+          imageUrl: sn(it.image_url),
+          price: n(it.price),
+          quantity: n(it.quantity),
+          fulfilledQuantity: n(it.fulfilled_quantity),
+        }))
+        .filter((it) => it.quantity > 0);
+      const anyFulfilled = allLines.some((it) => it.fulfilledQuantity > 0);
+      let items: ShipmentItem[];
+      let collectAmount: number;
+      if (anyFulfilled) {
+        items = allLines
+          .filter((it) => it.fulfilledQuantity > 0)
+          .map((it) => ({ ...it, quantity: it.fulfilledQuantity }));
+        collectAmount = items.reduce((sum, it) => sum + it.price * it.quantity, 0);
+      } else {
+        items = allLines;
+        collectAmount = Math.max(0, n(o?.total) - n(o?.amount_paid));
+      }
+
       return {
         id: s(r.id),
         orderId: s(r.order_id),
@@ -95,6 +158,13 @@ export async function getMyAssignments(): Promise<ActionResult<CourierHome>> {
         city: o ? sn(o.city) : null,
         governorate: o ? sn(o.governorate) : null,
         phone: o ? sn(o.phone) : null,
+        items,
+        discountAmount: o ? n(o.discount_amount) : 0,
+        discountCode: o ? sn(o.discount_code) : null,
+        shipping: o ? n(o.shipping) : 0,
+        collectAmount,
+        payments: paymentsByShip.get(s(r.id)) ?? [],
+        depositPlanned: n(r.deposit_fee),
       };
     });
 
@@ -120,6 +190,8 @@ export async function submitMyReport(
     proofUrl?: string | null;
     images?: string[];
     tags?: string[];
+    /** When present, the collection is split into these parts (each its own method). */
+    payments?: { amount: number; method: string }[];
   },
 ): Promise<ActionResult> {
   if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
@@ -135,7 +207,42 @@ export async function submitMyReport(
     if (!ship || s(ship.courier_id) !== courierId) return { ok: false, error: "not_your_shipment" };
 
     const collected = COLLECTED_STATUSES.includes(input.status as ShipmentStatus);
-    const cash = collected ? Math.max(0, n(input.cashCollected)) : 0;
+
+    // A split collection: each part its own method. Sanitise, then the report's
+    // cash is their sum and the back-compat single method is the first part's.
+    const parts = (Array.isArray(input.payments) ? input.payments : [])
+      .map((p) => ({ amount: Math.max(0, n(p.amount)), method: String(p.method || "cash") }))
+      .filter((p) => p.amount > 0);
+    const hasParts = collected && parts.length > 0;
+    const cash = collected
+      ? hasParts
+        ? parts.reduce((sum, p) => sum + p.amount, 0)
+        : Math.max(0, n(input.cashCollected))
+      : 0;
+    const method = collected ? (hasParts ? parts[0].method : input.method || "cash") : null;
+
+    // Record the courier's split in shipment_payments: replace any previous
+    // courier parts for this shipment with the new ones. Best-effort — a missing
+    // migration (0051) must never block a plain report.
+    if (collected) {
+      try {
+        await supabase.from("shipment_payments").delete().eq("shipment_id", shipmentId).eq("actor", "courier");
+        if (hasParts) {
+          await supabase.from("shipment_payments").insert(
+            parts.map((p) => ({
+              shipment_id: shipmentId,
+              order_number: s(ship.order_number),
+              amount: p.amount,
+              method: p.method,
+              kind: "payment",
+              actor: "courier",
+            })),
+          );
+        }
+      } catch {
+        /* split payments are additive; never fail the report on them */
+      }
+    }
 
     // Multiple courier photos → reported_images; the first also fills the single
     // proof field so the existing proof display keeps working.
@@ -152,7 +259,7 @@ export async function submitMyReport(
       .update({
         reported_status: input.status,
         reported_cash: cash,
-        reported_method: collected ? input.method || "cash" : null,
+        reported_method: method,
         reported_note: input.note?.trim() || null,
         reported_proof_url: proof,
         reported_images: images,

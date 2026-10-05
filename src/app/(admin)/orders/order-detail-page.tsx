@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useI18n, egp, num } from "@/lib/i18n";
 import { slotLabel } from "@/lib/offers";
-import { IcCash, IcCourier, IcChevron, IcX, IcRedo, IcRefresh, IcEdit, IcMail, IcFile, IcLink } from "@/components/icons";
+import { IcCash, IcCourier, IcChevron, IcX, IcRedo, IcRefresh, IcEdit, IcMail, IcFile, IcLink, IcPlus, IcTrash } from "@/components/icons";
 import { kindLabel, statusLabel } from "@/lib/returns";
 import type { ReturnRequest } from "@/lib/returns";
 import type { InventoryItem } from "@/lib/inventory";
@@ -35,8 +35,8 @@ import {
 } from "./actions";
 import type { ReturnableLine } from "@/lib/returns-service";
 import { createPaymobCheckout } from "../payments/actions";
-import { getShipmentForOrder, assignOrderToCourier, confirmCourierReport, listCouriers, updateShipmentFees } from "../couriers/actions";
-import { SHIPMENT_STATUS, collectionMethodLabel, type Shipment, type Courier } from "@/lib/courier";
+import { getShipmentForOrder, assignOrderToCourier, confirmCourierReport, listCouriers, updateShipmentFees, setShipmentPayments } from "../couriers/actions";
+import { SHIPMENT_STATUS, COLLECTION_METHODS, collectionMethodLabel, type Shipment, type Courier } from "@/lib/courier";
 import { Modal, Field, fieldClass } from "@/components/modal";
 import {
   paymentMeta,
@@ -394,8 +394,12 @@ export function OrderDetailPage({ orderNumber, basePath }: { orderNumber: string
                     <div className="text-xs text-ink-soft">{ar ? "بانتظار تحديث المندوب من بوابته." : "Waiting for the courier to update from their portal."}</div>
                   )}
 
-                  {/* Admin fees / tags / comment */}
-                  {(shipment.holdFee > 0 || shipment.depositFee > 0 || shipment.tags.length > 0 || shipment.adminComment) && (
+                  {/* Admin fees / split plan / tags / comment */}
+                  {(() => {
+                    const adminPlan = (shipment.payments ?? []).filter((p) => p.actor === "admin" && p.kind === "payment");
+                    const hasAnything = shipment.holdFee > 0 || shipment.depositFee > 0 || shipment.tags.length > 0 || !!shipment.adminComment || adminPlan.length > 0;
+                    if (!hasAnything) return null;
+                    return (
                     <div className="space-y-2 rounded-xl border border-line bg-surface-page/60 p-3">
                       {(shipment.holdFee > 0 || shipment.depositFee > 0) && (
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
@@ -416,6 +420,18 @@ export function OrderDetailPage({ orderNumber, basePath }: { orderNumber: string
                           )}
                         </div>
                       )}
+                      {adminPlan.length > 0 && (
+                        <div className="text-xs">
+                          <div className="mb-1 font-medium text-ink-soft">{ar ? "خطة تقسيم الدفع" : "Split payment plan"}</div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {adminPlan.map((p, i) => (
+                              <span key={i} className="rounded-lg bg-surface px-2 py-1 text-ink-muted ring-1 ring-line">
+                                {collectionMethodLabel(p.method, ar)}: <span className="font-semibold text-ink">{egp(p.amount, lang)}</span>
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                       {shipment.tags.length > 0 && (
                         <div className="flex flex-wrap gap-1.5">
                           {shipment.tags.map((tg) => (
@@ -425,7 +441,8 @@ export function OrderDetailPage({ orderNumber, basePath }: { orderNumber: string
                       )}
                       {shipment.adminComment && <div className="text-xs text-ink-muted">{shipment.adminComment}</div>}
                     </div>
-                  )}
+                    );
+                  })()}
 
                   {/* Courier photo gallery */}
                   {shipment.images.length > 0 && (
@@ -988,12 +1005,25 @@ function ShipmentFeesModal({ orderNumber, ar, shipment, onClose, onDone }: {
 }) {
   const [holdFee, setHoldFee] = useState(String(shipment.holdFee || ""));
   const [holdActive, setHoldActive] = useState(shipment.holdActive);
-  const [depositFee, setDepositFee] = useState(String(shipment.depositFee || ""));
+  const [depositFee, setDepositFee] = useState(String(shipment.depositFee || shipment.depositPlanned || ""));
   const [tags, setTags] = useState<string[]>(shipment.tags);
   const [tagInput, setTagInput] = useState("");
   const [comment, setComment] = useState(shipment.adminComment ?? "");
+  // The split-payment PLAN: amount + method rows, prefilled from the saved plan.
+  const adminPlan = (shipment.payments ?? []).filter((p) => p.actor === "admin" && p.kind === "payment");
+  const [parts, setParts] = useState<{ amount: string; method: string }[]>(
+    adminPlan.length ? adminPlan.map((p) => ({ amount: String(p.amount), method: p.method })) : [{ amount: "", method: "cash" }],
+  );
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  const partsSum = parts.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+
+  function setPart(i: number, patch: Partial<{ amount: string; method: string }>) {
+    setParts((prev) => prev.map((p, j) => (j === i ? { ...p, ...patch } : p)));
+  }
+  function addPart() { setParts((prev) => [...prev, { amount: "", method: "cash" }]); }
+  function removePart(i: number) { setParts((prev) => (prev.length <= 1 ? prev : prev.filter((_, j) => j !== i))); }
 
   function addTag(raw: string) {
     const t = raw.trim();
@@ -1004,16 +1034,24 @@ function ShipmentFeesModal({ orderNumber, ar, shipment, onClose, onDone }: {
 
   async function save() {
     setBusy(true); setErr(null);
+    const deposit = Number(depositFee) || 0;
     const res = await updateShipmentFees(orderNumber, {
       holdFee: Number(holdFee) || 0,
       holdActive,
-      depositFee: Number(depositFee) || 0,
+      depositFee: deposit,
       tags,
       adminComment: comment,
     });
+    const parsedParts = parts.map((p) => ({ amount: Number(p.amount) || 0, method: p.method })).filter((p) => p.amount > 0);
+    const payRes = await setShipmentPayments(orderNumber, { parts: parsedParts, deposit });
     setBusy(false);
-    if (res.ok) onDone();
-    else setErr(res.error === "not_assigned" ? (ar ? "لا يوجد شحنة لهذا الطلب." : "No shipment for this order.") : res.error === "migration_missing" ? (ar ? "شغّلي ترحيل 0050." : "Run migration 0050.") : (ar ? "تعذّر الحفظ." : "Couldn't save."));
+    // A split plan needs migration 0051; when the admin set no parts, don't let a
+    // missing table block the existing fees-only save.
+    let bad: { ok: false; error: string } | null = null;
+    if (!res.ok) bad = res;
+    else if (!payRes.ok && (parsedParts.length > 0 || payRes.error !== "migration_missing")) bad = payRes;
+    if (!bad) onDone();
+    else setErr(bad.error === "not_assigned" ? (ar ? "لا يوجد شحنة لهذا الطلب." : "No shipment for this order.") : bad.error === "migration_missing" ? (ar ? "شغّلي ترحيل 0050/0051." : "Run migration 0050/0051.") : (ar ? "تعذّر الحفظ." : "Couldn't save."));
   }
 
   return (
@@ -1043,6 +1081,45 @@ function ShipmentFeesModal({ orderNumber, ar, shipment, onClose, onDone }: {
           <input type="checkbox" checked={holdActive} onChange={(e) => setHoldActive(e.target.checked)} className="h-4 w-4 rounded border-line accent-brand-600" />
           {ar ? "الحجز نشط (يُخصم من المُسلَّم للمحاسبة)" : "Hold is active (netted off accounting hand-in)"}
         </label>
+
+        {/* Split-payment plan: how the courier should collect, by method. */}
+        <Field label={ar ? "خطة تقسيم الدفع (تظهر للمندوب)" : "Split payment plan (shown to the courier)"} hint={ar ? "اختياري — وزّع المبلغ على أكثر من طريقة" : "Optional — spread the amount across methods"}>
+          <div className="space-y-2">
+            {parts.map((p, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <input
+                  value={p.amount}
+                  onChange={(e) => setPart(i, { amount: e.target.value.replace(/[^\d.]/g, "") })}
+                  inputMode="decimal"
+                  dir="ltr"
+                  placeholder="0"
+                  className={`${fieldClass} flex-1`}
+                />
+                <select value={p.method} onChange={(e) => setPart(i, { method: e.target.value })} className={`${fieldClass} w-32`}>
+                  {COLLECTION_METHODS.map((m) => (
+                    <option key={m.value} value={m.value}>{ar ? m.ar : m.en}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => removePart(i)}
+                  disabled={parts.length <= 1}
+                  className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-line text-ink-soft disabled:opacity-30"
+                  aria-label={ar ? "إزالة" : "Remove"}
+                >
+                  <IcTrash className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
+            <div className="flex items-center justify-between">
+              <button type="button" onClick={addPart} className="flex items-center gap-1 text-xs font-medium text-brand-600">
+                <IcPlus className="h-3.5 w-3.5" /> {ar ? "إضافة طريقة" : "Add a method"}
+              </button>
+              {partsSum > 0 && <span className="text-xs text-ink-soft">{ar ? "الإجمالي" : "Total"}: <span className="font-semibold text-ink">{egp(partsSum, ar ? "ar" : "en")}</span></span>}
+            </div>
+          </div>
+        </Field>
+
         <Field label={ar ? "الوسوم" : "Tags"}>
           {tags.length > 0 && (
             <div className="mb-2 flex flex-wrap gap-1.5">

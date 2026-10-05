@@ -15,6 +15,25 @@ export type Courier = {
 export type ShipmentStatus = "assigned" | "out_for_delivery" | "delivered" | "partial" | "canceled" | "postponed" | "part_pickup" | "hand_to_hand" | "failed" | "returned";
 export type ReportStatus = "out_for_delivery" | "delivered" | "partial" | "canceled" | "postponed" | "part_pickup" | "hand_to_hand" | "failed" | "returned";
 
+/** One line of the real order, as the courier sees it on delivery. */
+export type ShipmentItem = {
+  productName: string;
+  variantTitle: string | null;
+  sku: string | null;
+  imageUrl: string | null;
+  price: number;
+  quantity: number;
+  fulfilledQuantity: number;
+};
+
+/** One part of a split collection (or a deposit) on a shipment. */
+export type ShipmentPayment = {
+  amount: number;
+  method: string;
+  kind: "payment" | "deposit";
+  actor: string | null;
+};
+
 export type Shipment = {
   id: string;
   orderId: string;
@@ -50,6 +69,17 @@ export type Shipment = {
   city?: string | null;
   governorate?: string | null;
   phone?: string | null;
+  /** The real order the courier is delivering (split payments + line items). */
+  items?: ShipmentItem[];
+  discountAmount?: number;
+  discountCode?: string | null;
+  shipping?: number;
+  /** What the courier should actually collect (fulfilled amount or balance). */
+  collectAmount?: number;
+  /** Split collection parts + deposit, mapped from shipment_payments. */
+  payments?: ShipmentPayment[];
+  /** The deposit planned on the order (from deposit_fee). */
+  depositPlanned?: number;
 };
 
 export type AccountingEntry = {

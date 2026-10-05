@@ -420,6 +420,7 @@ const NOT_DELIVERED_STATUSES: ShipmentStatus[] = ["canceled", "postponed", "retu
 
 /** A shipment flattened with just the fields the accounting rollups need. */
 type AccRow = {
+  id: string;
   courierId: string | null;
   courierName: string | null;
   status: ShipmentStatus;
@@ -436,6 +437,8 @@ type AccRow = {
   customerName: string | null;
   phone: string | null;
   address: string | null;
+  /** Split-collection parts (courier actor) — attribute to methods when present. */
+  parts: { amount: number; method: string }[];
 };
 
 /** Fetch the shipments (joined to their order) and apply the courier/date filters. */
@@ -467,6 +470,7 @@ async function fetchAccountingRows(input: {
     const courier = (r.couriers ?? null) as Row | null;
     const o = (r.store_orders ?? null) as Row | null;
     rows.push({
+      id: s(r.id),
       courierId: sn(r.courier_id),
       courierName: courier ? sn(courier.name) : null,
       status: (s(r.status) as ShipmentStatus) || "assigned",
@@ -483,7 +487,34 @@ async function fetchAccountingRows(input: {
       customerName: o ? sn(o.customer_name) : null,
       phone: o ? sn(o.phone) : null,
       address: o ? sn(o.address) : null,
+      parts: [],
     });
+  }
+
+  // Attach the courier's split-collection parts, so the payment breakdown can
+  // attribute amounts to the real methods. Best-effort: a missing migration
+  // (0051) just leaves every row with no parts and falls back to the single
+  // collected method. Fetched in chunks to keep the id list manageable.
+  const ids = rows.map((r) => r.id).filter(Boolean);
+  if (ids.length) {
+    const byShip = new Map<string, { amount: number; method: string }[]>();
+    let ok = true;
+    for (let i = 0; i < ids.length && ok; i += 300) {
+      const { data: pays, error: pErr } = await supabase
+        .from("shipment_payments")
+        .select("shipment_id,amount,method")
+        .eq("actor", "courier")
+        .eq("kind", "payment")
+        .in("shipment_id", ids.slice(i, i + 300));
+      if (pErr) { ok = false; break; }
+      for (const p of (pays ?? []) as Row[]) {
+        const sid = s(p.shipment_id);
+        const arr = byShip.get(sid) ?? [];
+        arr.push({ amount: n(p.amount), method: s(p.method) || "cash" });
+        byShip.set(sid, arr);
+      }
+    }
+    if (ok) for (const r of rows) r.parts = byShip.get(r.id) ?? [];
   }
   return { ok: true, rows };
 }
@@ -538,15 +569,29 @@ function computeAccounting(
     }
   }
 
-  // Payment breakdown: one line per collection method. With hold fees excluded,
-  // each order's hold is netted out of the amount counted for its method.
+  // Payment breakdown: one line per collection method. When a shipment has
+  // split-collection parts, each part is attributed to its own method; only
+  // shipments with no parts fall back to the single collected method. With hold
+  // fees excluded, each order's hold is netted off its collected amount (spread
+  // proportionally across its methods when it was split).
   const paymentBreakdown: PaymentBreakdownLine[] = COLLECTION_METHODS.map((m) => {
     let amount = 0;
     let count = 0;
     for (const r of rows) {
-      if (r.collectedMethod !== m.value) continue;
-      amount += r.cashCollected - (opts.includeHoldFees ? 0 : r.holdFee);
-      count += 1;
+      const holdAdj = opts.includeHoldFees ? 0 : r.holdFee;
+      if (r.parts.length) {
+        const mine = r.parts.filter((p) => p.method === m.value);
+        if (!mine.length) continue;
+        const sumMine = mine.reduce((x, p) => x + p.amount, 0);
+        const total = r.parts.reduce((x, p) => x + p.amount, 0);
+        const netFactor = total > 0 ? Math.max(0, 1 - holdAdj / total) : 1;
+        amount += sumMine * netFactor;
+        count += mine.length;
+      } else {
+        if (r.collectedMethod !== m.value) continue;
+        amount += r.cashCollected - holdAdj;
+        count += 1;
+      }
     }
     return { method: m.value, amount, count };
   });
@@ -682,18 +727,37 @@ export async function ordersByMethod(input: {
     if (!res.ok) return { ok: false, error: res.error };
     // "cod" is the rolled-up card → every cash-on-delivery method.
     const methods = input.method === "cod" ? COD_METHODS : [input.method];
-    const lines: OrderLine[] = res.rows
-      .filter((r) => r.collectedMethod != null && methods.includes(r.collectedMethod))
-      .map((r) => ({
-        orderNumber: r.orderNumber,
-        customer: r.customerName,
-        phone: r.phone,
-        address: r.address,
-        orderTotal: r.orderTotal,
-        collected: r.cashCollected,
-        status: r.status,
-        method: r.collectedMethod,
-      }));
+    // A split shipment contributes one line per matching part (its own amount);
+    // an unsplit one contributes a single line from its collected method.
+    const lines: OrderLine[] = [];
+    for (const r of res.rows) {
+      if (r.parts.length) {
+        for (const p of r.parts) {
+          if (!methods.includes(p.method)) continue;
+          lines.push({
+            orderNumber: r.orderNumber,
+            customer: r.customerName,
+            phone: r.phone,
+            address: r.address,
+            orderTotal: r.orderTotal,
+            collected: p.amount,
+            status: r.status,
+            method: p.method,
+          });
+        }
+      } else if (r.collectedMethod != null && methods.includes(r.collectedMethod)) {
+        lines.push({
+          orderNumber: r.orderNumber,
+          customer: r.customerName,
+          phone: r.phone,
+          address: r.address,
+          orderTotal: r.orderTotal,
+          collected: r.cashCollected,
+          status: r.status,
+          method: r.collectedMethod,
+        });
+      }
+    }
     return { ok: true, data: lines };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
