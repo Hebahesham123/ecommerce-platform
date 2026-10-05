@@ -8,6 +8,7 @@ import {
   getCourierId,
   verifyPin,
 } from "@/lib/courier-session";
+import { logCourierAction } from "@/lib/courier-log";
 import type { Courier, Shipment, ReportStatus, ShipmentStatus } from "@/lib/courier";
 
 export type ActionResult<T = void> = { ok: true; data: T } | { ok: false; error: string };
@@ -110,7 +111,11 @@ export async function submitMyReport(
   if (!courierId) return { ok: false, error: "not_signed_in" };
   try {
     const supabase = getServerSupabase();
-    const { data: ship } = await supabase.from("courier_shipments").select("id,courier_id").eq("id", shipmentId).maybeSingle();
+    const { data: ship } = await supabase
+      .from("courier_shipments")
+      .select("id,courier_id,order_number, couriers(name)")
+      .eq("id", shipmentId)
+      .maybeSingle();
     if (!ship || s(ship.courier_id) !== courierId) return { ok: false, error: "not_your_shipment" };
 
     const collected = input.status === "delivered" || input.status === "partial";
@@ -127,6 +132,17 @@ export async function submitMyReport(
       })
       .eq("id", shipmentId);
     if (error) return { ok: false, error: error.message };
+    const rel = ship.couriers as unknown;
+    const relRow = (Array.isArray(rel) ? rel[0] : rel) as Row | null;
+    const courierName = relRow ? s(relRow.name) : "";
+    await logCourierAction({
+      actor: courierName || "courier",
+      action: "courier_report",
+      targetType: "shipment",
+      targetId: shipmentId,
+      orderNumber: s(ship.order_number),
+      detail: `${input.status}${collected ? ` · cash ${cash}` : ""}`,
+    });
     return { ok: true, data: undefined };
   } catch (e) {
     return { ok: false, error: (e as Error).message };

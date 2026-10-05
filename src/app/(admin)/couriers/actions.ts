@@ -3,6 +3,7 @@
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
 import { hashPin } from "@/lib/courier-session";
 import { queuePendingEntry } from "@/lib/accounting/post-order";
+import { logCourierAction } from "@/lib/courier-log";
 import type { Courier, Shipment, ShipmentStatus } from "@/lib/courier";
 
 export type ActionResult<T = void> = { ok: true; data: T } | { ok: false; error: string };
@@ -85,6 +86,7 @@ export async function createCourier(input: { name: string; phone: string; zone?:
       if ((error.message || "").toLowerCase().includes("duplicate")) return { ok: false, error: "phone_taken" };
       return { ok: false, error: error.message };
     }
+    await logCourierAction({ actor: "staff", action: "courier_create", targetType: "courier", targetId: s(data.id), detail: name });
     return { ok: true, data: { id: s(data.id) } };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
@@ -104,6 +106,7 @@ export async function updateCourier(
     if (input.pin && input.pin.trim().length >= 4) patch.pin_hash = hashPin(input.pin.trim());
     const { error } = await getServerSupabase().from("couriers").update(patch).eq("id", id);
     if (error) return { ok: false, error: error.message };
+    await logCourierAction({ actor: "staff", action: "courier_update", targetType: "courier", targetId: id, detail: input.name?.trim() || undefined });
     return { ok: true, data: undefined };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
@@ -170,6 +173,7 @@ export async function assignOrderToCourier(orderNumber: string, courierId: strin
     );
     if (error) return { ok: false, error: error.message };
     await logOrderEvent(supabase, s(order.id), "courier", `Assigned to courier ${s(courier.name)} · fee ${Math.max(0, fee)}`);
+    await logCourierAction({ actor: "staff", action: "assign", targetType: "shipment", orderNumber, detail: `${s(courier.name)} · fee ${Math.max(0, fee)}` });
     return { ok: true, data: undefined };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
@@ -248,7 +252,33 @@ export async function confirmCourierReport(orderNumber: string): Promise<ActionR
       await supabase.from("store_orders").update({ fulfillment_status: "returned" }).eq("order_number", orderNumber);
     }
 
+    // A returned / failed delivery comes back to us: file each line of the order
+    // into the warehouse so the returns desk can triage it. Best-effort.
+    if (newStatus === "returned" || newStatus === "failed") {
+      try {
+        const { data: items } = await supabase
+          .from("store_order_items")
+          .select("product_name,sku,quantity")
+          .eq("order_id", orderId);
+        const intake = (items ?? []).map((it: Row) => ({
+          order_number: orderNumber,
+          product_name: s(it.product_name) || "—",
+          sku: sn(it.sku),
+          quantity: Math.max(1, n(it.quantity) || 1),
+          source: newStatus,
+          status: "in_warehouse",
+        }));
+        if (intake.length) {
+          await supabase.from("warehouse_items").insert(intake);
+          await logCourierAction({ actor: "staff", action: "warehouse_intake", targetType: "order", orderNumber, detail: `${intake.length} ${newStatus === "returned" ? "returned" : "failed"} item(s)` });
+        }
+      } catch {
+        /* warehouse intake is a convenience; never fail the confirmation on it */
+      }
+    }
+
     await logOrderEvent(supabase, orderId, "courier", `Courier report confirmed · ${newStatus}${newStatus === "delivered" && cash > 0 ? ` · collected ${cash}` : ""}`);
+    await logCourierAction({ actor: "staff", action: "confirm_report", targetType: "shipment", orderNumber, detail: `${newStatus}${collected && cash > 0 ? ` · ${method} ${cash}` : ""}` });
     return { ok: true, data: { status: newStatus, recorded, accounted } };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
@@ -306,6 +336,7 @@ export async function settleCourier(courierId: string): Promise<ActionResult<{ s
     if (ids.length) {
       await supabase.from("courier_shipments").update({ settled_at: new Date().toISOString() }).in("id", ids);
     }
+    await logCourierAction({ actor: "staff", action: "settle", targetType: "courier", targetId: courierId, detail: `settled ${settled} (${ids.length} shipment(s))` });
     return { ok: true, data: { settled } };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
