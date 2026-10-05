@@ -36,7 +36,7 @@ import {
 import type { ReturnableLine } from "@/lib/returns-service";
 import { createPaymobCheckout } from "../payments/actions";
 import { getShipmentForOrder, assignOrderToCourier, confirmCourierReport, listCouriers } from "../couriers/actions";
-import { SHIPMENT_STATUS, type Shipment, type Courier } from "@/lib/courier";
+import { SHIPMENT_STATUS, collectionMethodLabel, type Shipment, type Courier } from "@/lib/courier";
 import { Modal, Field, fieldClass } from "@/components/modal";
 import {
   paymentMeta,
@@ -353,7 +353,7 @@ export function OrderDetailPage({ orderNumber, basePath }: { orderNumber: string
                       </div>
                       <div className="text-sm text-amber-900">
                         {ar ? SHIPMENT_STATUS[shipment.reportedStatus].ar : SHIPMENT_STATUS[shipment.reportedStatus].en}
-                        {shipment.reportedStatus === "delivered" && <> · {ar ? "حصّل" : "collected"} {egp(shipment.reportedCash ?? 0, lang)}</>}
+                        {shipment.reportedStatus === "delivered" && <> · {ar ? "حصّل" : "collected"} {egp(shipment.reportedCash ?? 0, lang)} · {collectionMethodLabel(shipment.reportedMethod, ar)}</>}
                       </div>
                       {shipment.reportedNote && <div className="mt-0.5 text-xs text-amber-800/80">{shipment.reportedNote}</div>}
                       <button
@@ -367,7 +367,7 @@ export function OrderDetailPage({ orderNumber, basePath }: { orderNumber: string
                   ) : shipment.confirmedAt ? (
                     <div className="text-xs text-ink-soft">
                       {ar ? "آخر تأكيد" : "Confirmed"}: {new Date(shipment.confirmedAt).toLocaleString(ar ? "ar-EG" : "en-US", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
-                      {shipment.cashCollected > 0 && <> · {ar ? "النقد" : "cash"} {egp(shipment.cashCollected, lang)}</>}
+                      {shipment.cashCollected > 0 && <> · {ar ? "حُصّل" : "collected"} {egp(shipment.cashCollected, lang)} · {collectionMethodLabel(shipment.collectedMethod, ar)}</>}
                     </div>
                   ) : (
                     <div className="text-xs text-ink-soft">{ar ? "بانتظار تحديث المندوب من بوابته." : "Waiting for the courier to update from their portal."}</div>

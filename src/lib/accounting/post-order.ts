@@ -20,8 +20,11 @@ const DEBIT_CODE_BY_METHOD: Record<string, string> = {
   card: "103",
   credit_card: "103",
   visa: "103",
+  visa_machine: "103",
   mastercard: "103",
   paymob: "103",
+  valu: "103",
+  installments: "103",
   bank_transfer: "102",
   instapay: "102",
   wallet: "102",
@@ -38,16 +41,16 @@ export async function postOrderSaleToJournal(input: {
   amount: number;
   orderNumber?: string | null;
   note?: string;
-}): Promise<void> {
+}): Promise<string | null> {
   try {
     const amount = Number(input.amount);
-    if (!Number.isFinite(amount) || amount <= 0) return;
+    if (!Number.isFinite(amount) || amount <= 0) return null;
 
     const sb = getServerSupabase();
 
     // The books post to the default (first) entity.
     const { data: ent } = await sb.from("entities").select("id").order("created_at", { ascending: true }).limit(1).maybeSingle();
-    if (!ent) return;
+    if (!ent) return null;
     const entityId = String(ent.id);
 
     const method = (input.method || "cod").toLowerCase();
@@ -61,7 +64,7 @@ export async function postOrderSaleToJournal(input: {
     const byCode = new Map((accs ?? []).map((a: Record<string, unknown>) => [String(a.code), String(a.id)]));
     const debitId = byCode.get(debitCode);
     const creditId = byCode.get(SALES_CODE);
-    if (!debitId || !creditId) return; // chart not seeded — nothing to post to
+    if (!debitId || !creditId) return null; // chart not seeded — nothing to post to
 
     let entryNo = 1;
     try {
@@ -83,14 +86,46 @@ export async function postOrderSaleToJournal(input: {
       })
       .select("id")
       .single();
-    if (error || !entry) return;
+    if (error || !entry) return null;
 
     const entryId = String(entry.id);
     await sb.from("journal_lines").insert([
       { entry_id: entryId, account_id: debitId, debit: amount, credit: 0, line_no: 0, description: "تحصيل" },
       { entry_id: entryId, account_id: creditId, debit: 0, credit: amount, line_no: 1, description: "مبيعات" },
     ]);
+    return entryId;
   } catch {
     /* books posting is best-effort */
+    return null;
+  }
+}
+
+/**
+ * Queue a confirmed payment as a PENDING accounting entry instead of posting it
+ * straight to the books. The accountant reviews it on the Pending screen and
+ * confirms (which posts the journal entry) or rejects it.
+ */
+export async function queuePendingEntry(input: {
+  source: string;
+  method: string;
+  amount: number;
+  orderNumber?: string | null;
+  courierId?: string | null;
+  note?: string;
+}): Promise<void> {
+  try {
+    const amount = Number(input.amount);
+    if (!Number.isFinite(amount) || amount <= 0) return;
+    await getServerSupabase().from("pending_entries").insert({
+      order_number: input.orderNumber ?? null,
+      source: input.source || "payment",
+      method: input.method || "cash",
+      amount,
+      courier_id: input.courierId ?? null,
+      note: input.note ?? null,
+      status: "pending",
+    });
+  } catch {
+    /* queue is best-effort; never fails the payment */
   }
 }

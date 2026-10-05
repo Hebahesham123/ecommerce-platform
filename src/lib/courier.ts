@@ -24,8 +24,10 @@ export type Shipment = {
   fee: number;
   status: ShipmentStatus;
   cashCollected: number;
+  collectedMethod: string | null;
   reportedStatus: ReportStatus | null;
   reportedCash: number | null;
+  reportedMethod: string | null;
   reportedNote: string | null;
   reportedAt: string | null;
   confirmedAt: string | null;
@@ -68,3 +70,18 @@ export const REPORT_OPTIONS: { value: ReportStatus; ar: string; en: string }[] =
   { value: "failed", ar: "فشل التسليم", en: "Failed" },
   { value: "returned", ar: "مرتجع", en: "Returned" },
 ];
+
+/** How cash/payment was collected on delivery — the channels the shop uses. */
+export const COLLECTION_METHODS: { value: string; ar: string; en: string }[] = [
+  { value: "cash", ar: "كاش", en: "Cash" },
+  { value: "visa", ar: "فيزا", en: "Visa" },
+  { value: "visa_machine", ar: "ماكينة فيزا", en: "Visa machine" },
+  { value: "wallet", ar: "محفظة", en: "Wallet" },
+  { value: "valu", ar: "فاليو", en: "ValU" },
+  { value: "installments", ar: "تقسيط", en: "Installments" },
+];
+
+export function collectionMethodLabel(value: string | null | undefined, ar: boolean): string {
+  const m = COLLECTION_METHODS.find((x) => x.value === value);
+  return m ? (ar ? m.ar : m.en) : value || (ar ? "غير محدد" : "—");
+}

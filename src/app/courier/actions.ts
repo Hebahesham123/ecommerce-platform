@@ -69,8 +69,10 @@ export async function getMyAssignments(): Promise<ActionResult<CourierHome>> {
         fee: n(r.fee),
         status: (s(r.status) as ShipmentStatus) || "assigned",
         cashCollected: n(r.cash_collected),
+        collectedMethod: sn(r.collected_method),
         reportedStatus: (sn(r.reported_status) as ReportStatus | null) ?? null,
         reportedCash: r.reported_cash == null ? null : n(r.reported_cash),
+        reportedMethod: sn(r.reported_method),
         reportedNote: sn(r.reported_note),
         reportedAt: sn(r.reported_at),
         confirmedAt: sn(r.confirmed_at),
@@ -99,7 +101,7 @@ export async function getMyAssignments(): Promise<ActionResult<CourierHome>> {
  */
 export async function submitMyReport(
   shipmentId: string,
-  input: { status: ReportStatus; cashCollected: number; note?: string },
+  input: { status: ReportStatus; cashCollected: number; method?: string; note?: string },
 ): Promise<ActionResult> {
   if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
   const courierId = await getCourierId();
@@ -109,12 +111,14 @@ export async function submitMyReport(
     const { data: ship } = await supabase.from("courier_shipments").select("id,courier_id").eq("id", shipmentId).maybeSingle();
     if (!ship || s(ship.courier_id) !== courierId) return { ok: false, error: "not_your_shipment" };
 
-    const cash = input.status === "delivered" ? Math.max(0, n(input.cashCollected)) : 0;
+    const delivered = input.status === "delivered";
+    const cash = delivered ? Math.max(0, n(input.cashCollected)) : 0;
     const { error } = await supabase
       .from("courier_shipments")
       .update({
         reported_status: input.status,
         reported_cash: cash,
+        reported_method: delivered ? input.method || "cash" : null,
         reported_note: input.note?.trim() || null,
         reported_at: new Date().toISOString(),
       })

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Modal, Field, fieldClass } from "@/components/modal";
 import { IcCourier, IcLocation, IcCash, IcX } from "@/components/icons";
-import { SHIPMENT_STATUS, REPORT_OPTIONS, type Shipment, type Courier, type ReportStatus } from "@/lib/courier";
+import { SHIPMENT_STATUS, REPORT_OPTIONS, COLLECTION_METHODS, type Shipment, type Courier, type ReportStatus } from "@/lib/courier";
 import { courierLogin, courierLogout, getMyAssignments, submitMyReport } from "./actions";
 
 /**
@@ -204,13 +204,14 @@ function LoginScreen({ ar, setAr, onLoggedIn }: { ar: boolean; setAr: (v: boolea
 function ReportModal({ ar, shipment, onClose, onDone }: { ar: boolean; shipment: Shipment; onClose: () => void; onDone: () => void }) {
   const [status, setStatus] = useState<ReportStatus>("delivered");
   const [cash, setCash] = useState(String(shipment.orderTotal ?? ""));
+  const [method, setMethod] = useState("cash");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   async function submit() {
     setBusy(true); setErr(null);
-    const res = await submitMyReport(shipment.id, { status, cashCollected: Number(cash) || 0, note });
+    const res = await submitMyReport(shipment.id, { status, cashCollected: Number(cash) || 0, method, note });
     setBusy(false);
     if (res.ok) onDone(); else setErr(ar ? "تعذّر الإرسال." : "Couldn't submit.");
   }
@@ -240,9 +241,20 @@ function ReportModal({ ar, shipment, onClose, onDone }: { ar: boolean; shipment:
           </div>
         </Field>
         {status === "delivered" && (
-          <Field label={ar ? "النقد المُحصَّل" : "Cash collected"}>
-            <input value={cash} onChange={(e) => setCash(e.target.value.replace(/[^\d.]/g, ""))} inputMode="decimal" dir="ltr" className={fieldClass} />
-          </Field>
+          <>
+            <Field label={ar ? "المبلغ المُحصَّل" : "Amount collected"}>
+              <input value={cash} onChange={(e) => setCash(e.target.value.replace(/[^\d.]/g, ""))} inputMode="decimal" dir="ltr" className={fieldClass} />
+            </Field>
+            <Field label={ar ? "طريقة التحصيل" : "Collected by"}>
+              <div className="grid grid-cols-3 gap-2">
+                {COLLECTION_METHODS.map((m) => (
+                  <button key={m.value} type="button" onClick={() => setMethod(m.value)} className={`rounded-xl border px-2 py-2 text-xs font-medium transition ${method === m.value ? "border-brand-500 bg-brand-50 text-brand-700" : "border-line text-ink-muted"}`}>
+                    {ar ? m.ar : m.en}
+                  </button>
+                ))}
+              </div>
+            </Field>
+          </>
         )}
         <Field label={ar ? "ملاحظة (اختياري)" : "Note (optional)"}><input value={note} onChange={(e) => setNote(e.target.value)} className={fieldClass} /></Field>
         {err && <p className="text-sm text-rose-600">{err}</p>}

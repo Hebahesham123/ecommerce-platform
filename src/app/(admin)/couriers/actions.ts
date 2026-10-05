@@ -2,7 +2,7 @@
 
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
 import { hashPin } from "@/lib/courier-session";
-import { postOrderSaleToJournal } from "@/lib/accounting/post-order";
+import { queuePendingEntry } from "@/lib/accounting/post-order";
 import type { Courier, Shipment, ShipmentStatus } from "@/lib/courier";
 
 export type ActionResult<T = void> = { ok: true; data: T } | { ok: false; error: string };
@@ -33,8 +33,10 @@ function mapShipment(r: Row): Shipment {
     fee: n(r.fee),
     status: (s(r.status) as ShipmentStatus) || "assigned",
     cashCollected: n(r.cash_collected),
+    collectedMethod: sn(r.collected_method),
     reportedStatus: (sn(r.reported_status) as Shipment["reportedStatus"]) ?? null,
     reportedCash: r.reported_cash == null ? null : n(r.reported_cash),
+    reportedMethod: sn(r.reported_method),
     reportedNote: sn(r.reported_note),
     reportedAt: sn(r.reported_at),
     confirmedAt: sn(r.confirmed_at),
@@ -190,7 +192,7 @@ export async function confirmCourierReport(orderNumber: string): Promise<ActionR
 
     const newStatus = s(ship.reported_status) as ShipmentStatus;
     const cash = n(ship.reported_cash);
-    const fee = n(ship.fee);
+    const method = s(ship.reported_method) || "cash";
     const orderId = s(ship.order_id);
 
     await supabase
@@ -198,9 +200,11 @@ export async function confirmCourierReport(orderNumber: string): Promise<ActionR
       .update({
         status: newStatus,
         cash_collected: newStatus === "delivered" ? cash : 0,
+        collected_method: newStatus === "delivered" ? method : null,
         confirmed_at: new Date().toISOString(),
         reported_status: null,
         reported_cash: null,
+        reported_method: null,
         reported_note: null,
         reported_at: null,
       })
@@ -226,9 +230,10 @@ export async function confirmCourierReport(orderNumber: string): Promise<ActionR
       }
       await supabase.from("store_orders").update({ fulfillment_status: "delivered" }).eq("order_number", orderNumber);
 
-      // Post the collected cash to the double-entry books (Debit خزينة, Credit مبيعات).
+      // Queue the collected cash for the accountant to confirm into the books,
+      // tagged by how the courier collected it (cash / visa / wallet / …).
       if (cash > 0) {
-        await postOrderSaleToJournal({ method: "cod", amount: cash, orderNumber, note: "تحصيل عند التسليم" });
+        await queuePendingEntry({ source: "cod", method, amount: cash, orderNumber, courierId: sn(ship.courier_id), note: "تحصيل عند التسليم" });
         accounted = true;
       }
     } else if (newStatus === "returned") {

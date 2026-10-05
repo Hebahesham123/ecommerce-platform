@@ -14,6 +14,7 @@ const NAV: NavItem[] = [
   { href: "/accounting/accounts", label: "شجرة الحسابات", icon: "🌳" },
   { href: "/accounting/projects", label: "المشاريع", icon: "📁" },
   { href: "/accounting/journal", label: "قيود اليومية", icon: "📝" },
+  { href: "/accounting/pending", label: "القيود المعلّقة", icon: "⏳" },
   { type: "sep" },
   { href: "/accounting/reports/general-ledger", label: "دفتر الأستاذ", icon: "📒" },
   { href: "/accounting/reports/trial-balance", label: "ميزان المراجعة", icon: "⚖️" },
