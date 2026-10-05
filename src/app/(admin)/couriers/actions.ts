@@ -4,7 +4,7 @@ import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
 import { hashPin } from "@/lib/courier-session";
 import { queuePendingEntry } from "@/lib/accounting/post-order";
 import { logCourierAction } from "@/lib/courier-log";
-import type { Courier, Shipment, ShipmentStatus } from "@/lib/courier";
+import { COLLECTED_STATUSES, type Courier, type Shipment, type ShipmentStatus } from "@/lib/courier";
 
 export type ActionResult<T = void> = { ok: true; data: T } | { ok: false; error: string };
 
@@ -188,6 +188,51 @@ export async function assignOrderToCourier(orderNumber: string, courierId: strin
   }
 }
 
+/**
+ * Admin editor for the money/metadata an order's shipment carries: a hold fee
+ * (amount + whether it's still active), a deposit fee, free-form tags and an
+ * internal admin comment. Updates by order number; toggling a hold off stamps
+ * hold_removed_at so the accounting dashboard can show when it was released.
+ */
+export async function updateShipmentFees(
+  orderNumber: string,
+  patch: { holdFee?: number; holdActive?: boolean; depositFee?: number; tags?: string[]; adminComment?: string | null },
+): Promise<ActionResult> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  try {
+    const supabase = getServerSupabase();
+    const { data: cur, error: curErr } = await supabase
+      .from("courier_shipments")
+      .select("id,hold_active")
+      .eq("order_number", orderNumber)
+      .maybeSingle();
+    if (curErr) return { ok: false, error: missing(curErr) ? "migration_missing" : curErr.message };
+    if (!cur) return { ok: false, error: "not_assigned" };
+
+    const update: Row = {};
+    if (patch.holdFee !== undefined) update.hold_fee = Math.max(0, n(patch.holdFee));
+    if (patch.holdActive !== undefined) {
+      update.hold_active = patch.holdActive;
+      if (patch.holdActive) update.hold_removed_at = null;
+      else if (cur.hold_active === true) update.hold_removed_at = new Date().toISOString();
+    }
+    if (patch.depositFee !== undefined) update.deposit_fee = Math.max(0, n(patch.depositFee));
+    if (patch.tags !== undefined) update.tags = patch.tags.map((t) => String(t).trim()).filter(Boolean);
+    if (patch.adminComment !== undefined) update.admin_comment = patch.adminComment?.trim() || null;
+    if (Object.keys(update).length === 0) return { ok: true, data: undefined };
+
+    const { error } = await supabase.from("courier_shipments").update(update).eq("order_number", orderNumber);
+    if (error) return { ok: false, error: error.message };
+    const bits: string[] = [];
+    if (patch.holdFee !== undefined || patch.holdActive !== undefined) bits.push(`hold ${patch.holdActive ? "on" : "off"} ${n(patch.holdFee)}`);
+    if (patch.depositFee !== undefined) bits.push(`deposit ${n(patch.depositFee)}`);
+    await logCourierAction({ actor: "staff", action: "shipment_fees", targetType: "shipment", orderNumber, detail: bits.join(" · ") || "update" });
+    return { ok: true, data: undefined };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
 export type ConfirmResult = { status: ShipmentStatus; recorded: number; accounted: boolean };
 
 /**
@@ -208,7 +253,11 @@ export async function confirmCourierReport(orderNumber: string): Promise<ActionR
     const cash = n(ship.reported_cash);
     const method = s(ship.reported_method) || "cash";
     const orderId = s(ship.order_id);
-    const collected = newStatus === "delivered" || newStatus === "partial";
+    // Any hand-over outcome (delivered / partial / part pickup / hand-to-hand)
+    // can carry collected cash — not just a plain delivery.
+    const collected = COLLECTED_STATUSES.includes(newStatus);
+    // Promote the courier's submitted gallery to the confirmed one.
+    const confirmedImages = Array.isArray(ship.reported_images) ? ship.reported_images : [];
 
     await supabase
       .from("courier_shipments")
@@ -217,6 +266,8 @@ export async function confirmCourierReport(orderNumber: string): Promise<ActionR
         cash_collected: collected ? cash : 0,
         collected_method: collected ? method : null,
         proof_url: sn(ship.reported_proof_url),
+        images: confirmedImages,
+        reported_images: [],
         confirmed_at: new Date().toISOString(),
         reported_status: null,
         reported_cash: null,
@@ -229,6 +280,17 @@ export async function confirmCourierReport(orderNumber: string): Promise<ActionR
 
     let recorded = 0;
     let accounted = false;
+
+    // Fulfillment mapping: delivered → delivered; partial / part pickup →
+    // partial; returned → returned; everything else leaves the order as-is.
+    const fulfillTarget: string | null =
+      newStatus === "delivered" ? "delivered"
+      : newStatus === "partial" || newStatus === "part_pickup" ? "partial"
+      : newStatus === "returned" ? "returned"
+      : null;
+    if (fulfillTarget) {
+      await supabase.from("store_orders").update({ fulfillment_status: fulfillTarget }).eq("order_number", orderNumber);
+    }
 
     if (collected) {
       const { data: order } = await supabase.from("store_orders").select("total,amount_paid").eq("order_number", orderNumber).maybeSingle();
@@ -245,10 +307,6 @@ export async function confirmCourierReport(orderNumber: string): Promise<ActionR
         });
         if (!payErr) recorded = pay;
       }
-      await supabase
-        .from("store_orders")
-        .update({ fulfillment_status: newStatus === "delivered" ? "delivered" : "partial" })
-        .eq("order_number", orderNumber);
 
       // Queue the collected cash for the accountant to confirm into the books,
       // tagged by how the courier collected it (cash / visa / wallet / …).
@@ -256,8 +314,6 @@ export async function confirmCourierReport(orderNumber: string): Promise<ActionR
         await queuePendingEntry({ source: "cod", method, amount: cash, orderNumber, courierId: sn(ship.courier_id), note: "تحصيل عند التسليم" });
         accounted = true;
       }
-    } else if (newStatus === "returned") {
-      await supabase.from("store_orders").update({ fulfillment_status: "returned" }).eq("order_number", orderNumber);
     }
 
     // A returned / failed delivery comes back to us: file each line of the order

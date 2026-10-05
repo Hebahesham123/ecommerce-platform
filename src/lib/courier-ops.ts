@@ -93,6 +93,7 @@ export type CourierLog = {
 export const LOG_ACTION: Record<string, { ar: string; en: string; tone: Tone }> = {
   assign: { ar: "تعيين مندوب", en: "Assign", tone: "info" },
   confirm_report: { ar: "تأكيد تقرير", en: "Confirm report", tone: "success" },
+  shipment_fees: { ar: "رسوم ووسوم", en: "Fees & tags", tone: "info" },
   settle: { ar: "تسوية نقدية", en: "Settle cash", tone: "success" },
   courier_create: { ar: "إضافة مندوب", en: "New courier", tone: "neutral" },
   courier_update: { ar: "تعديل مندوب", en: "Edit courier", tone: "neutral" },

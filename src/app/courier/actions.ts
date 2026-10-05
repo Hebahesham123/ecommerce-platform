@@ -9,7 +9,7 @@ import {
   verifyPin,
 } from "@/lib/courier-session";
 import { logCourierAction } from "@/lib/courier-log";
-import type { Courier, Shipment, ReportStatus, ShipmentStatus } from "@/lib/courier";
+import { COLLECTED_STATUSES, type Courier, type Shipment, type ReportStatus, type ShipmentStatus } from "@/lib/courier";
 
 export type ActionResult<T = void> = { ok: true; data: T } | { ok: false; error: string };
 
@@ -112,7 +112,15 @@ export async function getMyAssignments(): Promise<ActionResult<CourierHome>> {
  */
 export async function submitMyReport(
   shipmentId: string,
-  input: { status: ReportStatus; cashCollected: number; method?: string; note?: string; proofUrl?: string | null },
+  input: {
+    status: ReportStatus;
+    cashCollected: number;
+    method?: string;
+    note?: string;
+    proofUrl?: string | null;
+    images?: string[];
+    tags?: string[];
+  },
 ): Promise<ActionResult> {
   if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
   const courierId = await getCourierId();
@@ -121,13 +129,24 @@ export async function submitMyReport(
     const supabase = getServerSupabase();
     const { data: ship } = await supabase
       .from("courier_shipments")
-      .select("id,courier_id,order_number, couriers(name)")
+      .select("id,courier_id,order_number,tags, couriers(name)")
       .eq("id", shipmentId)
       .maybeSingle();
     if (!ship || s(ship.courier_id) !== courierId) return { ok: false, error: "not_your_shipment" };
 
-    const collected = input.status === "delivered" || input.status === "partial";
+    const collected = COLLECTED_STATUSES.includes(input.status as ShipmentStatus);
     const cash = collected ? Math.max(0, n(input.cashCollected)) : 0;
+
+    // Multiple courier photos → reported_images; the first also fills the single
+    // proof field so the existing proof display keeps working.
+    const images = Array.isArray(input.images) ? input.images.map(String).filter(Boolean) : [];
+    const proof = input.proofUrl || images[0] || null;
+
+    // Tags merge with whatever is already on the shipment (admin tags + courier).
+    const existingTags = Array.isArray(ship.tags) ? (ship.tags as unknown[]).map(String) : [];
+    const inputTags = Array.isArray(input.tags) ? input.tags.map((t) => String(t).trim()).filter(Boolean) : [];
+    const mergedTags = Array.from(new Set([...existingTags, ...inputTags]));
+
     const { error } = await supabase
       .from("courier_shipments")
       .update({
@@ -135,7 +154,9 @@ export async function submitMyReport(
         reported_cash: cash,
         reported_method: collected ? input.method || "cash" : null,
         reported_note: input.note?.trim() || null,
-        reported_proof_url: input.proofUrl || null,
+        reported_proof_url: proof,
+        reported_images: images,
+        tags: mergedTags,
         reported_at: new Date().toISOString(),
       })
       .eq("id", shipmentId);

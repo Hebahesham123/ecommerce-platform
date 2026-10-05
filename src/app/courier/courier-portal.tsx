@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Modal, Field, fieldClass } from "@/components/modal";
 import { IcCourier, IcLocation, IcCash, IcX } from "@/components/icons";
-import { SHIPMENT_STATUS, REPORT_OPTIONS, COLLECTION_METHODS, type Shipment, type Courier, type ReportStatus } from "@/lib/courier";
+import { SHIPMENT_STATUS, REPORT_OPTIONS, COLLECTION_METHODS, COLLECTED_STATUSES, type Shipment, type Courier, type ReportStatus, type ShipmentStatus } from "@/lib/courier";
 import { courierLogin, courierLogout, getMyAssignments, submitMyReport, uploadCourierProof } from "./actions";
 
 /**
@@ -206,31 +206,54 @@ function ReportModal({ ar, shipment, onClose, onDone }: { ar: boolean; shipment:
   const [cash, setCash] = useState(String(shipment.orderTotal ?? ""));
   const [method, setMethod] = useState("cash");
   const [note, setNote] = useState("");
-  const [proofUrl, setProofUrl] = useState<string | null>(null);
+  const [images, setImages] = useState<string[]>([]);
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState("");
   const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const collected = status === "delivered" || status === "partial";
+  const collected = COLLECTED_STATUSES.includes(status as ShipmentStatus);
 
-  async function onPickProof(file: File | undefined) {
-    if (!file) return;
+  function addTag(raw: string) {
+    const t = raw.trim();
+    if (!t) return;
+    setTags((prev) => (prev.includes(t) ? prev : [...prev, t]));
+    setTagInput("");
+  }
+
+  async function onPickPhotos(files: FileList | null) {
+    if (!files || files.length === 0) return;
     setUploading(true); setErr(null);
-    const dataUrl = await new Promise<string>((resolve, reject) => {
-      const r = new FileReader();
-      r.onload = () => resolve(String(r.result));
-      r.onerror = reject;
-      r.readAsDataURL(file);
-    });
-    const res = await uploadCourierProof(dataUrl, file.name);
+    for (const file of Array.from(files)) {
+      try {
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const r = new FileReader();
+          r.onload = () => resolve(String(r.result));
+          r.onerror = reject;
+          r.readAsDataURL(file);
+        });
+        const res = await uploadCourierProof(dataUrl, file.name);
+        if (res.ok) setImages((prev) => [...prev, res.data.url]);
+        else setErr(ar ? "تعذّر رفع إحدى الصور." : "Couldn't upload a photo.");
+      } catch {
+        setErr(ar ? "تعذّر رفع إحدى الصور." : "Couldn't upload a photo.");
+      }
+    }
     setUploading(false);
-    if (res.ok) setProofUrl(res.data.url);
-    else setErr(ar ? "تعذّر رفع الصورة." : "Couldn't upload the photo.");
   }
 
   async function submit() {
     setBusy(true); setErr(null);
-    const res = await submitMyReport(shipment.id, { status, cashCollected: Number(cash) || 0, method, note, proofUrl });
+    const res = await submitMyReport(shipment.id, {
+      status,
+      cashCollected: Number(cash) || 0,
+      method,
+      note,
+      proofUrl: images[0] ?? null,
+      images,
+      tags,
+    });
     setBusy(false);
     if (res.ok) onDone(); else setErr(ar ? "تعذّر الإرسال." : "Couldn't submit.");
   }
@@ -276,20 +299,58 @@ function ReportModal({ ar, shipment, onClose, onDone }: { ar: boolean; shipment:
           </>
         )}
 
-        {/* Proof of delivery photo */}
-        <Field label={ar ? "صورة إثبات التسليم" : "Proof of delivery"}>
-          {proofUrl ? (
-            <div className="flex items-center gap-3">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={proofUrl} alt="" className="h-16 w-16 rounded-lg border border-line object-cover" />
-              <button type="button" onClick={() => setProofUrl(null)} className="text-xs font-medium text-rose-600">{ar ? "إزالة" : "Remove"}</button>
-            </div>
-          ) : (
-            <label className={`flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-line py-3 text-sm ${uploading ? "opacity-60" : "text-ink-muted hover:bg-surface-page"}`}>
-              {uploading ? (ar ? "جارٍ الرفع…" : "Uploading…") : (ar ? "📷 التقط / ارفع صورة" : "📷 Take / upload a photo")}
-              <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => onPickProof(e.target.files?.[0])} disabled={uploading} />
+        {/* Proof of delivery photos (one or more) */}
+        <Field label={ar ? "صور إثبات التسليم" : "Proof of delivery"}>
+          <div className="flex flex-wrap items-center gap-2">
+            {images.map((url, i) => (
+              <div key={url} className="relative">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={url} alt="" className="h-16 w-16 rounded-lg border border-line object-cover" />
+                <button
+                  type="button"
+                  onClick={() => setImages((prev) => prev.filter((_, j) => j !== i))}
+                  className="absolute -end-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full bg-rose-600 text-white shadow"
+                  aria-label={ar ? "إزالة" : "Remove"}
+                >
+                  <IcX className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+            <label className={`flex h-16 w-16 cursor-pointer flex-col items-center justify-center gap-0.5 rounded-xl border border-dashed border-line text-center text-[11px] ${uploading ? "opacity-60" : "text-ink-muted hover:bg-surface-page"}`}>
+              <span className="text-lg leading-none">📷</span>
+              {uploading ? (ar ? "رفع…" : "…") : (ar ? "إضافة" : "Add")}
+              <input type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={(e) => onPickPhotos(e.target.files)} disabled={uploading} />
             </label>
+          </div>
+        </Field>
+
+        {/* Tags */}
+        <Field label={ar ? "الوسوم" : "Tags"}>
+          {tags.length > 0 && (
+            <div className="mb-2 flex flex-wrap gap-1.5">
+              {tags.map((tg) => (
+                <span key={tg} className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700">
+                  {tg}
+                  <button type="button" onClick={() => setTags((prev) => prev.filter((x) => x !== tg))} aria-label={ar ? "إزالة" : "Remove"}>
+                    <IcX className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
           )}
+          <input
+            value={tagInput}
+            onChange={(e) => setTagInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === ",") {
+                e.preventDefault();
+                addTag(tagInput);
+              }
+            }}
+            onBlur={() => addTag(tagInput)}
+            placeholder={ar ? "اكتب وسماً ثم Enter" : "Type a tag, press Enter"}
+            className={fieldClass}
+          />
         </Field>
         <Field label={ar ? "ملاحظة (اختياري)" : "Note (optional)"}><input value={note} onChange={(e) => setNote(e.target.value)} className={fieldClass} /></Field>
         {err && <p className="text-sm text-rose-600">{err}</p>}

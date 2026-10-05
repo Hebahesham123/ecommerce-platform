@@ -35,7 +35,7 @@ import {
 } from "./actions";
 import type { ReturnableLine } from "@/lib/returns-service";
 import { createPaymobCheckout } from "../payments/actions";
-import { getShipmentForOrder, assignOrderToCourier, confirmCourierReport, listCouriers } from "../couriers/actions";
+import { getShipmentForOrder, assignOrderToCourier, confirmCourierReport, listCouriers, updateShipmentFees } from "../couriers/actions";
 import { SHIPMENT_STATUS, collectionMethodLabel, type Shipment, type Courier } from "@/lib/courier";
 import { Modal, Field, fieldClass } from "@/components/modal";
 import {
@@ -71,7 +71,7 @@ export function OrderDetailPage({ orderNumber, basePath }: { orderNumber: string
   const [err, setErr] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [modal, setModal] = useState<null | "collect" | "refund" | "fulfill" | "return" | "cancel" | "conversion" | "assign">(null);
+  const [modal, setModal] = useState<null | "collect" | "refund" | "fulfill" | "return" | "cancel" | "conversion" | "assign" | "fees">(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -331,9 +331,16 @@ export function OrderDetailPage({ orderNumber, basePath }: { orderNumber: string
                   {shipment && <StatusPill label={ar ? SHIPMENT_STATUS[shipment.status].ar : SHIPMENT_STATUS[shipment.status].en} tone={SHIPMENT_STATUS[shipment.status].tone} />}
                 </div>
                 {!cancelled && (
-                  <button onClick={() => setModal("assign")} className="btn-outline h-9">
-                    {shipment ? (ar ? "إعادة التعيين" : "Reassign") : (ar ? "تعيين مندوب" : "Assign courier")}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {shipment && (
+                      <button onClick={() => setModal("fees")} className="btn-outline h-9">
+                        {ar ? "الرسوم والوسوم" : "Fees & tags"}
+                      </button>
+                    )}
+                    <button onClick={() => setModal("assign")} className="btn-outline h-9">
+                      {shipment ? (ar ? "إعادة التعيين" : "Reassign") : (ar ? "تعيين مندوب" : "Assign courier")}
+                    </button>
+                  </div>
                 )}
               </div>
               {!shipment ? (
@@ -385,6 +392,51 @@ export function OrderDetailPage({ orderNumber, basePath }: { orderNumber: string
                     </>
                   ) : (
                     <div className="text-xs text-ink-soft">{ar ? "بانتظار تحديث المندوب من بوابته." : "Waiting for the courier to update from their portal."}</div>
+                  )}
+
+                  {/* Admin fees / tags / comment */}
+                  {(shipment.holdFee > 0 || shipment.depositFee > 0 || shipment.tags.length > 0 || shipment.adminComment) && (
+                    <div className="space-y-2 rounded-xl border border-line bg-surface-page/60 p-3">
+                      {(shipment.holdFee > 0 || shipment.depositFee > 0) && (
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                          {shipment.holdFee > 0 && (
+                            <span className="text-ink-muted">
+                              {ar ? "رسوم حجز" : "Hold fee"}: <span className="font-semibold text-ink">{egp(shipment.holdFee, lang)}</span>
+                              {shipment.holdActive ? (
+                                <span className="ms-1 text-rose-600">{ar ? "(نشطة)" : "(active)"}</span>
+                              ) : (
+                                <span className="ms-1 text-emerald-600">{ar ? "(مُزالة)" : "(removed)"}</span>
+                              )}
+                            </span>
+                          )}
+                          {shipment.depositFee > 0 && (
+                            <span className="text-ink-muted">
+                              {ar ? "وديعة" : "Deposit"}: <span className="font-semibold text-ink">{egp(shipment.depositFee, lang)}</span>
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      {shipment.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {shipment.tags.map((tg) => (
+                            <span key={tg} className="rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-medium text-brand-700">{tg}</span>
+                          ))}
+                        </div>
+                      )}
+                      {shipment.adminComment && <div className="text-xs text-ink-muted">{shipment.adminComment}</div>}
+                    </div>
+                  )}
+
+                  {/* Courier photo gallery */}
+                  {shipment.images.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {shipment.images.map((url) => (
+                        <a key={url} href={url} target="_blank" rel="noopener noreferrer">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={url} alt="" className="h-16 w-16 rounded-lg border border-line object-cover" />
+                        </a>
+                      ))}
+                    </div>
                   )}
                 </div>
               )}
@@ -519,6 +571,15 @@ export function OrderDetailPage({ orderNumber, basePath }: { orderNumber: string
           current={shipment}
           onClose={() => setModal(null)}
           onDone={async () => { setModal(null); flashOk(ar ? "تم تعيين المندوب" : "Courier assigned"); await load(); }}
+        />
+      )}
+      {modal === "fees" && shipment && (
+        <ShipmentFeesModal
+          orderNumber={orderNumber}
+          ar={ar}
+          shipment={shipment}
+          onClose={() => setModal(null)}
+          onDone={async () => { setModal(null); flashOk(ar ? "تم الحفظ" : "Saved"); await load(); }}
         />
       )}
       {modal === "return" && d && (
@@ -917,6 +978,98 @@ function AssignCourierModal({ orderNumber, ar, couriers, current, onClose, onDon
           {err && <p className="text-sm text-rose-600">{err}</p>}
         </div>
       )}
+    </Modal>
+  );
+}
+
+// ---- Shipment fees / tags / comment modal -----------------------------------
+function ShipmentFeesModal({ orderNumber, ar, shipment, onClose, onDone }: {
+  orderNumber: string; ar: boolean; shipment: Shipment; onClose: () => void; onDone: () => void;
+}) {
+  const [holdFee, setHoldFee] = useState(String(shipment.holdFee || ""));
+  const [holdActive, setHoldActive] = useState(shipment.holdActive);
+  const [depositFee, setDepositFee] = useState(String(shipment.depositFee || ""));
+  const [tags, setTags] = useState<string[]>(shipment.tags);
+  const [tagInput, setTagInput] = useState("");
+  const [comment, setComment] = useState(shipment.adminComment ?? "");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  function addTag(raw: string) {
+    const t = raw.trim();
+    if (!t) return;
+    setTags((prev) => (prev.includes(t) ? prev : [...prev, t]));
+    setTagInput("");
+  }
+
+  async function save() {
+    setBusy(true); setErr(null);
+    const res = await updateShipmentFees(orderNumber, {
+      holdFee: Number(holdFee) || 0,
+      holdActive,
+      depositFee: Number(depositFee) || 0,
+      tags,
+      adminComment: comment,
+    });
+    setBusy(false);
+    if (res.ok) onDone();
+    else setErr(res.error === "not_assigned" ? (ar ? "لا يوجد شحنة لهذا الطلب." : "No shipment for this order.") : res.error === "migration_missing" ? (ar ? "شغّلي ترحيل 0050." : "Run migration 0050.") : (ar ? "تعذّر الحفظ." : "Couldn't save."));
+  }
+
+  return (
+    <Modal
+      title={ar ? "رسوم ووسوم الشحنة" : "Shipment fees & tags"}
+      subtitle={`#${orderNumber}`}
+      icon={IcCash}
+      onClose={onClose}
+      dir={ar ? "rtl" : "ltr"}
+      footer={
+        <>
+          <button onClick={onClose} className="btn-outline h-9 px-4 text-sm">{ar ? "إلغاء" : "Cancel"}</button>
+          <button onClick={save} disabled={busy} className="btn-primary h-9 px-5 text-sm disabled:opacity-50">{busy ? "…" : ar ? "حفظ" : "Save"}</button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 gap-3">
+          <Field label={ar ? "رسوم الحجز" : "Hold fee"}>
+            <input value={holdFee} onChange={(e) => setHoldFee(e.target.value.replace(/[^\d.]/g, ""))} inputMode="decimal" dir="ltr" className={fieldClass} />
+          </Field>
+          <Field label={ar ? "الوديعة" : "Deposit fee"}>
+            <input value={depositFee} onChange={(e) => setDepositFee(e.target.value.replace(/[^\d.]/g, ""))} inputMode="decimal" dir="ltr" className={fieldClass} />
+          </Field>
+        </div>
+        <label className="flex items-center gap-2 text-sm text-ink">
+          <input type="checkbox" checked={holdActive} onChange={(e) => setHoldActive(e.target.checked)} className="h-4 w-4 rounded border-line accent-brand-600" />
+          {ar ? "الحجز نشط (يُخصم من المُسلَّم للمحاسبة)" : "Hold is active (netted off accounting hand-in)"}
+        </label>
+        <Field label={ar ? "الوسوم" : "Tags"}>
+          {tags.length > 0 && (
+            <div className="mb-2 flex flex-wrap gap-1.5">
+              {tags.map((tg) => (
+                <span key={tg} className="inline-flex items-center gap-1 rounded-full bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-700">
+                  {tg}
+                  <button type="button" onClick={() => setTags((prev) => prev.filter((x) => x !== tg))} aria-label={ar ? "إزالة" : "Remove"}>
+                    <IcX className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+          <input
+            value={tagInput}
+            onChange={(e) => setTagInput(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addTag(tagInput); } }}
+            onBlur={() => addTag(tagInput)}
+            placeholder={ar ? "اكتب وسماً ثم Enter" : "Type a tag, press Enter"}
+            className={fieldClass}
+          />
+        </Field>
+        <Field label={ar ? "تعليق إداري" : "Admin comment"}>
+          <textarea value={comment} onChange={(e) => setComment(e.target.value)} rows={2} className={fieldClass} />
+        </Field>
+        {err && <p className="text-sm text-rose-600">{err}</p>}
+      </div>
     </Modal>
   );
 }

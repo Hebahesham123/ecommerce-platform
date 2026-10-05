@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ComponentType, SVGProps } from "react";
 import { useI18n } from "@/lib/i18n";
-import { IcOverview, IcInbox, IcInventory, IcClipboard, IcCustomers, IcCourier, IcLink } from "@/components/icons";
+import { IcOverview, IcInbox, IcInventory, IcClipboard, IcCustomers, IcCourier, IcLink, IcAccounting } from "@/components/icons";
 
 type Tab = { href: string; ar: string; en: string; icon: ComponentType<SVGProps<SVGSVGElement>>; exact?: boolean };
 
@@ -12,6 +12,7 @@ const TABS: Tab[] = [
   { href: "/courier-system", ar: "لوحة التحكم", en: "Dashboard", icon: IcOverview, exact: true },
   { href: "/courier-system/requests", ar: "الطلبات", en: "Requests", icon: IcInbox },
   { href: "/courier-system/warehouse", ar: "المستودع", en: "Warehouse", icon: IcInventory },
+  { href: "/courier-system/accounting", ar: "محاسبة المندوبين", en: "Courier accounting", icon: IcAccounting },
   { href: "/courier-system/logs", ar: "السجل", en: "Logs", icon: IcClipboard },
   { href: "/courier-system/users", ar: "المستخدمون", en: "Users", icon: IcCustomers },
 ];
