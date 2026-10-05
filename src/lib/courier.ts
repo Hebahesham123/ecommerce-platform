@@ -12,8 +12,8 @@ export type Courier = {
   createdAt: string;
 };
 
-export type ShipmentStatus = "assigned" | "out_for_delivery" | "delivered" | "failed" | "returned";
-export type ReportStatus = "out_for_delivery" | "delivered" | "failed" | "returned";
+export type ShipmentStatus = "assigned" | "out_for_delivery" | "delivered" | "partial" | "failed" | "returned";
+export type ReportStatus = "out_for_delivery" | "delivered" | "partial" | "failed" | "returned";
 
 export type Shipment = {
   id: string;
@@ -25,10 +25,12 @@ export type Shipment = {
   status: ShipmentStatus;
   cashCollected: number;
   collectedMethod: string | null;
+  proofUrl: string | null;
   reportedStatus: ReportStatus | null;
   reportedCash: number | null;
   reportedMethod: string | null;
   reportedNote: string | null;
+  reportedProofUrl: string | null;
   reportedAt: string | null;
   confirmedAt: string | null;
   settledAt: string | null;
@@ -60,13 +62,15 @@ export const SHIPMENT_STATUS: Record<ShipmentStatus, { ar: string; en: string; t
   assigned: { ar: "تم التعيين", en: "Assigned", tone: "neutral" },
   out_for_delivery: { ar: "في الطريق", en: "Out for delivery", tone: "info" },
   delivered: { ar: "تم التسليم", en: "Delivered", tone: "success" },
+  partial: { ar: "تسليم جزئي", en: "Partial", tone: "warning" },
   failed: { ar: "فشل التسليم", en: "Failed", tone: "critical" },
   returned: { ar: "مرتجع", en: "Returned", tone: "warning" },
 };
 
 export const REPORT_OPTIONS: { value: ReportStatus; ar: string; en: string }[] = [
-  { value: "out_for_delivery", ar: "في الطريق", en: "Out for delivery" },
   { value: "delivered", ar: "تم التسليم", en: "Delivered" },
+  { value: "partial", ar: "تسليم جزئي", en: "Partial" },
+  { value: "out_for_delivery", ar: "في الطريق", en: "Out for delivery" },
   { value: "failed", ar: "فشل التسليم", en: "Failed" },
   { value: "returned", ar: "مرتجع", en: "Returned" },
 ];

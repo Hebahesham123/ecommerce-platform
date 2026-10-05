@@ -34,10 +34,12 @@ function mapShipment(r: Row): Shipment {
     status: (s(r.status) as ShipmentStatus) || "assigned",
     cashCollected: n(r.cash_collected),
     collectedMethod: sn(r.collected_method),
+    proofUrl: sn(r.proof_url),
     reportedStatus: (sn(r.reported_status) as Shipment["reportedStatus"]) ?? null,
     reportedCash: r.reported_cash == null ? null : n(r.reported_cash),
     reportedMethod: sn(r.reported_method),
     reportedNote: sn(r.reported_note),
+    reportedProofUrl: sn(r.reported_proof_url),
     reportedAt: sn(r.reported_at),
     confirmedAt: sn(r.confirmed_at),
     settledAt: sn(r.settled_at),
@@ -194,18 +196,21 @@ export async function confirmCourierReport(orderNumber: string): Promise<ActionR
     const cash = n(ship.reported_cash);
     const method = s(ship.reported_method) || "cash";
     const orderId = s(ship.order_id);
+    const collected = newStatus === "delivered" || newStatus === "partial";
 
     await supabase
       .from("courier_shipments")
       .update({
         status: newStatus,
-        cash_collected: newStatus === "delivered" ? cash : 0,
-        collected_method: newStatus === "delivered" ? method : null,
+        cash_collected: collected ? cash : 0,
+        collected_method: collected ? method : null,
+        proof_url: sn(ship.reported_proof_url),
         confirmed_at: new Date().toISOString(),
         reported_status: null,
         reported_cash: null,
         reported_method: null,
         reported_note: null,
+        reported_proof_url: null,
         reported_at: null,
       })
       .eq("id", s(ship.id));
@@ -213,7 +218,7 @@ export async function confirmCourierReport(orderNumber: string): Promise<ActionR
     let recorded = 0;
     let accounted = false;
 
-    if (newStatus === "delivered") {
+    if (collected) {
       const { data: order } = await supabase.from("store_orders").select("total,amount_paid").eq("order_number", orderNumber).maybeSingle();
       const balance = Math.max(0, n(order?.total) - n(order?.amount_paid));
       const pay = Math.min(cash, balance);
@@ -228,7 +233,10 @@ export async function confirmCourierReport(orderNumber: string): Promise<ActionR
         });
         if (!payErr) recorded = pay;
       }
-      await supabase.from("store_orders").update({ fulfillment_status: "delivered" }).eq("order_number", orderNumber);
+      await supabase
+        .from("store_orders")
+        .update({ fulfillment_status: newStatus === "delivered" ? "delivered" : "partial" })
+        .eq("order_number", orderNumber);
 
       // Queue the collected cash for the accountant to confirm into the books,
       // tagged by how the courier collected it (cash / visa / wallet / …).

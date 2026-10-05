@@ -353,9 +353,15 @@ export function OrderDetailPage({ orderNumber, basePath }: { orderNumber: string
                       </div>
                       <div className="text-sm text-amber-900">
                         {ar ? SHIPMENT_STATUS[shipment.reportedStatus].ar : SHIPMENT_STATUS[shipment.reportedStatus].en}
-                        {shipment.reportedStatus === "delivered" && <> · {ar ? "حصّل" : "collected"} {egp(shipment.reportedCash ?? 0, lang)} · {collectionMethodLabel(shipment.reportedMethod, ar)}</>}
+                        {(shipment.reportedStatus === "delivered" || shipment.reportedStatus === "partial") && <> · {ar ? "حصّل" : "collected"} {egp(shipment.reportedCash ?? 0, lang)} · {collectionMethodLabel(shipment.reportedMethod, ar)}</>}
                       </div>
                       {shipment.reportedNote && <div className="mt-0.5 text-xs text-amber-800/80">{shipment.reportedNote}</div>}
+                      {shipment.reportedProofUrl && (
+                        <a href={shipment.reportedProofUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={shipment.reportedProofUrl} alt="" className="h-16 w-16 rounded-lg border border-amber-200 object-cover" />
+                        </a>
+                      )}
                       <button
                         onClick={() => run(() => confirmCourierReport(orderNumber), ar ? "تم تأكيد التقرير" : "Report confirmed")}
                         disabled={busy}
@@ -365,10 +371,18 @@ export function OrderDetailPage({ orderNumber, basePath }: { orderNumber: string
                       </button>
                     </div>
                   ) : shipment.confirmedAt ? (
-                    <div className="text-xs text-ink-soft">
-                      {ar ? "آخر تأكيد" : "Confirmed"}: {new Date(shipment.confirmedAt).toLocaleString(ar ? "ar-EG" : "en-US", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
-                      {shipment.cashCollected > 0 && <> · {ar ? "حُصّل" : "collected"} {egp(shipment.cashCollected, lang)} · {collectionMethodLabel(shipment.collectedMethod, ar)}</>}
-                    </div>
+                    <>
+                      <div className="text-xs text-ink-soft">
+                        {ar ? "آخر تأكيد" : "Confirmed"}: {new Date(shipment.confirmedAt).toLocaleString(ar ? "ar-EG" : "en-US", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                        {shipment.cashCollected > 0 && <> · {ar ? "حُصّل" : "collected"} {egp(shipment.cashCollected, lang)} · {collectionMethodLabel(shipment.collectedMethod, ar)}</>}
+                      </div>
+                      {shipment.proofUrl && (
+                        <a href={shipment.proofUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-block">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={shipment.proofUrl} alt="" className="h-16 w-16 rounded-lg border border-line object-cover" />
+                        </a>
+                      )}
+                    </>
                   ) : (
                     <div className="text-xs text-ink-soft">{ar ? "بانتظار تحديث المندوب من بوابته." : "Waiting for the courier to update from their portal."}</div>
                   )}

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Modal, Field, fieldClass } from "@/components/modal";
 import { IcCourier, IcLocation, IcCash, IcX } from "@/components/icons";
 import { SHIPMENT_STATUS, REPORT_OPTIONS, COLLECTION_METHODS, type Shipment, type Courier, type ReportStatus } from "@/lib/courier";
-import { courierLogin, courierLogout, getMyAssignments, submitMyReport } from "./actions";
+import { courierLogin, courierLogout, getMyAssignments, submitMyReport, uploadCourierProof } from "./actions";
 
 /**
  * The courier's own portal (mobile-first). They sign in with phone + PIN, see
@@ -206,12 +206,31 @@ function ReportModal({ ar, shipment, onClose, onDone }: { ar: boolean; shipment:
   const [cash, setCash] = useState(String(shipment.orderTotal ?? ""));
   const [method, setMethod] = useState("cash");
   const [note, setNote] = useState("");
+  const [proofUrl, setProofUrl] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  const collected = status === "delivered" || status === "partial";
+
+  async function onPickProof(file: File | undefined) {
+    if (!file) return;
+    setUploading(true); setErr(null);
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result));
+      r.onerror = reject;
+      r.readAsDataURL(file);
+    });
+    const res = await uploadCourierProof(dataUrl, file.name);
+    setUploading(false);
+    if (res.ok) setProofUrl(res.data.url);
+    else setErr(ar ? "تعذّر رفع الصورة." : "Couldn't upload the photo.");
+  }
+
   async function submit() {
     setBusy(true); setErr(null);
-    const res = await submitMyReport(shipment.id, { status, cashCollected: Number(cash) || 0, method, note });
+    const res = await submitMyReport(shipment.id, { status, cashCollected: Number(cash) || 0, method, note, proofUrl });
     setBusy(false);
     if (res.ok) onDone(); else setErr(ar ? "تعذّر الإرسال." : "Couldn't submit.");
   }
@@ -240,7 +259,7 @@ function ReportModal({ ar, shipment, onClose, onDone }: { ar: boolean; shipment:
             ))}
           </div>
         </Field>
-        {status === "delivered" && (
+        {collected && (
           <>
             <Field label={ar ? "المبلغ المُحصَّل" : "Amount collected"}>
               <input value={cash} onChange={(e) => setCash(e.target.value.replace(/[^\d.]/g, ""))} inputMode="decimal" dir="ltr" className={fieldClass} />
@@ -256,6 +275,22 @@ function ReportModal({ ar, shipment, onClose, onDone }: { ar: boolean; shipment:
             </Field>
           </>
         )}
+
+        {/* Proof of delivery photo */}
+        <Field label={ar ? "صورة إثبات التسليم" : "Proof of delivery"}>
+          {proofUrl ? (
+            <div className="flex items-center gap-3">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={proofUrl} alt="" className="h-16 w-16 rounded-lg border border-line object-cover" />
+              <button type="button" onClick={() => setProofUrl(null)} className="text-xs font-medium text-rose-600">{ar ? "إزالة" : "Remove"}</button>
+            </div>
+          ) : (
+            <label className={`flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-line py-3 text-sm ${uploading ? "opacity-60" : "text-ink-muted hover:bg-surface-page"}`}>
+              {uploading ? (ar ? "جارٍ الرفع…" : "Uploading…") : (ar ? "📷 التقط / ارفع صورة" : "📷 Take / upload a photo")}
+              <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => onPickProof(e.target.files?.[0])} disabled={uploading} />
+            </label>
+          )}
+        </Field>
         <Field label={ar ? "ملاحظة (اختياري)" : "Note (optional)"}><input value={note} onChange={(e) => setNote(e.target.value)} className={fieldClass} /></Field>
         {err && <p className="text-sm text-rose-600">{err}</p>}
         <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-500">{ar ? "سيراجع المتجر تقريرك قبل اعتماده." : "The shop reviews your report before it's finalised."}</p>

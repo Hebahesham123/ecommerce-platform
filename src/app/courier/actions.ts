@@ -70,10 +70,12 @@ export async function getMyAssignments(): Promise<ActionResult<CourierHome>> {
         status: (s(r.status) as ShipmentStatus) || "assigned",
         cashCollected: n(r.cash_collected),
         collectedMethod: sn(r.collected_method),
+        proofUrl: sn(r.proof_url),
         reportedStatus: (sn(r.reported_status) as ReportStatus | null) ?? null,
         reportedCash: r.reported_cash == null ? null : n(r.reported_cash),
         reportedMethod: sn(r.reported_method),
         reportedNote: sn(r.reported_note),
+        reportedProofUrl: sn(r.reported_proof_url),
         reportedAt: sn(r.reported_at),
         confirmedAt: sn(r.confirmed_at),
         settledAt: sn(r.settled_at),
@@ -101,7 +103,7 @@ export async function getMyAssignments(): Promise<ActionResult<CourierHome>> {
  */
 export async function submitMyReport(
   shipmentId: string,
-  input: { status: ReportStatus; cashCollected: number; method?: string; note?: string },
+  input: { status: ReportStatus; cashCollected: number; method?: string; note?: string; proofUrl?: string | null },
 ): Promise<ActionResult> {
   if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
   const courierId = await getCourierId();
@@ -111,20 +113,45 @@ export async function submitMyReport(
     const { data: ship } = await supabase.from("courier_shipments").select("id,courier_id").eq("id", shipmentId).maybeSingle();
     if (!ship || s(ship.courier_id) !== courierId) return { ok: false, error: "not_your_shipment" };
 
-    const delivered = input.status === "delivered";
-    const cash = delivered ? Math.max(0, n(input.cashCollected)) : 0;
+    const collected = input.status === "delivered" || input.status === "partial";
+    const cash = collected ? Math.max(0, n(input.cashCollected)) : 0;
     const { error } = await supabase
       .from("courier_shipments")
       .update({
         reported_status: input.status,
         reported_cash: cash,
-        reported_method: delivered ? input.method || "cash" : null,
+        reported_method: collected ? input.method || "cash" : null,
         reported_note: input.note?.trim() || null,
+        reported_proof_url: input.proofUrl || null,
         reported_at: new Date().toISOString(),
       })
       .eq("id", shipmentId);
     if (error) return { ok: false, error: error.message };
     return { ok: true, data: undefined };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+/** Upload a proof-of-delivery photo (data URL) to the courier-proofs bucket. */
+export async function uploadCourierProof(dataUrl: string, filename: string): Promise<ActionResult<{ url: string }>> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  const courierId = await getCourierId();
+  if (!courierId) return { ok: false, error: "not_signed_in" };
+  try {
+    const m = /^data:([^;]+);base64,([\s\S]*)$/.exec(dataUrl);
+    if (!m) return { ok: false, error: "bad_image" };
+    const contentType = m[1] || "image/jpeg";
+    const bytes = Buffer.from(m[2], "base64");
+    if (bytes.length > 8 * 1024 * 1024) return { ok: false, error: "too_large" };
+    const ext = contentType.split("/")[1]?.replace(/[^a-z0-9]/gi, "") || "jpg";
+    const safe = (filename || "proof").replace(/[^\w.-]+/g, "_").slice(0, 40);
+    const path = `${courierId}/${Date.now()}-${safe}.${ext}`;
+    const sb = getServerSupabase();
+    const { error: upErr } = await sb.storage.from("courier-proofs").upload(path, bytes, { contentType, upsert: true });
+    if (upErr) return { ok: false, error: upErr.message };
+    const { data } = sb.storage.from("courier-proofs").getPublicUrl(path);
+    return { ok: true, data: { url: data.publicUrl } };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }
