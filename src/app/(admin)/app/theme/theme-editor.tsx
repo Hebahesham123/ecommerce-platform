@@ -784,6 +784,21 @@ export function ThemeEditor() {
                     : "A button across the card instead of a small plus. A product with sizes opens rather than being added."}
                 </p>
               </Field>
+              <Field label={ar ? "شكل بطاقة المنتج" : "How a product card is laid out"} type="select">
+                <select
+                  value={draft.settings.cardLook}
+                  onChange={(e) => patchSettings({ cardLook: e.target.value })}
+                  className={input}
+                >
+                  <option value="market">{ar ? "شكل المتاجر الكبيرة" : "Marketplace"}</option>
+                  <option value="soft">{ar ? "شكل المتجر الهادئ" : "The shop's own"}</option>
+                </select>
+                <p className="mt-1 text-[11px] text-ink-soft">
+                  {ar
+                    ? "شكل المتاجر الكبيرة: شريط متحرك تحت الصورة، السعر أسود وكبير، نسبة الخصم بالأخضر بجانب السعر القديم، والتقييم في إطار صغير. أكثف وأسرع في القراءة داخل الشبكة."
+                    : "Marketplace puts a moving strip under the picture, the price in black, the discount in green beside the price it was, and the rating in a small chip. Denser, and faster to read in a grid."}
+                </p>
+              </Field>
               <Field label={ar ? "سطر متحرك على البطاقة" : "A travelling line on the card"} type="checkbox">
                 <input
                   type="checkbox"
@@ -1760,6 +1775,7 @@ export function ThemeEditor() {
                       >
                         <AppHome
                           theme={{ ...draft, blocks: [block] }}
+                          shopBlocks={draft.blocks}
                           data={home}
                           ar={ar}
                           handlers={{

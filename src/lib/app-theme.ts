@@ -559,6 +559,16 @@ export type AppSettings = {
    */
   cardTicker: boolean;
   cardTickerText: string;
+  /**
+   * How a product card is laid out.
+   *
+   * "soft" is the shop's own: a bordered card, the discount stamped on the
+   * picture, the saving in a quiet line. "market" is the arrangement the big
+   * marketplaces use - a strip of moving text under the picture, the discount
+   * in green beside the price it was, the rating as a chip - which is denser
+   * and reads faster in a grid.
+   */
+  cardLook: string;
 };
 
 /**
@@ -929,6 +939,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   cardAddLabel: "",
   cardTicker: true,
   cardTickerText: "",
+  cardLook: "market",
 };
 
 /**
@@ -1744,6 +1755,7 @@ export function normalizeTheme(raw: unknown): AppTheme {
     cardAddLabel: str(s.cardAddLabel).slice(0, 24),
     cardTicker: s.cardTicker !== false,
     cardTickerText: str(s.cardTickerText).slice(0, 120),
+    cardLook: str(s.cardLook) === "soft" ? "soft" : "market",
     splashEnabled: Boolean(s.splashEnabled),
     splashImageUrl: str(s.splashImageUrl).slice(0, 500),
     splashBg: colour(s.splashBg, DEFAULT_SETTINGS.splashBg),

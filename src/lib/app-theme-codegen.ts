@@ -162,6 +162,7 @@ export function appPack(theme: AppTheme) {
         addLabel: str(t.cardAddLabel),
         ticker: t.cardTicker !== false,
         tickerText: str(t.cardTickerText),
+        look: str(t.cardLook) === "soft" ? "soft" : "market",
         // The shop's own free-delivery banner, repeated on the card. Borrowed
         // rather than written: a shop without that banner gets no such line.
         shopLine: (() => {
@@ -321,6 +322,7 @@ export type ThemeData = {
     ticker: boolean;
     tickerText: string;
     shopLine: string;
+    look: string;
     rating: string;
     reviews: string;
     lowAt: number;
@@ -1315,7 +1317,7 @@ function Stars({ score, size = 9 }: { score: number; size?: number }) {
  * longer than the card: a line that fits has nothing to reveal by moving, and
  * a card that fidgets for no reason is one a shopper learns to ignore.
  */
-function CardTicker({ says }: { says: string[] }) {
+function CardTicker({ says, band }: { says: string[]; band?: boolean }) {
   const rail = useRef<{ scrollTo: (to: { x: number; animated?: boolean }) => void } | null>(null);
   const size = useRef({ rail: 0, content: 0 });
   const [travels, setTravels] = useState(false);
@@ -1350,10 +1352,10 @@ function CardTicker({ says }: { says: string[] }) {
         size.current.content = w;
         measure();
       }}
-      style={styles.tickerRail}
+      style={band ? styles.tickerBand : styles.tickerRail}
     >
       {line.map((what, i) => (
-        <Text key={i} style={styles.tickerText}>
+        <Text key={i} style={band ? styles.tickerBandText : styles.tickerText}>
           {what + "  •  "}
         </Text>
       ))}
@@ -1389,6 +1391,11 @@ export function ProductTile({
   const left = typeof card.available === "number" ? card.available : null;
   const scarce = theme.card.stock && left !== null && left > 0 && left <= theme.card.lowAt;
   const single = card.variantId != null && (card.variantCount || 1) === 1;
+  const market = theme.card.look === "market";
+  const off =
+    card.compareAt != null && card.priceMin != null && card.compareAt > card.priceMin
+      ? Math.round(((card.compareAt - card.priceMin) / card.compareAt) * 100)
+      : 0;
   // What the card can say about this product that is true of it.
   const says: string[] = [];
   if (theme.card.ticker) {
@@ -1411,6 +1418,7 @@ export function ProductTile({
       ) : (
         <View style={[styles.tileImage, box]} />
       )}
+      {market ? <CardTicker says={says} band /> : null}
       <View style={styles.tileBody}>
         {/* One line. A name too long for it stops at a word, not mid-word. */}
         <Text style={styles.tileName} numberOfLines={1}>{shortName(card.name)}</Text>
@@ -1421,13 +1429,25 @@ export function ProductTile({
             {theme.card.reviews ? <Text style={styles.countText}>{"(" + theme.card.reviews + ")"}</Text> : null}
           </View>
         ) : null}
-        <View style={styles.priceRow}>
-          <Text style={styles.price}>{money(card.priceMin)}</Text>
-          {card.compareAt != null && card.priceMin != null && card.compareAt > card.priceMin ? (
-            <Text style={styles.compareAt}>{money(card.compareAt)}</Text>
-          ) : null}
-        </View>
-        <CardTicker says={says} />
+        {market ? (
+          <View>
+            <Text style={styles.priceBig}>{money(card.priceMin)}</Text>
+            {off > 0 ? (
+              <View style={styles.priceRow}>
+                <Text style={styles.compareAt}>{money(card.compareAt)}</Text>
+                <Text style={styles.off}>{off + "% OFF"}</Text>
+              </View>
+            ) : null}
+          </View>
+        ) : (
+          <View style={styles.priceRow}>
+            <Text style={styles.price}>{money(card.priceMin)}</Text>
+            {card.compareAt != null && card.priceMin != null && card.compareAt > card.priceMin ? (
+              <Text style={styles.compareAt}>{money(card.compareAt)}</Text>
+            ) : null}
+          </View>
+        )}
+        {market ? null : <CardTicker says={says} />}
         {scarce ? (
           <View style={styles.leftWrap}>
             <View style={styles.leftTrack}>
@@ -1470,6 +1490,10 @@ const styles = StyleSheet.create({
   scoreText: { fontSize: 9, fontWeight: "700", color: colors.inkMuted },
   countText: { fontSize: 9, color: colors.inkSoft },
   tickerRail: { marginTop: 4, maxHeight: 14 },
+  tickerBand: { maxHeight: 18, backgroundColor: colors.accent + "1f", paddingHorizontal: 8, paddingVertical: 3 },
+  tickerBandText: { fontSize: 9, fontWeight: "800", color: colors.accent },
+  priceBig: { marginTop: 4, fontSize: 15, fontWeight: "800", color: colors.ink },
+  off: { fontSize: 10, fontWeight: "800", color: "#15803d" },
   tickerText: { fontSize: 9, fontWeight: "700", color: colors.accent },
   leftWrap: { marginTop: 4 },
   leftTrack: { height: 3, borderRadius: 2, backgroundColor: colors.line, overflow: "hidden" },

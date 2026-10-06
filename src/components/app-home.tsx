@@ -244,16 +244,38 @@ function Thumb({
  * of a fifth instead of being rounded to something the number beside it
  * contradicts. One gradient, clipped to the width the score earns.
  */
-function Stars({ score, size = 9, color }: { score: number; size?: number; color: string }) {
-  const part = Math.max(0, Math.min(1, score / 5));
+/**
+ * The colour a saving is written in.
+ *
+ * Not the brand's: the price above it is already in the brand colour, and a
+ * discount told in the same ink as the price reads as part of the price. Green
+ * is what a shopper has been shown a saving in everywhere else.
+ */
+const SAVING_GREEN = "#15803d";
+
+function Stars({
+  score,
+  size = 9,
+  color,
+  only,
+}: {
+  score: number;
+  size?: number;
+  color: string;
+  /** Draw this many stars instead of five, for a chip that has the number beside it. */
+  only?: number;
+}) {
+  const of = only ?? 5;
+  const part = Math.max(0, Math.min(1, only ? 1 : score / 5));
+  const row = "★★★★★".slice(0, of);
   return (
     <span className="relative inline-block leading-none" style={{ fontSize: size }} aria-hidden>
-      <span style={{ color: "#d9d2c9" }}>★★★★★</span>
+      <span style={{ color: "#d9d2c9" }}>{row}</span>
       <span
         className="absolute inset-y-0 start-0 overflow-hidden whitespace-nowrap"
         style={{ width: `${part * 100}%`, color }}
       >
-        ★★★★★
+        {row}
       </span>
     </span>
   );
@@ -271,7 +293,16 @@ function Stars({ score, size = 9, color }: { score: number; size?: number; color
  * a shopper learns to ignore — so the phrases are laid down twice and the
  * travel wraps at the seam only when there is something past the edge.
  */
-function CardTicker({ says, accent }: { says: string[]; accent: string }) {
+function CardTicker({
+  says,
+  accent,
+  band,
+}: {
+  says: string[];
+  accent: string;
+  /** Tinted and run edge to edge, the way a marketplace strip is drawn. */
+  band?: boolean;
+}) {
   const rail = useRef<HTMLDivElement | null>(null);
   const [travels, setTravels] = useState(false);
 
@@ -314,8 +345,12 @@ function CardTicker({ says, accent }: { says: string[]; accent: string }) {
   return (
     <span
       ref={rail}
-      className="mt-1 block overflow-hidden whitespace-nowrap text-[9px] font-semibold"
-      style={{ color: accent }}
+      className={
+        band
+          ? "block overflow-hidden whitespace-nowrap px-2 py-[3px] text-[9px] font-bold"
+          : "mt-1 block overflow-hidden whitespace-nowrap text-[9px] font-semibold"
+      }
+      style={band ? { color: accent, background: accent + "1f" } : { color: accent }}
     >
       {line.map((what, i) => (
         <span key={i} className="inline-block" aria-hidden={i >= says.length}>
@@ -450,6 +485,7 @@ const CardStyle = createContext({
   ticker: DEFAULT_SETTINGS.cardTicker,
   tickerText: "",
   shopLine: "",
+  look: DEFAULT_SETTINGS.cardLook,
   /** The shop's standing, as the product screen states it. */
   rating: "",
   reviews: "",
@@ -520,19 +556,35 @@ function Tile({
 
   const ratio =
     shape === "wide" ? "aspect-[4/3]" : shape === "tall" ? "aspect-[3/4]" : "aspect-square";
+  // The marketplace arrangement: the moving strip under the picture, the
+  // discount in green beside the price it was, the rating as a chip, and the
+  // card itself quieter so the row reads as goods rather than as panels.
+  const market = style.look === "market";
 
   return (
     <div
-      className={`${wide ? "w-40 shrink-0" : ""} relative overflow-hidden rounded-2xl border border-slate-200 bg-white ${
-        fadeAfter === undefined ? "" : "app-fade-in"
-      }`}
+      className={`${wide ? "w-40 shrink-0" : ""} relative overflow-hidden bg-white ${
+        market ? "rounded-lg border border-slate-100" : "rounded-2xl border border-slate-200"
+      } ${fadeAfter === undefined ? "" : "app-fade-in"}`}
       style={fadeAfter === undefined ? undefined : { animationDelay: `${fadeAfter}ms` }}
     >
       <button onClick={() => onOpen?.(card.id)} className="block w-full text-start">
-        <span className="relative block p-1.5">
-          <Thumb src={card.image} className={`${ratio} rounded-xl`} fit={fit} blend />
+        <span className={`relative block ${market ? "" : "p-1.5"}`}>
+          <Thumb
+            src={card.image}
+            className={`${ratio} ${market ? "" : "rounded-xl"}`}
+            fit={fit}
+            blend
+          />
         </span>
-        <span className={`block ps-2 pb-2 ${canAdd && !style.add ? "pe-9" : "pe-2"}`}>
+        {/* Edge to edge, directly under the picture, where a marketplace puts
+            the line it wants read on the way down to the price. */}
+        {market && <CardTicker says={says} accent={accent} band />}
+        <span
+          className={`block ${market ? "ps-1.5 pt-1" : "ps-2"} pb-2 ${
+            canAdd && !style.add ? "pe-9" : market ? "pe-1.5" : "pe-2"
+          }`}
+        >
           {card.vendor && (
             <span className="block truncate text-[9px] font-bold uppercase tracking-[0.08em] text-slate-900">
               {card.vendor}
@@ -545,28 +597,58 @@ function Tile({
           {/* The shop's standing. Every card says the same thing because
               nothing here records a rating per product; it is the number the
               product screen already shows, not a second one. */}
-          {stars && (
-            <span className="mt-0.5 flex items-center gap-1">
-              <Stars score={score} color={accent} />
-              <span className="text-[9px] font-semibold text-slate-600">{style.rating}</span>
-              {str(style.reviews) && (
-                <span className="text-[9px] text-slate-400">({style.reviews})</span>
+          {stars &&
+            (market ? (
+              <span className="mt-1 inline-flex items-center gap-1 rounded border border-slate-200 px-1 py-[1px] align-middle">
+                <Stars score={score} color={accent} only={1} />
+                <span className="text-[9px] font-bold text-slate-700">{style.rating}</span>
+                {str(style.reviews) && (
+                  <span className="text-[9px] text-slate-400">({style.reviews})</span>
+                )}
+              </span>
+            ) : (
+              <span className="mt-0.5 flex items-center gap-1">
+                <Stars score={score} color={accent} />
+                <span className="text-[9px] font-semibold text-slate-600">{style.rating}</span>
+                {str(style.reviews) && (
+                  <span className="text-[9px] text-slate-400">({style.reviews})</span>
+                )}
+              </span>
+            ))}
+
+          {/* Was and now on one baseline: the saving reads as one thought, and
+              the card keeps the line the second price used to take. */}
+          {market ? (
+            <>
+              {/* What it costs, alone on its line and the largest thing under
+                  the picture, because it is what the card is being read for. */}
+              <span className="mt-1 block text-[15px] font-extrabold leading-tight text-slate-900">
+                {money(now, ar)}
+              </span>
+              {onSale && (
+                <span className="flex items-baseline gap-1.5">
+                  <span className="text-[10px] text-slate-400 line-through">{money(was, ar)}</span>
+                  {/* Green, because a saving is written in green everywhere a
+                      shopper has seen one, and the brand colour is already
+                      carrying the strip above. */}
+                  <span className="text-[10px] font-extrabold" style={{ color: SAVING_GREEN }}>
+                    {off}% {ar ? "خصم" : "OFF"}
+                  </span>
+                </span>
+              )}
+            </>
+          ) : (
+            <span className="mt-0.5 flex items-baseline gap-1.5">
+              <span className="text-[13px] font-bold" style={{ color: accent }}>
+                {money(now, ar)}
+              </span>
+              {onSale && (
+                <span className="text-[10px] text-slate-400 line-through">{money(was, ar)}</span>
               )}
             </span>
           )}
 
-          {/* Was and now on one baseline: the saving reads as one thought, and
-              the card keeps the line the second price used to take. */}
-          <span className="mt-0.5 flex items-baseline gap-1.5">
-            <span className="text-[13px] font-bold" style={{ color: accent }}>
-              {money(now, ar)}
-            </span>
-            {onSale && (
-              <span className="text-[10px] text-slate-400 line-through">{money(was, ar)}</span>
-            )}
-          </span>
-
-          <CardTicker says={says} accent={accent} />
+          {!market && <CardTicker says={says} accent={accent} />}
 
           {/* How little is left, which is the one thing on this card true of
               this product alone. It appears only once that is worth saying. */}
@@ -592,7 +674,7 @@ function Tile({
       {/* Across from the heart and measured from the same edge, so the two
           things stamped on a photo sit on one line. The corner the saving
           used to sit in is where the eye arrives last. */}
-      {off > 0 && (
+      {off > 0 && !market && (
         <span
           className="pointer-events-none absolute start-2 top-2 rounded-md px-1.5 py-0.5 text-[10px] font-bold text-white shadow-sm"
           style={{ background: accent }}
@@ -2605,7 +2687,7 @@ function CountdownDeals({
                     </span>
                   )}
                 </span>
-                <CardTicker says={dealSays} accent={accent} />
+                <CardTicker says={dealSays} accent={accent} band={cards.look === "market"} />
                 {showClaimed && claimed && (
                   <span className="mt-1.5 block">
                     <span className="block h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
@@ -5180,6 +5262,7 @@ export function AppHome({
   handlers = {},
   showPlaceholders = false,
   where = "home",
+  shopBlocks,
 }: {
   theme: AppTheme;
   data: HomeData;
@@ -5193,6 +5276,13 @@ export function AppHome({
    * same wherever a merchant places it.
    */
   where?: Placement;
+  /**
+   * Every block on the theme, when what is being drawn is only some of them.
+   *
+   * The editor draws one block per renderer so it can frame each separately,
+   * which left a card unable to find the free-delivery banner two blocks down.
+   */
+  shopBlocks?: Block[];
 }) {
   const blocks = blocksFor(theme.blocks ?? [], where);
   const cardStyle = useMemo(
@@ -5205,13 +5295,16 @@ export function AppHome({
       addLabel: theme.settings.cardAddLabel,
       ticker: theme.settings.cardTicker,
       tickerText: theme.settings.cardTickerText,
-      shopLine: shopPromise(theme.blocks ?? []),
+      // From the whole theme, not the blocks being drawn: the editor renders
+      // one block at a time, and the promise lives on a different block.
+      shopLine: shopPromise(shopBlocks ?? theme.blocks ?? []),
+      look: theme.settings.cardLook,
       // The product screen's numbers, not a second pair of them.
       rating: theme.screens.product.ratingValue,
       reviews: theme.screens.product.reviewCount,
       lowAt: theme.screens.product.lowStockAt || 5,
     }),
-    [theme.settings, theme.screens.product, theme.blocks],
+    [theme.settings, theme.screens.product, theme.blocks, shopBlocks],
   );
   return (
     <CardStyle.Provider value={cardStyle}>
