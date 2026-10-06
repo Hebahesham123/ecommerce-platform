@@ -162,6 +162,17 @@ export function appPack(theme: AppTheme) {
         addLabel: str(t.cardAddLabel),
         ticker: t.cardTicker !== false,
         tickerText: str(t.cardTickerText),
+        // The shop's own free-delivery banner, repeated on the card. Borrowed
+        // rather than written: a shop without that banner gets no such line.
+        shopLine: (() => {
+          const b = (theme.blocks ?? []).find((x) => x.type === "free_shipping");
+          if (!b) return "";
+          const set = b.settings as Record<string, unknown>;
+          const title = str(set.title).trim();
+          const under = str(set.subtitle).trim();
+          const line = !under || /[0-9٠-٩]/.test(title) ? title : title + " " + under;
+          return line.slice(0, 48);
+        })(),
         // The product screen's numbers, not a second pair of them: one score
         // kept in two places is a score that disagrees with itself.
         rating: str(theme.screens.product.ratingValue),
@@ -309,6 +320,7 @@ export type ThemeData = {
     addLabel: string;
     ticker: boolean;
     tickerText: string;
+    shopLine: string;
     rating: string;
     reviews: string;
     lowAt: number;
@@ -1387,6 +1399,7 @@ export function ProductTile({
     }
     const ways = card.variantCount || 1;
     if (ways > 1) says.push(ways + " to choose from");
+    if (theme.card.shopLine) says.push(theme.card.shopLine);
     if (theme.card.tickerText) says.push(theme.card.tickerText);
   }
   const ratio = shape === "wide" ? 0.75 : shape === "tall" ? 1.34 : 1;

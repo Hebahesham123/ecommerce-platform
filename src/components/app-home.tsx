@@ -328,6 +328,54 @@ function CardTicker({ says, accent }: { says: string[]; accent: string }) {
 }
 
 /**
+ * The promise the shop already prints on its own banner.
+ *
+ * Borrowed, not written: if the free-delivery banner is on the theme then the
+ * shop has published that line on the same screen, so a card may repeat it.
+ * Nothing here invents a promise the merchant has not made, which is why there
+ * is no default - a shop without the banner gets no such phrase.
+ */
+function shopPromise(blocks: Block[]): string {
+  const b = (blocks ?? []).find((x) => x.type === "free_shipping");
+  if (!b) return "";
+  const set = b.settings as Record<string, unknown>;
+  const title = str(set.title).trim();
+  const under = str(set.subtitle).trim();
+  // A title that already names the threshold has said it; adding the subtitle
+  // then repeats the number back at the shopper.
+  const line = !under || /[0-9٠-٩]/.test(title) ? title : title + " " + under;
+  return line.slice(0, 48);
+}
+
+/**
+ * Everything a card can truthfully say about a product, in the order a shopper
+ * cares about: what is nearly gone, what it saves, how many ways it comes,
+ * then what the shop says about everything.
+ *
+ * One list, so the hand-written deal card and the drawn product card say the
+ * same things in the same words. They did not, which is how the deals row came
+ * to carry no line at all.
+ */
+function cardSays(
+  style: { ticker: boolean; tickerText: string; shopLine: string },
+  facts: { left: number | null; scarce: boolean; was: number | null; now: number | null; ways: number },
+  ar: boolean,
+): string[] {
+  if (!style.ticker) return [];
+  const says: string[] = [];
+  if (facts.left === 1) says.push(ar ? "آخر قطعة" : "Last one");
+  else if (facts.scarce && facts.left !== null) says.push(ar ? `باقي ${facts.left} فقط` : `Only ${facts.left} left`);
+  if (facts.was != null && facts.now != null && facts.was > facts.now) {
+    const saved = money(facts.was - facts.now, ar);
+    says.push(ar ? `توفّرين ${saved}` : `Save ${saved}`);
+  }
+  if (facts.ways > 1) says.push(ar ? `${facts.ways} اختيارات` : `${facts.ways} to choose from`);
+  if (str(style.shopLine)) says.push(str(style.shopLine));
+  if (str(style.tickerText)) says.push(str(style.tickerText));
+  return says;
+}
+
+/**
  * The product a merchant-written item points at, if the catalogue holds it.
  *
  * A deal is typed by hand - a picture, a price, a link - so it knows nothing
@@ -401,6 +449,7 @@ const CardStyle = createContext({
   addLabel: "",
   ticker: DEFAULT_SETTINGS.cardTicker,
   tickerText: "",
+  shopLine: "",
   /** The shop's standing, as the product screen states it. */
   rating: "",
   reviews: "",
@@ -463,20 +512,11 @@ function Tile({
   // that claims to show sales would be inventing a number nothing records.
   const left = typeof card.available === "number" ? card.available : null;
   const scarce = style.stock && left !== null && left > 0 && left <= style.lowAt;
-  // Everything the card can say about this product that is true of it, in
-  // the order a shopper cares: what is nearly gone, what it saves, then
-  // whatever the merchant wants said about everything.
-  const says: string[] = [];
-  if (style.ticker) {
-    if (left !== null && left === 1) says.push(ar ? "آخر قطعة" : "Last one");
-    else if (scarce) says.push(ar ? `باقي ${left} فقط` : `Only ${left} left`);
-    if (onSale && was != null && now != null) {
-      says.push(ar ? `توفّرين ${money(was - now, ar)}` : `Save ${money(was - now, ar)}`);
-    }
-    const ways = card.variantCount ?? 1;
-    if (ways > 1) says.push(ar ? ways + " اختيارات" : ways + " to choose from");
-    if (str(style.tickerText)) says.push(str(style.tickerText));
-  }
+  const says = cardSays(
+    style,
+    { left, scarce, was: onSale ? was : null, now, ways: card.variantCount ?? 1 },
+    ar,
+  );
 
   const ratio =
     shape === "wide" ? "aspect-[4/3]" : shape === "tall" ? "aspect-[3/4]" : "aspect-square";
@@ -2516,6 +2556,18 @@ function CountdownDeals({
           // opens, for the same reason the product cards do.
           const product = productFor(item, data);
           const single = product?.variantId != null && (product?.variantCount ?? 1) === 1;
+          const dealLeft = typeof product?.available === "number" ? product.available : null;
+          const dealSays = cardSays(
+            cards,
+            {
+              left: dealLeft,
+              scarce: cards.stock && dealLeft !== null && dealLeft > 0 && dealLeft <= cards.lowAt,
+              was: product?.compareAt ?? null,
+              now: product?.priceMin ?? null,
+              ways: product?.variantCount ?? 1,
+            },
+            ar,
+          );
           return (
             <div
               key={item.id}
@@ -2553,6 +2605,7 @@ function CountdownDeals({
                     </span>
                   )}
                 </span>
+                <CardTicker says={dealSays} accent={accent} />
                 {showClaimed && claimed && (
                   <span className="mt-1.5 block">
                     <span className="block h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
@@ -5152,12 +5205,13 @@ export function AppHome({
       addLabel: theme.settings.cardAddLabel,
       ticker: theme.settings.cardTicker,
       tickerText: theme.settings.cardTickerText,
+      shopLine: shopPromise(theme.blocks ?? []),
       // The product screen's numbers, not a second pair of them.
       rating: theme.screens.product.ratingValue,
       reviews: theme.screens.product.reviewCount,
       lowAt: theme.screens.product.lowStockAt || 5,
     }),
-    [theme.settings, theme.screens.product],
+    [theme.settings, theme.screens.product, theme.blocks],
   );
   return (
     <CardStyle.Provider value={cardStyle}>
