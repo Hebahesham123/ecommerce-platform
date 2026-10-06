@@ -799,7 +799,7 @@ export function ThemeEditor() {
                     : "Marketplace puts a moving strip under the picture, the price in black, the discount in green beside the price it was, and the rating in a small chip. Denser, and faster to read in a grid."}
                 </p>
               </Field>
-              <Field label={ar ? "سطر متحرك على البطاقة" : "A travelling line on the card"} type="checkbox">
+              <Field label={ar ? "ملاحظة تتقلّب على البطاقة" : "A note that turns over on the card"} type="checkbox">
                 <input
                   type="checkbox"
                   checked={draft.settings.cardTicker}
@@ -807,8 +807,8 @@ export function ThemeEditor() {
                 />
                 <p className="mt-1 text-[11px] text-ink-soft">
                   {ar
-                    ? "يقول ما هو صحيح عن هذا المنتج: آخر قطعة، كم توفّرين. يتحرك فقط إذا كان أطول من البطاقة."
-                    : "Says what is true of that product — last one, how much it saves. It travels only when it is longer than the card."}
+                    ? "حقيقة واحدة في كل مرة، تتقلّب: التوصيل المجاني، تقييم المتجر، كم وفّرتِ، وكم قطعة بيعت فعلاً. كل واحدة بعلامتها، وكلها محسوبة ولا تُكتب."
+                    : "One true thing at a time, turning over: free delivery, the shop's standing, what came off the price, and how many have actually been bought. Each with its own mark, each measured rather than written."}
                 </p>
               </Field>
               <Field label={ar ? "سطرك أنتِ (يُضاف للجميع)" : "Your own line (added to every card)"} type="text">
@@ -820,8 +820,8 @@ export function ThemeEditor() {
                 />
                 <p className="mt-1 text-[11px] text-ink-soft">
                   {ar
-                    ? "هذا هو الجزء الوحيد الذي يمكنه قول ما لم يقسه المتجر — فاكتبي ما هو صحيح."
-                    : "The only part that can say something the shop has not measured, so write something true."}
+                    ? "تنضمّ إلى بقية الحقائق في الدور. هذا هو الجزء الوحيد الذي يمكنه قول ما لم يقسه المتجر — فاكتبي ما هو صحيح."
+                    : "It joins the others in the turn. This is the only part that can say something the shop has not measured, so write something true."}
                 </p>
               </Field>
               <Field label={ar ? "نص زر الإضافة" : "What the button says"} type="text">
@@ -1775,7 +1775,7 @@ export function ThemeEditor() {
                       >
                         <AppHome
                           theme={{ ...draft, blocks: [block] }}
-                          shopBlocks={draft.blocks}
+
                           data={home}
                           ar={ar}
                           handlers={{

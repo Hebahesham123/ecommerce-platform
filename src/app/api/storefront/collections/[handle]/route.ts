@@ -1,4 +1,5 @@
 import { appCatalog, toCard, toCollection } from "@/lib/api/catalog";
+import { attachSold, soldByProduct } from "@/lib/api/sold";
 import { fail, int, ok, str } from "@/lib/api/http";
 
 export const runtime = "nodejs";
@@ -88,7 +89,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ handle: str
 
     return ok({
       collection: toCollection(found),
-      products: products.slice(offset, offset + limit).map(toCard),
+      products: attachSold(products.slice(offset, offset + limit).map(toCard), await soldByProduct()),
       total: products.length,
       offset,
       limit,

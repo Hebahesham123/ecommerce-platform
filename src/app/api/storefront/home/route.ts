@@ -1,4 +1,5 @@
 import { appCatalog, appMenus, SYNTHETIC, toCard, toCollection } from "@/lib/api/catalog";
+import { attachSold, soldByProduct } from "@/lib/api/sold";
 import { getAppTheme } from "@/lib/app-theme-service";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
 import { fail, ok } from "@/lib/api/http";
@@ -153,17 +154,21 @@ export async function GET() {
       for (const c of collections.slice(0, ALL_ROWS_CAP)) want(String(c.handle), wantsAll);
     }
 
+    const sold = await soldByProduct();
     const rows: Record<string, ReturnType<typeof toCard>[]> = {};
     for (const [handle, limit] of wanted) {
       const found = catalog.collectionByHandle.get(handle);
-      if (found) rows[handle] = found.products.slice(0, limit).map(toCard);
+      if (found) rows[handle] = attachSold(found.products.slice(0, limit).map(toCard), sold);
     }
 
     const newArrivals = newArrivalsLimit
-      ? [...catalog.products]
-          .sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")))
-          .slice(0, newArrivalsLimit)
-          .map(toCard)
+      ? attachSold(
+          [...catalog.products]
+            .sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")))
+            .slice(0, newArrivalsLimit)
+            .map(toCard),
+          sold,
+        )
       : [];
 
     return ok({

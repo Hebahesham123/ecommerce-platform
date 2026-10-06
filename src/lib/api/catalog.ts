@@ -135,6 +135,13 @@ export type AppProductCard = {
    */
   variantId: string | null;
   variantCount: number;
+  /**
+   * How many have been bought. Counted off the order lines by the route that
+   * serves the card, not here - this function is given one product and no
+   * database. Zero until it is filled in, and zero is also the honest answer
+   * for a product nobody has bought yet.
+   */
+  sold: number;
 };
 
 export function toCard(p: ProductDrop): AppProductCard {
@@ -152,6 +159,7 @@ export function toCard(p: ProductDrop): AppProductCard {
     vendor: (p.vendor as string) || null,
     variantId: variants.length === 1 ? String(variants[0].id) : null,
     variantCount: variants.length,
+    sold: 0,
   };
 }
 

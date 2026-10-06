@@ -195,6 +195,8 @@ export type ProductCard = {
   /** Set only when the product has exactly one variant — see AppProductCard. */
   variantId?: string | null;
   variantCount?: number;
+  /** How many have been bought. Counted off order lines that were not cancelled. */
+  sold?: number;
 };
 
 export type Collection = {

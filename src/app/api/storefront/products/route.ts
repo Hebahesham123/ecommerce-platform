@@ -1,4 +1,5 @@
 import { appCatalog, toCard, type AppProductCard } from "@/lib/api/catalog";
+import { attachSold, soldByProduct } from "@/lib/api/sold";
 import { fail, int, ok, str } from "@/lib/api/http";
 
 export const runtime = "nodejs";
@@ -50,7 +51,10 @@ export async function GET(request: Request) {
     }
     if (inStock) rows = rows.filter((p) => p.available);
 
-    const products: AppProductCard[] = rows.slice(offset, offset + limit).map(toCard);
+    const products: AppProductCard[] = attachSold(
+      rows.slice(offset, offset + limit).map(toCard),
+      await soldByProduct(),
+    );
     return ok({ products, count: rows.length, offset, limit });
   } catch (e) {
     return fail((e as Error).message, 503);

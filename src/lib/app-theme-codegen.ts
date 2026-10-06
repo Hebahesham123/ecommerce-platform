@@ -163,17 +163,6 @@ export function appPack(theme: AppTheme) {
         ticker: t.cardTicker !== false,
         tickerText: str(t.cardTickerText),
         look: str(t.cardLook) === "soft" ? "soft" : "market",
-        // The shop's own free-delivery banner, repeated on the card. Borrowed
-        // rather than written: a shop without that banner gets no such line.
-        shopLine: (() => {
-          const b = (theme.blocks ?? []).find((x) => x.type === "free_shipping");
-          if (!b) return "";
-          const set = b.settings as Record<string, unknown>;
-          const title = str(set.title).trim();
-          const under = str(set.subtitle).trim();
-          const line = !under || /[0-9٠-٩]/.test(title) ? title : title + " " + under;
-          return line.slice(0, 48);
-        })(),
         // The product screen's numbers, not a second pair of them: one score
         // kept in two places is a score that disagrees with itself.
         rating: str(theme.screens.product.ratingValue),
@@ -321,7 +310,6 @@ export type ThemeData = {
     addLabel: string;
     ticker: boolean;
     tickerText: string;
-    shopLine: string;
     look: string;
     rating: string;
     reviews: string;
@@ -527,6 +515,8 @@ export type Card = {
   variantCount?: number;
   /** How many are left. The one number on a card true of that product alone. */
   available?: number;
+  /** How many have been bought. Counted off order lines that were not cancelled. */
+  sold?: number;
 };
 
 export type HomePayload = {
@@ -1192,7 +1182,7 @@ function piecesFile(): GeneratedFile {
     path: "components/Pieces.tsx",
     language: "tsx",
     contents: `import React, { useEffect, useRef, useState } from "react";
-import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Animated, Image, Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import { colors, radius, spacing, theme } from "../theme";
 import type { Card, HomePayload } from "../api";
 
@@ -1325,57 +1315,78 @@ function Stars({ score, size = 9 }: { score: number; size?: number }) {
   );
 }
 
+type Note = { key: string; text: string; ink: string; mark: string };
+
 /**
- * A line of true things, travelling.
+ * The card's note: one true thing at a time, turning over.
  *
- * Everything it says is measured from this product. It travels only when it is
- * longer than the card: a line that fits has nothing to reveal by moving, and
- * a card that fidgets for no reason is one a shopper learns to ignore.
+ * It turns on its top edge rather than sliding, because a line that slides is
+ * a ticker and a shopper learns to let a ticker run past.
  */
-function CardTicker({ says, tint }: { says: string[]; tint?: string }) {
-  const rail = useRef<{ scrollTo: (to: { x: number; animated?: boolean }) => void } | null>(null);
-  const size = useRef({ rail: 0, content: 0 });
-  const [travels, setTravels] = useState(false);
-  const measure = () => setTravels(size.current.content / 2 > size.current.rail + 4);
+function CardNote({ notes }: { notes: Note[] }) {
+  const [at, setAt] = useState(0);
+  const turn = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    if (!travels) return;
-    let at = 0;
-    const seam = size.current.content / 2;
+    if (notes.length < 2) return;
     const timer = setInterval(() => {
-      if (seam <= 1) return;
-      at += 0.6;
-      if (at >= seam) at -= seam;
-      rail.current?.scrollTo({ x: at, animated: false });
-    }, 33);
+      turn.setValue(0);
+      setAt((n) => (n + 1) % notes.length);
+      Animated.timing(turn, { toValue: 1, duration: 420, useNativeDriver: true }).start();
+    }, 2600);
     return () => clearInterval(timer);
-  }, [travels]);
+  }, [notes.length, turn]);
 
-  if (!says.length) return null;
-  const line = travels ? says.concat(says) : says;
+  if (!notes.length) return null;
+  const note = notes[at % notes.length];
+  const tilt = turn.interpolate({ inputRange: [0, 1], outputRange: ["-88deg", "0deg"] });
   return (
-    <ScrollView
-      ref={rail as never}
-      horizontal
-      scrollEnabled={false}
-      showsHorizontalScrollIndicator={false}
-      onLayout={(e: { nativeEvent: { layout: { width: number } } }) => {
-        size.current.rail = e.nativeEvent.layout.width;
-        measure();
-      }}
-      onContentSizeChange={(w: number) => {
-        size.current.content = w;
-        measure();
-      }}
-      style={styles.tickerRail}
-    >
-      {line.map((what, i) => (
-        <Text key={i} style={[styles.tickerText, tint ? { color: tint } : null]}>
-          {what + "  •  "}
-        </Text>
-      ))}
-    </ScrollView>
+    <View style={styles.noteRow}>
+      <Animated.View style={[styles.noteFace, { opacity: turn, transform: [{ perspective: 300 }, { rotateX: tilt }] }]}>
+        <Text style={[styles.noteMark, { color: note.ink }]}>{note.mark}</Text>
+        <Text style={[styles.noteText, { color: note.ink }]} numberOfLines={1}>{note.text}</Text>
+      </Animated.View>
+    </View>
   );
+}
+
+/**
+ * The facts a card can put its name to, in the order a shopper weighs them.
+ *
+ * Delivery is free on everything the shop sells, so it is not a promise being
+ * made here. Nothing is written for the card: the discount is the gap between
+ * the two prices and the count is of order lines that were not cancelled.
+ */
+function notesFor(card: Card, scarce: boolean, left: number | null): Note[] {
+  if (!theme.card.ticker) return [];
+  const notes: Note[] = [];
+  notes.push({ key: "van", mark: "\u{1F69A}", ink: "#15803d", text: "Free delivery on everything" });
+  const score = Number(theme.card.rating);
+  if (Number.isFinite(score) && score > 0) {
+    notes.push({
+      key: "star",
+      mark: "\u2605",
+      ink: "#b45309",
+      text: theme.card.reviews
+        ? theme.card.rating + " from " + theme.card.reviews + " ratings"
+        : theme.card.rating + " out of 5",
+    });
+  }
+  if (card.compareAt != null && card.priceMin != null && card.compareAt > card.priceMin) {
+    notes.push({ key: "drop", mark: "\u2193", ink: "#b42318", text: "You save " + money(card.compareAt - card.priceMin) });
+  }
+  const sold = Number(card.sold || 0);
+  if (sold > 0) {
+    notes.push({ key: "bag", mark: "\u{1F6CD}", ink: "#334155", text: sold.toLocaleString("en-US") + " sold" });
+  }
+  // The marketplace card flies this on the picture instead.
+  if (theme.card.look !== "market" && scarce && left !== null) {
+    notes.push({ key: "few", mark: "\u25C6", ink: "#b42318", text: left === 1 ? "Last one" : "Only " + left + " left" });
+  }
+  if (theme.card.tickerText) {
+    notes.push({ key: "own", mark: "\u25CF", ink: "#334155", text: theme.card.tickerText });
+  }
+  return notes;
 }
 
 export function ProductTile({
@@ -1411,19 +1422,7 @@ export function ProductTile({
     card.compareAt != null && card.priceMin != null && card.compareAt > card.priceMin
       ? Math.round(((card.compareAt - card.priceMin) / card.compareAt) * 100)
       : 0;
-  // What the card can say about this product that is true of it.
-  const says: string[] = [];
-  if (theme.card.ticker) {
-    if (left !== null && left === 1) says.push("Last one");
-    else if (scarce) says.push("Only " + left + " left");
-    if (card.compareAt != null && card.priceMin != null && card.compareAt > card.priceMin) {
-      says.push("Save " + money(card.compareAt - card.priceMin));
-    }
-    const ways = card.variantCount || 1;
-    if (ways > 1) says.push(ways + " to choose from");
-    if (theme.card.shopLine) says.push(theme.card.shopLine);
-    if (theme.card.tickerText) says.push(theme.card.tickerText);
-  }
+  const notes = notesFor(card, scarce, left);
   const ratio = shape === "wide" ? 0.75 : shape === "tall" ? 1.34 : 1;
   const box = fill ? styles.fillImage : { width, height: Math.round(width * ratio) };
 
@@ -1469,16 +1468,7 @@ export function ProductTile({
                 <Text style={styles.off}>{off + "%"}</Text>
               </View>
             ) : null}
-            {says.length ? (
-              <View style={styles.dropRow}>
-                {off > 0 ? (
-                  <View style={styles.dropDisc}>
-                    <Text style={styles.dropMark}>{"↓"}</Text>
-                  </View>
-                ) : null}
-                <CardTicker says={says} tint={"#b42318"} />
-              </View>
-            ) : null}
+            <CardNote notes={notes} />
           </View>
         </Pressable>
       </View>
@@ -1508,7 +1498,7 @@ export function ProductTile({
             <Text style={styles.compareAt}>{money(card.compareAt)}</Text>
           ) : null}
         </View>
-        <CardTicker says={says} />
+        <CardNote notes={notes} />
         {scarce ? (
           <View style={styles.leftWrap}>
             <View style={styles.leftTrack}>
@@ -1550,7 +1540,10 @@ const styles = StyleSheet.create({
   starRow: { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 2 },
   scoreText: { fontSize: 9, fontWeight: "700", color: colors.inkMuted },
   countText: { fontSize: 9, color: colors.inkSoft },
-  tickerRail: { marginTop: 4, maxHeight: 14 },
+  noteRow: { marginTop: 4, height: 15, justifyContent: "center", overflow: "hidden" },
+  noteFace: { flexDirection: "row", alignItems: "center", gap: 4 },
+  noteMark: { fontSize: 9, lineHeight: 11 },
+  noteText: { fontSize: 9, fontWeight: "700", flexShrink: 1 },
   flat: { backgroundColor: colors.surface },
   panel: { borderRadius: radius.lg, overflow: "hidden", backgroundColor: theme.card.photoBg },
   panelImage: { backgroundColor: theme.card.photoBg },
@@ -1569,7 +1562,6 @@ const styles = StyleSheet.create({
   dropMark: { fontSize: 9, lineHeight: 11, fontWeight: "800", color: "#fff" },
   priceBig: { marginTop: 4, fontSize: 14, fontWeight: "800", color: colors.ink },
   off: { fontSize: 10, fontWeight: "800", color: "#15803d" },
-  tickerText: { fontSize: 9, fontWeight: "700", color: colors.accent },
   leftWrap: { marginTop: 4 },
   leftTrack: { height: 3, borderRadius: 2, backgroundColor: colors.line, overflow: "hidden" },
   leftFill: { height: 3, borderRadius: 2, backgroundColor: colors.accent },

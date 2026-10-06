@@ -40,6 +40,8 @@ export type Card = {
   variantCount?: number;
   /** How many are left. The one number on a card true of that product alone. */
   available?: number;
+  /** How many have been bought. Counted off order lines that were not cancelled. */
+  sold?: number;
 };
 
 export type HomeCollection = {
@@ -274,6 +276,15 @@ const SAVING_GREEN = "#15803d";
 /** The ink a price drop is written in, and the disc its arrow sits in. */
 const DROP_RED = "#b42318";
 
+/** Delivery, in the green a thing that costs nothing is written in. */
+const DELIVERY_GREEN = "#15803d";
+
+/** The standing, in the colour its star already is. */
+const RATING_AMBER = "#b45309";
+
+/** How many have gone, and the merchant's own line: plain ink, no claim. */
+const SOLD_INK = "#334155";
+
 /** The flag in the corner of the picture. Dark, so white type holds on it. */
 const FLAG_INK = "#0f4c45";
 
@@ -306,119 +317,191 @@ function Stars({
 }
 
 /**
- * A line of true things, travelling.
+ * The card's note: one true thing at a time, turning over.
  *
- * Everything it says is measured from this product: what it saves against the
- * price it was, how few are left, whether it is the last one. The merchant can
- * add a line of their own and it rides along with the rest.
+ * A line that slides is a ticker, and a shopper learns to let a ticker run
+ * past. A line that turns over on its top edge asks to be read again, and it
+ * shows one fact whole rather than three facts in pieces. Each fact carries
+ * its own mark so the kind of thing it is can be known before it is read.
  *
- * It travels only when it is longer than the card. A line that fits has
- * nothing to reveal by moving, and a card that fidgets for no reason is a card
- * a shopper learns to ignore — so the phrases are laid down twice and the
- * travel wraps at the seam only when there is something past the edge.
+ * Nothing here is written for the card. The discount is the gap between the
+ * two prices, the standing is the one the product screen shows, and the count
+ * is of order lines that were not cancelled. The shop's own line is the only
+ * part a merchant types, and it is the only part this cannot vouch for.
  */
-function CardTicker({ says, accent }: { says: string[]; accent: string }) {
-  const rail = useRef<HTMLDivElement | null>(null);
-  const [travels, setTravels] = useState(false);
+function CardNote({ notes }: { notes: Note[] }) {
+  const [at, setAt] = useState(0);
 
   useEffect(() => {
-    const el = rail.current;
-    if (!el) return;
-    const own = travels ? el.scrollWidth / 2 : el.scrollWidth;
-    setTravels(own > el.clientWidth + 4);
-  }, [says.join("|"), travels]);
+    if (notes.length < 2) return;
+    const turn = setInterval(() => setAt((n) => (n + 1) % notes.length), 2600);
+    return () => clearInterval(turn);
+  }, [notes.length]);
 
-  useEffect(() => {
-    const el = rail.current;
-    if (!el || !travels) return;
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
-    let at = 0;
-    let last = 0;
-    let frame = 0;
-    const step = (now: number) => {
-      frame = requestAnimationFrame(step);
-      if (!last) {
-        last = now;
-        return;
-      }
-      const gap = Math.min(now - last, 64);
-      last = now;
-      const seam = el.scrollWidth / 2;
-      if (seam <= 1) return;
-      // Slower than the shortcut row above it: this one is read in passing,
-      // not aimed at.
-      at += (18 * gap) / 1000;
-      if (at >= seam) at -= seam;
-      el.scrollLeft = at;
-    };
-    frame = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(frame);
-  }, [travels, says.join("|")]);
-
-  if (!says.length) return null;
-  const line = travels ? [...says, ...says] : says;
+  if (!notes.length) return null;
+  const note = notes[at % notes.length];
   return (
-    <span
-      ref={rail}
-      className="block overflow-hidden whitespace-nowrap text-[9px] font-semibold"
-      style={{ color: accent }}
-    >
-      {line.map((what, i) => (
-        <span key={i} className="inline-block" aria-hidden={i >= says.length}>
-          {what}
-          <span className="px-1.5 opacity-40">•</span>
-        </span>
-      ))}
+    <span className="mt-1 flex h-[15px] items-center overflow-hidden" style={{ perspective: 300 }}>
+      {/* Keyed on which fact it is, so React builds a new one and the
+          animation runs again rather than being replayed onto the old. */}
+      <span
+        key={note.key}
+        className="app-flip-in flex min-w-0 items-center gap-1"
+        style={{ color: note.ink }}
+      >
+        <NoteMark kind={note.mark} />
+        <span className="truncate text-[9px] font-bold leading-none">{note.text}</span>
+      </span>
     </span>
   );
 }
 
-/**
- * The promise the shop already prints on its own banner.
- *
- * Borrowed, not written: if the free-delivery banner is on the theme then the
- * shop has published that line on the same screen, so a card may repeat it.
- * Nothing here invents a promise the merchant has not made, which is why there
- * is no default - a shop without the banner gets no such phrase.
- */
-function shopPromise(blocks: Block[]): string {
-  const b = (blocks ?? []).find((x) => x.type === "free_shipping");
-  if (!b) return "";
-  const set = b.settings as Record<string, unknown>;
-  const title = str(set.title).trim();
-  const under = str(set.subtitle).trim();
-  // A title that already names the threshold has said it; adding the subtitle
-  // then repeats the number back at the shopper.
-  const line = !under || /[0-9٠-٩]/.test(title) ? title : title + " " + under;
-  return line.slice(0, 48);
+type Note = { key: string; text: string; ink: string; mark: string };
+
+/** The mark in front of a fact. Small enough to be a bullet, clear enough not to be. */
+function NoteMark({ kind }: { kind: string }) {
+  const common = { viewBox: "0 0 24 24", className: "h-[11px] w-[11px] shrink-0", "aria-hidden": true } as const;
+  if (kind === "van") {
+    return (
+      <svg {...common} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M3 7h10v9H3zM13 10h4l3 3v3h-7z" />
+        <circle cx="7" cy="18" r="1.6" />
+        <circle cx="17" cy="18" r="1.6" />
+      </svg>
+    );
+  }
+  if (kind === "star") {
+    return (
+      <svg {...common} fill="currentColor">
+        <path d="m12 3.6 2.5 5.1 5.6.8-4 3.9 1 5.6-5.1-2.7-5 2.7 1-5.6-4.1-3.9 5.6-.8z" />
+      </svg>
+    );
+  }
+  if (kind === "drop") {
+    return (
+      <svg {...common} fill="currentColor">
+        <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 5v6.2l2.3-2.3 1.4 1.4L12 17.1l-4.7-4.8 1.4-1.4L11 13.2V7Z" />
+      </svg>
+    );
+  }
+  if (kind === "bag") {
+    return (
+      <svg {...common} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M5 8h14l-1 12H6zM9 8V6a3 3 0 0 1 6 0v2" />
+      </svg>
+    );
+  }
+  if (kind === "few") {
+    return (
+      <svg {...common} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 3 3 8v8l9 5 9-5V8z" />
+        <path d="M3 8l9 5 9-5M12 13v8" />
+      </svg>
+    );
+  }
+  return (
+    <svg {...common} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 12 12 4h7v7l-8 8z" />
+      <circle cx="15.5" cy="8.5" r="1.3" fill="currentColor" stroke="none" />
+    </svg>
+  );
 }
 
 /**
- * Everything a card can truthfully say about a product, in the order a shopper
- * cares about: what is nearly gone, what it saves, how many ways it comes,
- * then what the shop says about everything.
+ * The facts a card can put its name to, in the order a shopper weighs them.
+ *
+ * Delivery first because it is the one thing true of everything and the one
+ * thing a shopper is most often deciding about; then the standing, then what
+ * came off the price, then how many have gone. Each is measured from something
+ * this shop records, and anything it does not record is simply absent - there
+ * is no fact here that appears on every card because a card looked empty.
  *
  * One list, so the hand-written deal card and the drawn product card say the
- * same things in the same words. They did not, which is how the deals row came
- * to carry no line at all.
+ * same things in the same words.
  */
-function cardSays(
-  style: { ticker: boolean; tickerText: string; shopLine: string },
-  facts: { left: number | null; scarce: boolean; was: number | null; now: number | null; ways: number },
+function cardNotes(
+  style: { ticker: boolean; tickerText: string; rating: string; reviews: string; look: string },
+  facts: {
+    left: number | null;
+    scarce: boolean;
+    was: number | null;
+    now: number | null;
+    sold: number;
+  },
   ar: boolean,
-): string[] {
+): Note[] {
   if (!style.ticker) return [];
-  const says: string[] = [];
-  if (facts.left === 1) says.push(ar ? "آخر قطعة" : "Last one");
-  else if (facts.scarce && facts.left !== null) says.push(ar ? `باقي ${facts.left} فقط` : `Only ${facts.left} left`);
+  const notes: Note[] = [];
+
+  // Free on everything: orders are priced with shipping at zero, so this is
+  // not a promise being made here, it is what the shop already charges.
+  notes.push({
+    key: "van",
+    mark: "van",
+    ink: DELIVERY_GREEN,
+    text: ar ? "توصيل مجاني لكل المنتجات" : "Free delivery on everything",
+  });
+
+  // The shop's standing, which is the only rating anything here records.
+  const score = Number(style.rating);
+  if (Number.isFinite(score) && score > 0) {
+    notes.push({
+      key: "star",
+      mark: "star",
+      ink: RATING_AMBER,
+      text: str(style.reviews)
+        ? `${style.rating} ${ar ? "من" : "from"} ${style.reviews} ${ar ? "تقييم" : "ratings"}`
+        : `${style.rating} ${ar ? "من ٥" : "out of 5"}`,
+    });
+  }
+
+  // What came off the price, as the money rather than the percent: the percent
+  // is already beside the price, and the money is the part that is felt.
   if (facts.was != null && facts.now != null && facts.was > facts.now) {
     const saved = money(facts.was - facts.now, ar);
-    says.push(ar ? `توفّرين ${saved}` : `Save ${saved}`);
+    notes.push({
+      key: "drop",
+      mark: "drop",
+      ink: DROP_RED,
+      text: ar ? `وفّرتِ ${saved}` : `You save ${saved}`,
+    });
   }
-  if (facts.ways > 1) says.push(ar ? `${facts.ways} اختيارات` : `${facts.ways} to choose from`);
-  if (str(style.shopLine)) says.push(str(style.shopLine));
-  if (str(style.tickerText)) says.push(str(style.tickerText));
-  return says;
+
+  // How many have gone. Counted off order lines that were not cancelled, so a
+  // product nobody has bought says nothing rather than saying zero.
+  if (facts.sold > 0) {
+    notes.push({
+      key: "bag",
+      mark: "bag",
+      ink: SOLD_INK,
+      text: ar
+        ? `بيع منها ${new Intl.NumberFormat("ar-EG").format(facts.sold)}`
+        : `${new Intl.NumberFormat("en-US").format(facts.sold)} sold`,
+    });
+  }
+
+  // How few are left, which is the one fact true of this product alone. The
+  // marketplace card flies it on the picture instead, and a card that says the
+  // same thing twice has a shopper reading one of them for nothing.
+  if (style.look === "market") {
+    // said by the flag
+  } else if (facts.left === 1) {
+    notes.push({ key: "few", mark: "few", ink: DROP_RED, text: ar ? "آخر قطعة" : "Last one" });
+  } else if (facts.scarce && facts.left !== null) {
+    notes.push({
+      key: "few",
+      mark: "few",
+      ink: DROP_RED,
+      text: ar ? `باقي ${facts.left} فقط` : `Only ${facts.left} left`,
+    });
+  }
+
+  // The merchant's own, and the only part of the card nothing here can check.
+  if (str(style.tickerText)) {
+    notes.push({ key: "own", mark: "tag", ink: SOLD_INK, text: str(style.tickerText) });
+  }
+
+  return notes;
 }
 
 /**
@@ -495,7 +578,6 @@ const CardStyle = createContext({
   addLabel: "",
   ticker: DEFAULT_SETTINGS.cardTicker,
   tickerText: "",
-  shopLine: "",
   look: DEFAULT_SETTINGS.cardLook,
   /** The shop's standing, as the product screen states it. */
   rating: "",
@@ -559,9 +641,9 @@ function Tile({
   // that claims to show sales would be inventing a number nothing records.
   const left = typeof card.available === "number" ? card.available : null;
   const scarce = style.stock && left !== null && left > 0 && left <= style.lowAt;
-  const says = cardSays(
+  const notes = cardNotes(
     style,
-    { left, scarce, was: onSale ? was : null, now, ways: card.variantCount ?? 1 },
+    { left, scarce, was: onSale ? was : null, now, sold: card.sold ?? 0 },
     ar,
   );
 
@@ -634,22 +716,7 @@ function Tile({
             {/* Last, where the screens put it: the red arrow, then the line
                 that moves. The arrow appears only when the price really did
                 come down, because that is what the arrow is claiming. */}
-            {says.length > 0 && (
-              <span className="mt-1 flex items-center gap-1">
-                {onSale && (
-                  <span
-                    className="grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full"
-                    style={{ background: DROP_RED }}
-                    aria-hidden
-                  >
-                    <svg viewBox="0 0 24 24" className="h-2 w-2" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 5v14M6 13l6 6 6-6" />
-                    </svg>
-                  </span>
-                )}
-                <CardTicker says={says} accent={DROP_RED} />
-              </span>
-            )}
+            <CardNote notes={notes} />
           </span>
         </button>
 
@@ -780,7 +847,7 @@ function Tile({
             </span>
           )}
 
-          <CardTicker says={says} accent={accent} />
+          <CardNote notes={notes} />
 
           {/* How little is left, which is the one thing on this card true of
               this product alone. It appears only once that is worth saying. */}
@@ -2771,14 +2838,14 @@ function CountdownDeals({
           const product = productFor(item, data);
           const single = product?.variantId != null && (product?.variantCount ?? 1) === 1;
           const dealLeft = typeof product?.available === "number" ? product.available : null;
-          const dealSays = cardSays(
+          const dealNotes = cardNotes(
             cards,
             {
               left: dealLeft,
               scarce: cards.stock && dealLeft !== null && dealLeft > 0 && dealLeft <= cards.lowAt,
               was: product?.compareAt ?? null,
               now: product?.priceMin ?? null,
-              ways: product?.variantCount ?? 1,
+              sold: product?.sold ?? 0,
             },
             ar,
           );
@@ -2819,7 +2886,7 @@ function CountdownDeals({
                     </span>
                   )}
                 </span>
-                <CardTicker says={dealSays} accent={cards.look === "market" ? DROP_RED : accent} />
+                <CardNote notes={dealNotes} />
                 {showClaimed && claimed && (
                   <span className="mt-1.5 block">
                     <span className="block h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
@@ -5394,7 +5461,6 @@ export function AppHome({
   handlers = {},
   showPlaceholders = false,
   where = "home",
-  shopBlocks,
 }: {
   theme: AppTheme;
   data: HomeData;
@@ -5408,13 +5474,6 @@ export function AppHome({
    * same wherever a merchant places it.
    */
   where?: Placement;
-  /**
-   * Every block on the theme, when what is being drawn is only some of them.
-   *
-   * The editor draws one block per renderer so it can frame each separately,
-   * which left a card unable to find the free-delivery banner two blocks down.
-   */
-  shopBlocks?: Block[];
 }) {
   const blocks = blocksFor(theme.blocks ?? [], where);
   const cardStyle = useMemo(
@@ -5427,16 +5486,13 @@ export function AppHome({
       addLabel: theme.settings.cardAddLabel,
       ticker: theme.settings.cardTicker,
       tickerText: theme.settings.cardTickerText,
-      // From the whole theme, not the blocks being drawn: the editor renders
-      // one block at a time, and the promise lives on a different block.
-      shopLine: shopPromise(shopBlocks ?? theme.blocks ?? []),
       look: theme.settings.cardLook,
       // The product screen's numbers, not a second pair of them.
       rating: theme.screens.product.ratingValue,
       reviews: theme.screens.product.reviewCount,
       lowAt: theme.screens.product.lowStockAt || 5,
     }),
-    [theme.settings, theme.screens.product, theme.blocks, shopBlocks],
+    [theme.settings, theme.screens.product],
   );
   return (
     <CardStyle.Provider value={cardStyle}>
