@@ -260,6 +260,74 @@ function Stars({ score, size = 9, color }: { score: number; size?: number; color
 }
 
 /**
+ * A line of true things, travelling.
+ *
+ * Everything it says is measured from this product: what it saves against the
+ * price it was, how few are left, whether it is the last one. The merchant can
+ * add a line of their own and it rides along with the rest.
+ *
+ * It travels only when it is longer than the card. A line that fits has
+ * nothing to reveal by moving, and a card that fidgets for no reason is a card
+ * a shopper learns to ignore — so the phrases are laid down twice and the
+ * travel wraps at the seam only when there is something past the edge.
+ */
+function CardTicker({ says, accent }: { says: string[]; accent: string }) {
+  const rail = useRef<HTMLDivElement | null>(null);
+  const [travels, setTravels] = useState(false);
+
+  useEffect(() => {
+    const el = rail.current;
+    if (!el) return;
+    const own = travels ? el.scrollWidth / 2 : el.scrollWidth;
+    setTravels(own > el.clientWidth + 4);
+  }, [says.join("|"), travels]);
+
+  useEffect(() => {
+    const el = rail.current;
+    if (!el || !travels) return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    let at = 0;
+    let last = 0;
+    let frame = 0;
+    const step = (now: number) => {
+      frame = requestAnimationFrame(step);
+      if (!last) {
+        last = now;
+        return;
+      }
+      const gap = Math.min(now - last, 64);
+      last = now;
+      const seam = el.scrollWidth / 2;
+      if (seam <= 1) return;
+      // Slower than the shortcut row above it: this one is read in passing,
+      // not aimed at.
+      at += (18 * gap) / 1000;
+      if (at >= seam) at -= seam;
+      el.scrollLeft = at;
+    };
+    frame = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(frame);
+  }, [travels, says.join("|")]);
+
+  if (!says.length) return null;
+  const line = travels ? [...says, ...says] : says;
+  return (
+    <span
+      ref={rail}
+      className="mt-1 block overflow-hidden whitespace-nowrap text-[9px] font-semibold"
+      style={{ color: accent }}
+    >
+      {line.map((what, i) => (
+        <span key={i} className="inline-block" aria-hidden={i >= says.length}>
+          {what}
+          <span className="px-1.5 opacity-40">•</span>
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/**
  * The product a merchant-written item points at, if the catalogue holds it.
  *
  * A deal is typed by hand - a picture, a price, a link - so it knows nothing
@@ -331,6 +399,8 @@ const CardStyle = createContext({
   stock: DEFAULT_SETTINGS.cardStock,
   add: DEFAULT_SETTINGS.cardAdd,
   addLabel: "",
+  ticker: DEFAULT_SETTINGS.cardTicker,
+  tickerText: "",
   /** The shop's standing, as the product screen states it. */
   rating: "",
   reviews: "",
@@ -393,6 +463,21 @@ function Tile({
   // that claims to show sales would be inventing a number nothing records.
   const left = typeof card.available === "number" ? card.available : null;
   const scarce = style.stock && left !== null && left > 0 && left <= style.lowAt;
+  // Everything the card can say about this product that is true of it, in
+  // the order a shopper cares: what is nearly gone, what it saves, then
+  // whatever the merchant wants said about everything.
+  const says: string[] = [];
+  if (style.ticker) {
+    if (left !== null && left === 1) says.push(ar ? "آخر قطعة" : "Last one");
+    else if (scarce) says.push(ar ? `باقي ${left} فقط` : `Only ${left} left`);
+    if (onSale && was != null && now != null) {
+      says.push(ar ? `توفّرين ${money(was - now, ar)}` : `Save ${money(was - now, ar)}`);
+    }
+    const ways = card.variantCount ?? 1;
+    if (ways > 1) says.push(ar ? ways + " اختيارات" : ways + " to choose from");
+    if (str(style.tickerText)) says.push(str(style.tickerText));
+  }
+
   const ratio =
     shape === "wide" ? "aspect-[4/3]" : shape === "tall" ? "aspect-[3/4]" : "aspect-square";
 
@@ -440,6 +525,8 @@ function Tile({
               <span className="text-[10px] text-slate-400 line-through">{money(was, ar)}</span>
             )}
           </span>
+
+          <CardTicker says={says} accent={accent} />
 
           {/* How little is left, which is the one thing on this card true of
               this product alone. It appears only once that is worth saying. */}
@@ -5063,6 +5150,8 @@ export function AppHome({
       stock: theme.settings.cardStock,
       add: theme.settings.cardAdd,
       addLabel: theme.settings.cardAddLabel,
+      ticker: theme.settings.cardTicker,
+      tickerText: theme.settings.cardTickerText,
       // The product screen's numbers, not a second pair of them.
       rating: theme.screens.product.ratingValue,
       reviews: theme.screens.product.reviewCount,

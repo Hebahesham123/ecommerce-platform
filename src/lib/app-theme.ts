@@ -548,6 +548,17 @@ export type AppSettings = {
   cardStock: boolean;
   cardAdd: boolean;
   cardAddLabel: string;
+  /**
+   * The line that travels across the bottom of a card.
+   *
+   * What it says is built from what is true of that product — what it saves,
+   * how few are left, whether it is nearly gone — plus whatever the merchant
+   * adds in cardTickerText, which is the only part that can say anything the
+   * shop has not measured. It travels only when it is longer than the card,
+   * because a line that fits has nothing to reveal by moving.
+   */
+  cardTicker: boolean;
+  cardTickerText: string;
 };
 
 /**
@@ -916,6 +927,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   cardStock: true,
   cardAdd: true,
   cardAddLabel: "",
+  cardTicker: true,
+  cardTickerText: "",
 };
 
 /**
@@ -1729,6 +1742,8 @@ export function normalizeTheme(raw: unknown): AppTheme {
     cardStock: s.cardStock !== false,
     cardAdd: s.cardAdd !== false,
     cardAddLabel: str(s.cardAddLabel).slice(0, 24),
+    cardTicker: s.cardTicker !== false,
+    cardTickerText: str(s.cardTickerText).slice(0, 120),
     splashEnabled: Boolean(s.splashEnabled),
     splashImageUrl: str(s.splashImageUrl).slice(0, 500),
     splashBg: colour(s.splashBg, DEFAULT_SETTINGS.splashBg),

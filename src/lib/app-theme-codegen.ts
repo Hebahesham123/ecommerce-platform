@@ -160,6 +160,8 @@ export function appPack(theme: AppTheme) {
         stock: t.cardStock !== false,
         add: t.cardAdd !== false,
         addLabel: str(t.cardAddLabel),
+        ticker: t.cardTicker !== false,
+        tickerText: str(t.cardTickerText),
         // The product screen's numbers, not a second pair of them: one score
         // kept in two places is a score that disagrees with itself.
         rating: str(theme.screens.product.ratingValue),
@@ -305,6 +307,8 @@ export type ThemeData = {
     stock: boolean;
     add: boolean;
     addLabel: string;
+    ticker: boolean;
+    tickerText: string;
     rating: string;
     reviews: string;
     lowAt: number;
@@ -1173,8 +1177,8 @@ function piecesFile(): GeneratedFile {
   return {
     path: "components/Pieces.tsx",
     language: "tsx",
-    contents: `import React from "react";
-import { Image, Linking, Pressable, StyleSheet, Text, View } from "react-native";
+    contents: `import React, { useEffect, useRef, useState } from "react";
+import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { colors, radius, spacing, theme } from "../theme";
 import type { Card, HomePayload } from "../api";
 
@@ -1292,6 +1296,59 @@ function Stars({ score, size = 9 }: { score: number; size?: number }) {
   );
 }
 
+/**
+ * A line of true things, travelling.
+ *
+ * Everything it says is measured from this product. It travels only when it is
+ * longer than the card: a line that fits has nothing to reveal by moving, and
+ * a card that fidgets for no reason is one a shopper learns to ignore.
+ */
+function CardTicker({ says }: { says: string[] }) {
+  const rail = useRef<{ scrollTo: (to: { x: number; animated?: boolean }) => void } | null>(null);
+  const size = useRef({ rail: 0, content: 0 });
+  const [travels, setTravels] = useState(false);
+  const measure = () => setTravels(size.current.content / 2 > size.current.rail + 4);
+
+  useEffect(() => {
+    if (!travels) return;
+    let at = 0;
+    const seam = size.current.content / 2;
+    const timer = setInterval(() => {
+      if (seam <= 1) return;
+      at += 0.6;
+      if (at >= seam) at -= seam;
+      rail.current?.scrollTo({ x: at, animated: false });
+    }, 33);
+    return () => clearInterval(timer);
+  }, [travels]);
+
+  if (!says.length) return null;
+  const line = travels ? says.concat(says) : says;
+  return (
+    <ScrollView
+      ref={rail as never}
+      horizontal
+      scrollEnabled={false}
+      showsHorizontalScrollIndicator={false}
+      onLayout={(e: { nativeEvent: { layout: { width: number } } }) => {
+        size.current.rail = e.nativeEvent.layout.width;
+        measure();
+      }}
+      onContentSizeChange={(w: number) => {
+        size.current.content = w;
+        measure();
+      }}
+      style={styles.tickerRail}
+    >
+      {line.map((what, i) => (
+        <Text key={i} style={styles.tickerText}>
+          {what + "  •  "}
+        </Text>
+      ))}
+    </ScrollView>
+  );
+}
+
 export function ProductTile({
   card,
   width = 128,
@@ -1320,6 +1377,18 @@ export function ProductTile({
   const left = typeof card.available === "number" ? card.available : null;
   const scarce = theme.card.stock && left !== null && left > 0 && left <= theme.card.lowAt;
   const single = card.variantId != null && (card.variantCount || 1) === 1;
+  // What the card can say about this product that is true of it.
+  const says: string[] = [];
+  if (theme.card.ticker) {
+    if (left !== null && left === 1) says.push("Last one");
+    else if (scarce) says.push("Only " + left + " left");
+    if (card.compareAt != null && card.priceMin != null && card.compareAt > card.priceMin) {
+      says.push("Save " + money(card.compareAt - card.priceMin));
+    }
+    const ways = card.variantCount || 1;
+    if (ways > 1) says.push(ways + " to choose from");
+    if (theme.card.tickerText) says.push(theme.card.tickerText);
+  }
   const ratio = shape === "wide" ? 0.75 : shape === "tall" ? 1.34 : 1;
   const box = fill ? styles.fillImage : { width, height: Math.round(width * ratio) };
   return (
@@ -1345,6 +1414,7 @@ export function ProductTile({
             <Text style={styles.compareAt}>{money(card.compareAt)}</Text>
           ) : null}
         </View>
+        <CardTicker says={says} />
         {scarce ? (
           <View style={styles.leftWrap}>
             <View style={styles.leftTrack}>
@@ -1386,6 +1456,8 @@ const styles = StyleSheet.create({
   starRow: { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 2 },
   scoreText: { fontSize: 9, fontWeight: "700", color: colors.inkMuted },
   countText: { fontSize: 9, color: colors.inkSoft },
+  tickerRail: { marginTop: 4, maxHeight: 14 },
+  tickerText: { fontSize: 9, fontWeight: "700", color: colors.accent },
   leftWrap: { marginTop: 4 },
   leftTrack: { height: 3, borderRadius: 2, backgroundColor: colors.line, overflow: "hidden" },
   leftFill: { height: 3, borderRadius: 2, backgroundColor: colors.accent },

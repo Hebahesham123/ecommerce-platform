@@ -784,6 +784,31 @@ export function ThemeEditor() {
                     : "A button across the card instead of a small plus. A product with sizes opens rather than being added."}
                 </p>
               </Field>
+              <Field label={ar ? "سطر متحرك على البطاقة" : "A travelling line on the card"} type="checkbox">
+                <input
+                  type="checkbox"
+                  checked={draft.settings.cardTicker}
+                  onChange={(e) => patchSettings({ cardTicker: e.target.checked })}
+                />
+                <p className="mt-1 text-[11px] text-ink-soft">
+                  {ar
+                    ? "يقول ما هو صحيح عن هذا المنتج: آخر قطعة، كم توفّرين. يتحرك فقط إذا كان أطول من البطاقة."
+                    : "Says what is true of that product — last one, how much it saves. It travels only when it is longer than the card."}
+                </p>
+              </Field>
+              <Field label={ar ? "سطرك أنتِ (يُضاف للجميع)" : "Your own line (added to every card)"} type="text">
+                <input
+                  value={draft.settings.cardTickerText}
+                  onChange={(e) => patchSettings({ cardTickerText: e.target.value })}
+                  placeholder={ar ? "شحن مجاني فوق ٢٠٠٠" : "Free delivery over EGP 2,000"}
+                  className={input}
+                />
+                <p className="mt-1 text-[11px] text-ink-soft">
+                  {ar
+                    ? "هذا هو الجزء الوحيد الذي يمكنه قول ما لم يقسه المتجر — فاكتبي ما هو صحيح."
+                    : "The only part that can say something the shop has not measured, so write something true."}
+                </p>
+              </Field>
               <Field label={ar ? "نص زر الإضافة" : "What the button says"} type="text">
                 <input
                   value={draft.settings.cardAddLabel}
