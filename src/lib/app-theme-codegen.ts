@@ -1292,6 +1292,21 @@ export function money(v: number | null) {
 }
 
 /**
+ * The same number with the currency in front: "EGP 1,049".
+ *
+ * A shopper scanning a grid finds the digits in the same place on every card,
+ * which is the whole point of putting the three letters first.
+ */
+export function moneyFirst(v: number | null) {
+  return v == null ? "—" : \`EGP \${new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(v)}\`;
+}
+
+/** Just the digits, for the price it was - the currency is on the line above. */
+export function plainNumber(v: number | null) {
+  return v == null ? "" : new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(v);
+}
+
+/**
  * Five stars, filled to a score.
  *
  * Two rows of stars, the lit one clipped to the width the score earns, so a
@@ -1317,7 +1332,7 @@ function Stars({ score, size = 9 }: { score: number; size?: number }) {
  * longer than the card: a line that fits has nothing to reveal by moving, and
  * a card that fidgets for no reason is one a shopper learns to ignore.
  */
-function CardTicker({ says, band }: { says: string[]; band?: boolean }) {
+function CardTicker({ says, tint }: { says: string[]; tint?: string }) {
   const rail = useRef<{ scrollTo: (to: { x: number; animated?: boolean }) => void } | null>(null);
   const size = useRef({ rail: 0, content: 0 });
   const [travels, setTravels] = useState(false);
@@ -1352,10 +1367,10 @@ function CardTicker({ says, band }: { says: string[]; band?: boolean }) {
         size.current.content = w;
         measure();
       }}
-      style={band ? styles.tickerBand : styles.tickerRail}
+      style={styles.tickerRail}
     >
       {line.map((what, i) => (
-        <Text key={i} style={band ? styles.tickerBandText : styles.tickerText}>
+        <Text key={i} style={[styles.tickerText, tint ? { color: tint } : null]}>
           {what + "  •  "}
         </Text>
       ))}
@@ -1411,6 +1426,65 @@ export function ProductTile({
   }
   const ratio = shape === "wide" ? 0.75 : shape === "tall" ? 1.34 : 1;
   const box = fill ? styles.fillImage : { width, height: Math.round(width * ratio) };
+
+  if (market) {
+    return (
+      <View style={[styles.flat, fill ? styles.fill : { width }]}>
+        <Pressable onPress={() => onPress?.(card.id)}>
+          <View style={styles.panel}>
+            {card.image ? (
+              <Image source={{ uri: card.image }} style={[styles.panelImage, box]} resizeMode={fit === "contain" ? "contain" : "cover"} />
+            ) : (
+              <View style={[styles.panelImage, box]} />
+            )}
+            {/* Nothing here counts sales, so the flag does not claim a best
+                seller. It says how few are left, which is true or absent. */}
+            {scarce ? (
+              <View style={styles.flag}>
+                <Text style={styles.flagText}>{left === 1 ? "Last one" : "Only " + left + " left"}</Text>
+              </View>
+            ) : null}
+            {theme.card.add && onAdd ? (
+              <Pressable
+                style={styles.plus}
+                onPress={() => (single && card.variantId ? onAdd(card.variantId, card.id) : onPress?.(card.id))}
+              >
+                <Text style={styles.plusMark}>+</Text>
+              </Pressable>
+            ) : null}
+          </View>
+          <View style={styles.marketBody}>
+            <Text style={styles.marketName} numberOfLines={2}>{card.name}</Text>
+            {stars ? (
+              <View style={styles.chip}>
+                <Text style={styles.chipStar}>{"★"}</Text>
+                <Text style={styles.chipScore}>{theme.card.rating}</Text>
+                {theme.card.reviews ? <Text style={styles.chipCount}>{"(" + theme.card.reviews + ")"}</Text> : null}
+              </View>
+            ) : null}
+            <Text style={styles.priceBig}>{moneyFirst(card.priceMin)}</Text>
+            {off > 0 ? (
+              <View style={styles.priceRow}>
+                <Text style={styles.compareAt}>{plainNumber(card.compareAt)}</Text>
+                <Text style={styles.off}>{off + "%"}</Text>
+              </View>
+            ) : null}
+            {says.length ? (
+              <View style={styles.dropRow}>
+                {off > 0 ? (
+                  <View style={styles.dropDisc}>
+                    <Text style={styles.dropMark}>{"↓"}</Text>
+                  </View>
+                ) : null}
+                <CardTicker says={says} tint={"#b42318"} />
+              </View>
+            ) : null}
+          </View>
+        </Pressable>
+      </View>
+    );
+  }
+
   return (
     <Pressable style={[styles.tile, fill ? styles.fill : { width }]} onPress={() => onPress?.(card.id)}>
       {card.image ? (
@@ -1418,7 +1492,6 @@ export function ProductTile({
       ) : (
         <View style={[styles.tileImage, box]} />
       )}
-      {market ? <CardTicker says={says} band /> : null}
       <View style={styles.tileBody}>
         {/* One line. A name too long for it stops at a word, not mid-word. */}
         <Text style={styles.tileName} numberOfLines={1}>{shortName(card.name)}</Text>
@@ -1429,25 +1502,13 @@ export function ProductTile({
             {theme.card.reviews ? <Text style={styles.countText}>{"(" + theme.card.reviews + ")"}</Text> : null}
           </View>
         ) : null}
-        {market ? (
-          <View>
-            <Text style={styles.priceBig}>{money(card.priceMin)}</Text>
-            {off > 0 ? (
-              <View style={styles.priceRow}>
-                <Text style={styles.compareAt}>{money(card.compareAt)}</Text>
-                <Text style={styles.off}>{off + "% OFF"}</Text>
-              </View>
-            ) : null}
-          </View>
-        ) : (
-          <View style={styles.priceRow}>
-            <Text style={styles.price}>{money(card.priceMin)}</Text>
-            {card.compareAt != null && card.priceMin != null && card.compareAt > card.priceMin ? (
-              <Text style={styles.compareAt}>{money(card.compareAt)}</Text>
-            ) : null}
-          </View>
-        )}
-        {market ? null : <CardTicker says={says} />}
+        <View style={styles.priceRow}>
+          <Text style={styles.price}>{money(card.priceMin)}</Text>
+          {card.compareAt != null && card.priceMin != null && card.compareAt > card.priceMin ? (
+            <Text style={styles.compareAt}>{money(card.compareAt)}</Text>
+          ) : null}
+        </View>
+        <CardTicker says={says} />
         {scarce ? (
           <View style={styles.leftWrap}>
             <View style={styles.leftTrack}>
@@ -1490,9 +1551,23 @@ const styles = StyleSheet.create({
   scoreText: { fontSize: 9, fontWeight: "700", color: colors.inkMuted },
   countText: { fontSize: 9, color: colors.inkSoft },
   tickerRail: { marginTop: 4, maxHeight: 14 },
-  tickerBand: { maxHeight: 18, backgroundColor: colors.accent + "1f", paddingHorizontal: 8, paddingVertical: 3 },
-  tickerBandText: { fontSize: 9, fontWeight: "800", color: colors.accent },
-  priceBig: { marginTop: 4, fontSize: 15, fontWeight: "800", color: colors.ink },
+  flat: { backgroundColor: colors.surface },
+  panel: { borderRadius: radius.lg, overflow: "hidden", backgroundColor: theme.card.photoBg },
+  panelImage: { backgroundColor: theme.card.photoBg },
+  flag: { position: "absolute", left: 0, top: 6, backgroundColor: "#0f4c45", paddingHorizontal: 6, paddingVertical: 3, borderTopRightRadius: 6, borderBottomRightRadius: 6 },
+  flagText: { fontSize: 9, fontWeight: "700", color: "#fff" },
+  plus: { position: "absolute", right: 6, bottom: 6, width: 32, height: 32, borderRadius: 12, backgroundColor: "#fff", alignItems: "center", justifyContent: "center", shadowColor: "#0f172a", shadowOpacity: 0.18, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 3 },
+  plusMark: { fontSize: 20, lineHeight: 22, fontWeight: "600", color: colors.ink },
+  marketBody: { paddingTop: 6, paddingBottom: 6, paddingHorizontal: 2 },
+  marketName: { fontSize: 11, lineHeight: 14, fontWeight: "500", color: colors.ink },
+  chip: { flexDirection: "row", alignItems: "center", gap: 3, alignSelf: "flex-start", marginTop: 4, borderRadius: 6, backgroundColor: colors.line, paddingHorizontal: 6, paddingVertical: 2 },
+  chipStar: { fontSize: 9, color: "#15803d" },
+  chipScore: { fontSize: 9, fontWeight: "700", color: colors.ink },
+  chipCount: { fontSize: 9, color: colors.inkSoft },
+  dropRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
+  dropDisc: { width: 14, height: 14, borderRadius: 7, backgroundColor: "#b42318", alignItems: "center", justifyContent: "center" },
+  dropMark: { fontSize: 9, lineHeight: 11, fontWeight: "800", color: "#fff" },
+  priceBig: { marginTop: 4, fontSize: 14, fontWeight: "800", color: colors.ink },
   off: { fontSize: 10, fontWeight: "800", color: "#15803d" },
   tickerText: { fontSize: 9, fontWeight: "700", color: colors.accent },
   leftWrap: { marginTop: 4 },

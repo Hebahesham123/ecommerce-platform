@@ -123,6 +123,24 @@ const money = (v: number | null, ar: boolean) =>
         ar ? "ج.م" : "EGP"
       }`;
 
+/**
+ * The same number with the currency in front: "EGP 1,049".
+ *
+ * Marketplaces write it this way and a shopper scanning a grid finds the digits
+ * in the same place on every card, which is the whole point of putting the
+ * three letters first.
+ */
+const moneyFirst = (v: number | null, ar: boolean) =>
+  v == null
+    ? "—"
+    : `${ar ? "ج.م" : "EGP"} ${new Intl.NumberFormat(ar ? "ar-EG" : "en-US", {
+        maximumFractionDigits: 0,
+      }).format(v)}`;
+
+/** Just the digits, for the price it was - the currency is on the line above. */
+const plain = (v: number | null, ar: boolean) =>
+  v == null ? "" : new Intl.NumberFormat(ar ? "ar-EG" : "en-US", { maximumFractionDigits: 0 }).format(v);
+
 const str = (v: unknown, fallback = "") => (typeof v === "string" && v ? v : fallback);
 const int = (v: unknown, fallback: number) => {
   const n = Number(v);
@@ -253,6 +271,12 @@ function Thumb({
  */
 const SAVING_GREEN = "#15803d";
 
+/** The ink a price drop is written in, and the disc its arrow sits in. */
+const DROP_RED = "#b42318";
+
+/** The flag in the corner of the picture. Dark, so white type holds on it. */
+const FLAG_INK = "#0f4c45";
+
 function Stars({
   score,
   size = 9,
@@ -293,16 +317,7 @@ function Stars({
  * a shopper learns to ignore — so the phrases are laid down twice and the
  * travel wraps at the seam only when there is something past the edge.
  */
-function CardTicker({
-  says,
-  accent,
-  band,
-}: {
-  says: string[];
-  accent: string;
-  /** Tinted and run edge to edge, the way a marketplace strip is drawn. */
-  band?: boolean;
-}) {
+function CardTicker({ says, accent }: { says: string[]; accent: string }) {
   const rail = useRef<HTMLDivElement | null>(null);
   const [travels, setTravels] = useState(false);
 
@@ -345,12 +360,8 @@ function CardTicker({
   return (
     <span
       ref={rail}
-      className={
-        band
-          ? "block overflow-hidden whitespace-nowrap px-2 py-[3px] text-[9px] font-bold"
-          : "mt-1 block overflow-hidden whitespace-nowrap text-[9px] font-semibold"
-      }
-      style={band ? { color: accent, background: accent + "1f" } : { color: accent }}
+      className="block overflow-hidden whitespace-nowrap text-[9px] font-semibold"
+      style={{ color: accent }}
     >
       {line.map((what, i) => (
         <span key={i} className="inline-block" aria-hidden={i >= says.length}>
@@ -560,6 +571,130 @@ function Tile({
   // discount in green beside the price it was, the rating as a chip, and the
   // card itself quieter so the row reads as goods rather than as panels.
   const market = style.look === "market";
+  if (market) {
+    const add = () => (single ? onAdd?.(card.variantId as string, card.id) : onOpen?.(card.id));
+    return (
+      <div
+        className={`${wide ? "w-40 shrink-0" : ""} relative bg-white ${
+          fadeAfter === undefined ? "" : "app-fade-in"
+        }`}
+        style={fadeAfter === undefined ? undefined : { animationDelay: `${fadeAfter}ms` }}
+      >
+        <button onClick={() => onOpen?.(card.id)} className="block w-full text-start">
+          {/* The picture on a panel of its own. The card has no border: what
+              separates one product from the next is the gap, not a line. */}
+          <span className="relative block overflow-hidden rounded-xl" style={{ background: style.photoBg }}>
+            <Thumb src={card.image} className={ratio} fit={fit} />
+
+            {/* The flag says the one thing this card knows that the next one
+                may not. Nothing here counts sales, so it does not claim a
+                best-seller; it says how few are left, when that is true. */}
+            {scarce && (
+              <span
+                className="absolute start-0 top-1.5 rounded-e-md px-1.5 py-[3px] text-[9px] font-bold text-white"
+                style={{ background: FLAG_INK }}
+              >
+                {left === 1 ? (ar ? "آخر قطعة" : "Last one") : ar ? `باقي ${left}` : `Only ${left} left`}
+              </span>
+            )}
+          </span>
+
+          <span className="block px-0.5 pb-1.5 pt-1.5">
+            {/* Two lines, black, at the size a title is read at - not the
+                caption it had been. The brand is already the first words of it. */}
+            <span className="line-clamp-2 block text-[11px] font-medium leading-[1.25] text-slate-900">
+              {withoutVendor(card.name, card.vendor)}
+            </span>
+
+            {stars && (
+              <span className="mt-1 inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-[2px] align-middle">
+                <span className="text-[9px] leading-none" style={{ color: SAVING_GREEN }} aria-hidden>
+                  ★
+                </span>
+                <span className="text-[9px] font-bold text-slate-900">{style.rating}</span>
+                {str(style.reviews) && (
+                  <span className="text-[9px] text-slate-500">({style.reviews})</span>
+                )}
+              </span>
+            )}
+
+            <span className="mt-1 block text-[14px] font-extrabold leading-tight text-slate-900">
+              {moneyFirst(now, ar)}
+            </span>
+
+            {onSale && (
+              <span className="flex items-baseline gap-1.5">
+                <span className="text-[10px] text-slate-400 line-through">{plain(was, ar)}</span>
+                <span className="text-[10px] font-extrabold" style={{ color: SAVING_GREEN }}>
+                  {off}%
+                </span>
+              </span>
+            )}
+
+            {/* Last, where the screens put it: the red arrow, then the line
+                that moves. The arrow appears only when the price really did
+                come down, because that is what the arrow is claiming. */}
+            {says.length > 0 && (
+              <span className="mt-1 flex items-center gap-1">
+                {onSale && (
+                  <span
+                    className="grid h-3.5 w-3.5 shrink-0 place-items-center rounded-full"
+                    style={{ background: DROP_RED }}
+                    aria-hidden
+                  >
+                    <svg viewBox="0 0 24 24" className="h-2 w-2" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 5v14M6 13l6 6 6-6" />
+                    </svg>
+                  </span>
+                )}
+                <CardTicker says={says} accent={DROP_RED} />
+              </span>
+            )}
+          </span>
+        </button>
+
+        {onWish && (
+          <button
+            onClick={() => onWish(card)}
+            aria-pressed={wished}
+            aria-label={ar ? "أضيفي إلى المفضلة" : "Add to wishlist"}
+            className="absolute end-1.5 top-1.5 grid h-6 w-6 place-items-center"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className="h-4 w-4"
+              fill={wished ? accent : "none"}
+              stroke={wished ? accent : "#334155"}
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M20.8 5.6a5 5 0 0 0-7.1 0L12 7.3l-1.7-1.7a5 5 0 1 0-7.1 7.1l8.8 8.8 8.8-8.8a5 5 0 0 0 0-7.1Z" />
+            </svg>
+          </button>
+        )}
+
+        {/* A white square with a plus, standing on the foot of the picture.
+            It takes a corner instead of a whole line, which is most of what
+            made the old card tall. One that needs a size opens instead. */}
+        {canAdd && (
+          <span className={`pointer-events-none absolute inset-x-0 top-0 block ${ratio}`}>
+            <button
+              onClick={add}
+              aria-label={
+                single ? (ar ? "أضيفي إلى الحقيبة" : "Add to bag") : ar ? "اختاري المقاس" : "Choose a size"
+              }
+              className="pointer-events-auto absolute bottom-1.5 end-1.5 grid h-8 w-8 place-items-center rounded-xl bg-white text-slate-900 shadow-[0_2px_8px_rgba(15,23,42,0.18)]"
+            >
+              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+            </button>
+          </span>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div
@@ -577,9 +712,6 @@ function Tile({
             blend
           />
         </span>
-        {/* Edge to edge, directly under the picture, where a marketplace puts
-            the line it wants read on the way down to the price. */}
-        {market && <CardTicker says={says} accent={accent} band />}
         <span
           className={`block ${market ? "ps-1.5 pt-1" : "ps-2"} pb-2 ${
             canAdd && !style.add ? "pe-9" : market ? "pe-1.5" : "pe-2"
@@ -648,7 +780,7 @@ function Tile({
             </span>
           )}
 
-          {!market && <CardTicker says={says} accent={accent} />}
+          <CardTicker says={says} accent={accent} />
 
           {/* How little is left, which is the one thing on this card true of
               this product alone. It appears only once that is worth saying. */}
@@ -2687,7 +2819,7 @@ function CountdownDeals({
                     </span>
                   )}
                 </span>
-                <CardTicker says={dealSays} accent={accent} band={cards.look === "market"} />
+                <CardTicker says={dealSays} accent={cards.look === "market" ? DROP_RED : accent} />
                 {showClaimed && claimed && (
                   <span className="mt-1.5 block">
                     <span className="block h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
