@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { getStorefrontCatalog } from "@/lib/theme-render-service";
+import { listPublishedPosts } from "@/lib/blog";
 
 // Regenerate at most hourly: the sitemap is read by crawlers, not shoppers, so
 // an hour-stale list of products/collections is fine and keeps it cheap.
@@ -58,6 +59,23 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }
   } catch {
     // Never serve an empty sitemap on a catalog error — at least the home URL.
+  }
+
+  // The native blog: its index and each published article. Kept in its own
+  // try/catch so a blog table that was never migrated can't drop the catalog
+  // entries above.
+  try {
+    push(`${BASE}/store/blog`, { changeFrequency: "weekly", priority: 0.5 });
+    for (const post of await listPublishedPosts()) {
+      if (!post.slug) continue;
+      push(`${BASE}/store/blog/${post.slug}`, {
+        lastModified: post.updatedAt ? new Date(post.updatedAt) : undefined,
+        changeFrequency: "monthly",
+        priority: 0.6,
+      });
+    }
+  } catch {
+    // Blog is optional; ignore any failure.
   }
 
   if (!out.length) out.push({ url: `${BASE}${MOUNT}` });

@@ -307,6 +307,7 @@ const dict = {
   group_online_store: { ar: "المتجر الإلكتروني", en: "Online Store" },
   nav_online_store: { ar: "المتجر الإلكتروني", en: "Online Store" },
   nav_pages: { ar: "الصفحات", en: "Pages" },
+  nav_blog: { ar: "المدونة", en: "Blog" },
   nav_themes: { ar: "القوالب", en: "Themes" },
   nav_navigation: { ar: "قوائم التنقّل", en: "Navigation" },
   nav_seo: { ar: "تحسين محركات البحث (SEO)", en: "SEO" },

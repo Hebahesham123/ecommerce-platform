@@ -36,6 +36,7 @@ import {
   IcVideo,
   IcCash,
   IcSearch,
+  IcContent,
 } from "./icons";
 import type { ComponentType, SVGProps } from "react";
 
@@ -90,6 +91,7 @@ const groups: Group[] = [
     label: "group_online_store",
     items: [
       { href: "/pages", key: "nav_pages", icon: IcEye },
+      { href: "/blog", key: "nav_blog", icon: IcContent },
       { href: "/online-store/themes", key: "nav_themes", icon: IcTheme },
       { href: "/navigation", key: "nav_navigation", icon: IcMenu },
       { href: "/seo", key: "nav_seo", icon: IcSearch },
