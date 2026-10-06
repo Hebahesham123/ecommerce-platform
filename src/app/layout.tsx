@@ -4,6 +4,7 @@ import "./globals.css";
 import { cookies } from "next/headers";
 import { LangProvider, type Lang } from "@/lib/i18n";
 import { getPixelSnippet } from "@/lib/meta-pixel";
+import { getGa4Snippet, getGscMeta } from "@/lib/ga4";
 
 // Self-hosted Tajawal (bundled with the app) so an ad/privacy blocker or a
 // flaky network can never stop the font from loading — which used to break the
@@ -56,6 +57,10 @@ export default async function RootLayout({
   // id here meant a store that pasted its own still fired someone else's.
   const pixel = await getPixelSnippet();
 
+  // Google Analytics 4 + Search Console, configured in Analytics → Website.
+  // Read and injected exactly like the pixel — the merchant's own, or nothing.
+  const [ga4, gscMeta] = await Promise.all([getGa4Snippet(), getGscMeta()]);
+
   return (
     <html
       lang={lang}
@@ -78,6 +83,14 @@ export default async function RootLayout({
             <noscript> image alongside the script, and a <div> is not valid
             inside <head>. */}
         {pixel && <div dangerouslySetInnerHTML={{ __html: pixel }} />}
+        {/* Google Analytics 4 (gtag.js) and the Search Console verification
+            meta, injected right beside the pixel and for the same reason it is
+            here rather than in <head>: a raw multi-tag HTML snippet has no
+            neutral wrapper that is valid inside <head>. The gtag loader works
+            from the top of the body, and the crawled/verified surface is the
+            Liquid storefront, where these land in <head> (theme-render-service). */}
+        {ga4 && <div dangerouslySetInnerHTML={{ __html: ga4 }} />}
+        {gscMeta && <div dangerouslySetInnerHTML={{ __html: gscMeta }} />}
         <LangProvider initialLang={initialLang}>{children}</LangProvider>
       </body>
     </html>

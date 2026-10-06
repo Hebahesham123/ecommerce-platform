@@ -10,6 +10,7 @@ import {
 } from "@/lib/storefront-data";
 import { buildCart, type CartLine } from "@/lib/storefront-cart";
 import { getPixelSnippet, invalidatePixelSnippet } from "@/lib/meta-pixel";
+import { getGa4Snippet, getGscMeta } from "@/lib/ga4";
 
 // Re-exported so the admin actions keep one obvious place to call.
 export { invalidatePixelSnippet };
@@ -463,6 +464,12 @@ export async function renderStorefront(
   }
 
   const pixel = await getPixelSnippet();
+  // Google Analytics 4 + Search Console verification sit in the storefront
+  // <head> right beside the pixel — all three are the merchant's own, read from
+  // Analytics → Website. The GSC <meta> has to be in <head> to be found, which
+  // is exactly where injectHead puts it.
+  const [ga4, gscMeta] = await Promise.all([getGa4Snippet(), getGscMeta()]);
+  const headSnippet = `${gscMeta}${pixel}${ga4}`;
 
   // ---- Static (plain HTML) themes: serve files as uploaded -----------------
   if (bundle.kind === "static") {
@@ -476,7 +483,7 @@ export async function renderStorefront(
       const r = await fetch(target.url, { cache: "no-store" });
       const html = await r.text();
       const folder = target.url.slice(0, target.url.lastIndexOf("/") + 1);
-      return { status: 200, html: injectHead(injectBase(html, folder), pixel) };
+      return { status: 200, html: injectHead(injectBase(html, folder), headSnippet) };
     } catch (e) {
       return errorPage(`Preview error: ${(e as Error).message}`);
     }
@@ -607,7 +614,7 @@ export async function renderStorefront(
       collectLinks: req.collectLinks,
       inspect: req.inspect,
     });
-    return { status, html: injectHead(html, pixel) };
+    return { status, html: injectHead(html, headSnippet) };
   } catch (e) {
     return errorPage(`Render error: ${(e as Error).message}`);
   }

@@ -10,6 +10,7 @@ import { KpiCard, Panel, ChartFrame, chartAxis, NotConnected } from "@/component
 import { DataTable, type Column } from "@/components/data-table";
 import { CHART, useIsDark, type ChartColor } from "@/lib/chart-theme";
 import type { Report } from "@/lib/analytics";
+import { TrackingSettings } from "./tracking-settings";
 
 /**
  * The two analytics pages.
@@ -179,6 +180,7 @@ export function WebsiteAnalytics({ report }: { report: Report }) {
           </Link>
         }
       />
+      <TrackingSettings />
       <Missing report={report} />
 
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">

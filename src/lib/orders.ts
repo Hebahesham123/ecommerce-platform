@@ -13,6 +13,7 @@ import { getPaymentMethods } from "@/lib/payments-server";
 import { orderLine } from "@/lib/payments";
 import { awardOrderSignatures } from "@/lib/loyalty/earn";
 import { sendOrderPurchase } from "@/lib/meta-purchase";
+import { sendGa4Purchase } from "@/lib/ga4";
 import type { Channel } from "@/lib/channel";
 import { repriceLines } from "@/lib/cart-pricing";
 import { invalidateCatalog } from "@/lib/storefront-data";
@@ -368,6 +369,22 @@ export async function placeOrderCore(
       contentIds: [...new Set(payload.items.map((i) => i.sku || i.itemId))],
       numItems: payload.items.reduce((n, i) => n + i.quantity, 0),
     });
+
+    // Tell GA4 too, server-side (Measurement Protocol). Same authoritative
+    // total and repriced lines the Meta purchase used, so both platforms count
+    // the same sale. Best-effort — sendGa4Purchase swallows its own errors, and
+    // the extra .catch keeps a rejected promise from ever touching the order.
+    await sendGa4Purchase({
+      orderNumber,
+      value: total,
+      currency: "EGP",
+      items: items.map((i) => ({
+        item_id: i.sku || i.itemId,
+        item_name: i.productName,
+        price: i.price,
+        quantity: i.quantity,
+      })),
+    }).catch(() => {});
 
     // Close the loop on the hesitation popup. Web only: the visitor cookie it
     // keys on is written by the storefront's own script.
