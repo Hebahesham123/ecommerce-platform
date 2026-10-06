@@ -309,6 +309,7 @@ const dict = {
   nav_pages: { ar: "الصفحات", en: "Pages" },
   nav_themes: { ar: "القوالب", en: "Themes" },
   nav_navigation: { ar: "قوائم التنقّل", en: "Navigation" },
+  nav_seo: { ar: "تحسين محركات البحث (SEO)", en: "SEO" },
   themes_subtitle: { ar: "ارفع قوالب المتجر وعايِنها وانشرها", en: "Upload, preview & publish store themes" },
   upload_theme: { ar: "رفع قالب", en: "Upload theme" },
   theme_library: { ar: "مكتبة القوالب", en: "Theme library" },

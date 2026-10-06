@@ -25,6 +25,7 @@ import { getServerSupabase } from "@/lib/supabase/server";
 import { getActiveNudge, recordNudgeEvent } from "@/lib/nudge-service";
 import { nudgeScript } from "@/lib/nudge-script";
 import { analyticsScript } from "@/lib/analytics-script";
+import { readSeoSettings, type SeoSettings } from "@/lib/seo-settings";
 
 const escHtml = (s: string) =>
   s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] as string);
@@ -717,6 +718,222 @@ function crashPage(e: unknown): Response {
   );
 }
 
+// ---- SEO <head> injection ---------------------------------------------------
+/** Strip tags + collapse whitespace, turning rich text into a plain meta string. */
+function seoStripHtml(s: unknown): string {
+  return String(s ?? "")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Trim to ~max chars on a word boundary, adding an ellipsis when cut. */
+function seoTruncate(s: string, max = 160): string {
+  if (s.length <= max) return s;
+  const cut = s.slice(0, max - 1);
+  const sp = cut.lastIndexOf(" ");
+  return (sp > max * 0.6 ? cut.slice(0, sp) : cut).trimEnd() + "…";
+}
+
+/** Decode the handful of entities a theme's <title> may already carry, so we
+ *  don't double-escape when the text is re-emitted inside an attribute. */
+function seoDecodeEntities(s: string): string {
+  return s
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#0?39;/g, "'")
+    .replace(/&#x27;/gi, "'")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&");
+}
+
+type SeoInput = {
+  origin: string;
+  mount: string;
+  /** In-store path, no query (e.g. "/", "/products/x", "/collections/y"). */
+  path: string;
+  seo: SeoSettings;
+  catalog: any;
+};
+
+/**
+ * Insert SEO <head> tags into a rendered storefront page by post-processing its
+ * HTML — the Liquid engine is never touched. No <title> is added (the theme
+ * renders one). Fully guarded: any failure returns the original html so SEO can
+ * never break page rendering.
+ */
+function injectSeoHead(html: string, ctx: SeoInput): string {
+  try {
+    const { origin, mount, path, seo, catalog } = ctx;
+    const shop = (catalog?.shop ?? {}) as Record<string, unknown>;
+    const siteName = seo.siteName || String(shop.name ?? "") || "Store";
+    const currency = String(shop.currency ?? "") || "EGP";
+
+    // Which kind of page is this? Mirror theme-render-service's dispatch so a
+    // product nested under a collection path is still recognised as a product.
+    const segments = path.split("/").filter(Boolean);
+    const decode = (h: string) => {
+      try {
+        return decodeURIComponent(h);
+      } catch {
+        return h;
+      }
+    };
+    let kind: "home" | "product" | "collection" | "page" = "page";
+    let product: any = null;
+    let collection: any = null;
+    if (segments.length === 0) {
+      kind = "home";
+    } else if (segments[0] === "products" && segments[1]) {
+      kind = "product";
+      product = catalog?.productByHandle?.get(decode(segments[1])) ?? null;
+    } else if (segments[0] === "collections" && segments.length >= 4 && segments[2] === "products") {
+      kind = "product";
+      product = catalog?.productByHandle?.get(decode(segments[3])) ?? null;
+    } else if (segments[0] === "collections" && segments[1]) {
+      kind = "collection";
+      collection = catalog?.collectionByHandle?.get(decode(segments[1])) ?? null;
+    }
+
+    const canonical = `${origin}${mount}${path === "/" ? "/" : path}`;
+    const storeUrl = `${origin}${mount}`;
+
+    // Title: reuse the theme's own <title> when present, else build one.
+    const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+    const rawTitle = titleMatch ? seoDecodeEntities(titleMatch[1]).trim() : "";
+    const fallbackTitle = product?.title
+      ? `${product.title} · ${siteName}`
+      : collection?.title
+        ? `${collection.title} · ${siteName}`
+        : siteName;
+    const title = rawTitle || fallbackTitle;
+
+    // Description: the most specific source available, HTML-stripped + truncated.
+    const descSource =
+      (product && String(product.description ?? "")) ||
+      (collection && String(collection.description ?? "")) ||
+      String(shop.description ?? "") ||
+      seo.defaultDescription ||
+      "";
+    const description = seoTruncate(seoStripHtml(descSource), 160);
+
+    // Image: product's own, else the configured social image.
+    const image = (product && String(product.featured_image ?? "")) || seo.socialImage || "";
+
+    const ogType = kind === "product" ? "product" : "website";
+    const robots = seo.robotsIndex ? "index,follow" : "noindex,nofollow";
+    const twitter = seo.twitterHandle
+      ? seo.twitterHandle.startsWith("@")
+        ? seo.twitterHandle
+        : `@${seo.twitterHandle}`
+      : "";
+
+    const tags: string[] = [];
+    if (description) tags.push(`<meta name="description" content="${escHtml(description)}">`);
+    tags.push(`<link rel="canonical" href="${escHtml(canonical)}">`);
+    tags.push(`<meta property="og:type" content="${ogType}">`);
+    tags.push(`<meta property="og:title" content="${escHtml(title)}">`);
+    if (description) tags.push(`<meta property="og:description" content="${escHtml(description)}">`);
+    tags.push(`<meta property="og:url" content="${escHtml(canonical)}">`);
+    if (image) tags.push(`<meta property="og:image" content="${escHtml(image)}">`);
+    tags.push(`<meta property="og:site_name" content="${escHtml(siteName)}">`);
+    tags.push(`<meta name="twitter:card" content="summary_large_image">`);
+    tags.push(`<meta name="twitter:title" content="${escHtml(title)}">`);
+    if (description) tags.push(`<meta name="twitter:description" content="${escHtml(description)}">`);
+    if (image) tags.push(`<meta name="twitter:image" content="${escHtml(image)}">`);
+    if (twitter) tags.push(`<meta name="twitter:site" content="${escHtml(twitter)}">`);
+    tags.push(`<meta name="robots" content="${robots}">`);
+
+    // ---- JSON-LD ----
+    const graph: Record<string, unknown>[] = [];
+    const org: Record<string, unknown> = {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      name: siteName,
+      url: storeUrl,
+    };
+    if (seo.logo) org.logo = seo.logo;
+    graph.push(org);
+
+    if (kind === "home") {
+      graph.push({
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        name: siteName,
+        url: storeUrl,
+        potentialAction: {
+          "@type": "SearchAction",
+          target: `${storeUrl}/search?q={search_term_string}`,
+          "query-input": "required name=search_term_string",
+        },
+      });
+    }
+
+    if (kind === "product" && product) {
+      const firstVariant = Array.isArray(product.variants) ? product.variants[0] : null;
+      const sku = firstVariant && firstVariant.sku ? String(firstVariant.sku) : "";
+      const productLd: Record<string, unknown> = {
+        "@context": "https://schema.org",
+        "@type": "Product",
+        name: String(product.title ?? ""),
+        offers: {
+          "@type": "Offer",
+          price: (Number(product.price ?? 0) / 100).toFixed(2),
+          priceCurrency: currency,
+          availability: product.available
+            ? "https://schema.org/InStock"
+            : "https://schema.org/OutOfStock",
+          url: canonical,
+        },
+      };
+      if (description) productLd.description = description;
+      if (image) productLd.image = image;
+      if (sku) productLd.sku = sku;
+      graph.push(productLd);
+    }
+
+    // Breadcrumbs on product + collection pages (Home › Collection? › Product).
+    const crumbs: { name: string; item: string }[] = [{ name: "Home", item: `${storeUrl}/` }];
+    if (kind === "collection" && collection) {
+      crumbs.push({ name: String(collection.title ?? "Collection"), item: canonical });
+    } else if (kind === "product" && product) {
+      const col = Array.isArray(product.collections) ? product.collections[0] : null;
+      if (col && col.url && col.handle !== "all") {
+        crumbs.push({ name: String(col.title ?? "Collection"), item: `${origin}${col.url}` });
+      }
+      crumbs.push({ name: String(product.title ?? "Product"), item: canonical });
+    }
+    if (crumbs.length > 1) {
+      graph.push({
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        itemListElement: crumbs.map((c, i) => ({
+          "@type": "ListItem",
+          position: i + 1,
+          name: c.name,
+          item: c.item,
+        })),
+      });
+    }
+
+    // One <script> per JSON-LD object; `<` escaped so nothing can break out.
+    const ld = graph
+      .map(
+        (obj) =>
+          `<script type="application/ld+json">${JSON.stringify(obj).replace(/</g, "\\u003c")}</script>`,
+      )
+      .join("");
+
+    const block = `\n${tags.join("\n")}\n${ld}\n`;
+    if (/<head[^>]*>/i.test(html)) return html.replace(/<head[^>]*>/i, (m) => `${m}${block}`);
+    if (/<html[^>]*>/i.test(html)) return html.replace(/<html[^>]*>/i, (m) => `${m}${block}`);
+    return block + html;
+  } catch {
+    return html;
+  }
+}
+
 // ---- GET --------------------------------------------------------------------
 export async function handleStorefrontGet(
   req: Request,
@@ -929,7 +1146,28 @@ async function storefrontGet(req: Request, config: MountConfig): Promise<Respons
       .replace(/<img (?![^>]*\bloading=)/gi, '<img loading="lazy" decoding="async" '),
   );
 
-  return new Response(clean, {
+  // SEO <head>: canonical, meta description, Open Graph, Twitter cards and
+  // JSON-LD, inserted by post-processing the rendered HTML. Skip shopper-specific
+  // pages (cart, checkout, account) and any non-200 (e.g. 404) response; guarded
+  // so SEO can never break page rendering.
+  let finalHtml = clean;
+  if (res.status === 200 && !/^\/(cart|checkout|account)(?:[/?#]|$)/i.test(path)) {
+    try {
+      const seo = await readSeoSettings();
+      const seoCatalog = await getStorefrontCatalog(mount);
+      finalHtml = injectSeoHead(clean, {
+        origin: originOf(req),
+        mount,
+        path,
+        seo,
+        catalog: seoCatalog,
+      });
+    } catch {
+      finalHtml = clean;
+    }
+  }
+
+  return new Response(finalHtml, {
     status: res.status,
     headers: {
       "Content-Type": HTML,
