@@ -562,6 +562,55 @@ export function track(
   api("/track", { method: "POST", body: JSON.stringify({ type, channel: "app", platform: Platform.OS, visitorId: visitor, ...data }) }).catch(() => {});
 }
 
+/** Which screen she is on, for the shop to choose an offer for. */
+export type OfferContext = {
+  pageType: "index" | "product" | "collection" | "cart" | "search" | "checkout" | "other";
+  productKey?: string;
+  collectionHandle?: string;
+};
+
+/** An offer to show: the merchant's design, and when it should appear. */
+export type OfferConfig = {
+  id: string;
+  dwell: number;
+  idle: number;
+  cart: number;
+  maxPerSession: number;
+  cooldownHours: number;
+  skipIfCartEmpty: boolean;
+  style: string;
+  headline: string;
+  body: string;
+  button: string;
+  dismiss: string;
+  accent: string;
+  bg: string;
+  fg: string;
+  image: string | null;
+  code: string | null;
+  segments: { label: string; code: string; weight: number }[];
+  unique: boolean;
+};
+
+export const decideOffer = (ctx: OfferContext & { cartCount: number }) =>
+  api<{ offer: OfferConfig | null }>("/offers/decide", {
+    method: "POST",
+    body: JSON.stringify({ channel: "app", visitorId: visitor, ...ctx }),
+  }).then((r) => r.offer);
+
+/** A code made for this shopper, for a campaign that hands out one per person. */
+export const claimOffer = (id: string) =>
+  api<{ code: string }>("/offers/claim", {
+    method: "POST",
+    body: JSON.stringify({ channel: "app", visitorId: visitor, cid: id }),
+  }).then((r) => r.code);
+
+/** What she did with a popup. Fire and forget. */
+export function offerEvent(type: "shown" | "dismissed" | "claimed", id: string, extra: { trigger?: string; code?: string } = {}) {
+  if (!visitor) return;
+  api("/offers/event", { method: "POST", body: JSON.stringify({ channel: "app", visitorId: visitor, type, cid: id, ...extra }) }).catch(() => {});
+}
+
 /** The basket as it stands, once it has stopped changing for a moment. */
 let cartTimer: ReturnType<typeof setTimeout> | null = null;
 let cartSent: string | null = null;
@@ -6472,6 +6521,198 @@ function itemsObjects(type: BlockType, items: Item[]): Record<string, string>[] 
  * the wording and which optional parts appear — so their settings arrive as a
  * constant and the component reads it. Nobody reorders a checkout.
  */
+// The app's popup: the same offers the website shows, decided by the shop for
+// this shopper and this screen, drawn natively.
+function offerPopupFile(): GeneratedFile {
+  return {
+    path: "components/OfferPopup.tsx",
+    language: "tsx",
+    contents: `/**
+ * The app's popup. Generated from the dashboard — App → App theme.
+ *
+ * The shop decides which offer this shopper should see on this screen — one
+ * made for her by name, or the campaign that fits her and what she is looking
+ * at (Dashboard → Smart popups). This waits the time the campaign set, then
+ * shows it. A code the shop makes for each shopper is fetched only when she
+ * asks for it, and "Apply" puts it straight on her basket.
+ */
+import React, { useEffect, useRef, useState } from "react";
+import { Image, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { claimOffer, decideOffer, offerEvent, type OfferConfig, type OfferContext } from "../api";
+
+const SEEN_AT = "offer_seen_at";
+/** Shown this many times since the app opened. */
+let seenThisVisit = 0;
+
+function pickSegment(segments: OfferConfig["segments"]) {
+  const total = segments.reduce((n, s) => n + Math.max(0, s.weight || 0), 0);
+  if (total <= 0) return segments[Math.floor(Math.random() * segments.length)];
+  let r = Math.random() * total;
+  for (const s of segments) {
+    r -= Math.max(0, s.weight || 0);
+    if (r < 0) return s;
+  }
+  return segments[segments.length - 1];
+}
+
+export function OfferPopup({
+  context,
+  cartCount,
+  onApplyCode,
+}: {
+  context: OfferContext;
+  cartCount: number;
+  /** Put the code on her basket (or keep it for when there is one). */
+  onApplyCode: (code: string) => void;
+}) {
+  const [offer, setOffer] = useState<OfferConfig | null>(null);
+  const [visible, setVisible] = useState(false);
+  const [code, setCode] = useState<string | null>(null);
+  const [prize, setPrize] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const cartRef = useRef(cartCount);
+  cartRef.current = cartCount;
+  const key = context.pageType + "|" + (context.productKey ?? "") + "|" + (context.collectionHandle ?? "");
+
+  // A new screen: ask again, and forget whatever the last one was waiting for.
+  useEffect(() => {
+    let alive = true;
+    let timer: ReturnType<typeof setInterval> | null = null;
+    setOffer(null);
+    // Never in the way of someone paying.
+    if (context.pageType === "checkout") return;
+    decideOffer({ ...context, cartCount: cartRef.current })
+      .then(async (o) => {
+        if (!alive || !o) return;
+        if (seenThisVisit >= o.maxPerSession) return;
+        if (o.cooldownHours > 0) {
+          const last = Number(await AsyncStorage.getItem(SEEN_AT).catch(() => null)) || 0;
+          if (last && Date.now() - last < o.cooldownHours * 3600 * 1000) return;
+        }
+        if (o.skipIfCartEmpty && cartRef.current === 0) return;
+        if (!alive) return;
+        setOffer(o);
+        // Time on this screen, and time with something in the basket.
+        const dwell = o.dwell || o.idle;
+        let onScreen = 0;
+        let withCart = 0;
+        timer = setInterval(() => {
+          onScreen += 1;
+          withCart = cartRef.current > 0 ? withCart + 1 : 0;
+          const fire = dwell ? (onScreen >= dwell ? "dwell" : null) : null;
+          const cartFire = o.cart && withCart >= o.cart ? "cart" : null;
+          const why = fire || cartFire;
+          if (!why) return;
+          if (timer) clearInterval(timer);
+          timer = null;
+          if (!alive) return;
+          seenThisVisit += 1;
+          AsyncStorage.setItem(SEEN_AT, String(Date.now())).catch(() => {});
+          const segment = (o.style === "wheel" || o.style === "scratch") && o.segments.length ? pickSegment(o.segments) : null;
+          setPrize(segment ? segment.label : null);
+          setCode(o.unique ? null : segment ? segment.code || null : o.code);
+          setFailed(false);
+          setVisible(true);
+          offerEvent("shown", o.id, { trigger: why });
+        }, 1000);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+      if (timer) clearInterval(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  if (!offer) return null;
+
+  const close = (dismissed: boolean) => {
+    setVisible(false);
+    if (dismissed) offerEvent("dismissed", offer.id);
+  };
+
+  const getMine = async () => {
+    setBusy(true);
+    setFailed(false);
+    try {
+      setCode(await claimOffer(offer.id));
+    } catch {
+      setFailed(true);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const apply = () => {
+    if (!code) return;
+    if (!offer.unique) offerEvent("claimed", offer.id, { code });
+    close(false);
+    onApplyCode(code);
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={() => close(true)}>
+      <Pressable style={styles.veil} onPress={() => close(true)}>
+        <Pressable style={[styles.card, { backgroundColor: offer.bg || "#ffffff" }]} onPress={() => {}}>
+          <Pressable style={styles.x} onPress={() => close(true)} hitSlop={10}>
+            <Text style={[styles.xText, { color: offer.fg }]}>×</Text>
+          </Pressable>
+          {offer.image ? <Image source={{ uri: offer.image }} style={styles.image} resizeMode="cover" /> : null}
+          <Text style={[styles.headline, { color: offer.fg }]}>{offer.headline}</Text>
+          {offer.body ? <Text style={[styles.body, { color: offer.fg }]}>{offer.body}</Text> : null}
+          {prize ? <Text style={[styles.prize, { color: offer.accent }]}>{prize}</Text> : null}
+
+          {code ? (
+            <>
+              <View style={[styles.code, { borderColor: offer.accent }]}>
+                <Text selectable style={[styles.codeText, { color: offer.fg }]}>{code}</Text>
+              </View>
+              <Pressable style={[styles.button, { backgroundColor: offer.accent }]} onPress={apply}>
+                <Text style={styles.buttonText}>{cartCount > 0 ? "Apply to my cart" : offer.button || "Use my code"}</Text>
+              </Pressable>
+            </>
+          ) : offer.unique ? (
+            <Pressable style={[styles.button, { backgroundColor: offer.accent, opacity: busy ? 0.6 : 1 }]} onPress={getMine} disabled={busy}>
+              <Text style={styles.buttonText}>{busy ? "…" : failed ? "Try again" : offer.button || "Get my code"}</Text>
+            </Pressable>
+          ) : (
+            <Pressable style={[styles.button, { backgroundColor: offer.accent }]} onPress={() => close(false)}>
+              <Text style={styles.buttonText}>{offer.button || "OK"}</Text>
+            </Pressable>
+          )}
+
+          {offer.dismiss ? (
+            <Pressable onPress={() => close(true)} hitSlop={6}>
+              <Text style={[styles.dismiss, { color: offer.fg }]}>{offer.dismiss}</Text>
+            </Pressable>
+          ) : null}
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+const styles = StyleSheet.create({
+  veil: { flex: 1, backgroundColor: "rgba(15,23,42,0.45)", alignItems: "center", justifyContent: "center", padding: 20 },
+  card: { width: "100%", maxWidth: 400, borderRadius: 18, paddingHorizontal: 22, paddingTop: 26, paddingBottom: 18, alignItems: "stretch" },
+  x: { position: "absolute", top: 8, right: 10, width: 30, height: 30, alignItems: "center", justifyContent: "center", zIndex: 1 },
+  xText: { fontSize: 22, opacity: 0.45 },
+  image: { width: "100%", height: 132, borderRadius: 12, marginBottom: 14 },
+  headline: { fontSize: 20, fontWeight: "800", textAlign: "center", lineHeight: 25 },
+  body: { marginTop: 8, fontSize: 14.5, lineHeight: 22, opacity: 0.78, textAlign: "center" },
+  prize: { marginTop: 10, fontSize: 16, fontWeight: "700", textAlign: "center" },
+  code: { marginTop: 16, borderWidth: 1.5, borderStyle: "dashed", borderRadius: 12, paddingVertical: 12, alignItems: "center" },
+  codeText: { fontSize: 19, fontWeight: "800", letterSpacing: 1.5 },
+  button: { marginTop: 14, borderRadius: 12, paddingVertical: 13, alignItems: "center" },
+  buttonText: { color: "#ffffff", fontSize: 15, fontWeight: "700" },
+  dismiss: { marginTop: 10, textAlign: "center", fontSize: 13.5, opacity: 0.6, paddingVertical: 4 },
+});
+`,
+  };
+}
+
 function liveScreenFile(): GeneratedFile {
   return {
     path: "components/LiveScreen.tsx",
@@ -8830,6 +9071,7 @@ import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Splash } from "./components/Splash";
 import { AppChrome } from "./components/AppChrome";
+import { OfferPopup } from "./components/OfferPopup";
 import { HeaderIcon } from "./components/Icons";
 import { AllCollectionsScreen, PageScreen } from "./components/PageScreen";
 import { colors, spacing, theme } from "./theme";
@@ -8845,6 +9087,7 @@ import {
   setToken,
   track,
   trackCart,
+  type OfferContext,
   type Gift,
   type Loyalty,
   type PricedCart,
@@ -8935,6 +9178,10 @@ export default function App() {
 
   const count = useMemo(() => lines.reduce((n, l) => n + l.quantity, 0), [lines]);
 
+  // A code from a popup taken before there was anything to use it on: kept,
+  // and put on the basket as soon as there is one.
+  const [pendingCode, setPendingCode] = useState<string | null>(null);
+
   // The basket as she left it, for the shop's customer page.
   useEffect(() => {
     trackCart(
@@ -8992,6 +9239,12 @@ export default function App() {
     },
     [lines],
   );
+
+  useEffect(() => {
+    if (!pendingCode || !lines.length) return;
+    applyCoupon(pendingCode);
+    setPendingCode(null);
+  }, [pendingCode, lines.length, applyCoupon]);
 
   /** Her standing, once she is signed in. A guest has no rewards to offer. */
   useEffect(() => {
@@ -9237,6 +9490,23 @@ export default function App() {
           : ""
     : theme.storeName;
 
+  // Which screen she is on, for the shop to choose a popup for.
+  const offerContext: OfferContext = top
+    ? top.kind === "product"
+      ? { pageType: "product", productKey: top.id }
+      : top.kind === "collection"
+        ? { pageType: "collection", collectionHandle: top.handle }
+        : top.kind === "search"
+          ? { pageType: "search" }
+          : top.kind === "checkout" || top.kind === "signin" || top.kind === "placed"
+            ? { pageType: "checkout" }
+            : { pageType: "other" }
+    : tab === "shop"
+      ? { pageType: query.trim() ? "search" : "index" }
+      : tab === "cart"
+        ? { pageType: "cart" }
+        : { pageType: "other" };
+
   // The reels feed is a full-screen page with its own header; everything else
   // wears the shop's, as it does in the editor.
   const chrome = !(tab === "reels" && !stack.length);
@@ -9304,6 +9574,20 @@ export default function App() {
       ) : null}
 
       <TabBar active={tab} cartCount={count} onSelect={goTab} />
+
+      <OfferPopup
+        context={offerContext}
+        cartCount={count}
+        onApplyCode={(code) => {
+          if (count > 0) {
+            applyCoupon(code);
+            goTab("cart");
+          } else {
+            setPendingCode(code);
+            setNotice("Your code " + code + " is saved - it goes on your basket as soon as you add something.");
+          }
+        }}
+      />
 
       {/* Above everything, and gone by itself a moment later. */}
       <Splash
@@ -9479,6 +9763,7 @@ export function generateApp(theme: AppTheme, baseUrl: string): GeneratedFile[] {
     iconsFile(),
     fadeFile(),
     chromeFile(),
+    offerPopupFile(),
     liveScreenFile(),
     ...(Object.keys(BLOCK_META) as BlockType[]).map(sectionFile).sort((a, b) => a.path.localeCompare(b.path)),
   ];
