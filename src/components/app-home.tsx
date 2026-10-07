@@ -661,10 +661,13 @@ function Tile({
     const add = () => (single ? onAdd?.(card.variantId as string, card.id) : onOpen?.(card.id));
     return (
       <div
-        className={`${wide ? "w-40 shrink-0" : ""} relative ${
+        className={`${wide ? "w-[148px] shrink-0" : ""} relative overflow-hidden bg-white shadow-[0_1px_3px_rgba(15,23,42,0.08)] ${
           fadeAfter === undefined ? "" : "app-fade-in"
         }`}
-        style={fadeAfter === undefined ? undefined : { animationDelay: `${fadeAfter}ms` }}
+        style={{
+          borderRadius: style.radius,
+          ...(fadeAfter === undefined ? null : { animationDelay: `${fadeAfter}ms` }),
+        }}
       >
         <button onClick={() => onOpen?.(card.id)} className="block w-full text-start">
           {/* The picture on a panel of its own. The card has no border: what
@@ -673,6 +676,9 @@ function Tile({
               there is one clip edge rather than two. */}
           <span
             className="relative block overflow-hidden"
+            // The picture is flush with the card edges, so the two corners are the
+            // same corner. A smaller inner radius leaves a sliver of card showing
+            // through at the top, which is the sort of thing that looks like dirt.
             style={{ background: style.photoBg, borderRadius: style.radius }}
           >
             {/* Blended, like every other card in the shop. Without it the
@@ -683,7 +689,7 @@ function Tile({
 
           </span>
 
-          <span className={`block ps-0.5 pb-1 pt-1 ${canAdd ? "pe-8" : "pe-0.5"}`}>
+          <span className={`block ps-1.5 pb-1.5 pt-1 ${canAdd ? "pe-8" : "pe-1.5"}`}>
             {/* One line. The name gives way at the ellipsis and the standing
                 keeps its place on the end, because a score that moves down a
                 line when a name grows is a score a shopper stops finding.

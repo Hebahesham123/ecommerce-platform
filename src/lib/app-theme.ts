@@ -938,7 +938,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   pages: [],
   titleFont: "system",
   sectionGap: 12,
-  itemGap: 8,
+  itemGap: 12,
   cardNameWords: 3,
   cardPhotoBg: "#ece8e3",
   cardStars: true,
@@ -1753,7 +1753,7 @@ export function normalizeTheme(raw: unknown): AppTheme {
     headerInk: /^#[0-9a-f]{6}$/i.test(str(s.headerInk)) ? str(s.headerInk) : "",
     titleFont: str(s.titleFont) === "serif" ? "serif" : "system",
     sectionGap: size(s.sectionGap, 12, 0, 40),
-    itemGap: size(s.itemGap, 8, 0, 24),
+    itemGap: size(s.itemGap, 12, 0, 24),
     // One word is a name nobody recognises; eight is the two lines this
     // replaced.
     cardNameWords: size(s.cardNameWords, DEFAULT_SETTINGS.cardNameWords, 1, 8),
