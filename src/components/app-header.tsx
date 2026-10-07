@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type { AppSettings } from "@/lib/app-theme";
 
 /**
@@ -23,6 +24,39 @@ function Badge({ count, accent }: { count: number; accent: string }) {
   );
 }
 
+/**
+ * The suggestion in the search box, changing over.
+ *
+ * It only ever shows while the box is empty and nobody is typing in it: a
+ * hint that moves under a cursor is a hint that has become an obstacle.
+ */
+function SearchHint({ hints, ink }: { hints: string[]; ink: string }) {
+  const [at, setAt] = useState(0);
+
+  useEffect(() => {
+    if (hints.length < 2) return;
+    const t = setInterval(() => setAt((i) => (i + 1) % hints.length), 2600);
+    return () => clearInterval(t);
+  }, [hints.length]);
+
+  if (!hints.length) return null;
+  const hint = hints[at % hints.length];
+  return (
+    <span
+      className="pointer-events-none absolute inset-y-0 start-9 end-3 flex items-center overflow-hidden"
+      aria-hidden
+    >
+      <span
+        key={hint + at}
+        className="app-hint-up block truncate text-[12px]"
+        style={{ color: `${ink}70` }}
+      >
+        {hint}
+      </span>
+    </span>
+  );
+}
+
 export function AppHeader({
   settings,
   accent,
@@ -35,6 +69,7 @@ export function AppHeader({
   onBag,
   onMenu,
   onHome,
+  suggest = [],
 }: {
   settings: AppSettings;
   accent: string;
@@ -49,7 +84,24 @@ export function AppHeader({
   onMenu?: () => void;
   /** Tapping the name goes home, the way it does on every shop. */
   onHome?: () => void;
+  /**
+   * What the search box offers while it is empty, after the merchant's own
+   * wording. The shop's collections, so it cannot suggest what it does not
+   * sell.
+   */
+  suggest?: string[];
 }) {
+  const [typing, setTyping] = useState(false);
+  // Her wording first, then the collections. Trimmed, deduplicated, and short
+  // enough that none of them is cut off in a field this wide.
+  const hints = [
+    ...new Set(
+      [settings.searchPlaceholder, ...suggest]
+        .map((h) => String(h ?? "").trim())
+        .filter((h) => h && h.length <= 34),
+    ),
+  ].slice(0, 8);
+
   const ink = settings.headerInk || "#191614";
   const bg = settings.headerBg || "#ffffff";
   // An uploaded logo wins over the wordmark; a store that has neither still
@@ -149,11 +201,19 @@ export function AppHeader({
             <input
               value={query ?? ""}
               onChange={(e) => onQuery?.(e.target.value)}
+              onFocus={() => setTyping(true)}
+              onBlur={() => setTyping(false)}
               readOnly={!onQuery}
-              placeholder={settings.searchPlaceholder}
+              aria-label={settings.searchPlaceholder || (ar ? "ابحثي" : "Search")}
+              // The suggestion that changes stands in for this, so the two
+              // would otherwise be printed one on top of the other.
+              placeholder={hints.length > 1 ? "" : settings.searchPlaceholder}
               className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 ps-9 pe-3 text-[12px] outline-none focus:border-slate-300"
               style={{ color: ink }}
             />
+            {hints.length > 1 && !typing && !(query ?? "") && (
+              <SearchHint hints={hints} ink={ink} />
+            )}
           </span>
           {/* Searching and browsing by category are the two ways of finding
               something, so they share a line. */}

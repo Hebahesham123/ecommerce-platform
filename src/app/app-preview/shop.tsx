@@ -49,6 +49,7 @@ export function Shop({
   onToggleWish,
   onLeave,
   onTheme,
+  onCollections,
   shopperName,
   recommended,
   query,
@@ -70,6 +71,8 @@ export function Shop({
   onLeave: (what: "cart" | "requests") => void;
   /** The shell wears the brand too, and /home is where it arrives. */
   onTheme?: (theme: Home["theme"]) => void;
+  /** The collection names, for the search box above to offer. */
+  onCollections?: (titles: string[]) => void;
   /** Only the live-now offer uses it, and it reads fine without one. */
   shopperName?: string | null;
   /** What goes with this shopper's past orders; null hides the section. */
@@ -120,6 +123,7 @@ export function Shop({
       if (!r.ok) return setHomeErr(r.error);
       setHome(r.data);
       onTheme?.(r.data.theme);
+      onCollections?.((r.data.collections ?? []).map((c) => c.title).filter(Boolean));
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

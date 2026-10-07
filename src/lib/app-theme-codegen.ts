@@ -5929,12 +5929,18 @@ function useRecs(list: PackBlock[], signedIn?: boolean) {
   return recs;
 }
 
-export default function HomeScreen(h: Handlers) {
+export default function HomeScreen(h: Handlers & { onCollections?: (titles: string[]) => void }) {
   const [data, setData] = useState<HomePayload | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchHome().then(setData).catch((e) => setError(String(e.message ?? e)));
+    fetchHome()
+      .then((d) => {
+        setData(d);
+        h.onCollections?.((d.collections ?? []).map((c) => c.title).filter(Boolean));
+      })
+      .catch((e) => setError(String(e.message ?? e)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const recs = useRecs(layout.home, h.signedIn);
@@ -7127,9 +7133,12 @@ export function AppChrome({
   onOpenCollection,
   onOpenProduct,
   onOpenScreen,
+  suggest = [],
 }: {
   query: string;
   onQuery: (value: string) => void;
+  /** Collection names the empty search box offers, after the shop's own wording. */
+  suggest?: string[];
   cartCount?: number;
   onHome?: () => void;
   onBag?: () => void;
@@ -7140,6 +7149,28 @@ export function AppChrome({
 }) {
   const ink = theme.header.ink || "#191614";
   const bg = theme.header.bg || "#ffffff";
+
+  /**
+   * What the box offers while it is empty.
+   *
+   * The shop's own wording first, then its collections - so it can never name
+   * something the shop does not sell. It changes only while the box is empty:
+   * a hint that moves under a cursor has become an obstacle.
+   */
+  const hints = Array.from(
+    new Set(
+      [theme.header.searchPlaceholder, ...suggest]
+        .map((h) => String(h ?? "").trim())
+        .filter((h) => h.length > 0 && h.length <= 34),
+    ),
+  ).slice(0, 8);
+  const [hintAt, setHintAt] = useState(0);
+  useEffect(() => {
+    if (hints.length < 2 || query) return;
+    const t = setInterval(() => setHintAt((i) => (i + 1) % hints.length), 2600);
+    return () => clearInterval(t);
+  }, [hints.length, query]);
+  const hint = hints.length ? hints[hintAt % hints.length] : theme.header.searchPlaceholder;
   const wordmark = theme.header.logoText || theme.storeName;
 
   // The logo keeps its own proportions at the header's height, as it does in
@@ -7256,7 +7287,7 @@ export function AppChrome({
               style={[styles.search, { color: ink }]}
               value={query}
               onChangeText={onQuery}
-              placeholder={theme.header.searchPlaceholder}
+              placeholder={hint}
               placeholderTextColor="#94a3b8"
               returnKeyType="search"
               clearButtonMode="while-editing"
@@ -9168,6 +9199,8 @@ type Line = { itemId: string; quantity: number };
 
 export default function App() {
   const [tab, setTab] = useState<TabKey>(() => visibleTabs()[0]?.key ?? "shop");
+  // What the empty search box offers, carried up from the home screen.
+  const [suggest, setSuggest] = useState<string[]>([]);
   const [stack, setStack] = useState<Screen[]>([]);
   const [lines, setLines] = useState<Line[]>([]);
   const [cart, setCart] = useState<PricedCart | null>(null);
@@ -9492,6 +9525,7 @@ export default function App() {
     <SearchResults query={query.trim()} onOpenProduct={(id) => push({ kind: "product", id })} />
   ) : tab === "shop" ? (
     <HomeScreen
+      onCollections={setSuggest}
       onOpenCollection={(handle) => push({ kind: "collection", handle })}
       onOpenProduct={(id) => push({ kind: "product", id })}
       onOpenScreen={goScreen}
@@ -9566,6 +9600,7 @@ export default function App() {
       <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
       {chrome ? (
         <AppChrome
+          suggest={suggest}
           query={query}
           onQuery={(v) => {
             setQuery(v);

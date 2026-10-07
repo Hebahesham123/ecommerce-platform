@@ -259,6 +259,10 @@ export function Preview({
   // Tapping the header's menu asks the shop to open it; the shop owns the menu
   // because the shop is what knows the merchant's navigation.
   const [openMenu, setOpenMenu] = useState<{ at: number } | null>(null);
+  // What the search box offers while it is empty. The Shop tab reads the
+  // catalogue anyway, so it passes the names up rather than this fetching them
+  // a second time for a placeholder.
+  const [suggest, setSuggest] = useState<string[]>([]);
 
   // Where a link goes. The five kinds a merchant can pick in the link
   // picker all land here, so a banner, a chip and a card behave alike.
@@ -424,6 +428,7 @@ export function Preview({
           </div>
 
           <AppHeader
+            suggest={suggest}
             settings={brand}
             accent={accent}
             ar={ar}
@@ -472,6 +477,7 @@ export function Preview({
             {activeTab === "shop" && (
               <Shop
                 ar={ar}
+                onCollections={setSuggest}
                 onAdd={add}
                 wishlist={wishlist}
                 onToggleWish={toggleWish}

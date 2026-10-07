@@ -1550,6 +1550,7 @@ export function ThemeEditor() {
               )}
 
               <AppHeader
+                suggest={(home?.collections ?? []).map((c) => c.title).filter(Boolean)}
                 settings={draft.settings}
                 accent={draft.settings.accent}
                 ar={ar}

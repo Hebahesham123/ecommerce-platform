@@ -669,3 +669,28 @@ table.sheet tbody tr:hover { background: #eef6ff; }
     display: none;
   }
 }
+
+/* App theme: the search hint, changing over.
+   Each suggestion rises into the field as the one before it leaves, which is
+   how a shopper learns the box takes more than one kind of thing. Anyone who
+   has asked their system not to animate still gets each suggestion in turn,
+   just without the travel. */
+@keyframes app-hint-up {
+  0% {
+    opacity: 0;
+    transform: translateY(9px);
+  }
+  18%,
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+.app-hint-up {
+  animation: app-hint-up 420ms ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-hint-up {
+    animation: none;
+  }
+}
