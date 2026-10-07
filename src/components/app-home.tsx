@@ -66,6 +66,8 @@ export type HomeLive = {
   status: "scheduled" | "live" | "ended" | "cancelled";
   scheduledAt: string | null;
   peakViewers: number;
+  /** How many have reacted. The shop's own count, not an estimate. */
+  likes?: number;
   href: string;
 };
 
@@ -1255,6 +1257,8 @@ function BlockView({
         viewers: l.peakViewers ? String(l.peakViewers) : "",
         url: l.href,
         onAir: true,
+        liveId: l.id,
+        likes: l.likes ?? 0,
       }));
       const replays = itemsOf(block)
         .filter((i) => str(i.videoUrl) || str(i.imageUrl) || str(i.name))
@@ -2329,6 +2333,112 @@ function SelfPlaying({
   );
 }
 
+/**
+ * A heart on a live, and the hearts it throws.
+ *
+ * The count is the shop's: live_streams.likes, moved by live_like() in the
+ * database so two people tapping at the same moment both count. Nothing is
+ * invented here - a live nobody has reacted to shows no number, because nought
+ * is the honest answer and a made-up one would be the kind of lie a shopper
+ * cannot check and would act on.
+ *
+ * The browser remembers its own tap so it does not count twice, and the same
+ * tap takes it back: a heart that cannot be un-tapped turns a slip of the
+ * thumb into a permanent one.
+ */
+function LiveReact({ liveId, start, accent }: { liveId: string; start: number; accent: string }) {
+  const [count, setCount] = useState(start);
+  const [mine, setMine] = useState(false);
+  const [flying, setFlying] = useState<{ id: number; lean: number }[]>([]);
+  const next = useRef(0);
+
+  useEffect(() => setCount(start), [start]);
+  useEffect(() => {
+    try {
+      setMine(localStorage.getItem("bb_live_like_" + liveId) === "1");
+    } catch {
+      /* private browsing */
+    }
+  }, [liveId]);
+
+  function tap(e: React.MouseEvent) {
+    e.stopPropagation();
+    const on = !mine;
+    setMine(on);
+    setCount((n) => Math.max(0, n + (on ? 1 : -1)));
+    try {
+      if (on) localStorage.setItem("bb_live_like_" + liveId, "1");
+      else localStorage.removeItem("bb_live_like_" + liveId);
+    } catch {
+      /* private browsing */
+    }
+    if (on) {
+      // A handful, each leaning its own way, so a tap reads as a cheer
+      // rather than as one heart going up a pipe.
+      const born = [0, 1, 2].map((i) => ({ id: next.current++, lean: (i - 1) * 9 + (i % 2 ? 4 : -4) }));
+      setFlying((f) => [...f, ...born]);
+      window.setTimeout(() => {
+        setFlying((f) => f.filter((x) => !born.some((y) => y.id === x.id)));
+      }, 1200);
+    }
+    fetch("/api/storefront/reels/" + liveId + "/like", { method: on ? "POST" : "DELETE" })
+      .then((r) => r.json())
+      .then((r) => {
+        if (r?.ok && typeof r.data?.likes === "number") setCount(r.data.likes);
+      })
+      .catch(() => {
+        /* the tap is kept; the total catches up on the next read */
+      });
+  }
+
+  return (
+    <span className="relative z-10 inline-block">
+      {/* The hearts leave from the button and are not part of it, so they
+          cannot be tapped on their way up. */}
+      <span className="pointer-events-none absolute bottom-4 left-1/2 block h-0 w-0">
+        {flying.map((h) => (
+          <span
+            key={h.id}
+            className="app-heart-up absolute block text-[11px] leading-none"
+            style={{ ["--lean" as string]: h.lean + "px", color: accent }}
+            aria-hidden
+          >
+            ♥
+          </span>
+        ))}
+      </span>
+      <button
+        onClick={tap}
+        aria-pressed={mine}
+        aria-label={mine ? "Take back the heart" : "React to this live"}
+        className="grid h-[18px] min-w-[18px] place-items-center rounded-full bg-white px-[3px] shadow-[0_1px_3px_rgba(15,23,42,0.3)] transition active:scale-90"
+      >
+        <span className="flex items-center gap-[2px]">
+          <svg
+            viewBox="0 0 24 24"
+            className="h-2.5 w-2.5"
+            fill={mine ? accent : "none"}
+            stroke={mine ? accent : "#64748b"}
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M20.8 5.6a5 5 0 0 0-7.1 0L12 7.3l-1.7-1.7a5 5 0 1 0-7.1 7.1l8.8 8.8 8.8-8.8a5 5 0 0 0 0-7.1Z" />
+          </svg>
+          {count > 0 && (
+            <span className="text-[8px] font-bold leading-none text-slate-700">
+              {count > 999 ? Math.round(count / 100) / 10 + "k" : count}
+            </span>
+          )}
+        </span>
+      </button>
+    </span>
+  );
+}
+
+/** What the row learns about the live behind a pasted link. */
+type Found = { id: string; file: string; likes: number };
+
 function LiveNow({
   block,
   people,
@@ -2402,28 +2512,35 @@ function LiveNow({
    */
   const autoplay = s.autoplayReplays !== false;
   const direct = (u: string) => /\.(mp4|webm|ogg|mov)(\?|$)/i.test(u);
-  const [files, setFiles] = useState<Record<string, string>>({});
+  const [files, setFiles] = useState<Record<string, Found>>({});
   const wanted = people
     .map((p) => str(p.videoUrl))
-    .filter((u) => u && !direct(u) && /\/store\/live\//.test(u))
+    .filter((u) => u && /\/store\/live\//.test(u))
     .join("|");
   useEffect(() => {
-    if (!autoplay || !wanted) return;
+    if (!wanted) return;
     let alive = true;
     fetch("/api/storefront/lives")
       .then((r) => r.json())
       .then((r) => {
         if (!alive) return;
-        const lives = (r?.data?.lives ?? r?.data ?? []) as { id?: string; recordingUrl?: string }[];
-        const found: Record<string, string> = {};
+        const lives = (r?.data?.lives ?? r?.data ?? []) as {
+          id?: string;
+          recordingUrl?: string;
+          likes?: number;
+        }[];
+        const found: Record<string, Found> = {};
         for (const url of wanted.split("|")) {
           const id = (url.match(/\/store\/live\/([0-9a-zA-Z-]{4,})/) ?? [])[1];
           if (!id) continue;
           const live =
             lives.find((l) => String(l.id) === id) ?? lives.find((l) => String(l.id).startsWith(id));
+          if (!live?.id) continue;
           // The plain recording only: a playlist needs a player this row has
-          // no business carrying for a thumbnail.
-          if (live?.recordingUrl) found[url] = live.recordingUrl;
+          // no business carrying for a thumbnail. The id and the count come
+          // back regardless, because a replay with no file can still be
+          // reacted to.
+          found[url] = { id: String(live.id), file: live.recordingUrl ?? "", likes: Number(live.likes ?? 0) };
         }
         setFiles(found);
       })
@@ -2433,14 +2550,30 @@ function LiveNow({
     return () => {
       alive = false;
     };
-  }, [autoplay, wanted]);
+  }, [wanted]);
 
   /** What this tile can play, if anything. */
   const movie = (p: Item): string => {
     if (!autoplay) return "";
     const u = str(p.videoUrl);
     if (!u) return "";
-    return direct(u) ? u : (files[u] ?? "");
+    return direct(u) ? u : (files[u]?.file ?? "");
+  };
+
+  /**
+   * The live behind a tile, when there is one to react to.
+   *
+   * Someone on air brings their own id; a replay is a link the merchant
+   * pasted, so it is the id the row looked up. A tile that matches no live -
+   * a picture the merchant typed by hand - gets no heart, because there is
+   * nowhere for the tap to go.
+   */
+  const reactable = (p: Item): { id: string; likes: number } | null => {
+    const own = str(p.liveId);
+    if (own) return { id: own, likes: Number(p.likes ?? 0) };
+    const u = str(p.videoUrl);
+    const hit = u ? files[u] : undefined;
+    return hit ? { id: hit.id, likes: hit.likes } : null;
   };
 
   return (
@@ -2460,14 +2593,14 @@ function LiveNow({
             const viewers = str(person.viewers);
             const onAir = person.onAir !== false;
             const video = str(person.videoUrl);
+            const react = reactable(person);
             return (
+              <div key={person.id} className="relative flex shrink-0 flex-col items-center" style={{ width: cell }}>
               <button
-                key={person.id}
                 onClick={() =>
                   video ? setPlaying({ url: video, title: name || replayBadge }) : go(person)
                 }
-                className="flex shrink-0 flex-col items-center"
-                style={{ width: cell }}
+                className="flex w-full flex-col items-center"
               >
                 <span className="relative block">
                   <span
@@ -2539,6 +2672,22 @@ function LiveNow({
                   </span>
                 )}
               </button>
+              {/* On the picture, not under the name: a reaction belongs on the
+                  thing being reacted to. It sits outside the opener so a tap
+                  on it is a tap on it. */}
+              {react && (
+                <span
+                  className="pointer-events-none absolute block"
+                  // Top corner, not bottom: the badge owns the bottom of
+                  // the picture and two things in one place is one too many.
+                  style={{ left: (cell + size) / 2 - 14, top: -3 }}
+                >
+                  <span className="pointer-events-auto block">
+                    <LiveReact liveId={react.id} start={react.likes} accent={accent} />
+                  </span>
+                </span>
+              )}
+              </div>
             );
           })}
 

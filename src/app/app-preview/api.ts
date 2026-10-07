@@ -246,6 +246,7 @@ export type Home = {
     status: "scheduled" | "live" | "ended" | "cancelled";
     scheduledAt: string | null;
     peakViewers: number;
+  likes?: number;
     href: string;
   }[];
   productCount: number;

@@ -606,3 +606,33 @@ table.sheet tbody tr:hover { background: #eef6ff; }
     animation: none;
   }
 }
+
+/* App theme: hearts leaving a live tile.
+   Each one drifts up and fades, with its own sideways lean so a burst of them
+   reads as a handful of separate taps rather than one column of hearts. The
+   lean and the delay are set per heart in the markup; this is only the path.
+   Anyone who has asked their system not to animate is spared the flight and
+   simply sees the count change. */
+@keyframes app-heart-up {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.5);
+  }
+  12% {
+    opacity: 1;
+    transform: translate(0, -4px) scale(1.1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--lean, 0px), -46px) scale(0.85);
+  }
+}
+.app-heart-up {
+  animation: app-heart-up 1100ms ease-out forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-heart-up {
+    animation: none;
+    display: none;
+  }
+}
