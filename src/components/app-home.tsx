@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useHlsSource } from "@/lib/use-hls";
 import {
   ALL_ROWS_CAP,
@@ -2371,6 +2371,8 @@ function LiveReact({
   const [flying, setFlying] = useState<{ id: number; lean: number; face: string; at: number; size: number }[]>([]);
   const next = useRef(0);
   const timers = useRef<number[]>([]);
+  const seen = useRef<HTMLButtonElement | null>(null);
+  const [onScreen, setOnScreen] = useState(false);
 
   useEffect(() => setCount(start), [start]);
   useEffect(() => {
@@ -2383,28 +2385,70 @@ function LiveReact({
   useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), []);
 
   /**
-   * A cheer, not a tap.
+   * Faces let go, each clearing itself once it has flown.
    *
-   * Nine faces let go over about a second, each leaning its own way and its
-   * own size, so what rises reads as a room reacting rather than one heart
-   * going up a pipe. They are decoration and say nothing about how many
-   * people are watching - the only number on this tile is the shop's own.
+   * They are decoration and say nothing about how many people are watching -
+   * the only number on this tile is the shop's own count. The cap is there so
+   * a long sit on the home screen cannot accumulate a thousand spans nobody
+   * can see.
    */
-  function cheer() {
-    const born = Array.from({ length: 9 }, (_, i) => ({
+  const release = useCallback((many: number) => {
+    const born = Array.from({ length: many }, (_, i) => ({
       id: next.current++,
       lean: Math.round((Math.random() - 0.5) * 46),
       face: CHEER[Math.floor(Math.random() * CHEER.length)],
       at: Math.round(i * 95 + Math.random() * 70),
       size: 11 + Math.round(Math.random() * 7),
     }));
-    setFlying((all) => [...all, ...born]);
-    timers.current.push(
-      window.setTimeout(() => {
-        setFlying((all) => all.filter((x) => !born.some((y) => y.id === x.id)));
-      }, 2600),
-    );
-  }
+    setFlying((all) => [...all, ...born].slice(-16));
+    for (const one of born) {
+      timers.current.push(
+        window.setTimeout(
+          () => setFlying((all) => all.filter((x) => x.id !== one.id)),
+          one.at + 1900,
+        ),
+      );
+    }
+  }, []);
+
+  /** Whether this tile is on the screen at all. */
+  useEffect(() => {
+    const el = seen.current;
+    if (!el || typeof IntersectionObserver !== "function") return;
+    const watch = new IntersectionObserver(([e]) => setOnScreen(e.isIntersecting), { threshold: 0.3 });
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, []);
+
+  /**
+   * The cheer that needs nobody.
+   *
+   * A live tile with nothing moving on it reads as a photograph. This keeps a
+   * face drifting up every second or so, on its own, for as long as the tile
+   * is in front of somebody - and not one moment longer: off the screen, or
+   * on a hidden tab, it stops dead rather than burning a phone in a pocket.
+   */
+  useEffect(() => {
+    if (!inside || !onScreen) return;
+    if (typeof window === "undefined") return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    let timer = 0;
+    const beat = () => {
+      if (!document.hidden) release(1);
+      timer = window.setTimeout(beat, 700 + Math.random() * 900);
+    };
+    timer = window.setTimeout(beat, Math.random() * 1200);
+    const wake = () => {
+      if (document.hidden) return;
+      window.clearTimeout(timer);
+      timer = window.setTimeout(beat, 400);
+    };
+    document.addEventListener("visibilitychange", wake);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", wake);
+    };
+  }, [inside, onScreen, release]);
 
   function tap(e: React.MouseEvent) {
     e.stopPropagation();
@@ -2418,9 +2462,9 @@ function LiveReact({
     } catch {
       /* private browsing */
     }
-    // Tapping again always cheers, even when it is taking the count back:
-    // the gesture is worth answering whichever way the number went.
-    cheer();
+    // A tap is answered whichever way the number went, and more loudly
+    // than the drift, so her own tap is distinguishable from the weather.
+    release(9);
     fetch("/api/storefront/reels/" + liveId + "/like", { method: on ? "POST" : "DELETE" })
       .then((r) => r.json())
       .then((r) => {
@@ -2458,6 +2502,7 @@ function LiveReact({
         ))}
       </span>
       <button
+        ref={seen}
         onClick={tap}
         aria-pressed={mine}
         aria-label={mine ? "Take back the heart" : "React to this live"}
