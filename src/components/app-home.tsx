@@ -2395,12 +2395,12 @@ function LiveReact({
   const release = useCallback((many: number) => {
     const born = Array.from({ length: many }, (_, i) => ({
       id: next.current++,
-      lean: Math.round((Math.random() - 0.5) * 46),
+      lean: Math.round((Math.random() - 0.5) * 34),
       face: CHEER[Math.floor(Math.random() * CHEER.length)],
-      at: Math.round(i * 95 + Math.random() * 70),
+      at: Math.round(i * 55 + Math.random() * 240),
       size: 11 + Math.round(Math.random() * 7),
     }));
-    setFlying((all) => [...all, ...born].slice(-16));
+    setFlying((all) => [...all, ...born].slice(-30));
     for (const one of born) {
       timers.current.push(
         window.setTimeout(
@@ -2434,8 +2434,8 @@ function LiveReact({
     if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
     let timer = 0;
     const beat = () => {
-      if (!document.hidden) release(1);
-      timer = window.setTimeout(beat, 700 + Math.random() * 900);
+      if (!document.hidden) release(2 + Math.round(Math.random() * 2));
+      timer = window.setTimeout(beat, 420 + Math.random() * 620);
     };
     timer = window.setTimeout(beat, Math.random() * 1200);
     const wake = () => {
@@ -2482,7 +2482,7 @@ function LiveReact({
       <span
         className={
           inside
-            ? "pointer-events-none absolute bottom-7 end-3 z-20 block h-0 w-0"
+            ? "pointer-events-none absolute bottom-8 end-7 z-20 block h-0 w-0"
             : "pointer-events-none absolute bottom-4 left-1/2 z-20 block h-0 w-0"
         }
         aria-hidden
