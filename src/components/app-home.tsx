@@ -1194,6 +1194,7 @@ function BlockView({
           // Seconds between slides. Zero means it waits to be told.
           every={int(s.autoplaySeconds, 5)}
           height={int(s.height, 240)}
+          width={int(s.width, 86)}
         />
       );
     }
@@ -1760,6 +1761,7 @@ function Hero({
   onOpen,
   every = 5,
   height = 240,
+  width = 86,
 }: {
   slides: Item[];
   accent: string;
@@ -1769,6 +1771,8 @@ function Hero({
   every?: number;
   /** How tall the banner stands, in pixels. */
   height?: number;
+  /** How much of the width it takes, as a percentage. The rest shows the next slide. */
+  width?: number;
 }) {
   const [at, setAt] = useState(0);
 
@@ -1797,11 +1801,23 @@ function Hero({
   // A slide with no picture of its own borrows the collection's.
   const image = str(slide.imageUrl) || collection?.image || null;
 
+  // What comes next, for the sliver at the edge.
+  const after = slides.length > 1 ? slides[(at + 1) % slides.length] : null;
+  const afterImage = after
+    ? str(after.imageUrl) ||
+      data.collections.find((c) => c.handle === str(after.handle))?.image ||
+      null
+    : null;
+  const span = Math.max(50, Math.min(100, width));
+  const peeks = span < 98 && Boolean(afterImage);
+
   return (
     <section>
+      <div className="flex gap-2">
       <button
         onClick={() => handle && onOpen?.(handle, title)}
-        className="relative block w-full overflow-hidden rounded-2xl text-start"
+        className="relative block shrink-0 overflow-hidden rounded-2xl text-start"
+        style={{ width: peeks ? `${span}%` : "100%" }}
       >
         <Thumb src={image} className="w-full rounded-2xl" style={{ height }} />
         <div className="absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-black/60 to-transparent p-3">
@@ -1818,6 +1834,20 @@ function Hero({
           )}
         </div>
       </button>
+      {/* The next slide, showing at the edge. Tapping it moves on rather than
+          opening it: what is mostly off the screen is an invitation to look,
+          not a thing to buy. */}
+      {peeks && (
+        <button
+          onClick={() => setAt((i) => (i + 1) % slides.length)}
+          aria-label="Next slide"
+          className="relative block min-w-0 flex-1 overflow-hidden rounded-2xl text-start"
+        >
+          <Thumb src={afterImage} className="w-full rounded-2xl" style={{ height }} />
+          <span className="absolute inset-0 block rounded-2xl bg-white/35" />
+        </button>
+      )}
+      </div>
       {slides.length > 1 && (
         <div className="mt-2 flex justify-center gap-1.5">
           {slides.map((sl, i) => (

@@ -3847,6 +3847,22 @@ function BlockGroup({
       )}
 
       {block.type === "hero" && (
+        <SpaceRow
+          label={ar ? "عرض البانر" : "How wide the banner is"}
+          value={num0("width", 86)}
+          onChange={(v) => onPatch({ width: v })}
+          min={50}
+          max={100}
+          unit="%"
+          note={
+            ar
+              ? "أقل من المئة يُظهر طرف الشريحة التالية، وهو ما يخبر العميلة أن هناك شريحة أخرى — النقاط تحته لم تخبر أحداً بذلك قط."
+              : "Below a hundred, the next slide shows at the edge - which is how a shopper learns there is another one. The dots underneath never taught anybody that."
+          }
+        />
+      )}
+
+      {block.type === "hero" && (
         <Field label={ar ? "ثواني بين الشرائح" : "Seconds between slides"} type="range">
           <input
             type="number"

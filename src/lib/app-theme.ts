@@ -1291,7 +1291,7 @@ export function newBlock(type: BlockType): Block {
   const settings: Record<string, Record<string, unknown>> = {
     // Seconds each slide is held. Zero waits to be told, which is what a
     // one-slide hero does anyway.
-    hero: { autoplaySeconds: 5, height: 240, items: shape ? [shape.blank()] : [] },
+    hero: { autoplaySeconds: 5, height: 240, width: 86, items: shape ? [shape.blank()] : [] },
     promo_bar: { lead: "", rest: "", code: "" },
     collection_tabs: {
       kicker: "",
