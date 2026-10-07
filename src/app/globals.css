@@ -694,3 +694,34 @@ table.sheet tbody tr:hover { background: #eef6ff; }
     animation: none;
   }
 }
+
+/* App theme: the countdown's seconds turning over.
+   A split-flap board, which is what a countdown looked like before it looked
+   like anything: the tile hinges at its middle and the new number drops in.
+   Only the number that changed moves, so the hours sit still while the
+   seconds work - a whole clock flipping at once reads as a glitch. Anyone who
+   has asked their system not to animate gets the numbers without the hinge. */
+@keyframes app-flap {
+  0% {
+    transform: rotateX(-82deg);
+    opacity: 0.35;
+  }
+  60% {
+    transform: rotateX(8deg);
+    opacity: 1;
+  }
+  100% {
+    transform: none;
+    opacity: 1;
+  }
+}
+.app-flap {
+  animation: app-flap 420ms cubic-bezier(0.3, 0.8, 0.4, 1) both;
+  transform-origin: center top;
+  backface-visibility: hidden;
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-flap {
+    animation: none;
+  }
+}

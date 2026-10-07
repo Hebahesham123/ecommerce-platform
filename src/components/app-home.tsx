@@ -1901,6 +1901,36 @@ function Hero({
   );
 }
 
+/**
+ * One tile of the countdown, hinged across its middle.
+ *
+ * Keyed on the number it is showing, so React builds a new tile whenever the
+ * number changes and the hinge runs - and does not run on the two tiles that
+ * did not change. The seam is a real line across the face, because that is
+ * the whole of what makes a flap look like a flap.
+ */
+function Flap({ value, unit, accent }: { value: string; unit: string; accent: string }) {
+  return (
+    <span className="flex flex-col items-center" style={{ perspective: 160 }}>
+      <span
+        key={value}
+        className="app-flap relative block overflow-hidden rounded-[7px] px-[7px] py-[5px] text-white shadow-[0_1px_2px_rgba(15,23,42,0.25)]"
+        style={{
+          background: `linear-gradient(180deg, ${accent} 0%, ${accent} 49.5%, rgba(0,0,0,0.16) 50%, ${accent} 50.5%, ${accent} 100%)`,
+        }}
+      >
+        <span className="block font-mono text-[13px] font-bold leading-none tabular-nums">{value}</span>
+      </span>
+      <span
+        className="mt-[3px] text-[7px] font-bold uppercase leading-none tracking-[0.1em]"
+        style={{ color: `${accent}99` }}
+      >
+        {unit}
+      </span>
+    </span>
+  );
+}
+
 /** Collections as tabs, with the chosen one's products underneath. */
 function Tabs({
   title,
@@ -3133,14 +3163,14 @@ function CountdownDeals({
         <h3 className="min-w-0 truncate text-[16px] font-bold tracking-tight text-slate-900">{str(s.title)}</h3>
         {showTimer && (
           // hh:mm:ss on its own is a row of numbers you have to decode. The
-          // units under each box say what they are, and the live dot says the
+          // units under each tile say what they are, and the live dot says the
           // clock is actually moving rather than a picture of a time.
           <span
             dir="ltr"
-            className="flex shrink-0 items-center gap-1 rounded-full py-1 pe-2 ps-1.5"
-            style={{ background: `${accent}14` }}
+            className="flex shrink-0 items-center gap-[5px] rounded-xl py-1 pe-2 ps-2"
+            style={{ background: `${accent}12` }}
           >
-            <span className="relative me-0.5 flex h-1.5 w-1.5 shrink-0">
+            <span className="relative mb-2 flex h-1.5 w-1.5 shrink-0">
               <span
                 className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-75"
                 style={{ background: accent }}
@@ -3148,25 +3178,7 @@ function CountdownDeals({
               <span className="relative inline-flex h-1.5 w-1.5 rounded-full" style={{ background: accent }} />
             </span>
             {parts.map((part, i) => (
-              <span key={i} className="flex items-center">
-                {i > 0 && (
-                  <span
-                    className="px-[3px] pb-1 text-[11px] font-bold leading-none opacity-40"
-                    style={{ color: accent }}
-                  >
-                    :
-                  </span>
-                )}
-                <span
-                  className="flex flex-col items-center rounded-md px-1.5 py-1 leading-none text-white shadow-sm"
-                  style={{ background: accent }}
-                >
-                  <span className="font-mono text-[12px] font-bold tabular-nums">{part}</span>
-                  <span className="mt-[2px] text-[7px] font-semibold uppercase tracking-wide opacity-75">
-                    {units[i]}
-                  </span>
-                </span>
-              </span>
+              <Flap key={i} value={part} unit={units[i]} accent={accent} />
             ))}
           </span>
         )}
@@ -3201,7 +3213,7 @@ function CountdownDeals({
           return (
             <div
               key={item.id}
-              className="flex shrink-0 flex-col text-start"
+              className="relative flex shrink-0 flex-col text-start"
               style={{ width: lead ? 224 : 158 }}
             >
             <button onClick={() => go(item)} className="flex flex-1 flex-col text-start">
@@ -3224,7 +3236,7 @@ function CountdownDeals({
                   </span>
                 )}
               </span>
-              <span className="block p-2">
+              <span className="block ps-2 pt-2 pb-2 pe-8">
                 <span className="flex items-baseline gap-1">
                   <span className="text-[13px] font-bold" style={{ color: accent }}>
                     {str(item.price)}
@@ -3249,8 +3261,9 @@ function CountdownDeals({
                 )}
               </span>
             </button>
-            {/* The same button the product cards carry. A deal nobody can add
-                without choosing a size says so and opens instead. */}
+            {/* The same plus the product cards carry, in the same corner. A
+                deal nobody can add without choosing a size opens instead of
+                guessing one for her. */}
             {cards.add && (handlers.onAddToCart || handlers.onOpenProduct) && (
               <button
                 onClick={() =>
@@ -3258,29 +3271,19 @@ function CountdownDeals({
                     ? handlers.onAddToCart?.(product.variantId, product.id)
                     : go(item)
                 }
-                className="mx-2 mb-2 flex h-8 items-center justify-center gap-1 rounded-lg text-[11px] font-bold uppercase tracking-[0.08em] text-white transition active:scale-[0.98]"
+                aria-label={
+                  single
+                    ? str(cards.addLabel) || (ar ? "أضيفي إلى الحقيبة" : "Add to bag")
+                    : ar
+                      ? "اختاري المقاس"
+                      : "Choose a size"
+                }
+                className="absolute bottom-1 end-0.5 grid h-7 w-7 place-items-center rounded-full text-white shadow-sm transition active:scale-90"
                 style={{ background: accent }}
               >
-                {single ? (
-                  <>
-                    <svg
-                      viewBox="0 0 24 24"
-                      className="h-3 w-3"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="3"
-                      strokeLinecap="round"
-                      aria-hidden
-                    >
-                      <path d="M12 5v14M5 12h14" />
-                    </svg>
-                    {str(cards.addLabel) || (ar ? "أضيفي" : "Add to bag")}
-                  </>
-                ) : ar ? (
-                  "تسوّقي"
-                ) : (
-                  "Shop now"
-                )}
+                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden>
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
               </button>
             )}
             </div>
