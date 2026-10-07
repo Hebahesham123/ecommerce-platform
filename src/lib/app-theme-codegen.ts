@@ -2018,6 +2018,7 @@ export type Slide = {
 export type HeroSettings = {
   /** Seconds each slide is held before the next. Zero waits to be tapped. */
   autoplaySeconds?: number;
+  height?: number;
   items?: Slide[];
 };
 
@@ -2037,6 +2038,7 @@ export function Hero({
   const slides = settings.items ?? [];
   const [at, setAt] = useState(0);
   const every = settings.autoplaySeconds === undefined ? 5 : settings.autoplaySeconds;
+  const tall = settings.height === undefined ? 240 : settings.height;
 
   /**
    * The slides move on by themselves.
@@ -2062,7 +2064,7 @@ export function Hero({
     <View>
       <Pressable
         onPress={() => openLink(slide, { onOpenCollection, onOpenProduct, onOpenScreen })}
-        style={styles.wrap}
+        style={[styles.wrap, { height: tall }]}
       >
         {image ? <Image source={{ uri: image }} style={styles.image} /> : null}
         <View style={styles.overlay}>
@@ -2087,7 +2089,7 @@ export function Hero({
 }
 
 const styles = StyleSheet.create({
-  wrap: { borderRadius: radius.lg, overflow: "hidden", height: 176, backgroundColor: colors.page },
+  wrap: { borderRadius: radius.lg, overflow: "hidden", backgroundColor: colors.page },
   image: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, width: "100%", height: "100%" },
   overlay: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, justifyContent: "flex-end", padding: 12, backgroundColor: "rgba(0,0,0,0.3)" },
   kicker: { fontSize: 10, letterSpacing: 1.5, textTransform: "uppercase", color: "rgba(255,255,255,0.8)" },

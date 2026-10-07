@@ -3832,6 +3832,21 @@ function BlockGroup({
       )}
 
       {block.type === "hero" && (
+        <SpaceRow
+          label={ar ? "ارتفاع البانر" : "How tall the banner stands"}
+          value={num0("height", 240)}
+          onChange={(v) => onPatch({ height: v })}
+          min={120}
+          max={420}
+          note={
+            ar
+              ? "بالبكسل. الصورة تملأ الارتفاع وتُقتطع من أعلى وأسفل، فالبانر الأطول يُظهر قدراً أكبر من تصميمك."
+              : "In pixels. The picture fills the height and is cropped top and bottom, so a taller banner shows more of your artwork."
+          }
+        />
+      )}
+
+      {block.type === "hero" && (
         <Field label={ar ? "ثواني بين الشرائح" : "Seconds between slides"} type="range">
           <input
             type="number"

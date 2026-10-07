@@ -1193,6 +1193,7 @@ function BlockView({
           data={data}
           // Seconds between slides. Zero means it waits to be told.
           every={int(s.autoplaySeconds, 5)}
+          height={int(s.height, 240)}
         />
       );
     }
@@ -1758,6 +1759,7 @@ function Hero({
   data,
   onOpen,
   every = 5,
+  height = 240,
 }: {
   slides: Item[];
   accent: string;
@@ -1765,6 +1767,8 @@ function Hero({
   onOpen?: (handle: string, title: string) => void;
   /** Seconds each slide is held before the next one. Zero stands still. */
   every?: number;
+  /** How tall the banner stands, in pixels. */
+  height?: number;
 }) {
   const [at, setAt] = useState(0);
 
@@ -1799,7 +1803,7 @@ function Hero({
         onClick={() => handle && onOpen?.(handle, title)}
         className="relative block w-full overflow-hidden rounded-2xl text-start"
       >
-        <Thumb src={image} className="h-44 w-full rounded-2xl" />
+        <Thumb src={image} className="w-full rounded-2xl" style={{ height }} />
         <div className="absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-black/60 to-transparent p-3">
           {str(slide.kicker) && (
             <div className="text-[10px] uppercase tracking-widest text-white/80">
