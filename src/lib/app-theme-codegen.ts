@@ -163,6 +163,7 @@ export function appPack(theme: AppTheme) {
         ticker: t.cardTicker !== false,
         tickerText: str(t.cardTickerText),
         look: str(t.cardLook) === "soft" ? "soft" : "market",
+        radius: Math.max(0, Math.min(32, Math.round(Number(t.cardRadius ?? 22)) || 0)),
         // The product screen's numbers, not a second pair of them: one score
         // kept in two places is a score that disagrees with itself.
         rating: str(theme.screens.product.ratingValue),
@@ -311,6 +312,7 @@ export type ThemeData = {
     ticker: boolean;
     tickerText: string;
     look: string;
+    radius: number;
     rating: string;
     reviews: string;
     lowAt: number;
@@ -1541,7 +1543,7 @@ const styles = StyleSheet.create({
   noteMark: { fontSize: 9, lineHeight: 11 },
   noteText: { fontSize: 9, fontWeight: "700", flexShrink: 1 },
   flat: { backgroundColor: colors.surface, position: "relative" },
-  panel: { borderRadius: radius.lg, overflow: "hidden", backgroundColor: theme.card.photoBg },
+  panel: { borderRadius: theme.card.radius, overflow: "hidden", backgroundColor: theme.card.photoBg },
   panelImage: { backgroundColor: theme.card.photoBg },
   offStamp: { position: "absolute", left: 6, top: 6, backgroundColor: colors.accent, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
   offStampText: { fontSize: 10, fontWeight: "700", color: "#fff" },

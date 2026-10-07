@@ -799,6 +799,18 @@ export function ThemeEditor() {
                     : "Marketplace puts a moving strip under the picture, the price in black, the discount in green beside the price it was, and the rating in a small chip. Denser, and faster to read in a grid."}
                 </p>
               </Field>
+              <SpaceRow
+                label={ar ? "استدارة زاوية الصورة" : "How round the picture's corner is"}
+                value={draft.settings.cardRadius}
+                onChange={(v) => patchSettings({ cardRadius: v })}
+                min={0}
+                max={32}
+                note={
+                  ar
+                    ? "صفر يعني زاوية قائمة. الصورة تُقصّ مرة واحدة فقط، فالزاوية نظيفة مهما كان الرقم."
+                    : "Nought is a square corner. The picture is clipped once and once only, so the corner stays clean at any number."
+                }
+              />
               <Field label={ar ? "ملاحظة تتقلّب على البطاقة" : "A note that turns over on the card"} type="checkbox">
                 <input
                   type="checkbox"

@@ -582,6 +582,7 @@ const CardStyle = createContext({
   ticker: DEFAULT_SETTINGS.cardTicker,
   tickerText: "",
   look: DEFAULT_SETTINGS.cardLook,
+  radius: DEFAULT_SETTINGS.cardRadius,
   /** The shop's standing, as the product screen states it. */
   rating: "",
   reviews: "",
@@ -671,8 +672,8 @@ function Tile({
           {/* The panel owns the corner; the picture inside is left square so
               there is one clip edge rather than two. */}
           <span
-            className="relative block overflow-hidden rounded-2xl"
-            style={{ background: style.photoBg }}
+            className="relative block overflow-hidden"
+            style={{ background: style.photoBg, borderRadius: style.radius }}
           >
             {/* Blended, like every other card in the shop. Without it the
                 picture keeps its own background and a row of products looks
@@ -5495,6 +5496,7 @@ export function AppHome({
       ticker: theme.settings.cardTicker,
       tickerText: theme.settings.cardTickerText,
       look: theme.settings.cardLook,
+      radius: theme.settings.cardRadius,
       // The product screen's numbers, not a second pair of them.
       rating: theme.screens.product.ratingValue,
       reviews: theme.screens.product.reviewCount,

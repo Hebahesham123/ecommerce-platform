@@ -569,6 +569,14 @@ export type AppSettings = {
    * and reads faster in a grid.
    */
   cardLook: string;
+  /**
+   * How round the picture's corner is, in pixels.
+   *
+   * A number rather than a judgement: the difference between twelve and
+   * sixteen is one a person has to be told about before they can see it, and
+   * arguing about it in prose wastes a day. Nought is a square corner.
+   */
+  cardRadius: number;
 };
 
 /**
@@ -940,6 +948,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   cardTicker: true,
   cardTickerText: "",
   cardLook: "market",
+  cardRadius: 22,
 };
 
 /**
@@ -1756,6 +1765,7 @@ export function normalizeTheme(raw: unknown): AppTheme {
     cardTicker: s.cardTicker !== false,
     cardTickerText: str(s.cardTickerText).slice(0, 120),
     cardLook: str(s.cardLook) === "soft" ? "soft" : "market",
+    cardRadius: Math.max(0, Math.min(32, Math.round(Number(s.cardRadius ?? 22)) || 0)),
     splashEnabled: Boolean(s.splashEnabled),
     splashImageUrl: str(s.splashImageUrl).slice(0, 500),
     splashBg: colour(s.splashBg, DEFAULT_SETTINGS.splashBg),
