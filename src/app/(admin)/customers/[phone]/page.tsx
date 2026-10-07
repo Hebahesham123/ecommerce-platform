@@ -22,6 +22,7 @@ import {
   IcGlobe,
 } from "@/components/icons";
 import { getCustomerProfile, type CustomerProfile, type TimelineItem } from "../tracking-actions";
+import { ExclusiveOffers } from "./exclusive-offers";
 
 /**
  * One customer: who she is, what she looks at, what she left in her basket.
@@ -168,6 +169,8 @@ export default function CustomerPage({ params }: { params: Promise<{ phone: stri
 
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-1">
+          <ExclusiveOffers phone={data.phone} name={data.name} />
+
           {/* What she walked away from: the first thing worth acting on. */}
           <Card>
             <SectionHeader

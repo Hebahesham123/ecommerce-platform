@@ -3,21 +3,26 @@
 import { useMemo, useState } from "react";
 import { useI18n } from "@/lib/i18n";
 import {
+  ALL_CHANNELS,
   ALL_PAGES,
+  AUDIENCE_LABELS,
+  CHANNEL_LABELS,
   PAGE_LABELS,
   POSITION_LABELS,
   STYLE_LABELS,
   TRIGGER_LABELS,
   campaignProblems,
+  type NudgeAudience,
   type NudgeCampaign,
+  type NudgeChannel,
   type NudgePage,
   type NudgeStyle,
   type NudgePosition,
   type WheelSegment,
 } from "@/lib/nudge";
-import type { OfferableCode } from "./actions";
+import type { OfferableCode, TargetOptions } from "./actions";
 import { Card } from "@/components/ui";
-import { IcAlert, IcPlus, IcTrash } from "@/components/icons";
+import { IcAlert, IcPlus, IcTrash, IcX } from "@/components/icons";
 
 /* ------------------------------- small parts ------------------------------ */
 
@@ -185,6 +190,88 @@ function Choice<T extends string>({
   );
 }
 
+/**
+ * Choose some of a long list: type to find, tap to add, x to take away.
+ * Products, collections and customers all number in the hundreds, so a list
+ * of checkboxes would be a page of its own.
+ */
+function Picker({
+  label,
+  placeholder,
+  options,
+  selected,
+  onChange,
+  empty,
+}: {
+  label: string;
+  placeholder: string;
+  options: { value: string; label: string; sub?: string; image?: string | null }[];
+  selected: string[];
+  onChange: (v: string[]) => void;
+  empty: string;
+}) {
+  const [q, setQ] = useState("");
+  const byValue = useMemo(() => new Map(options.map((o) => [o.value, o])), [options]);
+  const needle = q.trim().toLowerCase();
+  const matches = needle
+    ? options
+        .filter((o) => !selected.includes(o.value) && (o.label + " " + (o.sub ?? "")).toLowerCase().includes(needle))
+        .slice(0, 8)
+    : [];
+  return (
+    <div>
+      <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">{label}</span>
+      {selected.length > 0 ? (
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
+          {selected.map((v) => (
+            <span key={v} className="inline-flex items-center gap-1 rounded-full bg-brand-50 py-1 pe-1 ps-2.5 text-xs text-brand-700">
+              {byValue.get(v)?.label ?? v}
+              <button
+                type="button"
+                onClick={() => onChange(selected.filter((x) => x !== v))}
+                className="grid h-5 w-5 place-items-center rounded-full hover:bg-brand-100"
+                aria-label="Remove"
+              >
+                <IcX className="h-3 w-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      ) : (
+        <p className="mt-1 text-xs text-ink-soft">{empty}</p>
+      )}
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder={placeholder} className={"mt-2 " + inputCls} />
+      {matches.length > 0 && (
+        <ul className="mt-1 overflow-hidden rounded-xl border border-line">
+          {matches.map((o) => (
+            <li key={o.value}>
+              <button
+                type="button"
+                onClick={() => {
+                  onChange([...selected, o.value]);
+                  setQ("");
+                }}
+                className="flex w-full items-center gap-2.5 px-3 py-2 text-start text-sm hover:bg-surface-hover"
+              >
+                {o.image !== undefined && (
+                  <span className="h-8 w-8 shrink-0 overflow-hidden rounded-md bg-surface-page">
+                    {o.image && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={o.image} alt="" className="h-full w-full object-cover" />
+                    )}
+                  </span>
+                )}
+                <span className="min-w-0 flex-1 truncate text-ink">{o.label}</span>
+                {o.sub && <span className="text-xs text-ink-soft" dir="ltr">{o.sub}</span>}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 /* --------------------------------- preview -------------------------------- */
 
 /**
@@ -264,7 +351,7 @@ function Preview({ c }: { c: NudgeCampaign }) {
             className="mt-4 rounded-xl border-[1.5px] border-dashed px-3.5 py-3 text-[19px] font-extrabold tracking-[0.08em]"
             style={{ borderColor: c.accentColor }}
           >
-            {c.discountCode || "NO CODE"}
+            {c.codeMode === "unique" ? "BB••••••" : c.discountCode || "NO CODE"}
           </div>
         )}
 
@@ -287,11 +374,14 @@ function Preview({ c }: { c: NudgeCampaign }) {
 export function NudgeEditor({
   initial,
   codes,
+  options,
   onSave,
   saving,
 }: {
   initial: NudgeCampaign;
   codes: OfferableCode[];
+  /** What can be targeted: products, collections, customers. */
+  options: TargetOptions;
   onSave: (c: NudgeCampaign) => void;
   saving: boolean;
 }) {
@@ -331,7 +421,16 @@ export function NudgeEditor({
     scratch_needs_prize: ar
       ? "بطاقة الخدش تحتاج كود خصم أو جائزة واحدة على الأقل."
       : "A scratch card needs a discount code, or at least one prize to draw from.",
+    no_channels: ar ? "لم تختاري أين يعمل (الموقع، المتجر، التطبيق)." : "No channel chosen: website, theme storefront or app.",
+    no_customers: ar ? "اخترتِ عملاء محددين لكن لم تضيفي أحداً." : "Specific customers is chosen but none are added.",
+    unique_needs_card: ar
+      ? "الكود الخاص بكل عميلة يعمل مع بطاقة الخصم أو طلب البيانات فقط."
+      : "A code per shopper works with the discount card or the email/phone-first style only.",
+    unique_value: ar ? "قيمة الخصم غير صحيحة (النسبة حتى ٩٠٪)." : "The discount value is not valid (percent up to 90).",
   };
+
+  const toggleChannel = (ch: NudgeChannel) =>
+    set("channels", c.channels.includes(ch) ? c.channels.filter((x) => x !== ch) : [...c.channels, ch]);
 
   return (
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
@@ -366,6 +465,42 @@ export function NudgeEditor({
             }
           />
           <Text label={ar ? "الاسم" : "Name"} value={c.name} onChange={(v) => set("name", v)} />
+          <Num
+            label={ar ? "الأولوية" : "Priority"}
+            value={c.priority}
+            onChange={(v) => set("priority", v)}
+            min={0}
+            suffix={ar ? "الأعلى يُعرض أولاً إذا تنافست حملتان" : "higher shows first when two campaigns fit"}
+          />
+        </Section>
+
+        <Section
+          title={ar ? "لمن يظهر" : "Who sees it"}
+          hint={ar ? "قنوات العرض والعملاء المستهدفون." : "Where it runs and which shoppers it is for."}
+        >
+          <div className="grid gap-2 sm:grid-cols-3">
+            {ALL_CHANNELS.map((ch) => (
+              <Toggle key={ch} checked={c.channels.includes(ch)} onChange={() => toggleChannel(ch)} title={CHANNEL_LABELS[ch][lang]} />
+            ))}
+          </div>
+          <Choice<NudgeAudience>
+            value={c.audience}
+            onChange={(v) => set("audience", v)}
+            options={(["everyone", "guests", "signed_in", "with_cart", "customers"] as NudgeAudience[]).map((a) => ({
+              value: a,
+              label: AUDIENCE_LABELS[a][lang],
+            }))}
+          />
+          {c.audience === "customers" && (
+            <Picker
+              label={ar ? "العملاء" : "Customers"}
+              placeholder={ar ? "ابحثي بالاسم أو الرقم…" : "Search by name or phone…"}
+              options={options.customers.map((p) => ({ value: p.phone, label: p.name || p.phone, sub: p.phone }))}
+              selected={c.audiencePhones}
+              onChange={(v) => set("audiencePhones", v)}
+              empty={ar ? "لم تُضَف أي عميلة بعد." : "No customers added yet."}
+            />
+          )}
         </Section>
 
         <Section
@@ -478,6 +613,29 @@ export function NudgeEditor({
               ? "لا يظهر أبداً في صفحة الدفع أو الحساب."
               : "Never appears on checkout or account pages."}
           </p>
+          <Picker
+            label={ar ? "منتجات محددة (اختياري)" : "Only these products (optional)"}
+            placeholder={ar ? "ابحثي عن منتج…" : "Search products…"}
+            options={options.products.map((p) => ({ value: p.id, label: p.title, image: p.image }))}
+            selected={c.productIds}
+            onChange={(v) => set("productIds", v)}
+            empty={ar ? "كل المنتجات." : "Any product."}
+          />
+          <Picker
+            label={ar ? "تصنيفات محددة (اختياري)" : "Only these collections (optional)"}
+            placeholder={ar ? "ابحثي عن تصنيف…" : "Search collections…"}
+            options={options.collections.map((k) => ({ value: k.handle, label: k.title }))}
+            selected={c.collectionHandles}
+            onChange={(v) => set("collectionHandles", v)}
+            empty={ar ? "كل التصنيفات." : "Any collection."}
+          />
+          {(c.productIds.length > 0 || c.collectionHandles.length > 0) && (
+            <p className="text-xs text-ink-soft">
+              {ar
+                ? "يظهر فقط على صفحات هذه المنتجات أو منتجات هذه التصنيفات."
+                : "Shows only on these products' pages, or on products in these collections."}
+            </p>
+          )}
         </Section>
 
         <Section
@@ -577,7 +735,48 @@ export function NudgeEditor({
               : "Codes come from your Discounts page, so the popup can never offer one checkout would reject."
           }
         >
-          {c.style === "wheel" || c.style === "scratch" ? (
+          <Choice<"shared" | "unique">
+            value={c.codeMode}
+            onChange={(v) => set("codeMode", v)}
+            options={[
+              {
+                value: "shared",
+                label: ar ? "كود واحد للجميع" : "One shared code",
+                desc: ar ? "نفس الكود لكل من يرى النافذة." : "The same code for everyone who sees it.",
+              },
+              {
+                value: "unique",
+                label: ar ? "كود خاص لكل عميلة" : "A code for each shopper",
+                desc: ar
+                  ? "يُصنع كود يُستخدم مرة واحدة لكل عميلة، ولا يعمل إلا برقمها إن كانت مسجلة."
+                  : "Each shopper gets her own one-time code; locked to her phone when she is signed in.",
+              },
+            ]}
+          />
+          {c.codeMode === "unique" ? (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block">
+                <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">{ar ? "نوع الخصم" : "Discount"}</span>
+                <select
+                  value={c.uniqueValueType}
+                  onChange={(e) => set("uniqueValueType", e.target.value as "percentage" | "fixed_amount")}
+                  className={"mt-1.5 " + inputCls}
+                >
+                  <option value="percentage">{ar ? "نسبة %" : "Percent %"}</option>
+                  <option value="fixed_amount">{ar ? "مبلغ ج.م" : "Amount EGP"}</option>
+                </select>
+              </label>
+              <Num label={ar ? "القيمة" : "Value"} value={c.uniqueValue} onChange={(v) => set("uniqueValue", v)} />
+              <Num label={ar ? "صالح لمدة" : "Valid for"} value={c.uniqueHours} onChange={(v) => set("uniqueHours", v)} suffix={ar ? "ساعة" : "hours"} />
+              <Num
+                label={ar ? "أقل قيمة للطلب" : "Min. order"}
+                value={c.uniqueMinAmount ?? 0}
+                onChange={(v) => set("uniqueMinAmount", v > 0 ? v : null)}
+                min={0}
+                suffix={ar ? "ج.م (٠ = بدون)" : "EGP (0 = none)"}
+              />
+            </div>
+          ) : c.style === "wheel" || c.style === "scratch" ? (
             <div className="space-y-2">
               {c.wheelSegments.map((s, i) => (
                 <div key={i} className="flex flex-wrap items-end gap-2">

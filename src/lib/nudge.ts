@@ -24,6 +24,16 @@ export type NudgeEventType =
 
 export type WheelSegment = { label: string; code: string; weight: number };
 
+/** Where a campaign may appear: the website, the theme storefront at /shop, the app. */
+export type NudgeChannel = "web" | "shop" | "app";
+export const ALL_CHANNELS: NudgeChannel[] = ["web", "shop", "app"];
+
+/** Who a campaign is for. */
+export type NudgeAudience = "everyone" | "guests" | "signed_in" | "customers" | "with_cart";
+
+/** One code for everyone, or a code made for each shopper who claims it. */
+export type NudgeCodeMode = "shared" | "unique";
+
 export type NudgeCampaign = {
   id: string;
   name: string;
@@ -57,10 +67,39 @@ export type NudgeCampaign = {
   discountCode: string | null;
   wheelSegments: WheelSegment[];
 
+  /** Higher runs first when several campaigns could show on the same page. */
+  priority: number;
+  channels: NudgeChannel[];
+  audience: NudgeAudience;
+  /** For the "customers" audience: their phones. */
+  audiencePhones: string[];
+  /** Only on these products / collections. Empty means any. */
+  productIds: string[];
+  collectionHandles: string[];
+  codeMode: NudgeCodeMode;
+  uniqueValueType: "percentage" | "fixed_amount";
+  uniqueValue: number;
+  uniqueHours: number;
+  uniqueMinAmount: number | null;
+
   updatedAt: string;
 };
 
 export const ALL_PAGES: NudgePage[] = ["index", "product", "collection", "cart", "search"];
+
+export const CHANNEL_LABELS: Record<NudgeChannel, { ar: string; en: string }> = {
+  web: { ar: "الموقع", en: "Website" },
+  shop: { ar: "متجر الثيم (/shop)", en: "Theme storefront (/shop)" },
+  app: { ar: "التطبيق", en: "Mobile app" },
+};
+
+export const AUDIENCE_LABELS: Record<NudgeAudience, { ar: string; en: string }> = {
+  everyone: { ar: "الجميع", en: "Everyone" },
+  guests: { ar: "الزوار غير المسجلين", en: "Guests (not signed in)" },
+  signed_in: { ar: "العملاء المسجلون", en: "Signed-in customers" },
+  customers: { ar: "عملاء محددون", en: "Specific customers" },
+  with_cart: { ar: "من في سلته منتجات", en: "Shoppers with items in their cart" },
+};
 
 export const PAGE_LABELS: Record<NudgePage, { ar: string; en: string }> = {
   index: { ar: "الصفحة الرئيسية", en: "Home page" },
@@ -120,6 +159,9 @@ function segmentsOf(v: unknown): WheelSegment[] {
     .filter((s) => s.label);
 }
 
+const strings = (v: unknown): string[] =>
+  Array.isArray(v) ? v.map((x) => String(x ?? "").trim()).filter(Boolean).slice(0, 500) : [];
+
 export function mapCampaign(r: Row): NudgeCampaign {
   return {
     id: String(r.id),
@@ -160,6 +202,23 @@ export function mapCampaign(r: Row): NudgeCampaign {
     discountCode: r.discount_code ? String(r.discount_code) : null,
     wheelSegments: segmentsOf(r.wheel_segments),
 
+    priority: int(r.priority, 0),
+    channels: (() => {
+      const v = strings(r.channels).filter((c): c is NudgeChannel => (ALL_CHANNELS as string[]).includes(c));
+      return r.channels == null ? [...ALL_CHANNELS] : v;
+    })(),
+    audience: (["everyone", "guests", "signed_in", "customers", "with_cart"] as string[]).includes(str(r.audience))
+      ? (str(r.audience) as NudgeAudience)
+      : "everyone",
+    audiencePhones: strings(r.audience_phones),
+    productIds: strings(r.product_ids),
+    collectionHandles: strings(r.collection_handles),
+    codeMode: str(r.code_mode) === "unique" ? "unique" : "shared",
+    uniqueValueType: str(r.unique_value_type) === "fixed_amount" ? "fixed_amount" : "percentage",
+    uniqueValue: Number(r.unique_value ?? 10) || 10,
+    uniqueHours: Math.max(1, int(r.unique_hours, 24)),
+    uniqueMinAmount: r.unique_min_amount == null ? null : Number(r.unique_min_amount),
+
     updatedAt: str(r.updated_at),
   };
 }
@@ -193,6 +252,17 @@ export function campaignToRow(c: NudgeCampaign): Row {
     image_url: c.imageUrl?.trim() || null,
     discount_code: c.discountCode?.trim() || null,
     wheel_segments: c.wheelSegments,
+    priority: Math.trunc(c.priority) || 0,
+    channels: c.channels,
+    audience: c.audience,
+    audience_phones: c.audiencePhones,
+    product_ids: c.productIds,
+    collection_handles: c.collectionHandles,
+    code_mode: c.codeMode,
+    unique_value_type: c.uniqueValueType,
+    unique_value: c.uniqueValue,
+    unique_hours: Math.max(1, Math.trunc(c.uniqueHours)),
+    unique_min_amount: c.uniqueMinAmount && c.uniqueMinAmount > 0 ? c.uniqueMinAmount : null,
   };
 }
 
@@ -214,6 +284,15 @@ export function campaignProblems(c: NudgeCampaign): string[] {
   const out: string[] = [];
   if (!activeTriggers(c).length) out.push("no_triggers");
   if (!c.pages.length) out.push("no_pages");
+  if (!c.channels.length) out.push("no_channels");
+  if (c.audience === "customers" && !c.audiencePhones.length) out.push("no_customers");
+  if (c.codeMode === "unique") {
+    // A code made per shopper is handed over by the card and the capture
+    // styles; a wheel or scratch card draws from codes set in advance.
+    if (c.style === "wheel" || c.style === "scratch") out.push("unique_needs_card");
+    if (!(c.uniqueValue > 0) || (c.uniqueValueType === "percentage" && c.uniqueValue > 90)) out.push("unique_value");
+    return out;
+  }
   if (c.style === "wheel") {
     if (c.wheelSegments.length < 2) out.push("wheel_needs_segments");
   } else if (c.style === "scratch") {

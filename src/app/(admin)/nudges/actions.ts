@@ -4,12 +4,13 @@ import { revalidatePath } from "next/cache";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
 import { invalidateNudge } from "@/lib/nudge-service";
 import { campaignToRow, mapCampaign, type NudgeCampaign } from "@/lib/nudge";
+import { getCatalog } from "@/lib/storefront-data";
 import type { ActionResult } from "../../store/actions";
 
 type Row = Record<string, unknown>;
 
 function mapError(message: string): string {
-  return /nudge_campaigns|nudge_events/i.test(message) ? "migration_missing" : message;
+  return /nudge_campaigns|nudge_events|customer_offers/i.test(message) ? "migration_missing" : message;
 }
 
 /** A code the merchant can actually hand out, straight from their discounts. */
@@ -23,10 +24,48 @@ export type OfferableCode = {
   endsAt: string | null;
 };
 
-export type NudgeEditorData = {
-  campaign: NudgeCampaign;
-  codes: OfferableCode[];
+/** What a campaign can be aimed at. */
+export type TargetOptions = {
+  products: { id: string; title: string; image: string | null }[];
+  collections: { handle: string; title: string }[];
+  customers: { phone: string; name: string | null }[];
 };
+
+export type NudgeEditorData = {
+  /** Every campaign, highest priority first. */
+  campaigns: NudgeCampaign[];
+  codes: OfferableCode[];
+  options: TargetOptions;
+};
+
+function imageOf(img: unknown): string | null {
+  if (!img) return null;
+  if (typeof img === "string") return img;
+  const src = (img as { src?: unknown }).src;
+  return typeof src === "string" ? src : null;
+}
+
+async function targetOptions(): Promise<TargetOptions> {
+  const out: TargetOptions = { products: [], collections: [], customers: [] };
+  try {
+    const catalog = await getCatalog();
+    out.products = catalog.products.map((p) => ({ id: p.id, title: p.title, image: imageOf(p.featured_image) }));
+    out.collections = catalog.collections.map((k) => ({ handle: k.handle, title: k.title }));
+  } catch {
+    /* targeting by product is optional */
+  }
+  try {
+    const { data } = await getServerSupabase()
+      .from("store_customers")
+      .select("phone,name")
+      .order("created_at", { ascending: false })
+      .limit(2000);
+    out.customers = ((data ?? []) as Row[]).map((r) => ({ phone: String(r.phone), name: r.name ? String(r.name) : null }));
+  } catch {
+    /* targeting by customer is optional */
+  }
+  return out;
+}
 
 /**
  * The campaign to edit, plus every discount code that is real.
@@ -40,23 +79,23 @@ export async function loadNudge(): Promise<ActionResult<NudgeEditorData>> {
   try {
     const supabase = getServerSupabase();
 
-    let { data, error } = await supabase
+    const listed = await supabase
       .from("nudge_campaigns")
       .select("*")
       .order("updated_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (error) return { ok: false, error: mapError(error.message) };
+      .limit(50);
+    if (listed.error) return { ok: false, error: mapError(listed.error.message) };
+    let rows = (listed.data ?? []) as Row[];
 
     // A store that ran the migration before this page existed has no row yet.
-    if (!data) {
+    if (!rows.length) {
       const created = await supabase
         .from("nudge_campaigns")
         .insert({ name: "Hesitation offer", enabled: false })
         .select("*")
         .single();
       if (created.error) return { ok: false, error: mapError(created.error.message) };
-      data = created.data;
+      rows = [created.data as Row];
     }
 
     const { data: discounts } = await supabase
@@ -71,7 +110,8 @@ export async function loadNudge(): Promise<ActionResult<NudgeEditorData>> {
     return {
       ok: true,
       data: {
-        campaign: mapCampaign(data as Row),
+        campaigns: rows.map(mapCampaign).sort((a, b) => b.priority - a.priority),
+        options: await targetOptions(),
         codes: ((discounts ?? []) as Row[]).map((r) => ({
           code: String(r.code),
           title: String(r.title ?? r.code),
@@ -99,6 +139,36 @@ export async function saveNudge(campaign: NudgeCampaign): Promise<ActionResult> 
     if (error) return { ok: false, error: mapError(error.message) };
     // The storefront serves the campaign from a cached lookup — drop it so the
     // next page view reflects the save rather than waiting out the TTL.
+    invalidateNudge();
+    revalidatePath("/nudges");
+    return { ok: true, data: undefined };
+  } catch (e) {
+    return { ok: false, error: mapError((e as Error).message) };
+  }
+}
+
+/** A new campaign, switched off, to set up from scratch. */
+export async function createNudge(): Promise<ActionResult<NudgeCampaign>> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  try {
+    const { data, error } = await getServerSupabase()
+      .from("nudge_campaigns")
+      .insert({ name: "New popup", enabled: false })
+      .select("*")
+      .single();
+    if (error) return { ok: false, error: mapError(error.message) };
+    return { ok: true, data: mapCampaign(data as Row) };
+  } catch (e) {
+    return { ok: false, error: mapError((e as Error).message) };
+  }
+}
+
+/** Delete a campaign. Its results stay, filed under no campaign. */
+export async function deleteNudge(id: string): Promise<ActionResult> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  try {
+    const { error } = await getServerSupabase().from("nudge_campaigns").delete().eq("id", id);
+    if (error) return { ok: false, error: mapError(error.message) };
     invalidateNudge();
     revalidatePath("/nudges");
     return { ok: true, data: undefined };

@@ -2,7 +2,7 @@
 import "server-only";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
 import { computeDiscount as builtinOffer } from "@/lib/offers";
-import { phoneVariants } from "@/lib/phone";
+import { normalizePhone, phoneVariants } from "@/lib/phone";
 
 /**
  * What a discount code is actually worth on this cart.
@@ -231,11 +231,23 @@ export async function validateDiscount(
     }
   }
 
-  // Segment and named-customer eligibility isn't modelled on this store (the
-  // account is a phone number, and segments live client-side), so a code
-  // restricted to either is honoured by refusing it rather than quietly
-  // handing it to everyone.
-  if (String(row.eligibility ?? "all") !== "all") return { ok: false, reason: "not_eligible" };
+  // A code made for named customers works for their phones only. The account
+  // is the phone, and an order can only be placed for a phone that proved it
+  // is hers, so a code passed on to someone else is refused at the till.
+  // Segments still live client-side, so a segment code is refused rather than
+  // quietly handed to everyone.
+  const eligibility = String(row.eligibility ?? "all");
+  if (eligibility === "customers") {
+    const allowed = new Set(
+      (Array.isArray(row.eligibility_ids) ? (row.eligibility_ids as unknown[]) : [])
+        .map((v) => (v && typeof v === "object" ? (v as { id?: unknown }).id : v))
+        .filter((v): v is string => typeof v === "string" && v.trim() !== "")
+        .map((v) => normalizePhone(v)),
+    );
+    if (!ctx.phone || !allowed.has(normalizePhone(ctx.phone))) return { ok: false, reason: "not_eligible" };
+  } else if (eligibility !== "all") {
+    return { ok: false, reason: "not_eligible" };
+  }
 
   // ---- What it is worth -----------------------------------------------------
   const type = String(row.discount_type ?? "");

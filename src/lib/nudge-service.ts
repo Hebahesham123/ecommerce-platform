@@ -16,9 +16,37 @@ const TTL_MS = 60_000;
 
 let cache: { at: number; value: NudgeCampaign | null } | null = null;
 
-/** Forget the cached campaign (call after the editor saves). */
+let listCache: { at: number; value: NudgeCampaign[] } | null = null;
+
+/** Forget the cached campaigns (call after the editor saves). */
 export function invalidateNudge(): void {
   cache = null;
+  listCache = null;
+}
+
+/**
+ * Every enabled campaign, the one to try first first: highest priority, then
+ * the most recently edited.
+ */
+export async function getEnabledNudges(): Promise<NudgeCampaign[]> {
+  if (!isSupabaseConfigured()) return [];
+  if (listCache && Date.now() - listCache.at < TTL_MS) return listCache.value;
+  let value: NudgeCampaign[] = [];
+  try {
+    const { data } = await getServerSupabase()
+      .from("nudge_campaigns")
+      .select("*")
+      .eq("enabled", true)
+      .order("updated_at", { ascending: false })
+      .limit(50);
+    value = ((data ?? []) as Record<string, unknown>[])
+      .map(mapCampaign)
+      .sort((a, b) => b.priority - a.priority);
+  } catch {
+    value = [];
+  }
+  listCache = { at: Date.now(), value };
+  return value;
 }
 
 /** The enabled campaign, or null. Most recently updated wins if several are on. */
@@ -112,31 +140,53 @@ export async function recordNudgeConversion(args: {
 }): Promise<void> {
   if (!args.visitorId || !args.code || !isSupabaseConfigured()) return;
   try {
-    const campaign = await getActiveNudge();
-    const codes = campaign
-      ? [campaign.discountCode, ...campaign.wheelSegments.map((s) => s.code)]
-          .filter(Boolean)
-          .map((c) => String(c).toLowerCase())
-      : [];
-    if (!codes.includes(args.code.toLowerCase())) return;
+    const supabase = getServerSupabase();
+    const code = args.code.toLowerCase();
 
-    // Only count it if this visitor was actually shown the thing.
-    const { data } = await getServerSupabase()
+    // The clearest evidence: this visitor claimed exactly this code from a
+    // popup. It covers codes made for one shopper as well as shared ones.
+    const { data: claimed } = await supabase
       .from("nudge_events")
-      .select("id")
+      .select("campaign_id")
       .eq("visitor_id", args.visitorId)
-      .in("type", ["shown", "claimed"])
+      .eq("type", "claimed")
+      .ilike("code", code)
+      .order("created_at", { ascending: false })
       .limit(1);
-    if (!data?.length) return;
+    let campaignId: string | null = claimed?.[0] ? ((claimed[0] as any).campaign_id ?? null) : null;
+    let attributed = Boolean(claimed?.length);
 
-    await recordNudgeEvent({
-      campaignId: campaign?.id ?? null,
-      visitorId: args.visitorId,
-      type: "converted",
-      code: args.code,
-      orderNumber: args.orderNumber,
-      orderTotal: args.orderTotal,
-    });
+    // Otherwise: a shared code from a campaign this visitor was shown.
+    if (!attributed) {
+      const campaigns = await getEnabledNudges();
+      const owner = campaigns.find((c) =>
+        [c.discountCode, ...c.wheelSegments.map((x) => x.code)]
+          .filter(Boolean)
+          .some((x) => String(x).toLowerCase() === code),
+      );
+      if (!owner) return;
+      const { data: shown } = await supabase
+        .from("nudge_events")
+        .select("id")
+        .eq("visitor_id", args.visitorId)
+        .eq("campaign_id", owner.id)
+        .in("type", ["shown", "claimed"])
+        .limit(1);
+      if (!shown?.length) return;
+      campaignId = owner.id;
+      attributed = true;
+    }
+
+    if (attributed) {
+      await recordNudgeEvent({
+        campaignId,
+        visitorId: args.visitorId,
+        type: "converted",
+        code: args.code,
+        orderNumber: args.orderNumber,
+        orderTotal: args.orderTotal,
+      });
+    }
   } catch {
     /* never let bookkeeping fail an order */
   }

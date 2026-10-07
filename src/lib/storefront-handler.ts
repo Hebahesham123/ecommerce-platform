@@ -22,8 +22,8 @@ import {
 } from "@/lib/storefront-cart";
 import { searchProducts, type ProductDrop } from "@/lib/storefront-data";
 import { getServerSupabase } from "@/lib/supabase/server";
-import { getActiveNudge, recordNudgeEvent } from "@/lib/nudge-service";
-import { nudgeScript } from "@/lib/nudge-script";
+import { recordNudgeEvent } from "@/lib/nudge-service";
+import { offerScript } from "@/lib/offer-script";
 import { analyticsScript } from "@/lib/analytics-script";
 import { readSeoSettings, type SeoSettings } from "@/lib/seo-settings";
 
@@ -1117,13 +1117,6 @@ async function storefrontGet(req: Request, config: MountConfig): Promise<Respons
   // the cart badge from /cart.js so a returning shopper still sees their real
   // item count. Only on the public storefront (the admin preview isn't cached).
   const cartSync = config.edgeCache ? cartCountSyncScript(mount) : "";
-  // The hesitation nudge. The campaign is merchant configuration — identical
-  // for every visitor — so baking it in keeps the page shareable at the edge;
-  // everything shopper-specific (dwell, what they've already seen, their cart)
-  // is decided in the browser.
-  const campaign = await getActiveNudge();
-  const nudge = campaign ? nudgeScript(mount, campaign) : "";
-
   // The account icon is identical for every shopper, so it stays cache-safe.
   // navLinksScript adds Reviews & Requests into the store menu (both cache-safe).
   // Counting the visit: the same figures the Website analytics page shows.
@@ -1131,6 +1124,12 @@ async function storefrontGet(req: Request, config: MountConfig): Promise<Respons
   // would add a dozen pageviews to the merchant's own figures every time they
   // looked at their own store.
   const previewing = new URL(req.url).searchParams.get("bbpreview") === "1";
+
+  // The popups. The script is the same for every visitor, which keeps the
+  // page shareable at the edge; which offer this shopper gets — her own, or
+  // the campaign that fits her and this product — is asked for by the
+  // browser once the page is open.
+  const nudge = previewing ? "" : offerScript(mount);
   const counter = previewing ? "" : analyticsScript(mount);
   const inject = `${mountPathScript(mount)}${stockGuard}${localizationScript(mount)}${cartSync}${accountLinkScript(mount)}${navLinksScript(mount)}${nudge}${counter}`;
   const withLoc = res.html.includes("</body>")

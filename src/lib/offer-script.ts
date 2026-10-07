@@ -1,21 +1,22 @@
 import "server-only";
-import type { NudgeCampaign } from "@/lib/nudge";
 
 /**
- * The client half of the hesitation nudge: watch for the signals the merchant
- * switched on, and render the popup they designed.
+ * The popup, on every web page that sells: the website at /store and the
+ * theme storefront at /shop.
  *
- * Two constraints shape all of this.
+ * The page is the same for every shopper, so nothing personal is baked into
+ * it. Instead a small loader asks the server which offer this shopper should
+ * be armed with on this page — her own offer if one was made for her, or the
+ * first campaign that fits her and the product she is looking at — and then
+ * runs the popup the merchant designed, watching for the hesitation signals
+ * that campaign switched on.
  *
- * 1. Catalogue pages are shared edge-cached HTML, byte-identical for every
- *    shopper. So the campaign is baked in (merchant configuration, same for
- *    everyone) while anything shopper-specific — how long they have been here,
- *    whether they have seen it, what is in their cart — is decided in the
- *    browser from cookies and storage. Nothing here makes a page private.
+ * On /store the pages change without reloading, so the loader is also exposed
+ * as window.__bbOffers() for the website to call on every route change; the
+ * previous page's listeners are stopped first.
  *
- * 2. The theme is an arbitrary uploaded Shopify theme whose CSS we do not
- *    control. The popup therefore lives in a shadow root, so no theme rule can
- *    reach into it and nothing it does can leak back out.
+ * The popup itself lives in a shadow root, so no theme rule can reach into it
+ * and nothing it does can leak back out.
  */
 
 /** Embedding JSON in a <script> means neutralising anything that closes it. */
@@ -26,66 +27,79 @@ function jsonForScript(value: unknown): string {
     .replace(/\u2029/g, "\\u2029");
 }
 
-export function nudgeScript(mount: string, c: NudgeCampaign): string {
-  // Only what the browser needs. Nothing here is secret, but there is no
-  // reason to ship the whole row.
-  const config = {
-    id: c.id,
-    pages: c.pages,
-    dwell: c.dwellEnabled ? c.dwellSeconds : 0,
-    exit: c.exitEnabled,
-    idle: c.idleEnabled ? c.idleSeconds : 0,
-    cart: c.cartEnabled ? c.cartSeconds : 0,
-    maxPerSession: c.maxPerSession,
-    cooldownHours: c.cooldownHours,
-    skipIfCartEmpty: c.skipIfCartEmpty,
-    style: c.style,
-    position: c.position,
-    headline: c.headline,
-    body: c.body,
-    button: c.buttonLabel,
-    dismiss: c.dismissLabel,
-    captureLabel: c.captureLabel,
-    accent: c.accentColor,
-    bg: c.backgroundColor,
-    fg: c.textColor,
-    image: c.imageUrl,
-    code: c.discountCode,
-    segments: c.wheelSegments,
-  };
-
-  return (
-    "<script>(function(){" +
-    "var C=" + jsonForScript(config) + ";" +
-    "var M=" + jsonForScript(mount) + ";" +
-    NUDGE_BODY +
-    "})();</script>"
-  );
+/** The whole program, ready to drop into a page. `mount` is "/shop" or "/store". */
+export function offerScript(mount: string): string {
+  return "<script>" + offerScriptBody(mount) + "</script>";
 }
 
-/**
- * Kept as one plain string rather than a template literal so that nothing in
- * it can be mistaken for an interpolation, and so the whole program reads in
- * one place.
- */
-const NUDGE_BODY = `
-if(window.__BB_NUDGE__)return;window.__BB_NUDGE__=1;
+/** The same program without the tag, for pages that add it themselves. */
+export function offerScriptBody(mount: string): string {
+  return "(function(){var M=" + jsonForScript(mount) + ";" + LOADER + "})();";
+}
+
+const LOADER = `
 var D=document,W=window;
 function noop(){}
+var CH=M==="/shop"?"shop":"web";
+var CART=M==="/shop"?M+"/cart":"/store/checkout";
+function ck(n){try{var m=D.cookie.match("(?:^|; )"+n+"=([^;]*)");return m?decodeURIComponent(m[1]):"";}catch(e){return "";}}
 
-/* ---- which page is this? ------------------------------------------------ */
-function pageType(){
-  var p=location.pathname;
+/* What kind of page this is, and which product or collection it shows. */
+function pageInfo(){
+  var p=location.pathname,m;
   if(M&&p.indexOf(M)===0)p=p.slice(M.length)||"/";
-  if(/^\\/products\\//.test(p))return "product";
-  if(/^\\/collections\\/[^\\/]+/.test(p))return "collection";
-  if(/^\\/collections\\/?$/.test(p))return "collection";
-  if(/^\\/cart/.test(p))return "cart";
-  if(/^\\/search/.test(p))return "search";
-  if(p==="/"||p==="")return "index";
-  return "other";
+  if(/^\\/(checkout|account|login|signup)(\\/|$)/.test(p))return {pageType:"checkout"};
+  if((m=p.match(/^\\/products?\\/([^\\/?#]+)/)))return {pageType:"product",productKey:decodeURIComponent(m[1])};
+  if((m=p.match(/^\\/collections\\/([^\\/?#]+)/)))return {pageType:"collection",collectionHandle:decodeURIComponent(m[1])};
+  if(/^\\/collections\\/?$/.test(p))return {pageType:"collection"};
+  if(/^\\/cart/.test(p))return {pageType:"cart"};
+  if(/^\\/search/.test(p))return {pageType:"search"};
+  if(p==="/"||p==="")return {pageType:"index"};
+  return {pageType:"other"};
 }
-var PT=pageType();
+
+/* How many things are in the basket: a cookie on /shop, local storage on /store. */
+function cartCount(){
+  try{
+    var lines=M==="/shop"?JSON.parse(ck("sf_cart")||"[]"):JSON.parse(localStorage.getItem("bb_cart")||"[]");
+    var n=0;for(var i=0;i<lines.length;i++)n+=(+lines[i].quantity||0);
+    return n;
+  }catch(e){return 0;}
+}
+
+function visitor(){
+  var v=ck("bb_vid");
+  if(!v){
+    try{v=localStorage.getItem("bb_visitor")||"";}catch(e){v="";}
+    if(!v)v="v-"+Math.random().toString(36).slice(2)+Date.now().toString(36).slice(-4);
+    try{D.cookie="bb_vid="+encodeURIComponent(v)+";path=/;max-age=31536000;samesite=lax";}catch(e){}
+  }
+  return v;
+}
+
+W.__bbOffers=function(){
+  try{
+    if(W.__BB_NUDGE_STOP__){W.__BB_NUDGE_STOP__();W.__BB_NUDGE_STOP__=null;}
+    if(new URLSearchParams(location.search).get("bbpreview")==="1")return;
+    /* Inside the app the app shows its own popup, and inside the dashboard's
+       previews nobody is shopping. */
+    if(W.ReactNativeWebView||/[?&]app=/.test(location.search))return;
+    try{if(W.parent&&W.parent!==W)return;}catch(e){return;}
+    var info=pageInfo();
+    if(info.pageType==="checkout")return;
+    fetch("/api/offers/decide",{method:"POST",credentials:"same-origin",headers:{"content-type":"application/json"},
+      body:JSON.stringify({channel:CH,visitorId:visitor(),pageType:info.pageType,productKey:info.productKey||null,collectionHandle:info.collectionHandle||null,cartCount:cartCount()})})
+      .then(function(r){return r.json();})
+      .then(function(j){if(j&&j.offer)run(j.offer,info);})
+      .catch(noop);
+  }catch(e){}
+};
+
+function run(C,INFO){
+` + `
+
+/* ---- which page is this? (worked out by the loader) ---------------------- */
+var PT=INFO.pageType;
 if(C.pages.indexOf(PT)<0)return;
 /* Never interrupt someone who is already at the till. */
 if(/\\/(checkout|account)(\\/|$)/.test(location.pathname))return;
@@ -110,28 +124,20 @@ if(C.cooldownHours>0&&lastSeenAt&&Date.now()-lastSeenAt<C.cooldownHours*3600000)
 /* ---- what is in the cart ------------------------------------------------ */
 /* Read straight from the theme's own cart cookie: no request, and it keeps
    this page identical for every shopper, which is what lets the CDN cache it. */
-function cartCount(){
-  try{
-    var raw=ck("sf_cart");if(!raw)return 0;
-    var lines=JSON.parse(raw);if(!lines||!lines.length)return 0;
-    var n=0;for(var i=0;i<lines.length;i++)n+=(+lines[i].quantity||0);
-    return n;
-  }catch(e){return 0;}
-}
 if(C.skipIfCartEmpty&&cartCount()===0)return;
 
 /* ---- reporting ----------------------------------------------------------- */
 function report(type,extra){
   try{
-    var b={type:type,cid:C.id,vid:vid,sid:sid,path:location.pathname};
+    var b={type:type,cid:C.id,vid:vid,sid:sid,path:location.pathname,channel:CH};
     if(extra)for(var k in extra)b[k]=extra[k];
     var body=JSON.stringify(b);
     /* sendBeacon survives the page being closed, which is exactly when an
        exit-intent dismissal is reported. */
     if(navigator.sendBeacon){
-      navigator.sendBeacon(M+"/nudge/event",new Blob([body],{type:"application/json"}));
+      navigator.sendBeacon("/api/offers/event",new Blob([body],{type:"application/json"}));
     }else{
-      fetch(M+"/nudge/event",{method:"POST",headers:{"content-type":"application/json"},body:body,keepalive:true}).catch(noop);
+      fetch("/api/offers/event",{method:"POST",headers:{"content-type":"application/json"},body:body,keepalive:true}).catch(noop);
     }
   }catch(e){}
 }
@@ -139,6 +145,8 @@ function report(type,extra){
 /* ---- the signals --------------------------------------------------------- */
 var fired=false,timers=[],arrived=Date.now(),visibleMs=0,idleMs=0,cartMs=0,lastTick=Date.now();
 
+/* Moving to another page in the same tab stops this one listening. */
+W.__BB_NUDGE_STOP__=function(){fired=true;cleanup();};
 function cleanup(){
   for(var i=0;i<timers.length;i++)clearInterval(timers[i]);
   D.removeEventListener("mouseout",onMouseOut,true);
@@ -283,10 +291,18 @@ function show(trigger){
        shopper back on the path to paying. */
     function claim(code,contact){
       try{if(navigator.clipboard)navigator.clipboard.writeText(code).catch(noop);}catch(e){}
-      report("claimed",{trigger:trigger,code:code,contact:contact||null});
+      /* A code made for her was already counted when the server made it. */
+      if(!C.unique||contact)report("claimed",{trigger:trigger,code:code,contact:contact||null});
       close(null);
-      /* On a product page the cart is where they were heading anyway. */
-      if(PT!=="cart")setTimeout(function(){location.href=M+"/cart";},220);
+      /* With something in the basket, the basket is where they were heading anyway. */
+      if(PT!=="cart"&&cartCount()>0)setTimeout(function(){location.href=CART;},220);
+    }
+
+    function mine(done){
+      fetch("/api/offers/claim",{method:"POST",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({cid:C.id,vid:vid,channel:CH,path:location.pathname})})
+        .then(function(r){return r.json();})
+        .then(function(j){done(j&&j.ok&&j.code?j.code:null);})
+        .catch(function(){done(null);});
     }
 
     function codePanel(code){
@@ -402,11 +418,23 @@ function show(trigger){
         var okPhone=v.replace(/\\D/g,"").length>=10;
         if(!okEmail&&!okPhone){err.style.display="";err.textContent="Enter a valid email or phone number";return;}
         err.style.display="none";
-        if(C.code)claim(C.code,v);
+        if(C.unique){send.disabled=true;mine(function(code){if(code)claim(code,v);else{send.disabled=false;err.style.display="";err.textContent="Something went wrong, please try again";}});}
+        else if(C.code)claim(C.code,v);
         else{report("claimed",{trigger:trigger,contact:v});close(null);}
       };
       input.addEventListener("keydown",function(e){if(e.key==="Enter")send.click();});
       panel.appendChild(send);
+    }else if(C.unique){
+      /* A code made for this shopper, fetched the moment she asks for it. */
+      var get=D.createElement("button");get.className="btn";get.textContent=esc(C.button)||"Get my code";
+      get.onclick=function(){
+        get.disabled=true;
+        mine(function(code){
+          if(code){get.remove();codePanel(code);}
+          else{get.disabled=false;get.textContent="Try again";}
+        });
+      };
+      panel.appendChild(get);
     }else if(C.code){
       codePanel(C.code);
     }else{
@@ -427,5 +455,8 @@ function show(trigger){
     requestAnimationFrame(function(){veil.classList.add("on");panel.classList.add("on");});
     report("shown",{trigger:trigger});
   }catch(e){/* a broken popup must never take the storefront with it */}
+}` + `
 }
+
+W.__bbOffers();
 `;
