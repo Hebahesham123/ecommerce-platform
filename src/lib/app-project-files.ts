@@ -79,6 +79,8 @@ function packageJson(theme: AppTheme): GeneratedFile {
       // The editor's gradients and icons, drawn natively rather than faked.
       "expo-linear-gradient": "~14.0.2",
       "react-native-svg": "15.8.0",
+      // A product opened from a reel is dragged down to go back to it.
+      "react-native-gesture-handler": "~2.20.2",
       react: "18.3.1",
       "react-native": "0.76.6",
       "react-native-safe-area-context": "4.12.0",

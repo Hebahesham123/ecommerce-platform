@@ -7961,7 +7961,13 @@ function productScreenFile(placed: boolean): GeneratedFile {
  * the product cannot say which one to send.
  */
 import React, { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Animated, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  PanGestureHandler,
+  ScrollView as GestureScrollView,
+  State,
+  type PanGestureHandlerStateChangeEvent,
+} from "react-native-gesture-handler";
 import { theme } from "../theme";
 import { screens, say } from "../screens";
 import { fetchProduct, searchProducts, type Card, type Product } from "../api";
@@ -7995,6 +8001,9 @@ function seeded(id: string, min: number, max: number) {
 }
 
 type Scroller = { scrollTo: (to: { x: number; animated?: boolean }) => void };
+
+/** How far the finger travels down before letting go goes back to the reel. */
+const PULL_BACK = 120;
 
 export function ProductScreen({
   id,
@@ -8035,6 +8044,29 @@ export function ProductScreen({
   const [added, setAdded] = useState(false);
   const [viewers, setViewers] = useState(0);
   const gallery = useRef<Scroller | null>(null);
+
+  // Opened from a reel, the page is a sheet over the video, and it moves the
+  // way one does: at the top of the page, a finger going down takes the
+  // whole page with it, a little behind, with the reel showing above; let go
+  // far enough and it drops away, otherwise it settles back. Sideways is the
+  // gallery's, upwards is reading on, and below the top it is all scrolling.
+  // The movement runs on the native side, so it keeps up with the finger.
+  const page = useRef(null);
+  const [atTop, setAtTop] = useState(true);
+  const drag = useRef(new Animated.Value(0)).current;
+  const follow = drag.interpolate({ inputRange: [0, 1], outputRange: [0, 0.7], extrapolateLeft: "clamp" });
+  const dim = drag.interpolate({ inputRange: [0, 700], outputRange: [1, 0.82], extrapolate: "clamp" });
+  const onDrag = Animated.event([{ nativeEvent: { translationY: drag } }], { useNativeDriver: true });
+  const onDragState = (e: PanGestureHandlerStateChangeEvent) => {
+    const { state, translationY, velocityY } = e.nativeEvent;
+    if (state !== State.END && state !== State.CANCELLED && state !== State.FAILED) return;
+    const away = state === State.END && (translationY > PULL_BACK || (translationY > 40 && velocityY > 900));
+    if (away && onPullBack) {
+      Animated.timing(drag, { toValue: 1400, duration: 220, useNativeDriver: true }).start(() => onPullBack());
+      return;
+    }
+    Animated.spring(drag, { toValue: 0, useNativeDriver: true, speed: 16, bounciness: 4 }).start();
+  };
 
 
   useEffect(() => {
@@ -8096,30 +8128,27 @@ export function ProductScreen({
     ));
 
   return (
-    <View style={{ flex: 1, backgroundColor: p.pageBg || "#f8f5f0" }}>
-      <ScrollView
+    <PanGestureHandler
+      enabled={Boolean(onPullBack) && atTop}
+      activeOffsetY={12}
+      failOffsetX={[-15, 15]}
+      simultaneousHandlers={page}
+      onGestureEvent={onDrag}
+      onHandlerStateChange={onDragState}
+    >
+    <Animated.View style={{ flex: 1, backgroundColor: p.pageBg || "#f8f5f0", opacity: dim, transform: [{ translateY: follow }] }}>
+      <GestureScrollView
+        ref={page}
         contentContainerStyle={{ paddingBottom: 24 }}
-        // Opened from a reel, pulling down from the top of the page goes back
-        // to it. The phone's own pull-at-the-top gesture rather than raw
-        // touches: on Android the page's scrolling claims a downward drag
-        // the moment it starts, so watching touches never sees the pull.
-        // Sideways stays the gallery's, and below the top a pull is scrolling.
-        refreshControl={
-          onPullBack ? (
-            <RefreshControl
-              refreshing={false}
-              onRefresh={onPullBack}
-              colors={[accent]}
-              tintColor={accent}
-              title="Release to go back to the reel"
-              titleColor={muted}
-            />
-          ) : undefined
-        }
+        scrollEventThrottle={16}
+        // The page itself moves at the top, so it does not also stretch or glow.
+        bounces={!onPullBack}
+        overScrollMode={onPullBack ? "never" : "auto"}
+        onScroll={(e) => {
+          const top = e.nativeEvent.contentOffset.y <= 1;
+          if (top !== atTop) setAtTop(top);
+        }}
       >
-        {onPullBack ? (
-          <Text style={[styles.pullHint, { color: muted }]}>{"↓  Pull down to go back to the reel"}</Text>
-        ) : null}
         {/* gallery */}
         <View style={styles.galleryWrap} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
           <ScrollView
@@ -8355,7 +8384,7 @@ export function ProductScreen({
             </ScrollView>
           </View>
         ) : null}
-${placed ? "\n        {/* What the merchant put on the product screen. */}\n        <ProductSections onOpenCollection={onOpenCollection} onOpenProduct={onOpenProduct} onOpenScreen={onOpenScreen} onAdd={onAddBundle} signedIn />\n" : ""}      </ScrollView>
+${placed ? "\n        {/* What the merchant put on the product screen. */}\n        <ProductSections onOpenCollection={onOpenCollection} onOpenProduct={onOpenProduct} onOpenScreen={onOpenScreen} onAdd={onAddBundle} signedIn />\n" : ""}      </GestureScrollView>
 
       {/* the bar that stays */}
       <View style={styles.footer}>
@@ -8379,12 +8408,12 @@ ${placed ? "\n        {/* What the merchant put on the product screen. */}\n    
           </Pressable>
         ) : null}
       </View>
-    </View>
+    </Animated.View>
+    </PanGestureHandler>
   );
 }
 
 const styles = StyleSheet.create({
-  pullHint: { paddingTop: 8, paddingBottom: 2, textAlign: "center", fontSize: 11, fontWeight: "600" },
   galleryWrap: { backgroundColor: "#ffffff" },
   galleryImage: { position: "absolute", top: 12, right: 12, bottom: 12, left: 12 },
   badge: { position: "absolute", top: 12, left: 12, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: "#c0644a" },
@@ -8482,7 +8511,7 @@ function webPageFile(): GeneratedFile {
   return {
     path: "components/WebPage.tsx",
     language: "tsx",
-    contents: `import React, { useState } from "react";
+    contents: `import React, { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { WebView, type WebViewMessageEvent } from "react-native-webview";
 import { colors } from "../theme";
@@ -8492,6 +8521,7 @@ export function WebPage({
   path,
   onClose,
   onProduct,
+  paused,
 }: {
   /** Where on the site this opens, e.g. "/store/reels". */
   path: string;
@@ -8508,8 +8538,23 @@ export function WebPage({
    * the page to come back to, so she lands on the reel she left.
    */
   onProduct?: (id: string, back: string) => void;
+  /** Covered by a product opened from it: its video stops until it is uncovered. */
+  paused?: boolean;
 }) {
   const [loading, setLoading] = useState(true);
+  const view = useRef<WebView | null>(null);
+  const firstRun = useRef(true);
+  useEffect(() => {
+    if (firstRun.current) {
+      firstRun.current = false;
+      return;
+    }
+    view.current?.injectJavaScript(
+      paused
+        ? "document.querySelectorAll('video').forEach(function (v) { v.pause(); }); true;"
+        : "(function () { var h = window.innerHeight / 2; document.querySelectorAll('video').forEach(function (v) { var r = v.getBoundingClientRect(); if (r.top < h && r.bottom > h) { var p = v.play(); if (p && p.catch) p.catch(function () {}); } }); })(); true;",
+    );
+  }, [paused]);
   // Stamped once per opening, so the phone asks the shop for the page again
   // rather than showing a copy it kept from before the shop last changed it.
   const [opened] = useState(() => Date.now());
@@ -8532,6 +8577,7 @@ export function WebPage({
   return (
     <View style={styles.fill}>
       <WebView
+        ref={view}
         source={{ uri: fresh }}
         style={styles.fill}
         onLoadEnd={() => setLoading(false)}
@@ -8747,6 +8793,7 @@ import { Linking, Pressable, StatusBar, StyleSheet, Text, View } from "react-nat
 // react-native's own SafeAreaView does nothing on Android, which put the
 // header under the phone's status bar.
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { Splash } from "./components/Splash";
 import { AppChrome } from "./components/AppChrome";
 import { HeaderIcon } from "./components/Icons";
@@ -9028,6 +9075,19 @@ export default function App() {
     );
   };
 
+  // The reels feed stays loaded while a product opened from it is on top, so
+  // dragging the product down shows the reel behind it, and going back finds
+  // the same video at the same moment rather than a page loading again.
+  const reels = (
+    <WebPage
+      key="reels"
+      path={reelPath}
+      paused={stack.length > 0}
+      onClose={() => goTab("shop")}
+      onProduct={(id) => push({ kind: "product", id, fromReel: true })}
+    />
+  );
+
   const body = top ? (
     top.kind === "collections" ? (
       <AllCollectionsScreen onOpen={(handle, title) => push({ kind: "collection", handle, title })} />
@@ -9085,16 +9145,8 @@ export default function App() {
       ? ' : tab === "live" ? (\n    <LiveScreen onOpenCollection={(handle) => push({ kind: "collection", handle })} onOpenProduct={(id) => push({ kind: "product", id })} onOpenScreen={goScreen} />\n  )'
       : ""
   } : tab === "reels" ? (
-    <WebPage
-      path={reelPath}
-      onClose={() => goTab("shop")}
-      onProduct={(id, back) => {
-        // Coming back from the product remounts this page; remembering the
-        // reel means it reopens on that reel, not at the top of the feed.
-        setReelPath(back);
-        push({ kind: "product", id, fromReel: true });
-      }}
-    />
+    // Drawn below, under whatever is opened from it.
+    null
   ) : tab === "cart" ? (
     <CartScreen
       lines={cart?.lines ?? []}
@@ -9133,6 +9185,7 @@ export default function App() {
   const chrome = !(tab === "reels" && !stack.length);
 
   return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
     <SafeAreaProvider>
     <SafeAreaView style={styles.app} edges={["top", "bottom"]}>
       <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
@@ -9169,7 +9222,23 @@ export default function App() {
         </View>
       ) : null}
 
-      <View style={{ flex: 1 }}>{body}</View>
+      <View style={{ flex: 1 }}>
+        {tab === "reels" ? reels : null}
+        {tab !== "reels" ? (
+          body
+        ) : top ? (
+          <View
+            style={[
+              StyleSheet.absoluteFill,
+              // A product from the reel shows the reel when dragged; anything
+              // else opened on top of it covers it.
+              top.kind === "product" && top.fromReel ? null : { backgroundColor: colors.page },
+            ]}
+          >
+            {body}
+          </View>
+        ) : null}
+      </View>
 
       {notice ? (
         <Pressable style={styles.notice} onPress={() => setNotice(null)}>
@@ -9193,6 +9262,7 @@ export default function App() {
       />
     </SafeAreaView>
     </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
 
