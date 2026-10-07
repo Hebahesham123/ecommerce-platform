@@ -7210,6 +7210,7 @@ export function AppChrome({
       ) : null}
 
       <View style={[styles.header, { backgroundColor: bg }]}>
+        <View style={styles.topRow}>
         <Pressable onPress={onHome} disabled={!onHome} hitSlop={6} style={styles.home}>
           {theme.logoUrl ? (
             <Image
@@ -7227,23 +7228,6 @@ export function AppChrome({
           ) : null}
         </Pressable>
 
-        {theme.showSearch ? (
-          <View style={styles.searchWrap}>
-            <View style={styles.searchIcon} pointerEvents="none">
-              <HeaderIcon name="search" color={ink + "80"} size={14} />
-            </View>
-            <TextInput
-              style={[styles.search, { color: ink }]}
-              value={query}
-              onChangeText={onQuery}
-              placeholder={theme.header.searchPlaceholder}
-              placeholderTextColor="#94a3b8"
-              returnKeyType="search"
-              clearButtonMode="while-editing"
-            />
-          </View>
-        ) : null}
-
         {theme.header.showWishlist ? (
           <Pressable style={styles.iconButton} onPress={onWishlist} hitSlop={4}>
             <HeaderIcon name="heart" color={ink} />
@@ -7258,6 +7242,26 @@ export function AppChrome({
               </View>
             ) : null}
           </Pressable>
+        ) : null}
+        </View>
+
+        {/* The whole of the second line, which is the only way a placeholder
+            gets to say anything longer than two words. */}
+        {theme.showSearch ? (
+          <View style={styles.searchRow}>
+            <View style={styles.searchIcon} pointerEvents="none">
+              <HeaderIcon name="search" color={ink + "80"} size={15} />
+            </View>
+            <TextInput
+              style={[styles.search, { color: ink }]}
+              value={query}
+              onChangeText={onQuery}
+              placeholder={theme.header.searchPlaceholder}
+              placeholderTextColor="#94a3b8"
+              returnKeyType="search"
+              clearButtonMode="while-editing"
+            />
+          </View>
         ) : null}
       </View>
 
@@ -7305,12 +7309,13 @@ export function AppChrome({
 const styles = StyleSheet.create({
   announcement: { backgroundColor: colors.accent, paddingVertical: 6, paddingHorizontal: 12 },
   announcementText: { color: "#ffffff", fontSize: 11, fontWeight: "500", textAlign: "center" },
-  header: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: "#e2e8f0" },
-  home: { flexShrink: 0, justifyContent: "center" },
+  header: { paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: "#e2e8f0" },
+  topRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  searchRow: { marginTop: 8, justifyContent: "center" },
+  home: { flex: 1, minWidth: 0, justifyContent: "center" },
   wordmark: { fontSize: 13, fontWeight: "800", letterSpacing: -0.3 },
-  searchWrap: { flex: 1, minWidth: 0, justifyContent: "center" },
   searchIcon: { position: "absolute", left: 10, zIndex: 1 },
-  search: { height: 32, borderRadius: 999, borderWidth: 1, borderColor: "#e2e8f0", backgroundColor: "#f8fafc", paddingLeft: 32, paddingRight: 12, paddingVertical: 0, fontSize: 12 },
+  search: { height: 36, borderRadius: 12, borderWidth: 1, borderColor: "#e2e8f0", backgroundColor: "#f8fafc", paddingLeft: 36, paddingRight: 12, paddingVertical: 0, fontSize: 12 },
   iconButton: { width: 32, height: 32, alignItems: "center", justifyContent: "center" },
   badge: { position: "absolute", top: -4, right: -4, minWidth: 16, height: 16, borderRadius: 999, paddingHorizontal: 4, alignItems: "center", justifyContent: "center", backgroundColor: colors.accent },
   badgeText: { color: "#ffffff", fontSize: 9, fontWeight: "700" },
