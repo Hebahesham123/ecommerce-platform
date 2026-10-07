@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useEffect, useState } from "react";
+import { use, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useI18n, egp, num } from "@/lib/i18n";
@@ -16,6 +16,9 @@ import { IcChevron } from "@/components/icons";
  * like this shop and lands somewhere that is not.
  */
 const SAFE_BACK = /^\/(?!\/)[A-Za-z0-9/_\-?=&.%]*$/;
+
+/** How far the page follows a pull from the top before letting go goes back. */
+const PULL_BACK = 70;
 
 export default function ProductPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -39,6 +42,56 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
       setBack(null);
     }
   }, []);
+
+  /**
+   * Opened from a reel, the page is a sheet over the video: pulled down from
+   * its top it goes back to the reel. Sideways is the gallery, upwards is
+   * reading on, and anywhere below the top a pull is just scrolling.
+   */
+  const [pull, setPull] = useState(0);
+  useEffect(() => {
+    if (!back) return;
+    // The browser's own pull-to-refresh would answer the same gesture.
+    const root = document.documentElement;
+    const before = root.style.overscrollBehaviorY;
+    root.style.overscrollBehaviorY = "contain";
+    let start: { x: number; y: number; top: boolean } | null = null;
+    let travel = 0;
+    const onStart = (e: TouchEvent) => {
+      const t = e.touches[0];
+      start = { x: t.clientX, y: t.clientY, top: window.scrollY <= 0 };
+      travel = 0;
+    };
+    const onMove = (e: TouchEvent) => {
+      if (!start?.top) return;
+      const t = e.touches[0];
+      const dx = t.clientX - start.x;
+      const dy = t.clientY - start.y;
+      travel = dy > 0 && dy > Math.abs(dx) ? dy : 0;
+      setPull(Math.min(travel * 0.5, PULL_BACK * 1.4));
+    };
+    const onEnd = () => {
+      const went = Boolean(start?.top) && travel * 0.5 >= PULL_BACK;
+      start = null;
+      travel = 0;
+      setPull(0);
+      if (went) router.push(back);
+    };
+    window.addEventListener("touchstart", onStart, { passive: true });
+    window.addEventListener("touchmove", onMove, { passive: true });
+    window.addEventListener("touchend", onEnd);
+    window.addEventListener("touchcancel", onEnd);
+    return () => {
+      root.style.overscrollBehaviorY = before;
+      window.removeEventListener("touchstart", onStart);
+      window.removeEventListener("touchmove", onMove);
+      window.removeEventListener("touchend", onEnd);
+      window.removeEventListener("touchcancel", onEnd);
+    };
+  }, [back, router]);
+
+  // A swipe across the photo turns to the next one, as it does in the app.
+  const swipe = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -77,7 +130,20 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
 
 
   return (
-    <>
+    <div
+      style={{
+        transform: pull ? `translateY(${pull}px)` : undefined,
+        transition: pull ? "none" : "transform 0.2s ease-out",
+      }}
+    >
+      {back && pull > 0 && (
+        <div
+          className="pointer-events-none fixed inset-x-0 top-3 z-10 text-center text-xs font-semibold text-ink-muted"
+          style={{ opacity: Math.min(1, Math.max(0, (pull - PULL_BACK * 0.3) / (PULL_BACK * 0.7))) }}
+        >
+          {ar ? "↓  اتركي للرجوع إلى الريل" : "↓  Release to go back to the reel"}
+        </div>
+      )}
       {/* Where she came from, when she came from somewhere she was in the
           middle of. A reel is not a list you pass through. */}
       {back && (
@@ -99,7 +165,23 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
         {/* Gallery */}
         <div>
-          <div className="flex aspect-square items-center justify-center overflow-hidden rounded-3xl border border-line bg-surface-page">
+          <div
+            className="flex aspect-square touch-pan-y items-center justify-center overflow-hidden rounded-3xl border border-line bg-surface-page"
+            onTouchStart={(e) => {
+              swipe.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+            }}
+            onTouchEnd={(e) => {
+              const from = swipe.current;
+              swipe.current = null;
+              if (!from || gallery.length < 2) return;
+              const dx = e.changedTouches[0].clientX - from.x;
+              const dy = e.changedTouches[0].clientY - from.y;
+              if (Math.abs(dx) < 40 || Math.abs(dx) < Math.abs(dy)) return;
+              // Next is to the left in English and to the right in Arabic.
+              const step = (dx < 0 ? 1 : -1) * (ar ? -1 : 1);
+              setActive((i) => (i + step + gallery.length) % gallery.length);
+            }}
+          >
             {gallery[active] ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={gallery[active]} alt={product.name} className="h-full w-full object-cover" />
@@ -216,6 +298,6 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
           )}
         </div>
       </div>
-    </>
+    </div>
   );
 }

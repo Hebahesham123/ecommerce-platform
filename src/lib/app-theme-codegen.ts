@@ -7959,7 +7959,7 @@ function productScreenFile(placed: boolean): GeneratedFile {
  * the product cannot say which one to send.
  */
 import React, { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Animated, Image, Pressable, ScrollView, StyleSheet, Text, View, type GestureResponderEvent } from "react-native";
 import { theme } from "../theme";
 import { screens, say } from "../screens";
 import { fetchProduct, searchProducts, type Card, type Product } from "../api";
@@ -7994,8 +7994,12 @@ function seeded(id: string, min: number, max: number) {
 
 type Scroller = { scrollTo: (to: { x: number; animated?: boolean }) => void };
 
+/** How far the page follows a pull from the top before letting go goes back. */
+const PULL_BACK = 70;
+
 export function ProductScreen({
   id,
+  onPullBack,
   onAdd,
   onBuyNow,
   onOpenCollection,
@@ -8004,6 +8008,11 @@ export function ProductScreen({
   onAddBundle,
 }: {
   id: string;
+  /**
+   * Set when the product was opened from a reel: pulling down from the top
+   * of the page goes back to that reel.
+   */
+  onPullBack?: () => void;
   onAdd: (variantId: string, product: Product) => void;
   /** Add, then go to the basket. */
   onBuyNow?: (variantId: string, product: Product, quantity: number) => void;
@@ -8027,6 +8036,37 @@ export function ProductScreen({
   const [added, setAdded] = useState(false);
   const [viewers, setViewers] = useState(0);
   const gallery = useRef<Scroller | null>(null);
+
+  // Opened from a reel, the page is a sheet over the video: pulled down from
+  // its top it goes back to the reel. Sideways is still the gallery, upwards
+  // is still reading on, and anywhere below the top a pull is just scrolling.
+  const atTop = useRef(true);
+  const touch = useRef<{ x: number; y: number; top: boolean; dy: number } | null>(null);
+  const pull = useRef(new Animated.Value(0)).current;
+  const pullHint = pull.interpolate({ inputRange: [PULL_BACK * 0.3, PULL_BACK], outputRange: [0, 1], extrapolate: "clamp" });
+  const pullStart = (e: GestureResponderEvent) => {
+    if (!onPullBack) return;
+    touch.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY, top: atTop.current, dy: 0 };
+  };
+  const pullMove = (e: GestureResponderEvent) => {
+    const t = touch.current;
+    if (!t || !t.top) return;
+    const dx = e.nativeEvent.pageX - t.x;
+    const dy = e.nativeEvent.pageY - t.y;
+    if (dy <= 0 || Math.abs(dx) > dy) {
+      t.dy = 0;
+      pull.setValue(0);
+      return;
+    }
+    t.dy = dy;
+    pull.setValue(Math.min(dy * 0.5, PULL_BACK * 1.4));
+  };
+  const pullEnd = () => {
+    const t = touch.current;
+    touch.current = null;
+    if (t && onPullBack && t.dy * 0.5 >= PULL_BACK) return onPullBack();
+    Animated.spring(pull, { toValue: 0, useNativeDriver: true }).start();
+  };
 
   useEffect(() => {
     let live = true;
@@ -8087,8 +8127,26 @@ export function ProductScreen({
     ));
 
   return (
-    <View style={{ flex: 1, backgroundColor: p.pageBg || "#f8f5f0" }}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
+    <View
+      style={{ flex: 1, backgroundColor: p.pageBg || "#f8f5f0" }}
+      onTouchStart={pullStart}
+      onTouchMove={pullMove}
+      onTouchEnd={pullEnd}
+      onTouchCancel={pullEnd}
+    >
+      {onPullBack ? (
+        <Animated.View pointerEvents="none" style={[styles.pullHint, { opacity: pullHint }]}>
+          <Text style={[styles.pullHintText, { color: muted }]}>{"↓  Release to go back to the reel"}</Text>
+        </Animated.View>
+      ) : null}
+      <Animated.View style={{ flex: 1, transform: [{ translateY: pull }] }}>
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: 24 }}
+        scrollEventThrottle={16}
+        onScroll={(e) => {
+          atTop.current = e.nativeEvent.contentOffset.y <= 2;
+        }}
+      >
         {/* gallery */}
         <View style={styles.galleryWrap} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
           <ScrollView
@@ -8348,11 +8406,14 @@ ${placed ? "\n        {/* What the merchant put on the product screen. */}\n    
           </Pressable>
         ) : null}
       </View>
+      </Animated.View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  pullHint: { position: "absolute", top: 20, left: 0, right: 0, alignItems: "center" },
+  pullHintText: { fontSize: 12, fontWeight: "600" },
   galleryWrap: { backgroundColor: "#ffffff" },
   galleryImage: { position: "absolute", top: 12, right: 12, bottom: 12, left: 12 },
   badge: { position: "absolute", top: 12, left: 12, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: "#c0644a" },
@@ -8749,7 +8810,7 @@ type Screen =
   | { kind: "page"; handle: string }
   | { kind: "collections" }
   | { kind: "search"; term: string }
-  | { kind: "product"; id: string }
+  | { kind: "product"; id: string; fromReel?: boolean }
   | { kind: "checkout" }
   | { kind: "signin" }
   | { kind: "placed"; orderNumber: string };
@@ -9012,6 +9073,7 @@ export default function App() {
     ) : top.kind === "product" ? (
       <ProductScreen
         id={top.id}
+        onPullBack={top.fromReel ? pop : undefined}
         onAdd={add}
         onBuyNow={(v, product, quantity) => {
           for (let i = 0; i < quantity; i++) add(v, product);
@@ -9055,7 +9117,7 @@ export default function App() {
         // Coming back from the product remounts this page; remembering the
         // reel means it reopens on that reel, not at the top of the feed.
         setReelPath(back);
-        push({ kind: "product", id });
+        push({ kind: "product", id, fromReel: true });
       }}
     />
   ) : tab === "cart" ? (
