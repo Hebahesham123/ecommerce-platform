@@ -1997,8 +1997,8 @@ const styles = StyleSheet.create({
 });
 `,
 
-    hero: `import React, { useEffect, useState } from "react";
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+    hero: `import React, { useEffect, useRef, useState } from "react";
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { colors, radius } from "../theme";
 import { openLink } from "./Pieces";
 import type { HomePayload } from "../api";
@@ -2019,6 +2019,7 @@ export type HeroSettings = {
   /** Seconds each slide is held before the next. Zero waits to be tapped. */
   autoplaySeconds?: number;
   height?: number;
+  width?: number;
   items?: Slide[];
 };
 
@@ -2039,6 +2040,12 @@ export function Hero({
   const [at, setAt] = useState(0);
   const every = settings.autoplaySeconds === undefined ? 5 : settings.autoplaySeconds;
   const tall = settings.height === undefined ? 240 : settings.height;
+  const span = Math.max(50, Math.min(100, settings.width === undefined ? 86 : settings.width));
+  const rail = useRef<{ scrollTo: (to: { x: number; animated?: boolean }) => void } | null>(null);
+  const far = useRef(0);
+  const seen = useRef(0);
+  const [wide, setWide] = useState(0);
+  const step = wide > 0 ? Math.round((wide * span) / 100) + 8 : 0;
 
   /**
    * The slides move on by themselves.
@@ -2049,36 +2056,69 @@ export function Hero({
    * from under a thumb.
    */
   useEffect(() => {
-    if (every <= 0 || slides.length < 2) return;
-    const t = setInterval(() => setAt((i) => (i + 1) % slides.length), every * 1000);
+    if (every <= 0 || slides.length < 2 || step <= 0) return;
+    const t = setInterval(() => {
+      // Back to the start only once it is actually at the end: wrapping as
+      // soon as one more slide would overshoot leaves a rail whose last step
+      // is a short one sitting still for ever.
+      const next = seen.current >= far.current - 2 ? 0 : Math.min(seen.current + step, far.current);
+      seen.current = next;
+      rail.current?.scrollTo({ x: next, animated: true });
+      setAt(step > 0 ? Math.round(next / step) : 0);
+    }, every * 1000);
     return () => clearInterval(t);
-  }, [every, slides.length, at]);
+  }, [every, slides.length, step, at]);
 
   if (!slides.length) return null;
-  const slide = slides[Math.min(at, slides.length - 1)];
-  // A slide with no picture of its own borrows the collection's.
-  const image =
-    slide.imageUrl || collections.find((c) => c.handle === slide.handle)?.image || undefined;
 
   return (
-    <View>
-      <Pressable
-        onPress={() => openLink(slide, { onOpenCollection, onOpenProduct, onOpenScreen })}
-        style={[styles.wrap, { height: tall }]}
+    <View onLayout={(e: { nativeEvent: { layout: { width: number } } }) => setWide(e.nativeEvent.layout.width)}>
+      <ScrollView
+        ref={rail as never}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        snapToInterval={step > 0 ? step : undefined}
+        decelerationRate="fast"
+        onContentSizeChange={(w: number) => {
+          far.current = Math.max(0, w - wide);
+        }}
+        onScroll={(e: { nativeEvent: { contentOffset: { x: number } } }) => {
+          seen.current = e.nativeEvent.contentOffset.x;
+          if (step > 0) setAt(Math.max(0, Math.min(slides.length - 1, Math.round(seen.current / step))));
+        }}
+        scrollEventThrottle={64}
+        contentContainerStyle={styles.rail}
       >
-        {image ? <Image source={{ uri: image }} style={styles.image} /> : null}
-        <View style={styles.overlay}>
-          {slide.kicker ? <Text style={styles.kicker}>{slide.kicker}</Text> : null}
-          {slide.heading ? <Text style={styles.heading}>{slide.heading}</Text> : null}
-          {slide.subheading ? <Text style={styles.sub}>{slide.subheading}</Text> : null}
-        </View>
-      </Pressable>
+        {slides.map((sl) => {
+          // A slide with no picture of its own borrows the collection's.
+          const image =
+            sl.imageUrl || collections.find((c) => c.handle === sl.handle)?.image || undefined;
+          return (
+            <Pressable
+              key={sl.id}
+              onPress={() => openLink(sl, { onOpenCollection, onOpenProduct, onOpenScreen })}
+              style={[styles.wrap, { height: tall, width: wide > 0 ? Math.round((wide * span) / 100) : undefined }]}
+            >
+              {image ? <Image source={{ uri: image }} style={styles.image} /> : null}
+              <View style={styles.overlay}>
+                {sl.kicker ? <Text style={styles.kicker}>{sl.kicker}</Text> : null}
+                {sl.heading ? <Text style={styles.heading}>{sl.heading}</Text> : null}
+                {sl.subheading ? <Text style={styles.sub}>{sl.subheading}</Text> : null}
+              </View>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
       {slides.length > 1 ? (
         <View style={styles.dots}>
-          {slides.map((s, i) => (
+          {slides.map((sl, i) => (
             <Pressable
-              key={s.id}
-              onPress={() => setAt(i)}
+              key={sl.id}
+              onPress={() => {
+                setAt(i);
+                seen.current = i * step;
+                rail.current?.scrollTo({ x: i * step, animated: true });
+              }}
               style={[styles.dot, i === at ? styles.dotOn : null]}
             />
           ))}
@@ -2089,6 +2129,7 @@ export function Hero({
 }
 
 const styles = StyleSheet.create({
+  rail: { gap: 8 },
   wrap: { borderRadius: radius.lg, overflow: "hidden", backgroundColor: colors.page },
   image: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, width: "100%", height: "100%" },
   overlay: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, justifyContent: "flex-end", padding: 12, backgroundColor: "rgba(0,0,0,0.3)" },

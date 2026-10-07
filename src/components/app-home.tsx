@@ -1776,14 +1776,27 @@ function Hero({
 }) {
   const [at, setAt] = useState(0);
 
+  const rail = useRef<HTMLDivElement | null>(null);
+  const span = Math.max(50, Math.min(100, width));
+
+  /** How far one slide is from the next, measured off what is actually drawn. */
+  const stride = () => {
+    const el = rail.current;
+    if (!el) return 0;
+    const first = el.firstElementChild as HTMLElement | null;
+    if (!first) return 0;
+    const second = el.children[1] as HTMLElement | undefined;
+    return second ? second.offsetLeft - first.offsetLeft : first.offsetWidth;
+  };
+
   /**
    * The slides move on by themselves.
    *
    * A second slide nobody scrolls to is a second slide nobody sees, and the
    * dots underneath are too small to read as an invitation. It stops the
-   * moment a shopper picks a dot herself - the timer restarts from her
-   * choice rather than yanking the carousel out from under her - and it does
-   * not run at all for a single slide or for anyone who has asked their
+   * moment a shopper pushes the rail herself - the timer restarts from where
+   * she left it rather than yanking the carousel out from under her - and it
+   * does not run at all for a single slide or for anyone who has asked their
    * phone to stop animating things.
    */
   useEffect(() => {
@@ -1791,69 +1804,89 @@ function Hero({
     if (typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
       return;
     }
-    const t = setInterval(() => setAt((i) => (i + 1) % slides.length), every * 1000);
+    const t = setInterval(() => {
+      const el = rail.current;
+      const step = stride();
+      if (!el || step <= 0) return;
+      // By a slide, and back to the start once there is no more rail. Counting
+      // slides instead would stall whenever several fit at once: asking for
+      // slide two when the rail only has room to move by half of one leaves
+      // it exactly where it was, forever.
+      const far = el.scrollWidth - el.clientWidth;
+      // Back to the start only once it is actually at the end. Wrapping as
+      // soon as one more slide would overshoot means a rail whose last step
+      // is a short one never moves at all - it asks for nought while sitting
+      // at nought, every time the clock comes round.
+      const next = el.scrollLeft >= far - 2 ? 0 : Math.min(el.scrollLeft + step, far);
+      el.scrollTo({ left: next, behavior: "smooth" });
+    }, every * 1000);
     return () => clearInterval(t);
   }, [every, slides.length, at]);
-  const slide = slides[Math.min(at, slides.length - 1)];
-  const handle = str(slide.handle);
-  const collection = data.collections.find((c) => c.handle === handle);
-  const title = collection?.title ?? str(slide.heading);
-  // A slide with no picture of its own borrows the collection's.
-  const image = str(slide.imageUrl) || collection?.image || null;
 
-  // What comes next, for the sliver at the edge.
-  const after = slides.length > 1 ? slides[(at + 1) % slides.length] : null;
-  const afterImage = after
-    ? str(after.imageUrl) ||
-      data.collections.find((c) => c.handle === str(after.handle))?.image ||
-      null
-    : null;
-  const span = Math.max(50, Math.min(100, width));
-  const peeks = span < 98 && Boolean(afterImage);
+  /** Which slide is in front, read off the rail rather than remembered. */
+  function onScroll() {
+    const el = rail.current;
+    const step = stride();
+    if (!el || step <= 0) return;
+    const now = Math.max(0, Math.min(slides.length - 1, Math.round(el.scrollLeft / step)));
+    if (now !== at) setAt(now);
+  }
+
+  function goTo(i: number) {
+    const el = rail.current;
+    const step = stride();
+    setAt(i);
+    if (el && step > 0) el.scrollTo({ left: i * step, behavior: "smooth" });
+  }
 
   return (
     <section>
-      <div className="flex gap-2">
-      <button
-        onClick={() => handle && onOpen?.(handle, title)}
-        className="relative block shrink-0 overflow-hidden rounded-2xl text-start"
-        style={{ width: peeks ? `${span}%` : "100%" }}
+      {/* A real scroller: the drag, the momentum and the snap are the
+          platform's own. The negative margin lets a slide sit against the
+          edge of the screen while the page keeps its gutter. */}
+      <div
+        ref={rail}
+        onScroll={onScroll}
+        className="-mx-4 flex snap-x snap-mandatory gap-2 overflow-x-auto px-4 pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        style={{ scrollPaddingInlineStart: 16 }}
       >
-        <Thumb src={image} className="w-full rounded-2xl" style={{ height }} />
-        <div className="absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-black/60 to-transparent p-3">
-          {str(slide.kicker) && (
-            <div className="text-[10px] uppercase tracking-widest text-white/80">
-              {str(slide.kicker)}
-            </div>
-          )}
-          {str(slide.heading) && (
-            <div className="text-lg font-bold text-white">{str(slide.heading)}</div>
-          )}
-          {str(slide.subheading) && (
-            <div className="text-[11px] text-white/85">{str(slide.subheading)}</div>
-          )}
-        </div>
-      </button>
-      {/* The next slide, showing at the edge. Tapping it moves on rather than
-          opening it: what is mostly off the screen is an invitation to look,
-          not a thing to buy. */}
-      {peeks && (
-        <button
-          onClick={() => setAt((i) => (i + 1) % slides.length)}
-          aria-label="Next slide"
-          className="relative block min-w-0 flex-1 overflow-hidden rounded-2xl text-start"
-        >
-          <Thumb src={afterImage} className="w-full rounded-2xl" style={{ height }} />
-          <span className="absolute inset-0 block rounded-2xl bg-white/35" />
-        </button>
-      )}
+        {slides.map((sl) => {
+          const handle = str(sl.handle);
+          const collection = data.collections.find((c) => c.handle === handle);
+          const title = collection?.title ?? str(sl.heading);
+          // A slide with no picture of its own borrows the collection's.
+          const image = str(sl.imageUrl) || collection?.image || null;
+          return (
+            <button
+              key={sl.id}
+              onClick={() => handle && onOpen?.(handle, title)}
+              className="relative block shrink-0 snap-start overflow-hidden rounded-2xl text-start"
+              style={{ width: span >= 98 ? "100%" : `${span}%` }}
+            >
+              <Thumb src={image} className="w-full rounded-2xl" style={{ height }} />
+              <div className="absolute inset-0 flex flex-col justify-end bg-gradient-to-t from-black/60 to-transparent p-3">
+                {str(sl.kicker) && (
+                  <div className="text-[10px] uppercase tracking-widest text-white/80">
+                    {str(sl.kicker)}
+                  </div>
+                )}
+                {str(sl.heading) && (
+                  <div className="text-lg font-bold text-white">{str(sl.heading)}</div>
+                )}
+                {str(sl.subheading) && (
+                  <div className="text-[11px] text-white/85">{str(sl.subheading)}</div>
+                )}
+              </div>
+            </button>
+          );
+        })}
       </div>
       {slides.length > 1 && (
         <div className="mt-2 flex justify-center gap-1.5">
           {slides.map((sl, i) => (
             <button
               key={sl.id}
-              onClick={() => setAt(i)}
+              onClick={() => goTo(i)}
               aria-label={`${i + 1}`}
               className="h-1.5 rounded-full transition-all"
               style={{
