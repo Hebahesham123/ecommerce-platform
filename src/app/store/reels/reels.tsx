@@ -31,6 +31,9 @@ type AppMessage =
  *
  * Returns false on the plain website, where there is nobody to tell.
  */
+/** Both ends of the product row fade to nothing. */
+const FADE_EDGES = "linear-gradient(to right, transparent 0, #000 22%, #000 78%, transparent 100%)";
+
 function postToApp(message: AppMessage): boolean {
   if (typeof window === "undefined") return false;
   if (window.ReactNativeWebView) {
@@ -578,7 +581,14 @@ function Reel({
               // No scroll snapping: it would keep pulling the row back onto a
               // product while the drift is trying to move it off one.
               className="pointer-events-auto -mx-1 flex gap-2 overflow-x-auto px-1 pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-              style={{ maxWidth: "min(72vw, 260px)" }}
+              style={{
+                maxWidth: "min(72vw, 260px)",
+                // Products come in out of nothing and go back into it, rather
+                // than being cut off by the edge of the row.
+                // One product stands still, so it keeps its edges.
+                WebkitMaskImage: ordered.length > 1 ? FADE_EDGES : undefined,
+                maskImage: ordered.length > 1 ? FADE_EDGES : undefined,
+              }}
             >
               {ring.map((p, i) => {
                 const soldOut = (p.available ?? 0) <= 0;
@@ -592,7 +602,7 @@ function Reel({
                     // same things again and a screen reader should not have to
                     // sit through them.
                     aria-hidden={i >= ordered.length}
-                    className="w-[104px] shrink-0"
+                    className="w-[84px] shrink-0"
                   >
                     <Link
                       href={
@@ -605,7 +615,7 @@ function Reel({
                       }}
                       className="block text-start"
                     >
-                      <span className="block h-[104px] w-[104px] overflow-hidden rounded-2xl bg-white/10 ring-1 ring-white/25 backdrop-blur">
+                      <span className="block h-[84px] w-[84px] overflow-hidden rounded-xl bg-white/10 ring-1 ring-white/25 backdrop-blur">
                         {p.imageUrl && (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
@@ -615,10 +625,10 @@ function Reel({
                           />
                         )}
                       </span>
-                      <span className="mt-1.5 block truncate text-center text-[11px] font-medium leading-tight text-white drop-shadow">
+                      <span className="mt-1 block truncate text-center text-[10px] font-medium leading-tight text-white drop-shadow">
                         {p.productName}
                       </span>
-                      <span className="mt-0.5 block text-center text-[11px] font-bold text-white drop-shadow">
+                      <span className="mt-0.5 block text-center text-[10px] font-bold text-white drop-shadow">
                         {p.price != null ? egp(p.price, lang as never) : ""}
                       </span>
                     </Link>
@@ -628,7 +638,7 @@ function Reel({
                     <button
                       onClick={() => !soldOut && addToCart(p)}
                       disabled={soldOut}
-                      className={`mt-1.5 block w-full rounded-lg px-2 py-1.5 text-[9px] font-bold uppercase tracking-[0.12em] ${
+                      className={`mt-1 block w-full whitespace-nowrap rounded-lg px-1 py-1.5 text-[8px] font-bold uppercase tracking-[0.08em] ${
                         soldOut
                           ? "bg-white/25 text-white/70"
                           : added === p.id
@@ -640,7 +650,7 @@ function Reel({
                         ? say(copy, "soldOut", ar) || (ar ? "نفدت" : "Sold out")
                         : added === p.id
                           ? say(copy, "added", ar) || (ar ? "تمت" : "Added")
-                          : say(copy, "add", ar) || (ar ? "تسوّقي الآن" : "Shop now")}
+                          : say(copy, "add", ar) || (ar ? "أضيفي للسلة" : "Add to cart")}
                     </button>
                   </div>
                 );
