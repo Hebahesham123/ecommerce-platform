@@ -207,6 +207,7 @@ function Thumb({
   style,
   fit = "cover",
   blend,
+  radius = "rounded-xl",
 }: {
   src: string | null;
   className?: string;
@@ -230,10 +231,19 @@ function Thumb({
    * the picture goes on cropping regardless.
    */
   fit?: string;
+  /**
+   * How the picture's own corners are cut.
+   *
+   * It is a prop because a picture inside something already rounded must not
+   * round itself: two clip edges a fraction of a pixel apart leave a corner
+   * looking chewed instead of cut. Such a caller passes "rounded-none" and
+   * keeps the corner on the box outside.
+   */
+  radius?: string;
 }) {
   return (
     <div
-      className={`overflow-hidden rounded-xl ${blend ? "" : "bg-slate-100 "}${className}`}
+      className={`overflow-hidden ${radius} ${blend ? "" : "bg-slate-100 "}${className}`}
       style={blend ? { background: "var(--app-photo-bg, #ece8e3)", ...style } : style}
     >
       {src && (
@@ -658,8 +668,17 @@ function Tile({
         <button onClick={() => onOpen?.(card.id)} className="block w-full text-start">
           {/* The picture on a panel of its own. The card has no border: what
               separates one product from the next is the gap, not a line. */}
-          <span className="relative block overflow-hidden rounded-xl" style={{ background: style.photoBg }}>
-            <Thumb src={card.image} className={ratio} fit={fit} />
+          {/* The panel owns the corner; the picture inside is left square so
+              there is one clip edge rather than two. */}
+          <span
+            className="relative block overflow-hidden rounded-2xl"
+            style={{ background: style.photoBg }}
+          >
+            {/* Blended, like every other card in the shop. Without it the
+                picture keeps its own background and a row of products looks
+                assembled from three different shops - which is the harshness
+                that crept in when this card was redrawn. */}
+            <Thumb src={card.image} className={ratio} fit={fit} blend radius="rounded-none" />
 
           </span>
 
@@ -702,7 +721,7 @@ function Tile({
             things stamped on the picture sit on one line. */}
         {off > 0 && (
           <span
-            className="pointer-events-none absolute start-1.5 top-1.5 rounded-md px-1.5 py-[2px] text-[10px] font-bold text-white"
+            className="pointer-events-none absolute start-2 top-2 rounded-md px-1.5 py-[2px] text-[10px] font-bold text-white"
             style={{ background: accent }}
           >
             −{off}%
@@ -714,7 +733,7 @@ function Tile({
             onClick={() => onWish(card)}
             aria-pressed={wished}
             aria-label={ar ? "أضيفي إلى المفضلة" : "Add to wishlist"}
-            className="absolute end-1.5 top-1.5 grid h-6 w-6 place-items-center"
+            className="absolute end-2 top-2 grid h-6 w-6 place-items-center"
           >
             <svg
               viewBox="0 0 24 24"
