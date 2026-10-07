@@ -68,6 +68,8 @@ export type HomeLive = {
   peakViewers: number;
   /** How many have reacted. The shop's own count, not an estimate. */
   likes?: number;
+  /** How many products are pinned to it to buy. */
+  pieces?: number;
   href: string;
 };
 
@@ -1259,6 +1261,7 @@ function BlockView({
         onAir: true,
         liveId: l.id,
         likes: l.likes ?? 0,
+        pieces: l.pieces ?? 0,
       }));
       const replays = itemsOf(block)
         .filter((i) => str(i.videoUrl) || str(i.imageUrl) || str(i.name))
@@ -2285,11 +2288,14 @@ function SelfPlaying({
   src,
   poster,
   size,
+  height,
   radius,
 }: {
   src: string;
   poster: string | null;
   size: number;
+  /** Taller than it is wide, for a card. Square when it is left out. */
+  height?: number;
   radius: number;
 }) {
   const ref = useRef<HTMLVideoElement | null>(null);
@@ -2327,8 +2333,8 @@ function SelfPlaying({
       loop
       playsInline
       preload="metadata"
-      className="border-2 border-white object-cover"
-      style={{ width: size, height: size, borderRadius: radius, background: "#ece8e3" }}
+      className={height ? "object-cover" : "border-2 border-white object-cover"}
+      style={{ width: size, height: height ?? size, borderRadius: radius, background: "#ece8e3" }}
     />
   );
 }
@@ -2346,11 +2352,25 @@ function SelfPlaying({
  * tap takes it back: a heart that cannot be un-tapped turns a slip of the
  * thumb into a permanent one.
  */
-function LiveReact({ liveId, start, accent }: { liveId: string; start: number; accent: string }) {
+const CHEER = ["❤️", "🔥", "😍", "👏", "✨", "💖"];
+
+function LiveReact({
+  liveId,
+  start,
+  accent,
+  inside,
+}: {
+  liveId: string;
+  start: number;
+  accent: string;
+  /** Let the emoji rise across the whole tile rather than off the button. */
+  inside?: boolean;
+}) {
   const [count, setCount] = useState(start);
   const [mine, setMine] = useState(false);
-  const [flying, setFlying] = useState<{ id: number; lean: number }[]>([]);
+  const [flying, setFlying] = useState<{ id: number; lean: number; face: string; at: number; size: number }[]>([]);
   const next = useRef(0);
+  const timers = useRef<number[]>([]);
 
   useEffect(() => setCount(start), [start]);
   useEffect(() => {
@@ -2360,9 +2380,35 @@ function LiveReact({ liveId, start, accent }: { liveId: string; start: number; a
       /* private browsing */
     }
   }, [liveId]);
+  useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), []);
+
+  /**
+   * A cheer, not a tap.
+   *
+   * Nine faces let go over about a second, each leaning its own way and its
+   * own size, so what rises reads as a room reacting rather than one heart
+   * going up a pipe. They are decoration and say nothing about how many
+   * people are watching - the only number on this tile is the shop's own.
+   */
+  function cheer() {
+    const born = Array.from({ length: 9 }, (_, i) => ({
+      id: next.current++,
+      lean: Math.round((Math.random() - 0.5) * 46),
+      face: CHEER[Math.floor(Math.random() * CHEER.length)],
+      at: Math.round(i * 95 + Math.random() * 70),
+      size: 11 + Math.round(Math.random() * 7),
+    }));
+    setFlying((all) => [...all, ...born]);
+    timers.current.push(
+      window.setTimeout(() => {
+        setFlying((all) => all.filter((x) => !born.some((y) => y.id === x.id)));
+      }, 2600),
+    );
+  }
 
   function tap(e: React.MouseEvent) {
     e.stopPropagation();
+    e.preventDefault();
     const on = !mine;
     setMine(on);
     setCount((n) => Math.max(0, n + (on ? 1 : -1)));
@@ -2372,15 +2418,9 @@ function LiveReact({ liveId, start, accent }: { liveId: string; start: number; a
     } catch {
       /* private browsing */
     }
-    if (on) {
-      // A handful, each leaning its own way, so a tap reads as a cheer
-      // rather than as one heart going up a pipe.
-      const born = [0, 1, 2].map((i) => ({ id: next.current++, lean: (i - 1) * 9 + (i % 2 ? 4 : -4) }));
-      setFlying((f) => [...f, ...born]);
-      window.setTimeout(() => {
-        setFlying((f) => f.filter((x) => !born.some((y) => y.id === x.id)));
-      }, 1200);
-    }
+    // Tapping again always cheers, even when it is taking the count back:
+    // the gesture is worth answering whichever way the number went.
+    cheer();
     fetch("/api/storefront/reels/" + liveId + "/like", { method: on ? "POST" : "DELETE" })
       .then((r) => r.json())
       .then((r) => {
@@ -2392,18 +2432,28 @@ function LiveReact({ liveId, start, accent }: { liveId: string; start: number; a
   }
 
   return (
-    <span className="relative z-10 inline-block">
-      {/* The hearts leave from the button and are not part of it, so they
-          cannot be tapped on their way up. */}
-      <span className="pointer-events-none absolute bottom-4 left-1/2 block h-0 w-0">
+    <>
+      {/* The stream rises up the tile from behind the button. It cannot be
+          tapped on the way: it is weather, not a control. */}
+      <span
+        className={
+          inside
+            ? "pointer-events-none absolute bottom-7 end-3 z-20 block h-0 w-0"
+            : "pointer-events-none absolute bottom-4 left-1/2 z-20 block h-0 w-0"
+        }
+        aria-hidden
+      >
         {flying.map((h) => (
           <span
             key={h.id}
-            className="app-heart-up absolute block text-[11px] leading-none"
-            style={{ ["--lean" as string]: h.lean + "px", color: accent }}
-            aria-hidden
+            className="app-cheer-up absolute block leading-none"
+            style={{
+              ["--lean" as string]: h.lean + "px",
+              animationDelay: h.at + "ms",
+              fontSize: h.size,
+            }}
           >
-            ♥
+            {h.face}
           </span>
         ))}
       </span>
@@ -2411,14 +2461,18 @@ function LiveReact({ liveId, start, accent }: { liveId: string; start: number; a
         onClick={tap}
         aria-pressed={mine}
         aria-label={mine ? "Take back the heart" : "React to this live"}
-        className="grid h-[18px] min-w-[18px] place-items-center rounded-full bg-white px-[3px] shadow-[0_1px_3px_rgba(15,23,42,0.3)] transition active:scale-90"
+        className={
+          inside
+            ? "absolute end-1.5 top-1.5 z-20 grid h-[22px] min-w-[22px] place-items-center rounded-full bg-black/35 px-[5px] backdrop-blur-sm transition active:scale-90"
+            : "relative z-10 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-white px-[3px] shadow-[0_1px_3px_rgba(15,23,42,0.3)] transition active:scale-90"
+        }
       >
         <span className="flex items-center gap-[2px]">
           <svg
             viewBox="0 0 24 24"
-            className="h-2.5 w-2.5"
-            fill={mine ? accent : "none"}
-            stroke={mine ? accent : "#64748b"}
+            className="h-3 w-3"
+            fill={mine ? accent : inside ? "rgba(255,255,255,0.25)" : "none"}
+            stroke={mine ? accent : inside ? "#ffffff" : "#64748b"}
             strokeWidth="2.5"
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -2426,18 +2480,24 @@ function LiveReact({ liveId, start, accent }: { liveId: string; start: number; a
             <path d="M20.8 5.6a5 5 0 0 0-7.1 0L12 7.3l-1.7-1.7a5 5 0 1 0-7.1 7.1l8.8 8.8 8.8-8.8a5 5 0 0 0 0-7.1Z" />
           </svg>
           {count > 0 && (
-            <span className="text-[8px] font-bold leading-none text-slate-700">
+            <span
+              className={
+                inside
+                  ? "text-[9px] font-bold leading-none text-white"
+                  : "text-[8px] font-bold leading-none text-slate-700"
+              }
+            >
               {count > 999 ? Math.round(count / 100) / 10 + "k" : count}
             </span>
           )}
         </span>
       </button>
-    </span>
+    </>
   );
 }
 
 /** What the row learns about the live behind a pasted link. */
-type Found = { id: string; file: string; likes: number };
+type Found = { id: string; file: string; likes: number; pieces: number };
 
 function LiveNow({
   block,
@@ -2457,7 +2517,6 @@ function LiveNow({
   const s = block.settings ?? {};
   const title = str(s.title);
   const liveLabel = str(s.liveLabel, ar ? "مباشر" : "LIVE");
-  const replayBadge = str(s.replayBadge, ar ? "مسجّل" : "Replay");
   // The recording a shopper asked to watch, if any.
   const [playing, setPlaying] = useState<{ url: string; title: string } | null>(null);
   const showReplays = s.showReplays !== false;
@@ -2497,6 +2556,13 @@ function LiveNow({
   const offerTitleSize = int(s.offerTitleSize, 13);
   const offerTextSize = int(s.offerTextSize, 11);
   const cell = Math.max(size + 12, 56);
+  // A card, not a face in a circle. It takes its width from the size the
+  // merchant set so her setting still means something, but it will not go
+  // below the width two lines of a name and a pill need, and its height is
+  // the portrait shape a phone video actually is.
+  const tileW = Math.max(Math.round(size * 1.6), 96);
+  const tileH = Math.round(tileW * 1.46);
+  const tileR = shape === "square" ? 6 : 14;
 
   const go = opener(data, handlers);
 
@@ -2528,6 +2594,7 @@ function LiveNow({
           id?: string;
           recordingUrl?: string;
           likes?: number;
+          products?: unknown[];
         }[];
         const found: Record<string, Found> = {};
         for (const url of wanted.split("|")) {
@@ -2540,7 +2607,12 @@ function LiveNow({
           // no business carrying for a thumbnail. The id and the count come
           // back regardless, because a replay with no file can still be
           // reacted to.
-          found[url] = { id: String(live.id), file: live.recordingUrl ?? "", likes: Number(live.likes ?? 0) };
+          found[url] = {
+            id: String(live.id),
+            file: live.recordingUrl ?? "",
+            likes: Number(live.likes ?? 0),
+            pieces: Array.isArray(live.products) ? live.products.length : 0,
+          };
         }
         setFiles(found);
       })
@@ -2568,12 +2640,12 @@ function LiveNow({
    * a picture the merchant typed by hand - gets no heart, because there is
    * nowhere for the tap to go.
    */
-  const reactable = (p: Item): { id: string; likes: number } | null => {
+  const reactable = (p: Item): { id: string; likes: number; pieces: number } | null => {
     const own = str(p.liveId);
-    if (own) return { id: own, likes: Number(p.likes ?? 0) };
+    if (own) return { id: own, likes: Number(p.likes ?? 0), pieces: Number(p.pieces ?? 0) };
     const u = str(p.videoUrl);
     const hit = u ? files[u] : undefined;
-    return hit ? { id: hit.id, likes: hit.likes } : null;
+    return hit ? { id: hit.id, likes: hit.likes, pieces: hit.pieces } : null;
   };
 
   return (
@@ -2594,99 +2666,100 @@ function LiveNow({
             const onAir = person.onAir !== false;
             const video = str(person.videoUrl);
             const react = reactable(person);
+            const pieces = Number(person.pieces ?? react?.pieces ?? 0);
             return (
-              <div key={person.id} className="relative flex shrink-0 flex-col items-center" style={{ width: cell }}>
-              <button
-                onClick={() =>
-                  video ? setPlaying({ url: video, title: name || replayBadge }) : go(person)
-                }
-                className="flex w-full flex-col items-center"
+              <div
+                key={person.id}
+                className="relative shrink-0 overflow-hidden"
+                style={{ width: tileW, height: tileH, borderRadius: tileR, background: "#17120f" }}
               >
-                <span className="relative block">
+                <button
+                  onClick={() =>
+                    video ? setPlaying({ url: video, title: name || liveLabel }) : go(person)
+                  }
+                  className="block h-full w-full text-start"
+                >
+                  {movie(person) ? (
+                    <SelfPlaying
+                      src={movie(person)}
+                      poster={borrowed.image}
+                      size={tileW}
+                      height={tileH}
+                      radius={tileR}
+                    />
+                  ) : (
+                    <Thumb
+                      src={borrowed.image}
+                      style={{ width: tileW, height: tileH, borderRadius: tileR }}
+                      radius="rounded-none"
+                    />
+                  )}
+
+                  {/* What is written on the video has to stay readable over
+                      whatever the video happens to be showing, so the words
+                      sit on a wash that is darkest where they are. */}
                   <span
-                    className="block"
+                    className="pointer-events-none absolute inset-x-0 bottom-0 block"
                     style={{
-                      background: ringW > 0 ? ringColor : "transparent",
-                      padding: ringW,
-                      borderRadius: photoRadius + ringW,
+                      height: "64%",
+                      background:
+                        "linear-gradient(to top, rgba(0,0,0,0.88) 0%, rgba(0,0,0,0.55) 38%, rgba(0,0,0,0) 100%)",
+                      borderBottomLeftRadius: tileR,
+                      borderBottomRightRadius: tileR,
                     }}
-                  >
-                    {movie(person) ? (
-                      <SelfPlaying
-                        src={movie(person)}
-                        poster={borrowed.image}
-                        size={size}
-                        radius={photoRadius}
-                      />
-                    ) : (
-                      <Thumb
-                        src={borrowed.image}
-                        className="border-2 border-white"
-                        style={{ width: size, height: size, borderRadius: photoRadius }}
-                      />
+                  />
+
+                  {/* One badge, and only for what is actually happening now.
+                      A recording does not need announcing: the row is the
+                      shop's lives, and what is not live is a recording. */}
+                  {onAir && liveLabel && (
+                    <span
+                      className="absolute start-1.5 top-1.5 inline-flex items-center gap-1 whitespace-nowrap px-1.5 py-[2px] text-[8px] font-bold uppercase tracking-wide"
+                      style={{ background: badgeBg, color: badgeFg, borderRadius: 4 }}
+                    >
+                      <span className="block h-1 w-1 rounded-full" style={{ background: badgeFg }} />
+                      {liveLabel}
+                    </span>
+                  )}
+
+                  <span className="absolute inset-x-0 bottom-0 block px-1.5 pb-1.5">
+                    {name && (
+                      <span
+                        className="block truncate font-bold leading-tight text-white"
+                        style={{ fontSize: nameSize + 1 }}
+                      >
+                        {name}
+                      </span>
+                    )}
+                    {viewers && (
+                      <span
+                        className="mt-px block truncate leading-tight text-white/75"
+                        style={{ fontSize: viewersSize }}
+                      >
+                        {viewers}
+                      </span>
+                    )}
+                    {/* What is pinned to the live to buy. Counted from the
+                        live itself, so a live with nothing pinned to it says
+                        nothing rather than inviting a tap that leads nowhere. */}
+                    {pieces > 0 && (
+                      <span
+                        className="mt-1 inline-block max-w-full truncate rounded-full bg-white/20 px-2 py-[3px] font-semibold text-white backdrop-blur-sm"
+                        style={{ fontSize: Math.max(8, viewersSize) }}
+                      >
+                        {onAir
+                          ? ar
+                            ? "تسوّقي " + pieces + " قطعة"
+                            : "Shop " + pieces + " piece" + (pieces === 1 ? "" : "s")
+                          : "+" + pieces + (ar ? " قطعة" : pieces === 1 ? " piece" : " pieces")}
+                      </span>
                     )}
                   </span>
-                  {/* Red for what is happening now; quiet for what already
-                      happened. A shopper should be able to tell from the
-                      colour alone which one is worth interrupting herself for. */}
-                  {(onAir ? liveLabel : replayBadge) && (
-                    <span
-                      className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap px-1 py-px text-[8px] font-bold uppercase tracking-wide"
-                      style={{
-                        background: onAir ? badgeBg : "#2b1b10",
-                        color: badgeFg,
-                        borderRadius: 4,
-                        bottom: -6,
-                      }}
-                    >
-                      {onAir ? liveLabel : replayBadge}
-                    </span>
-                  )}
-                  {/* A recording says so before it is tapped. */}
-                  {!onAir && video && !movie(person) && (
-                    <span
-                      aria-hidden
-                      className="absolute inset-0 grid place-items-center"
-                      style={{ borderRadius: photoRadius }}
-                    >
-                      <span className="grid h-7 w-7 place-items-center rounded-full bg-black/45 text-[10px] text-white">
-                        ▶
-                      </span>
-                    </span>
-                  )}
-                </span>
-                {name && (
-                  <span
-                    className="mt-1.5 w-full truncate text-center font-semibold leading-tight text-slate-800"
-                    style={{ fontSize: nameSize }}
-                  >
-                    {name}
-                  </span>
+                </button>
+
+                {react && (
+                  <LiveReact liveId={react.id} start={react.likes} accent={accent} inside />
                 )}
-                {viewers && (
-                  <span
-                    className="w-full truncate text-center text-slate-500"
-                    style={{ fontSize: viewersSize }}
-                  >
-                    {viewers}
-                  </span>
-                )}
-              </button>
-              {/* On the picture, not under the name: a reaction belongs on the
-                  thing being reacted to. It sits outside the opener so a tap
-                  on it is a tap on it. */}
-              {react && (
-                <span
-                  className="pointer-events-none absolute block"
-                  // Top corner, not bottom: the badge owns the bottom of
-                  // the picture and two things in one place is one too many.
-                  style={{ left: (cell + size) / 2 - 14, top: -3 }}
-                >
-                  <span className="pointer-events-auto block">
-                    <LiveReact liveId={react.id} start={react.likes} accent={accent} />
-                  </span>
-                </span>
-              )}
               </div>
             );
           })}

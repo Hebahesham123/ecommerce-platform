@@ -247,6 +247,7 @@ export type Home = {
     scheduledAt: string | null;
     peakViewers: number;
   likes?: number;
+  pieces?: number;
     href: string;
   }[];
   productCount: number;

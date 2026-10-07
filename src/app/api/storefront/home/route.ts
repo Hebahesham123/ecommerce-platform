@@ -60,6 +60,12 @@ async function homeLives() {
     status: l.status,
     scheduledAt: l.scheduledAt,
     peakViewers: l.peakViewers,
+    // What the tile can say about a live besides who is on it: how many have
+    // reacted, and how many things are pinned to it to buy.
+    likes: Number((l as { likes?: number }).likes ?? 0),
+    pieces: Array.isArray((l as { products?: unknown[] }).products)
+      ? (l as { products: unknown[] }).products.length
+      : 0,
     // Where a tap goes. The watching page is a real URL, so it opens the
     // same way from the app, from a share, or from a message.
     href: `/store/live/${l.id}`,
