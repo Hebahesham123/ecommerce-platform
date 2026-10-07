@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
+import { visitorId as sharedVisitorId } from "@/lib/shopper-client";
 
 /**
  * Tells the shop which screen was just seen.
@@ -22,7 +23,9 @@ const makeId = () =>
 
 function ids(): { visitorId: string; sessionId: string; fresh: boolean } | null {
   try {
-    let visitorId = localStorage.getItem(VISITOR);
+    // The same id shopper tracking and the popup use, so a pageview and a
+    // product view are the same visitor on the customer's timeline.
+    let visitorId = sharedVisitorId() || localStorage.getItem(VISITOR);
     if (!visitorId) {
       visitorId = makeId();
       localStorage.setItem(VISITOR, visitorId);

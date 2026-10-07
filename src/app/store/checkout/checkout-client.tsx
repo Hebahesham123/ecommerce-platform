@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCart, type CartItem } from "../cart";
@@ -14,6 +14,7 @@ import type { LoyaltySummary } from "@/lib/loyalty/types";
 import { say, type Copy } from "@/lib/page-copy";
 import { payName, payNote, type PaymentMethod } from "@/lib/payments";
 import { normalizePhone } from "@/lib/phone";
+import { track } from "@/lib/shopper-client";
 import { STOREFRONT_HOME } from "@/lib/storefront";
 
 
@@ -201,6 +202,14 @@ export default function CheckoutClient({
     if (hydrated && initialItems.length > 0) seed(initialItems);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated]);
+
+  // She got as far as the till: the step an abandoned basket is measured from.
+  const reachedTill = useRef(false);
+  useEffect(() => {
+    if (!hydrated || reachedTill.current || !items.length) return;
+    reachedTill.current = true;
+    track("checkout_start", { value: subtotal, quantity: items.reduce((n, i) => n + i.quantity, 0) });
+  }, [hydrated, items, subtotal]);
 
   // Keep checkout static on mobile: no pinch-zoom, and no iOS auto-zoom when a
   // field is focused. Scoped to this page - restored on unmount.

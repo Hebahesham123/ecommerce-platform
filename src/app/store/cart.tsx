@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { track, trackCart } from "@/lib/shopper-client";
 
 export type CartItem = {
   itemId: string;
@@ -52,10 +53,28 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (hydrated) localStorage.setItem(KEY, JSON.stringify(items));
+    if (!hydrated) return;
+    localStorage.setItem(KEY, JSON.stringify(items));
+    // The basket as she left it, for the dashboard's customer page.
+    trackCart(
+      items.map((i) => ({
+        itemId: i.itemId,
+        name: i.variantTitle ? i.productName + " - " + i.variantTitle : i.productName,
+        imageUrl: i.imageUrl,
+        price: i.price,
+        quantity: i.quantity,
+      })),
+    );
   }, [items, hydrated]);
 
   const add: CartCtx["add"] = (item, qty = 1) => {
+    track("add_to_cart", {
+      productId: item.itemId,
+      productName: item.productName,
+      imageUrl: item.imageUrl,
+      value: item.price,
+      quantity: qty,
+    });
     setItems((prev) => {
       const existing = prev.find((i) => i.itemId === item.itemId);
       if (existing) {
@@ -77,8 +96,19 @@ export function CartProvider({ children }: { children: ReactNode }) {
         .filter((i) => i.quantity > 0),
     );
 
-  const remove: CartCtx["remove"] = (itemId) =>
+  const remove: CartCtx["remove"] = (itemId) => {
+    const gone = items.find((i) => i.itemId === itemId);
+    if (gone) {
+      track("remove_from_cart", {
+        productId: gone.itemId,
+        productName: gone.productName,
+        imageUrl: gone.imageUrl,
+        value: gone.price,
+        quantity: gone.quantity,
+      });
+    }
     setItems((prev) => prev.filter((i) => i.itemId !== itemId));
+  };
 
   const clear = () => setItems([]);
 

@@ -462,6 +462,13 @@ let token: string | null = null;
 export const setToken = (t: string | null) => { token = t; };
 
 /**
+ * This phone, as the shop's customer tracking knows it: made once and kept on
+ * the phone (Boot.tsx), anonymous until she signs in, then joined to her.
+ */
+let visitor = "";
+export const setVisitor = (v: string) => { visitor = v; };
+
+/**
  * What the phone is, in one header.
  *
  * Meta will not count an app sale without it: an event marked as coming from
@@ -496,6 +503,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
       "x-app-device": encodeURIComponent(JSON.stringify(device)),
       ...(init?.body ? { "content-type": "application/json" } : {}),
       ...(token ? { authorization: \`Bearer \${token}\` } : {}),
+      ...(visitor ? { "x-visitor": visitor } : {}),
       ...(init?.headers ?? {}),
     },
   });
@@ -541,6 +549,31 @@ export type HomePayload = {
 
 /** Everything the front page needs, in one request. */
 export const fetchHome = () => api<HomePayload>("/home");
+
+/**
+ * What she did, for the shop's customer page. Fire and forget: tracking
+ * never slows the app down or shows an error.
+ */
+export function track(
+  type: string,
+  data: { productId?: string; productName?: string; imageUrl?: string | null; value?: number | null; quantity?: number; term?: string; handle?: string } = {},
+) {
+  if (!visitor) return;
+  api("/track", { method: "POST", body: JSON.stringify({ type, channel: "app", platform: Platform.OS, visitorId: visitor, ...data }) }).catch(() => {});
+}
+
+/** The basket as it stands, once it has stopped changing for a moment. */
+let cartTimer: ReturnType<typeof setTimeout> | null = null;
+let cartSent: string | null = null;
+export function trackCart(lines: { itemId: string; name: string; imageUrl: string | null; price: number; quantity: number }[]) {
+  const sig = JSON.stringify(lines.map((l) => [l.itemId, l.quantity]));
+  if (!visitor || sig === cartSent || (cartSent === null && !lines.length)) return;
+  if (cartTimer) clearTimeout(cartTimer);
+  cartTimer = setTimeout(() => {
+    cartSent = sig;
+    api("/track", { method: "POST", body: JSON.stringify({ channel: "app", platform: Platform.OS, visitorId: visitor, cart: lines }) }).catch(() => {});
+  }, 1500);
+}
 
 /**
  * What goes with the signed-in shopper's past orders. A guest gets an empty
@@ -7970,7 +8003,7 @@ import {
 } from "react-native-gesture-handler";
 import { theme } from "../theme";
 import { screens, say } from "../screens";
-import { fetchProduct, searchProducts, type Card, type Product } from "../api";
+import { fetchProduct, searchProducts, track, type Card, type Product } from "../api";
 import { money } from "./Pieces";${placed ? '\nimport { ProductSections } from "../HomeScreen";' : ""}
 
 const NL = String.fromCharCode(10);
@@ -8080,6 +8113,7 @@ export function ProductScreen({
       .then((d) => {
         if (!live) return;
         setProduct(d);
+        track("product_view", { productId: d.id, productName: d.name, imageUrl: d.image, value: d.priceMin });
         const first = d.variants.find((v) => v.available > 0) ?? d.variants[0];
         setChosen(first ? first.id : null);
         if (d.vendor && p.showRelated) {
@@ -8809,6 +8843,8 @@ import {
   priceCart,
   redeemReward,
   setToken,
+  track,
+  trackCart,
   type Gift,
   type Loyalty,
   type PricedCart,
@@ -8899,7 +8935,27 @@ export default function App() {
 
   const count = useMemo(() => lines.reduce((n, l) => n + l.quantity, 0), [lines]);
 
-  const add = useCallback((variantId: string, _product?: Product) => {
+  // The basket as she left it, for the shop's customer page.
+  useEffect(() => {
+    trackCart(
+      (lines.length ? cart?.lines ?? [] : []).map((l) => ({
+        itemId: l.itemId,
+        name: l.variantTitle ? l.productName + " - " + l.variantTitle : l.productName,
+        imageUrl: l.imageUrl,
+        price: l.price,
+        quantity: l.quantity,
+      })),
+    );
+  }, [cart, lines.length]);
+
+  const add = useCallback((variantId: string, product?: Product) => {
+    track("add_to_cart", {
+      productId: product ? product.id : variantId,
+      productName: product ? product.name : undefined,
+      imageUrl: product ? product.image : undefined,
+      value: product ? product.priceMin : undefined,
+      quantity: 1,
+    });
     setLines((v) => {
       const found = v.find((l) => l.itemId === variantId);
       return found
@@ -9004,6 +9060,7 @@ export default function App() {
   };
 
   const checkout = () => {
+    track("checkout_start", { value: cart?.subtotal ?? null, quantity: count });
     if (!phone) return push({ kind: "signin" });
     push({ kind: "checkout" });
   };
@@ -9304,10 +9361,11 @@ function bootFile(): GeneratedFile {
 import React, { useEffect, useRef, useState } from "react";
 import { AppState, View } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { api } from "./api";
+import { api, setVisitor } from "./api";
 import { applyPack, canApplyLive, isApplied, theme } from "./theme";
 
 const SAVED = "app_theme_pack";
+const VISITOR = "app_visitor";
 /** How long a start waits for the network before going with what it has. */
 const WAIT_MS = 1500;
 /** Coming back to the app checks again, but not more than once a minute. */
@@ -9342,6 +9400,17 @@ export default function Boot() {
     };
 
     (async () => {
+      // This phone, for the shop's customer tracking: made once, kept here.
+      try {
+        let id = await AsyncStorage.getItem(VISITOR);
+        if (!id) {
+          id = "a-" + Math.random().toString(36).slice(2) + Date.now().toString(36);
+          await AsyncStorage.setItem(VISITOR, id);
+        }
+        setVisitor(id);
+      } catch {
+        /* untracked is fine */
+      }
       try {
         const saved = await AsyncStorage.getItem(SAVED);
         if (saved) applyPack(JSON.parse(saved));

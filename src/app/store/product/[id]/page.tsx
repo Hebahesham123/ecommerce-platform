@@ -7,6 +7,7 @@ import { useI18n, egp, num } from "@/lib/i18n";
 import { getStoreProduct, type StoreProduct, type StoreVariant } from "../../actions";
 import { useCart } from "../../cart";
 import { IcChevron } from "@/components/icons";
+import { track } from "@/lib/shopper-client";
 
 /**
  * A path inside this shop, and nothing else.
@@ -98,6 +99,12 @@ export default function ProductPage({ params }: { params: Promise<{ id: string }
       const res = await getStoreProduct(id);
       if (res.ok) {
         setProduct(res.data);
+        track("product_view", {
+          productId: id,
+          productName: res.data.name,
+          imageUrl: res.data.image,
+          value: res.data.priceMin,
+        });
         setVariant(res.data.variants.find((v) => v.available > 0) ?? res.data.variants[0]);
       }
       setLoading(false);

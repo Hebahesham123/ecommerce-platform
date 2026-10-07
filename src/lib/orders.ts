@@ -9,6 +9,7 @@ import {
   type DiscountLine,
 } from "@/lib/discount-engine";
 import { recordNudgeConversion } from "@/lib/nudge-service";
+import { recordShopperOrder } from "@/lib/shopper-tracking";
 import { getPaymentMethods } from "@/lib/payments-server";
 import { orderLine } from "@/lib/payments";
 import { awardOrderSignatures } from "@/lib/loyalty/earn";
@@ -162,6 +163,11 @@ export type PlaceOrderOptions = {
    * cookie on the web, a bearer token in the app. Never taken from the payload.
    */
   viewerPhone: string | null;
+  /**
+   * The app's visitor id, from its request header. The website's comes from
+   * the bb_vid cookie, read here rather than passed in.
+   */
+  visitorId?: string | null;
 };
 
 export async function placeOrderCore(
@@ -388,14 +394,26 @@ export async function placeOrderCore(
 
     // Close the loop on the hesitation popup. Web only: the visitor cookie it
     // keys on is written by the storefront's own script.
+    let shopperVisitor = opts.visitorId ?? null;
     if (opts.channel === "web") {
       try {
         const visitorId = (await cookies()).get("bb_vid")?.value ?? null;
+        shopperVisitor = shopperVisitor ?? visitorId;
         await recordNudgeConversion({ visitorId, code: discountCode, orderNumber, orderTotal: total });
       } catch {
         /* attribution is never worth failing an order over */
       }
     }
+
+    // On her timeline, and every basket she had open closed.
+    await recordShopperOrder({
+      visitorId: shopperVisitor,
+      phone: ph,
+      channel: opts.channel === "app" ? "app" : "web",
+      orderNumber,
+      total,
+      itemCount: payload.items.reduce((n, i) => n + i.quantity, 0),
+    });
 
     await fireOrderRelay(supabase, orderNumber, payload, ph, relayEmail, total, opts.channel);
 

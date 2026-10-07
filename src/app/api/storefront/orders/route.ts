@@ -94,6 +94,10 @@ export async function POST(request: Request) {
   if (normalizePhone(payload.phone) !== viewer) return fail("phone_not_yours", 403);
 
   return fromResult(
-    await placeOrderCore(payload, { channel: channelOf(request), viewerPhone: viewer }),
+    await placeOrderCore(payload, {
+      channel: channelOf(request),
+      viewerPhone: viewer,
+      visitorId: str(request.headers.get("x-visitor"), 64) || null,
+    }),
   );
 }
