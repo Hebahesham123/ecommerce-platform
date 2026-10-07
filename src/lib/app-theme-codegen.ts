@@ -1542,7 +1542,7 @@ const styles = StyleSheet.create({
   noteFace: { flexDirection: "row", alignItems: "center", gap: 4 },
   noteMark: { fontSize: 9, lineHeight: 11 },
   noteText: { fontSize: 9, fontWeight: "700", flexShrink: 1 },
-  flat: { backgroundColor: colors.surface, position: "relative" },
+  flat: { position: "relative" },
   panel: { borderRadius: theme.card.radius, overflow: "hidden", backgroundColor: theme.card.photoBg },
   panelImage: { backgroundColor: theme.card.photoBg },
   offStamp: { position: "absolute", left: 6, top: 6, backgroundColor: colors.accent, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },

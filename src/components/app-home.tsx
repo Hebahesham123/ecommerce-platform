@@ -661,7 +661,7 @@ function Tile({
     const add = () => (single ? onAdd?.(card.variantId as string, card.id) : onOpen?.(card.id));
     return (
       <div
-        className={`${wide ? "w-40 shrink-0" : ""} relative bg-white ${
+        className={`${wide ? "w-40 shrink-0" : ""} relative ${
           fadeAfter === undefined ? "" : "app-fade-in"
         }`}
         style={fadeAfter === undefined ? undefined : { animationDelay: `${fadeAfter}ms` }}
@@ -2861,8 +2861,8 @@ function CountdownDeals({
           return (
             <div
               key={item.id}
-              className="flex shrink-0 flex-col overflow-hidden border border-slate-200 bg-white text-start"
-              style={{ borderRadius: radius, width: lead ? 224 : 158 }}
+              className="flex shrink-0 flex-col text-start"
+              style={{ width: lead ? 224 : 158 }}
             >
             <button onClick={() => go(item)} className="flex flex-1 flex-col text-start">
               {/* The picture takes whatever height the row settles on, so the
@@ -2872,7 +2872,7 @@ function CountdownDeals({
                 <Thumb
                   src={borrowed.image}
                   className="h-full w-full"
-                  style={{ borderRadius: 0, minHeight: lead ? 168 : 120 }}
+                  style={{ borderRadius: cards.radius, minHeight: lead ? 168 : 120 }}
                   blend
                 />
                 {str(item.badge) && (
