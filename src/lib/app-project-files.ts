@@ -32,10 +32,16 @@ function slug(name: string): string {
   return cleaned || "shop";
 }
 
-/** com.something.shop — letters and dots only, which is all Android allows. */
+/**
+ * com.something.app — letters and dots only, which is all Android allows.
+ *
+ * Apple holds every bundle identifier in one list for the whole world, so the
+ * ending is the conventional one rather than a word another shop's generator
+ * might already have claimed.
+ */
 function bundleId(name: string): string {
   const id = slug(name).replace(/-/g, "");
-  return `com.${id || "shop"}.shop`;
+  return `com.${id || "shop"}.app`;
 }
 
 const json = (path: string, value: unknown): GeneratedFile => ({
@@ -115,7 +121,21 @@ function appJson(theme: AppTheme): GeneratedFile {
         resizeMode: "contain",
         backgroundColor: theme.settings.accent || "#ffffff",
       },
-      ios: { supportsTablet: true, bundleIdentifier: id },
+      ios: {
+        supportsTablet: true,
+        bundleIdentifier: id,
+        infoPlist: {
+          // Only the encryption every phone already has (HTTPS). Saying so
+          // here answers the export question Apple otherwise asks on every
+          // TestFlight upload.
+          ITSAppUsesNonExemptEncryption: false,
+          // The account page lets a shopper choose a profile photo. iOS ends
+          // an app that opens the camera or the library without saying why.
+          NSCameraUsageDescription: "Take a photo for your profile.",
+          NSPhotoLibraryUsageDescription: "Choose a photo for your profile.",
+          NSMicrophoneUsageDescription: "Record sound when you go live.",
+        },
+      },
       android: {
         adaptiveIcon: { backgroundColor: theme.settings.accent || "#ffffff" },
         package: id,
@@ -127,7 +147,9 @@ function appJson(theme: AppTheme): GeneratedFile {
 /** Two builds: one to put on a phone today, one the stores will accept. */
 function easJson(): GeneratedFile {
   return json("eas.json", {
-    cli: { version: ">= 12.0.0" },
+    // Build numbers are kept by Expo rather than in this file, so two builds
+    // can never reach Apple with the same one.
+    cli: { version: ">= 12.0.0", appVersionSource: "remote" },
     build: {
       // Installs straight onto a phone from a link. No store, no review.
       preview: { distribution: "internal", android: { buildType: "apk" } },
