@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useI18n, egp, num } from "@/lib/i18n";
 import { labels, type PayMethod, type Lifecycle } from "@/lib/data";
 import { listStoreOrders } from "../../store/actions";
@@ -19,6 +21,7 @@ import {
   usePagination,
 } from "@/components/dashboard-ui";
 import { IcCustomers, IcCash, IcUp, IcLocation, IcWhatsApp, IcX } from "@/components/icons";
+import { getBrowsingNow, listAbandonedCarts, type AbandonedCart, type BrowsingNow } from "./tracking-actions";
 
 // ---- Derived customer model --------------------------------------------
 type Customer = {
@@ -166,6 +169,25 @@ export default function CustomersPage() {
   }, []);
 
   const customers = useMemo(() => buildCustomers(rows), [rows]);
+
+  // Baskets left behind, and who is in the shop right now: the two lists an
+  // offer is made from.
+  const router = useRouter();
+  const [abandoned, setAbandoned] = useState<AbandonedCart[] | null>(null);
+  const [browsing, setBrowsing] = useState<BrowsingNow | null>(null);
+  useEffect(() => {
+    listAbandonedCarts(50).then((r) => setAbandoned(r.ok ? r.data : []));
+    const load = () => getBrowsingNow().then((r) => r.ok && setBrowsing(r.data));
+    load();
+    const t = setInterval(load, 30000);
+    return () => clearInterval(t);
+  }, []);
+  const profileHref = (phone: string) => `/customers/${encodeURIComponent(phone)}`;
+  const since = (iso: string) => {
+    const h = Math.max(0, (Date.now() - new Date(iso).getTime()) / 3600000);
+    const rtf = new Intl.RelativeTimeFormat(ar ? "ar-EG" : "en", { numeric: "auto" });
+    return h < 1 ? rtf.format(-Math.max(1, Math.round(h * 60)), "minute") : h < 48 ? rtf.format(-Math.round(h), "hour") : rtf.format(-Math.round(h / 24), "day");
+  };
 
   // VIP = customers spending well above the average — a moving, data-driven bar
   // rather than a hardcoded number, so it stays meaningful as data changes.
@@ -410,6 +432,97 @@ export default function CustomersPage() {
         </KpiRow>
       </div>
 
+      {/* ---- Who to make an offer to ---- */}
+      <div className="mb-4 grid gap-4 lg:grid-cols-3">
+        <Card className="lg:col-span-2">
+          <div className="flex items-center justify-between px-5 pt-4 pb-3">
+            <h3 className="text-sm font-semibold text-ink">
+              {ar ? "سلال متروكة" : "Abandoned carts"}
+              {abandoned && abandoned.length > 0 && (
+                <span className="ms-2 rounded-full bg-amber-500/10 px-2 py-0.5 text-xs text-amber-700">{num(abandoned.length, lang)}</span>
+              )}
+            </h3>
+            <span className="text-xs text-ink-soft">{ar ? "بدون طلب منذ نصف ساعة على الأقل" : "No order for at least 30 minutes"}</span>
+          </div>
+          <div className="max-h-80 overflow-y-auto px-5 pb-4">
+            {abandoned === null ? (
+              <p className="text-sm text-ink-soft">{ar ? "جارٍ التحميل…" : "Loading…"}</p>
+            ) : abandoned.length === 0 ? (
+              <p className="text-sm text-ink-soft">{ar ? "لا توجد سلال متروكة الآن." : "No abandoned carts right now."}</p>
+            ) : (
+              <ul className="divide-y divide-line">
+                {abandoned.map((c) => {
+                  const body = (
+                    <span className="flex items-center gap-3 py-2.5">
+                      <span className="flex -space-x-2 rtl:space-x-reverse">
+                        {c.items.slice(0, 3).map((l) => (
+                          <span key={l.itemId} className="h-9 w-9 overflow-hidden rounded-lg border-2 border-surface bg-surface-page">
+                            {l.imageUrl && (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={l.imageUrl} alt="" className="h-full w-full object-cover" />
+                            )}
+                          </span>
+                        ))}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium text-ink">
+                          {c.name || c.phone || (ar ? "زائرة غير مسجلة" : "Guest (not signed in)")}
+                        </span>
+                        <span className="block truncate text-xs text-ink-soft">
+                          {num(c.itemCount, lang)} {ar ? "قطعة" : "items"} · {since(c.updatedAt)}
+                        </span>
+                      </span>
+                      <span className="text-sm font-semibold text-ink">{egp(c.subtotal, lang)}</span>
+                    </span>
+                  );
+                  return (
+                    <li key={c.visitorId}>
+                      {c.phone ? (
+                        <Link href={profileHref(c.phone)} className="block hover:bg-surface-page">
+                          {body}
+                        </Link>
+                      ) : (
+                        body
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+        </Card>
+
+        <Card>
+          <div className="flex items-center justify-between px-5 pt-4 pb-3">
+            <h3 className="flex items-center gap-2 text-sm font-semibold text-ink">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
+              {ar ? "يتصفحن الآن" : "Browsing now"}
+            </h3>
+            <span className="text-xs text-ink-soft">
+              {browsing ? num(browsing.total, lang) : "–"} {ar ? "زائر" : "visitors"}
+            </span>
+          </div>
+          <div className="max-h-80 overflow-y-auto px-5 pb-4">
+            {browsing && browsing.known.length ? (
+              <ul className="divide-y divide-line">
+                {browsing.known.map((k) => (
+                  <li key={k.phone}>
+                    <Link href={profileHref(k.phone)} className="flex items-center justify-between py-2 text-sm hover:text-brand-700">
+                      <span className="truncate text-ink">{k.name || k.phone}</span>
+                      <span className="text-xs text-ink-soft">{since(k.lastSeen)}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-ink-soft">
+                {ar ? "لا توجد عميلات معروفات يتصفحن الآن." : "No signed-in customers browsing right now."}
+              </p>
+            )}
+          </div>
+        </Card>
+      </div>
+
       <Card className="overflow-hidden">
         {/* ---- Filter toolbar ---- */}
         <Toolbar>
@@ -472,6 +585,7 @@ export default function CustomersPage() {
             rows={pg.items}
             columns={columns}
             getKey={(c) => c.key}
+            onRowClick={(c) => router.push(profileHref(c.phone))}
             empty={
               <div className="flex flex-col items-center gap-3 py-8 text-center">
                 <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-surface-page text-ink-muted">
