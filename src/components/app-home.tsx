@@ -285,9 +285,6 @@ const RATING_AMBER = "#b45309";
 /** How many have gone, and the merchant's own line: plain ink, no claim. */
 const SOLD_INK = "#334155";
 
-/** The flag in the corner of the picture. Dark, so white type holds on it. */
-const FLAG_INK = "#0f4c45";
-
 function Stars({
   score,
   size = 9,
@@ -480,12 +477,8 @@ function cardNotes(
     });
   }
 
-  // How few are left, which is the one fact true of this product alone. The
-  // marketplace card flies it on the picture instead, and a card that says the
-  // same thing twice has a shopper reading one of them for nothing.
-  if (style.look === "market") {
-    // said by the flag
-  } else if (facts.left === 1) {
+  // How few are left, which is the one fact true of this product alone.
+  if (facts.left === 1) {
     notes.push({ key: "few", mark: "few", ink: DROP_RED, text: ar ? "آخر قطعة" : "Last one" });
   } else if (facts.scarce && facts.left !== null) {
     notes.push({
@@ -668,57 +661,53 @@ function Tile({
           <span className="relative block overflow-hidden rounded-xl" style={{ background: style.photoBg }}>
             <Thumb src={card.image} className={ratio} fit={fit} />
 
-            {/* The flag says the one thing this card knows that the next one
-                may not. Nothing here counts sales, so it does not claim a
-                best-seller; it says how few are left, when that is true. */}
-            {scarce && (
-              <span
-                className="absolute start-0 top-1.5 rounded-e-md px-1.5 py-[3px] text-[9px] font-bold text-white"
-                style={{ background: FLAG_INK }}
-              >
-                {left === 1 ? (ar ? "آخر قطعة" : "Last one") : ar ? `باقي ${left}` : `Only ${left} left`}
-              </span>
-            )}
           </span>
 
-          <span className="block px-0.5 pb-1.5 pt-1.5">
-            {/* Two lines, black, at the size a title is read at - not the
-                caption it had been. The brand is already the first words of it. */}
-            <span className="line-clamp-2 block text-[11px] font-medium leading-[1.25] text-slate-900">
-              {withoutVendor(card.name, card.vendor)}
-            </span>
-
-            {stars && (
-              <span className="mt-1 inline-flex items-center gap-1 rounded-md bg-slate-100 px-1.5 py-[2px] align-middle">
-                <span className="text-[9px] leading-none" style={{ color: SAVING_GREEN }} aria-hidden>
-                  ★
-                </span>
-                <span className="text-[9px] font-bold text-slate-900">{style.rating}</span>
-                {str(style.reviews) && (
-                  <span className="text-[9px] text-slate-500">({style.reviews})</span>
-                )}
+          <span className="block px-0.5 pb-1 pt-1">
+            {/* One line. The name gives way at the ellipsis and the standing
+                keeps its place on the end, because a score that moves down a
+                line when a name grows is a score a shopper stops finding.
+                The count stays off it - it is in the note, and the point of
+                the number here is that it is read without being read. */}
+            <span className="flex items-center gap-1">
+              <span className="min-w-0 flex-1 truncate text-[11px] font-medium leading-[1.3] text-slate-900">
+                {withoutVendor(card.name, card.vendor)}
               </span>
-            )}
-
-            <span className="mt-1 block text-[14px] font-extrabold leading-tight text-slate-900">
-              {moneyFirst(now, ar)}
+              {stars && (
+                <span className="flex shrink-0 items-center gap-[2px]">
+                  <span className="text-[9px] leading-none" style={{ color: SAVING_GREEN }} aria-hidden>
+                    ★
+                  </span>
+                  <span className="text-[9px] font-bold text-slate-700">{style.rating}</span>
+                </span>
+              )}
             </span>
 
-            {onSale && (
-              <span className="flex items-baseline gap-1.5">
+            {/* The price, and the price it was beside it. The percent is on
+                the picture now, so it is not said again here. */}
+            <span className="mt-0.5 flex items-baseline gap-1.5">
+              <span className="text-[13px] font-extrabold leading-tight text-slate-900">
+                {moneyFirst(now, ar)}
+              </span>
+              {onSale && (
                 <span className="text-[10px] text-slate-400 line-through">{plain(was, ar)}</span>
-                <span className="text-[10px] font-extrabold" style={{ color: SAVING_GREEN }}>
-                  {off}%
-                </span>
-              </span>
-            )}
+              )}
+            </span>
 
-            {/* Last, where the screens put it: the red arrow, then the line
-                that moves. The arrow appears only when the price really did
-                come down, because that is what the arrow is claiming. */}
             <CardNote notes={notes} />
           </span>
         </button>
+
+        {/* Across from the heart and measured from the same edge, so the two
+            things stamped on the picture sit on one line. */}
+        {off > 0 && (
+          <span
+            className="pointer-events-none absolute start-1.5 top-1.5 rounded-md px-1.5 py-[2px] text-[10px] font-bold text-white"
+            style={{ background: accent }}
+          >
+            −{off}%
+          </span>
+        )}
 
         {onWish && (
           <button

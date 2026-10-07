@@ -1379,8 +1379,7 @@ function notesFor(card: Card, scarce: boolean, left: number | null): Note[] {
   if (sold > 0) {
     notes.push({ key: "bag", mark: "\u{1F6CD}", ink: "#334155", text: sold.toLocaleString("en-US") + " sold" });
   }
-  // The marketplace card flies this on the picture instead.
-  if (theme.card.look !== "market" && scarce && left !== null) {
+  if (scarce && left !== null) {
     notes.push({ key: "few", mark: "\u25C6", ink: "#b42318", text: left === 1 ? "Last one" : "Only " + left + " left" });
   }
   if (theme.card.tickerText) {
@@ -1436,11 +1435,10 @@ export function ProductTile({
             ) : (
               <View style={[styles.panelImage, box]} />
             )}
-            {/* Nothing here counts sales, so the flag does not claim a best
-                seller. It says how few are left, which is true or absent. */}
-            {scarce ? (
-              <View style={styles.flag}>
-                <Text style={styles.flagText}>{left === 1 ? "Last one" : "Only " + left + " left"}</Text>
+            {/* Across from where the heart sits, measured from the same edge. */}
+            {off > 0 ? (
+              <View style={styles.offStamp}>
+                <Text style={styles.offStampText}>{"-" + off + "%"}</Text>
               </View>
             ) : null}
             {theme.card.add && onAdd ? (
@@ -1453,21 +1451,19 @@ export function ProductTile({
             ) : null}
           </View>
           <View style={styles.marketBody}>
-            <Text style={styles.marketName} numberOfLines={2}>{card.name}</Text>
-            {stars ? (
-              <View style={styles.chip}>
-                <Text style={styles.chipStar}>{"★"}</Text>
-                <Text style={styles.chipScore}>{theme.card.rating}</Text>
-                {theme.card.reviews ? <Text style={styles.chipCount}>{"(" + theme.card.reviews + ")"}</Text> : null}
-              </View>
-            ) : null}
-            <Text style={styles.priceBig}>{moneyFirst(card.priceMin)}</Text>
-            {off > 0 ? (
-              <View style={styles.priceRow}>
-                <Text style={styles.compareAt}>{plainNumber(card.compareAt)}</Text>
-                <Text style={styles.off}>{off + "%"}</Text>
-              </View>
-            ) : null}
+            <View style={styles.nameRow}>
+              <Text style={styles.marketName} numberOfLines={1}>{card.name}</Text>
+              {stars ? (
+                <View style={styles.scoreTail}>
+                  <Text style={styles.chipStar}>{"★"}</Text>
+                  <Text style={styles.chipScore}>{theme.card.rating}</Text>
+                </View>
+              ) : null}
+            </View>
+            <View style={styles.priceRow}>
+              <Text style={styles.priceBig}>{moneyFirst(card.priceMin)}</Text>
+              {off > 0 ? <Text style={styles.compareAt}>{plainNumber(card.compareAt)}</Text> : null}
+            </View>
             <CardNote notes={notes} />
           </View>
         </Pressable>
@@ -1547,21 +1543,20 @@ const styles = StyleSheet.create({
   flat: { backgroundColor: colors.surface },
   panel: { borderRadius: radius.lg, overflow: "hidden", backgroundColor: theme.card.photoBg },
   panelImage: { backgroundColor: theme.card.photoBg },
-  flag: { position: "absolute", left: 0, top: 6, backgroundColor: "#0f4c45", paddingHorizontal: 6, paddingVertical: 3, borderTopRightRadius: 6, borderBottomRightRadius: 6 },
-  flagText: { fontSize: 9, fontWeight: "700", color: "#fff" },
+  offStamp: { position: "absolute", left: 6, top: 6, backgroundColor: colors.accent, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  offStampText: { fontSize: 10, fontWeight: "700", color: "#fff" },
   plus: { position: "absolute", right: 6, bottom: 6, width: 32, height: 32, borderRadius: 12, backgroundColor: "#fff", alignItems: "center", justifyContent: "center", shadowColor: "#0f172a", shadowOpacity: 0.18, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 3 },
   plusMark: { fontSize: 20, lineHeight: 22, fontWeight: "600", color: colors.ink },
-  marketBody: { paddingTop: 6, paddingBottom: 6, paddingHorizontal: 2 },
-  marketName: { fontSize: 11, lineHeight: 14, fontWeight: "500", color: colors.ink },
-  chip: { flexDirection: "row", alignItems: "center", gap: 3, alignSelf: "flex-start", marginTop: 4, borderRadius: 6, backgroundColor: colors.line, paddingHorizontal: 6, paddingVertical: 2 },
+  marketBody: { paddingTop: 4, paddingBottom: 4, paddingHorizontal: 2 },
+  nameRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  marketName: { flex: 1, fontSize: 11, lineHeight: 15, fontWeight: "500", color: colors.ink },
+  scoreTail: { flexDirection: "row", alignItems: "center", gap: 2 },
   chipStar: { fontSize: 9, color: "#15803d" },
-  chipScore: { fontSize: 9, fontWeight: "700", color: colors.ink },
-  chipCount: { fontSize: 9, color: colors.inkSoft },
+  chipScore: { fontSize: 9, fontWeight: "700", color: colors.inkMuted },
   dropRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
   dropDisc: { width: 14, height: 14, borderRadius: 7, backgroundColor: "#b42318", alignItems: "center", justifyContent: "center" },
   dropMark: { fontSize: 9, lineHeight: 11, fontWeight: "800", color: "#fff" },
-  priceBig: { marginTop: 4, fontSize: 14, fontWeight: "800", color: colors.ink },
-  off: { fontSize: 10, fontWeight: "800", color: "#15803d" },
+  priceBig: { fontSize: 13, fontWeight: "800", color: colors.ink },
   leftWrap: { marginTop: 4 },
   leftTrack: { height: 3, borderRadius: 2, backgroundColor: colors.line, overflow: "hidden" },
   leftFill: { height: 3, borderRadius: 2, backgroundColor: colors.accent },
