@@ -1441,14 +1441,6 @@ export function ProductTile({
                 <Text style={styles.offStampText}>{"-" + off + "%"}</Text>
               </View>
             ) : null}
-            {theme.card.add && onAdd ? (
-              <Pressable
-                style={styles.plus}
-                onPress={() => (single && card.variantId ? onAdd(card.variantId, card.id) : onPress?.(card.id))}
-              >
-                <Text style={styles.plusMark}>+</Text>
-              </Pressable>
-            ) : null}
           </View>
           <View style={styles.marketBody}>
             <View style={styles.nameRow}>
@@ -1467,6 +1459,14 @@ export function ProductTile({
             <CardNote notes={notes} />
           </View>
         </Pressable>
+        {theme.card.add && onAdd ? (
+          <Pressable
+            style={styles.plus}
+            onPress={() => (single && card.variantId ? onAdd(card.variantId, card.id) : onPress?.(card.id))}
+          >
+            <Text style={styles.plusMark}>+</Text>
+          </Pressable>
+        ) : null}
       </View>
     );
   }
@@ -1540,14 +1540,14 @@ const styles = StyleSheet.create({
   noteFace: { flexDirection: "row", alignItems: "center", gap: 4 },
   noteMark: { fontSize: 9, lineHeight: 11 },
   noteText: { fontSize: 9, fontWeight: "700", flexShrink: 1 },
-  flat: { backgroundColor: colors.surface },
+  flat: { backgroundColor: colors.surface, position: "relative" },
   panel: { borderRadius: radius.lg, overflow: "hidden", backgroundColor: theme.card.photoBg },
   panelImage: { backgroundColor: theme.card.photoBg },
   offStamp: { position: "absolute", left: 6, top: 6, backgroundColor: colors.accent, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
   offStampText: { fontSize: 10, fontWeight: "700", color: "#fff" },
-  plus: { position: "absolute", right: 6, bottom: 6, width: 32, height: 32, borderRadius: 12, backgroundColor: "#fff", alignItems: "center", justifyContent: "center", shadowColor: "#0f172a", shadowOpacity: 0.18, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 3 },
-  plusMark: { fontSize: 20, lineHeight: 22, fontWeight: "600", color: colors.ink },
-  marketBody: { paddingTop: 4, paddingBottom: 4, paddingHorizontal: 2 },
+  plus: { position: "absolute", right: 2, bottom: 4, width: 28, height: 28, borderRadius: 14, backgroundColor: colors.accent, alignItems: "center", justifyContent: "center", shadowColor: "#0f172a", shadowOpacity: 0.12, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
+  plusMark: { fontSize: 17, lineHeight: 19, fontWeight: "600", color: "#fff" },
+  marketBody: { paddingTop: 4, paddingBottom: 4, paddingLeft: 2, paddingRight: 34 },
   nameRow: { flexDirection: "row", alignItems: "center", gap: 4 },
   marketName: { flex: 1, fontSize: 11, lineHeight: 15, fontWeight: "500", color: colors.ink },
   scoreTail: { flexDirection: "row", alignItems: "center", gap: 2 },

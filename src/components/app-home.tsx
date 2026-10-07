@@ -663,7 +663,7 @@ function Tile({
 
           </span>
 
-          <span className="block px-0.5 pb-1 pt-1">
+          <span className={`block ps-0.5 pb-1 pt-1 ${canAdd ? "pe-8" : "pe-0.5"}`}>
             {/* One line. The name gives way at the ellipsis and the standing
                 keeps its place on the end, because a score that moves down a
                 line when a name grows is a score a shopper stops finding.
@@ -730,23 +730,23 @@ function Tile({
           </button>
         )}
 
-        {/* A white square with a plus, standing on the foot of the picture.
-            It takes a corner instead of a whole line, which is most of what
-            made the old card tall. One that needs a size opens instead. */}
+        {/* In the corner of the card beside the price, the way the website
+            draws it: a filled circle in the shop's own colour. It takes a
+            corner rather than a whole line, which is what kept the card
+            short. One that needs a size opens instead of adding. */}
         {canAdd && (
-          <span className={`pointer-events-none absolute inset-x-0 top-0 block ${ratio}`}>
-            <button
-              onClick={add}
-              aria-label={
-                single ? (ar ? "أضيفي إلى الحقيبة" : "Add to bag") : ar ? "اختاري المقاس" : "Choose a size"
-              }
-              className="pointer-events-auto absolute bottom-1.5 end-1.5 grid h-8 w-8 place-items-center rounded-xl bg-white text-slate-900 shadow-[0_2px_8px_rgba(15,23,42,0.18)]"
-            >
-              <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                <path d="M12 5v14M5 12h14" />
-              </svg>
-            </button>
-          </span>
+          <button
+            onClick={add}
+            aria-label={
+              single ? (ar ? "أضيفي إلى الحقيبة" : "Add to bag") : ar ? "اختاري المقاس" : "Choose a size"
+            }
+            className="absolute bottom-1 end-0.5 grid h-7 w-7 place-items-center rounded-full text-white shadow-sm"
+            style={{ background: accent }}
+          >
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </button>
         )}
       </div>
     );
