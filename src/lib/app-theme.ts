@@ -51,6 +51,7 @@ export type BlockType =
   | "review_summary"
   | "bundle_save"
   | "pay_strip"
+  | "brand_wall"
   | "showcase"
   | "reviews"
   | "text";
@@ -135,6 +136,11 @@ export const ITEM_SHAPE: Partial<Record<BlockType, { ar: string; en: string; bla
     ar: "سطر",
     en: "Row",
     blank: () => ({ id: itemId(), emoji: "", title: "", subtitle: "", note: "", handle: "", url: "" }),
+  },
+  brand_wall: {
+    ar: "ماركة",
+    en: "Brand",
+    blank: () => ({ id: itemId(), handle: "", label: "", imageUrl: "" }),
   },
   payment_plans: {
     ar: "طريقة دفع",
@@ -295,6 +301,11 @@ export const ITEM_FIELDS: Partial<Record<BlockType, FieldSpec[]>> = {
     { key: "subtitle", kind: "text", ar: "سطر فرعي", en: "Subtitle" },
     { key: "note", kind: "text", ar: "على اليسار", en: "Right note" },
     { key: "handle", kind: "link", ar: "يفتح", en: "Opens" },
+  ],
+  brand_wall: [
+    { key: "handle", kind: "link", ar: "المجموعة", en: "Its collection" },
+    { key: "label", kind: "text", ar: "الاسم", en: "Name" },
+    { key: "imageUrl", kind: "image", ar: "الصورة", en: "Photo" },
   ],
   payment_plans: [
     { key: "name", kind: "text", ar: "الجهة", en: "Provider" },
@@ -1138,6 +1149,12 @@ export const BLOCK_META: Record<
     hintAr: "وسوم تصف ذوق العميلة، كل وسم يفتح ما يناسبه",
     hintEn: "Tags describing the shopper's taste, each opening what matches it",
   },
+  brand_wall: {
+    ar: "تسوّقي حسب الماركة",
+    en: "Shop by brand",
+    hintAr: "شبكة بالماركات التي يبيعها المتجر، وتحت كل واحدة عدد القطع المتاح منها فعلاً",
+    hintEn: "A grid of the houses the shop carries, each with how many pieces it actually holds",
+  },
   pay_strip: {
     ar: "شريط طرق الدفع",
     en: "How you can pay",
@@ -1554,6 +1571,19 @@ export function newBlock(type: BlockType): Block {
       url: "",
       cardBg: "",
       radius: 14,
+      items: shape ? [shape.blank()] : [],
+    },
+    brand_wall: {
+      title: "Shop by brand",
+      subtitle: "",
+      seeAllLabel: "",
+      seeAllHandle: "",
+      seeAllUrl: "",
+      // Three across reads as a wall; four makes a wordmark too small to be
+      // the thing a shopper came for.
+      perRow: 3,
+      // The count under each name, read off the catalogue rather than typed.
+      showCount: true,
       items: shape ? [shape.blank()] : [],
     },
     pay_strip: {

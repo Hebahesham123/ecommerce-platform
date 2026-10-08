@@ -1397,6 +1397,14 @@ function BlockView({
       );
     }
 
+    case "brand_wall": {
+      const houses = itemsOf(block).filter((i) => str(i.handle) || str(i.label));
+      if (!houses.length) return <Placeholder ar={ar} label={ar ? "لا ماركات بعد" : "No brands yet"} />;
+      return (
+        <BrandWall block={block} items={houses} data={data} ar={ar} accent={accent} handlers={handlers} />
+      );
+    }
+
     case "pay_strip": {
       const ways = data.payments ?? [];
       if (!ways.length) {
@@ -4147,6 +4155,103 @@ function CircleRow({
   );
 }
 
+/**
+ * The houses the shop carries, each with how many pieces it holds.
+ *
+ * It points at the collection the shop already keeps per house rather than
+ * holding a second list of brands that would drift out of step with it, and
+ * the count is read off the catalogue every time this draws. A brand wall
+ * with hand-typed numbers is a brand wall that is wrong by next week, and a
+ * wrong count is worse than no count: it is the one number here a shopper
+ * could check.
+ *
+ * A brand whose collection has emptied is left out rather than shown as
+ * nought - an empty house is a tap that goes nowhere.
+ */
+function BrandWall({
+  block,
+  items,
+  data,
+  ar,
+  accent,
+  handlers,
+}: {
+  block: Block;
+  items: Item[];
+  data: HomeData;
+  ar: boolean;
+  accent: string;
+  handlers: HomeHandlers;
+}) {
+  const s = block.settings ?? {};
+  const perRow = Math.max(2, Math.min(5, int(s.perRow, 3)));
+  const showCount = s.showCount !== false;
+  const go = opener(data, handlers);
+
+  const houses = items
+    .map((item) => {
+      const handle = str(item.handle);
+      const found = data.collections.find((c) => c.handle === handle);
+      return {
+        item,
+        handle,
+        name: str(item.label, found?.title ?? handle),
+        image: str(item.imageUrl) || found?.image || null,
+        count: found?.productCount ?? 0,
+        known: Boolean(found),
+      };
+    })
+    // A house with nothing in it is a tap that goes nowhere.
+    .filter((h) => h.name && (!h.known || h.count > 0));
+
+  if (!houses.length) return <Placeholder ar={ar} label={ar ? "لا ماركات بعد" : "No brands yet"} />;
+
+  return (
+    <section>
+      <RowHead
+        title={str(s.title)}
+        subtitle={str(s.subtitle)}
+        seeAll={str(s.seeAllLabel)}
+        onSeeAll={() => go(s, "seeAll")}
+        accent={accent}
+        titleSize={int(s.titleSize, 16)}
+        linkColor={str(s.linkColor)}
+      />
+      <div
+        className="mt-2 grid"
+        style={{
+          gap: "var(--app-item-gap, 8px)",
+          gridTemplateColumns: `repeat(${perRow}, minmax(0, 1fr))`,
+        }}
+      >
+        {houses.map((h) => (
+          <button
+            key={h.item.id}
+            onClick={() => go(h.item)}
+            className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white text-start"
+          >
+            <Thumb src={h.image} className="aspect-[4/3] w-full" radius="rounded-none" blend />
+            <span className="block px-2 py-1.5">
+              {/* The wordmark is the thing she came for, so it is the thing
+                  set largest and in the shop's own ink. */}
+              <span className="block truncate text-[11px] font-extrabold uppercase tracking-[0.04em] text-slate-900">
+                {h.name}
+              </span>
+              {showCount && h.count > 0 && (
+                <span className="mt-px block text-[9px] text-slate-500">
+                  {ar
+                    ? `${new Intl.NumberFormat("ar-EG").format(h.count)} قطعة`
+                    : `${new Intl.NumberFormat("en-US").format(h.count)} piece${h.count === 1 ? "" : "s"}`}
+                </span>
+              )}
+            </span>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 /** Colour circles, each opening its own collection. */
 /**
  * Shop by palette - the website's section, card for card.
@@ -6299,6 +6404,9 @@ function isPlaceholder(node: React.ReactElement): boolean {
       return itemsOf(block).filter((i) => str(i.name) || str(i.imageUrl) || str(i.handle)).length === 0;
     case "circle_row":
       return itemsOf(block).filter((i) => str(i.imageUrl) || str(i.label) || str(i.handle)).length === 0;
+
+    case "brand_wall":
+      return itemsOf(block).filter((i) => str(i.handle) || str(i.label)).length === 0;
     case "pick_colour":
       return itemsOf(block).filter((i) => str(i.color)).length === 0;
     case "price_drop":

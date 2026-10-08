@@ -1709,6 +1709,121 @@ const styles = StyleSheet.create({
 function sectionFile(type: BlockType): GeneratedFile {
   const name = componentName(type);
   const body: Record<BlockType, string> = {
+    brand_wall: `import React from "react";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { colors, gap, radius, spacing, theme } from "../theme";
+import { inherit, openLink, type LinkTo } from "./Pieces";
+import type { HomePayload } from "../api";
+
+export type Brand = { id: string; handle?: string; label?: string; imageUrl?: string };
+export type BrandWallSettings = {
+  title?: string;
+  subtitle?: string;
+  seeAllLabel?: string;
+  seeAllHandle?: string;
+  seeAllUrl?: string;
+  perRow?: number;
+  showCount?: boolean;
+  titleSize?: number;
+  linkColor?: string;
+  items?: Brand[];
+};
+
+/**
+ * The houses the shop carries, each with how many pieces it holds.
+ *
+ * It points at the collection the shop already keeps per house, and the count
+ * is read off the catalogue every time it draws. A hand-typed count is wrong
+ * by next week, and a wrong count is worse than none: it is the one number
+ * here a shopper could check.
+ */
+export function BrandWall({
+  settings,
+  collections,
+  onOpenCollection,
+  onOpenProduct,
+  onOpenScreen,
+}: {
+  settings: BrandWallSettings;
+  collections: HomePayload["collections"];
+  onOpenCollection?: (handle: string) => void;
+  onOpenProduct?: (id: string) => void;
+  onOpenScreen?: (screen: string) => void;
+}) {
+  const items = settings.items ?? [];
+  const perRow = Math.max(2, Math.min(5, Number(settings.perRow || 3)));
+  const showCount = settings.showCount !== false;
+  const go = (to: LinkTo) => openLink(to, { onOpenCollection, onOpenProduct, onOpenScreen });
+
+  const houses = items
+    .map((i) => {
+      const found = collections.find((c) => c.handle === i.handle);
+      return {
+        item: i,
+        name: i.label || found?.title || i.handle || "",
+        image: i.imageUrl || found?.image || undefined,
+        count: found?.productCount ?? 0,
+        known: Boolean(found),
+      };
+    })
+    .filter((h) => h.name && (!h.known || h.count > 0));
+
+  if (!houses.length) return null;
+
+  return (
+    <View>
+      <View style={styles.head}>
+        <Text style={[styles.heading, settings.titleSize ? { fontSize: settings.titleSize } : null]} numberOfLines={1}>
+          {settings.title ?? ""}
+        </Text>
+        {settings.seeAllLabel ? (
+          <Pressable onPress={() => go({ handle: settings.seeAllHandle, url: settings.seeAllUrl })}>
+            <Text style={[styles.seeAll, settings.linkColor ? { color: settings.linkColor } : null]}>
+              {settings.seeAllLabel}
+            </Text>
+          </Pressable>
+        ) : null}
+      </View>
+      <View style={styles.grid}>
+        {houses.map((h) => (
+          <Pressable
+            key={h.item.id}
+            style={[styles.cell, { width: 100 / perRow + "%" }]}
+            onPress={() => go(h.item)}
+          >
+            <View style={styles.card}>
+              {h.image ? (
+                <Image source={{ uri: h.image }} style={styles.photo} />
+              ) : (
+                <View style={[styles.photo, { backgroundColor: theme.card.photoBg }]} />
+              )}
+              <View style={styles.body}>
+                <Text style={styles.name} numberOfLines={1}>{h.name.toUpperCase()}</Text>
+                {showCount && h.count > 0 ? (
+                  <Text style={styles.count}>{h.count + (h.count === 1 ? " piece" : " pieces")}</Text>
+                ) : null}
+              </View>
+            </View>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  head: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: spacing.sm },
+  heading: { flex: 1, fontSize: 17, fontWeight: "700", color: colors.ink, fontFamily: theme.titleFont },
+  seeAll: { fontSize: 12, fontWeight: "600", color: colors.accent },
+  grid: { flexDirection: "row", flexWrap: "wrap", marginHorizontal: -4, marginTop: 8, rowGap: gap.item },
+  cell: { paddingHorizontal: 4 },
+  card: { borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, overflow: "hidden" },
+  photo: { width: "100%", aspectRatio: 4 / 3, backgroundColor: theme.card.photoBg },
+  body: { paddingHorizontal: 8, paddingVertical: 6 },
+  name: { fontSize: 11, fontWeight: "800", letterSpacing: 0.4, color: colors.ink },
+  count: { marginTop: 1, fontSize: 9, color: colors.inkSoft },
+});
+`,
     pay_strip: `import React, { useEffect, useRef, useState } from "react";
 import { Animated, StyleSheet, Text, View } from "react-native";
 import { colors } from "../theme";
@@ -6369,6 +6484,7 @@ function blockCase(type: BlockType): string {
     hero: ["collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     promo_bar: [],
     pay_strip: ["payments={data.payments ?? []}"],
+    brand_wall: ["collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     bundle_save: ["rows={data.rows}", "newArrivals={data.newArrivals}", "onOpenProduct={onOpenProduct}", "onAdd={onAdd}"],
     collection_tabs: ["rows={data.rows}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}"],
     cards: ["collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
@@ -6454,6 +6570,7 @@ function settingsObject(block: Block): Record<string, unknown> {
   const keep: Record<BlockType, string[]> = {
     hero: [],
     pay_strip: ["every", "title"],
+    brand_wall: ["title", "subtitle", "seeAllLabel", "seeAllHandle", "seeAllUrl", "perRow", "showCount", "titleSize", "linkColor"],
     bundle_save: [
       "eyebrow",
       "title",
@@ -6901,6 +7018,7 @@ function itemsObjects(type: BlockType, items: Item[]): Record<string, string>[] 
       "screen",
     ],
     circle_row: ["imageUrl", "label", "note", "handle", "url", "productId", "screen"],
+    brand_wall: ["handle", "label", "imageUrl", "url", "productId", "screen"],
     moments: ["imageUrl", "label", "focal", "handle", "url", "productId", "screen"],
     pick_colour: ["color", "label", "imageUrl", "line1", "line2", "handle", "url", "productId", "screen"],
     brand_timeline: ["logoText", "label", "title", "description", "imageUrl", "focal", "handle", "url", "productId", "screen"],
