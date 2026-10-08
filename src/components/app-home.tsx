@@ -1976,20 +1976,24 @@ function PayMark({ name, logo, kind }: { name: string; logo: string; kind: strin
     .join("")
     .toUpperCase();
   return (
-    <span className="grid h-8 min-w-8 max-w-[58px] shrink-0 place-items-center overflow-hidden rounded-lg bg-white px-1 shadow-[0_1px_2px_rgba(0,0,0,0.18)]">
+    <span className="grid h-[22px] min-w-[22px] max-w-[46px] shrink-0 place-items-center overflow-hidden rounded-md bg-white px-[3px] shadow-[0_1px_2px_rgba(0,0,0,0.18)]">
       {logo ? (
+        // The height is a number rather than h-full: inside a grid cell with
+        // no definite height, a percentage has nothing to resolve against, so
+        // the browser sized the mark off its own proportions instead and the
+        // chip cropped it.
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={logo} alt="" className="h-full w-auto max-w-full object-contain py-[3px]" />
+        <img src={logo} alt="" className="w-auto max-w-full object-contain" style={{ height: 16 }} />
       ) : kind === "cod" ? (
         // Money at the door is not a brand, so it gets a drawn note rather
         // than two letters pretending to be a mark.
-        <svg viewBox="0 0 24 24" className="h-4 w-4 text-slate-700" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-slate-700" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
           <rect x="2" y="6" width="20" height="12" rx="2" />
           <circle cx="12" cy="12" r="2.6" />
           <path d="M6 12h.01M18 12h.01" />
         </svg>
       ) : (
-        <span className="text-[10px] font-extrabold leading-none text-slate-800">{initials}</span>
+        <span className="text-[9px] font-extrabold leading-none text-slate-800">{initials}</span>
       )}
     </span>
   );
@@ -2015,7 +2019,7 @@ function PayFace({
   const note = ar ? way.noteAr || way.note : way.note;
   return (
     <span
-      className={`${leaving ? "app-pay-out" : "app-pay-in"} absolute inset-0 flex items-center gap-2 overflow-hidden px-2.5`}
+      className={`${leaving ? "app-pay-out" : "app-pay-in"} absolute inset-0 flex items-center gap-1.5 overflow-hidden px-2`}
       style={{
         background: `linear-gradient(135deg, ${ground} 0%, ${ground} 55%, rgba(0,0,0,0.22) 160%)`,
       }}
@@ -2029,12 +2033,12 @@ function PayFace({
       <PayMark name={way.name} logo={str(way.logo)} kind={str(way.kind)} />
       <span className="relative flex min-w-0 flex-1 flex-col justify-center leading-tight">
         <span className="flex items-baseline gap-1.5">
-          <span className="shrink-0 text-[12px] font-extrabold text-white">{name}</span>
-          <span className="shrink-0 rounded bg-white/20 px-1 py-px text-[7px] font-bold uppercase tracking-[0.08em] text-white/90">
+          <span className="shrink-0 text-[11px] font-extrabold leading-none text-white">{name}</span>
+          <span className="shrink-0 rounded bg-white/20 px-1 py-px text-[6.5px] font-bold uppercase tracking-[0.08em] text-white/90">
             {title || (ar ? "ادفعي كما يناسبك" : "Pay your way")}
           </span>
         </span>
-        {note && <span className="mt-px truncate text-[9.5px] text-white/80">{note}</span>}
+        {note && <span className="truncate text-[9px] leading-tight text-white/80">{note}</span>}
       </span>
     </span>
   );
@@ -2096,19 +2100,19 @@ function PayStrip({
 
   return (
     <section>
-      <div className="relative h-12 overflow-hidden rounded-xl">
+      <div className="relative h-[34px] overflow-hidden rounded-[10px]">
         {going && (
           <PayFace key={"out-" + going.id + at} way={going} title={title} ar={ar} accent={accent} leaving />
         )}
         <PayFace key={"in-" + way.id + at} way={way} title={title} ar={ar} accent={accent} />
         {ways.length > 1 && (
-          <span className="pointer-events-none absolute bottom-1 end-2.5 z-10 flex items-center gap-[3px]" aria-hidden>
+          <span className="pointer-events-none absolute bottom-[3px] end-2 z-10 flex items-center gap-[2px]" aria-hidden>
             {ways.slice(0, 8).map((w, i) => (
               <span
                 key={w.id}
-                className="block h-[3px] rounded-full transition-all"
+                className="block h-[2.5px] rounded-full transition-all"
                 style={{
-                  width: i === at % Math.min(ways.length, 8) ? 9 : 3,
+                  width: i === at % Math.min(ways.length, 8) ? 7 : 2.5,
                   background: i === at % Math.min(ways.length, 8) ? "#ffffff" : "rgba(255,255,255,0.45)",
                 }}
               />
