@@ -543,8 +543,12 @@ export type HomePayload = {
     status: string;
     scheduledAt: string | null;
     peakViewers: number;
+    likes?: number;
+    pieces?: number;
     href: string;
   }[];
+  /** The ways the shop takes money, as the checkout knows them. */
+  payments?: { id: string; name: string; nameAr: string; kind: string; note: string; noteAr: string }[];
 };
 
 /** Everything the front page needs, in one request. */
@@ -1667,6 +1671,75 @@ const styles = StyleSheet.create({
 function sectionFile(type: BlockType): GeneratedFile {
   const name = componentName(type);
   const body: Record<BlockType, string> = {
+    pay_strip: `import React, { useEffect, useRef, useState } from "react";
+import { Animated, StyleSheet, Text, View } from "react-native";
+import { colors } from "../theme";
+
+type Way = { id: string; name: string; nameAr: string; kind: string; note: string; noteAr: string };
+
+/**
+ * A thin strip naming the ways the shop takes money, one at a time.
+ *
+ * What it names comes from the merchant's payment settings, the same place
+ * the checkout reads, so the strip cannot advertise a provider that was
+ * switched off a month ago. A shop that takes one way shows one line standing
+ * still rather than a carousel of one.
+ *
+ * It rises rather than slides: everything else on this screen travels
+ * sideways, and one strip moving the other way gets read.
+ */
+export function PayStrip({
+  settings,
+  payments,
+}: {
+  settings: { every?: number; title?: string };
+  payments: Way[];
+}) {
+  const every = Math.max(0, Math.min(12, Number(settings.every === undefined ? 3 : settings.every) || 0));
+  const [at, setAt] = useState(0);
+  const rise = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (every <= 0 || payments.length < 2) return;
+    const t = setInterval(() => {
+      rise.setValue(0);
+      setAt((i) => (i + 1) % payments.length);
+      Animated.timing(rise, { toValue: 1, duration: 420, useNativeDriver: true }).start();
+    }, every * 1000);
+    return () => clearInterval(t);
+  }, [every, payments.length, rise]);
+
+  if (!payments.length) return null;
+  const way = payments[at % payments.length];
+  const lift = rise.interpolate({ inputRange: [0, 1], outputRange: [14, 0] });
+
+  return (
+    <View style={styles.strip}>
+      <View style={styles.tag}>
+        <Text style={styles.tagText}>{settings.title || "Pay your way"}</Text>
+      </View>
+      <View style={styles.window}>
+        <Animated.View style={[styles.line, { opacity: rise, transform: [{ translateY: lift }] }]}>
+          <Text style={styles.name}>{way.name}</Text>
+          {way.note ? (
+            <Text style={styles.note} numberOfLines={1}>{way.note}</Text>
+          ) : null}
+        </Animated.View>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  strip: { flexDirection: "row", alignItems: "center", gap: 8, height: 36, borderRadius: 12, paddingHorizontal: 10, backgroundColor: colors.accent + "12" },
+  tag: { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 3, backgroundColor: colors.accent },
+  tagText: { fontSize: 8, fontWeight: "700", letterSpacing: 0.8, textTransform: "uppercase", color: "#fff" },
+  window: { flex: 1, minWidth: 0, overflow: "hidden", justifyContent: "center" },
+  line: { flexDirection: "row", alignItems: "baseline", gap: 6 },
+  name: { fontSize: 11, fontWeight: "700", color: colors.accent },
+  note: { flexShrink: 1, fontSize: 10, color: colors.inkSoft },
+});
+`,
     banner: `import React from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { colors, radius } from "../theme";
@@ -6016,6 +6089,7 @@ function blockCase(type: BlockType): string {
   const extras: Record<BlockType, string[]> = {
     hero: ["collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     promo_bar: [],
+    pay_strip: ["payments={data.payments ?? []}"],
     bundle_save: ["rows={data.rows}", "newArrivals={data.newArrivals}", "onOpenProduct={onOpenProduct}", "onAdd={onAdd}"],
     collection_tabs: ["rows={data.rows}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}"],
     cards: ["collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
@@ -6100,6 +6174,7 @@ const SIZE_KEYS = new Set([
 function settingsObject(block: Block): Record<string, unknown> {
   const keep: Record<BlockType, string[]> = {
     hero: [],
+    pay_strip: ["every", "title"],
     bundle_save: [
       "eyebrow",
       "title",

@@ -1,6 +1,7 @@
 import { appCatalog, appMenus, SYNTHETIC, toCard, toCollection } from "@/lib/api/catalog";
 import { attachSold, soldByProduct } from "@/lib/api/sold";
 import { getAppTheme } from "@/lib/app-theme-service";
+import { getPaymentMethods } from "@/lib/payments-server";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
 import { fail, ok } from "@/lib/api/http";
 import { itemsOf, type Block } from "@/lib/app-theme";
@@ -187,6 +188,12 @@ export async function GET() {
       reviews: reviewsLimit ? await featuredReviews(reviewsLimit) : [],
       lives: wantsLives ? await homeLives() : [],
       productCount: catalog.products.length,
+      // What the checkout will actually offer, so a strip on the home screen
+      // cannot name a provider that was switched off in settings. Both
+      // languages travel: this route does not know which one is reading it.
+      payments: (await getPaymentMethods())
+        .filter((m) => m.enabled)
+        .map((m) => ({ id: m.id, name: m.name, nameAr: m.nameAr, kind: m.kind, note: m.note, noteAr: m.noteAr })),
     });
   } catch (e) {
     return fail((e as Error).message, 503);

@@ -82,6 +82,14 @@ export type HomeData = {
   /** The shop's real lives — on air first, then what is scheduled. */
   lives?: HomeLive[];
   /**
+   * The ways the shop takes money, as the checkout knows them.
+   *
+   * Read from the merchant's payment settings rather than typed into a block,
+   * so the strip on the home screen cannot advertise a provider that was
+   * switched off on the settings screen a month ago.
+   */
+  payments?: { id: string; name: string; nameAr: string; kind: string; note: string; noteAr: string }[];
+  /**
    * The signed-in shopper first name, when the surface drawing this knows it.
    * Only the live-now offer uses it, and it degrades to an unnamed greeting,
    * so nothing here has to go and fetch an account it does not otherwise need.
@@ -1378,6 +1386,14 @@ function BlockView({
       );
     }
 
+    case "pay_strip": {
+      const ways = data.payments ?? [];
+      if (!ways.length) {
+        return <Placeholder ar={ar} label={ar ? "لا طرق دفع مفعّلة" : "No payment ways switched on"} />;
+      }
+      return <PayStrip block={block} ways={ways} ar={ar} accent={accent} />;
+    }
+
     case "price_slider": {
       const plans = itemsOf(block).filter((i) => str(i.name) && str(i.months));
       if (!plans.length) return <Placeholder ar={ar} label={ar ? "لا خطط تقسيط بعد" : "No instalment plans yet"} />;
@@ -1928,6 +1944,90 @@ function Flap({ value, unit, accent }: { value: string; unit: string; accent: st
         {unit}
       </span>
     </span>
+  );
+}
+
+/**
+ * A thin strip naming the ways the shop takes money, one at a time.
+ *
+ * What it names is read from the merchant's payment settings, the same place
+ * the checkout reads, so the strip cannot advertise a provider that was
+ * switched off a month ago - and a shop that takes one way shows one line,
+ * standing still, rather than a carousel of one.
+ *
+ * It rises rather than slides. Everything else on this screen travels
+ * sideways: the shortcut row, the card's note. One strip moving the other way
+ * gets read; a third thing sliding sideways is wallpaper.
+ */
+function PayStrip({
+  block,
+  ways,
+  ar,
+  accent,
+}: {
+  block: Block;
+  ways: NonNullable<HomeData["payments"]>;
+  ar: boolean;
+  accent: string;
+}) {
+  const s = block.settings ?? {};
+  const every = Math.max(0, Math.min(12, Number(s.every ?? 3) || 0));
+  const title = str(s.title);
+  const [at, setAt] = useState(0);
+
+  useEffect(() => {
+    if (every <= 0 || ways.length < 2) return;
+    if (typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      // Still turning, just not travelling: someone who has asked for less
+      // motion has not asked to be shown one payment method for ever.
+      const quiet = setInterval(() => setAt((i) => (i + 1) % ways.length), every * 1000);
+      return () => clearInterval(quiet);
+    }
+    const t = setInterval(() => setAt((i) => (i + 1) % ways.length), every * 1000);
+    return () => clearInterval(t);
+  }, [every, ways.length]);
+
+  if (!ways.length) return null;
+  const way = ways[at % ways.length];
+  const name = ar ? way.nameAr || way.name : way.name;
+  const note = ar ? way.noteAr || way.note : way.note;
+
+  return (
+    <section>
+      <div
+        className="flex h-9 items-center gap-2 overflow-hidden rounded-xl px-2.5"
+        style={{ background: `${accent}12` }}
+      >
+        <span
+          className="shrink-0 rounded-md px-1.5 py-[3px] text-[8px] font-bold uppercase tracking-[0.08em] text-white"
+          style={{ background: accent }}
+        >
+          {title || (ar ? "ادفعي كما يناسبك" : "Pay your way")}
+        </span>
+        {/* Keyed on which way it is, so the line is rebuilt and rises again
+            rather than the text swapping inside a span that never moved. */}
+        <span key={way.id} className="app-rise flex min-w-0 flex-1 items-baseline gap-1.5" style={{ ["--hold" as string]: `${every * 1000}ms` }}>
+          <span className="shrink-0 text-[11px] font-bold" style={{ color: accent }}>
+            {name}
+          </span>
+          {note && <span className="min-w-0 truncate text-[10px] text-slate-500">{note}</span>}
+        </span>
+        {ways.length > 1 && (
+          <span className="flex shrink-0 items-center gap-[3px]" aria-hidden>
+            {ways.slice(0, 6).map((w, i) => (
+              <span
+                key={w.id}
+                className="block h-1 rounded-full transition-all"
+                style={{
+                  width: i === at % Math.min(ways.length, 6) ? 7 : 3,
+                  background: i === at % Math.min(ways.length, 6) ? accent : `${accent}40`,
+                }}
+              />
+            ))}
+          </span>
+        )}
+      </div>
+    </section>
   );
 }
 

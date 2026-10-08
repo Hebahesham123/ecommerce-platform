@@ -487,6 +487,8 @@ function HomeView({
           newArrivals: home.newArrivals,
           reviews: home.reviews,
           lives: home.lives,
+          // The ways the shop takes money, for the strip that names them.
+          payments: home.payments,
           shopperName,
           // Never undefined here: undefined is the editor's "draw a sample".
           recommended: recommended ?? null,

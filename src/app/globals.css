@@ -725,3 +725,33 @@ table.sheet tbody tr:hover { background: #eef6ff; }
     animation: none;
   }
 }
+
+/* App theme: the pay strip's lines, rising.
+   Each way the shop takes money comes up from under the one before it and
+   leaves over the top, which is a different motion from everything else on
+   this screen - the shortcut row and the card's note both travel sideways.
+   One strip moving the other way is read; a third thing sliding sideways is
+   wallpaper. Reduced motion gets each line plainly, still in turn. */
+@keyframes app-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  14%,
+  86% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+}
+.app-rise {
+  animation: app-rise var(--hold, 3000ms) ease-in-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-rise {
+    animation: none;
+  }
+}

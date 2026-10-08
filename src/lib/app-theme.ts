@@ -50,6 +50,7 @@ export type BlockType =
   | "brand_timeline"
   | "review_summary"
   | "bundle_save"
+  | "pay_strip"
   | "showcase"
   | "reviews"
   | "text";
@@ -1137,6 +1138,12 @@ export const BLOCK_META: Record<
     hintAr: "وسوم تصف ذوق العميلة، كل وسم يفتح ما يناسبه",
     hintEn: "Tags describing the shopper's taste, each opening what matches it",
   },
+  pay_strip: {
+    ar: "شريط طرق الدفع",
+    en: "How you can pay",
+    hintAr: "شريط رفيع يسمّي طرق الدفع التي يقبلها المتجر فعلاً، واحدة تلو الأخرى صاعدة من أسفل",
+    hintEn: "A thin strip naming the ways the shop really takes money, one at a time, each rising from below",
+  },
   bundle_save: {
     ar: "اشتري معاً ووفّري",
     en: "Bundle & Save",
@@ -1544,6 +1551,12 @@ export function newBlock(type: BlockType): Block {
       cardBg: "",
       radius: 14,
       items: shape ? [shape.blank()] : [],
+    },
+    pay_strip: {
+      // Seconds one way holds before the next rises. Zero stands still, which
+      // is the right answer for a shop that takes exactly one.
+      every: 3,
+      title: "",
     },
     bundle_save: {
       kicker: "",

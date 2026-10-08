@@ -251,6 +251,8 @@ export type Home = {
     href: string;
   }[];
   productCount: number;
+  /** The ways the shop takes money, as the checkout knows them. */
+  payments?: { id: string; name: string; nameAr: string; kind: string; note: string; noteAr: string }[];
 };
 export type PricedLine = {
   itemId: string;
