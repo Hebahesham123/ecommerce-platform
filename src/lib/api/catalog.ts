@@ -64,6 +64,12 @@ export type AppCollection = {
   title: string;
   description: string | null;
   image: string | null;
+  /**
+   * True when the merchant set that picture on the collection. False means it
+   * was borrowed from the first product, which is fine for a department and
+   * wrong for a house: a photograph of one bag is not what Gucci looks like.
+   */
+  ownImage: boolean;
   productCount: number;
 };
 
@@ -169,6 +175,7 @@ export function toCollection(c: CollectionDrop): AppCollection {
     title: String(c.title ?? ""),
     description: (c.description as string) || null,
     image: imageOf(c.featured_image ?? c.image),
+    ownImage: c.own_image === true,
     productCount: Number(c.products_count ?? 0),
   };
 }

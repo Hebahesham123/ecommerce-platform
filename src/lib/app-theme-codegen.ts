@@ -533,7 +533,7 @@ export type Card = {
 
 export type HomePayload = {
   theme: typeof import("./theme").theme;
-  collections: { handle: string; title: string; image: string | null; productCount: number }[];
+  collections: { handle: string; title: string; image: string | null; ownImage?: boolean; productCount: number }[];
   rows: Record<string, Card[]>;
   newArrivals: Card[];
   reviews: { id: string; name: string; productRating: number | null; comment: string | null }[];
@@ -1762,8 +1762,10 @@ export function BrandWall({
       return {
         item: i,
         name: i.label || found?.title || i.handle || "",
-        logo: i.imageUrl || undefined,
-        photo: found?.image || undefined,
+        // Hers first: pasted on the item, then set on the collection. The
+        // first product's photograph is a stand-in and is treated as one.
+        logo: i.imageUrl || (found?.ownImage ? found.image || undefined : undefined),
+        photo: found?.ownImage ? undefined : found?.image || undefined,
         count: found?.productCount ?? 0,
         known: Boolean(found),
       };

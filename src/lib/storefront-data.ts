@@ -315,6 +315,8 @@ function buildCollection(
     all_products_count: products.length,
     featured_image: featured,
     image: featured,
+    // Borrowed from the first product until the merchant sets one.
+    own_image: false,
     all_tags: [...new Set(products.flatMap((p) => p.tags))],
     tags: [],
     all_types: [...new Set(products.map((p) => String(p.type)).filter(Boolean))],
@@ -483,6 +485,9 @@ export function buildCatalog(
           const img = imageDrop(d.imageUrl, d.title, 1);
           c.featured_image = img;
           c.image = img;
+          // Hers, not the first product's. The brand wall draws these as
+          // brand images and the borrowed ones as a ground to set a name over.
+          c.own_image = true;
         }
         return c;
       });

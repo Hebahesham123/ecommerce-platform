@@ -45,6 +45,8 @@ export type Card = {
 };
 
 export type HomeCollection = {
+  /** True when the picture is the merchant's own rather than a product's. */
+  ownImage?: boolean;
   handle: string;
   title: string;
   image: string | null;
@@ -4200,11 +4202,13 @@ function BrandWall({
         item,
         handle,
         name: str(item.label, found?.title ?? handle),
-        // The house's own mark, if the merchant has one.
-        logo: str(item.imageUrl),
-        // A piece from the house, used as the ground the name is set over -
-        // never as a stand-in for the mark itself.
-        photo: found?.image ?? null,
+        // The house's picture, in the order it should be believed: pasted on
+        // this item, then set on the collection. Both are hers; either is a
+        // brand image and is drawn as one.
+        logo: str(item.imageUrl) || (found?.ownImage ? (found.image ?? "") : ""),
+        // Only when she has set neither: the first product's photograph, a
+        // stand-in used as a ground to set the name over, never as the mark.
+        photo: found?.ownImage ? null : (found?.image ?? null),
         count: found?.productCount ?? 0,
         known: Boolean(found),
       };
