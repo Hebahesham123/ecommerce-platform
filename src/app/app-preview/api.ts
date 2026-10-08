@@ -261,6 +261,7 @@ export type Home = {
     noteAr: string;
     /** The ground this one is drawn on. Empty falls back to the shop's accent. */
     color: string;
+    logo: string;
   }[];
 };
 export type PricedLine = {

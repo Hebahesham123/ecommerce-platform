@@ -201,6 +201,7 @@ export async function GET() {
           note: m.note,
           noteAr: m.noteAr,
           color: m.color,
+          logo: m.logo,
         })),
     });
   } catch (e) {

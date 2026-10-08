@@ -755,3 +755,64 @@ table.sheet tbody tr:hover { background: #eef6ff; }
     animation: none;
   }
 }
+
+/* App theme: the pay banner changing hands.
+   Two layers, not one: the way that is leaving travels up and out while the
+   next one comes up behind it, so the change is a handover rather than a
+   flicker. The incoming one arrives very slightly large and settles, which is
+   what makes it read as coming towards the reader rather than sliding past.
+   Reduced motion gets the change with no travel at all. */
+@keyframes app-pay-in {
+  0% {
+    opacity: 0;
+    transform: translateY(105%) scale(1.04);
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes app-pay-out {
+  0% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-105%) scale(0.97);
+  }
+}
+.app-pay-in {
+  animation: app-pay-in 560ms cubic-bezier(0.22, 0.75, 0.3, 1) both;
+}
+.app-pay-out {
+  animation: app-pay-out 560ms cubic-bezier(0.5, 0, 0.75, 0.3) both;
+}
+/* A slow shine crossing the banner, the way a card catches the light. It is
+   the only thing on this strip that is decoration, so it is slow enough to be
+   noticed only once. */
+@keyframes app-pay-sheen {
+  0% {
+    transform: translateX(-120%) skewX(-18deg);
+  }
+  45%,
+  100% {
+    transform: translateX(340%) skewX(-18deg);
+  }
+}
+.app-pay-sheen {
+  animation: app-pay-sheen 5.5s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-pay-in,
+  .app-pay-out,
+  .app-pay-sheen {
+    animation: none;
+  }
+  .app-pay-out {
+    display: none;
+  }
+}

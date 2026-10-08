@@ -97,6 +97,8 @@ export type HomeData = {
     noteAr: string;
     /** The ground this one is drawn on. Empty falls back to the shop's accent. */
     color: string;
+    /** The provider's own mark, when the merchant has given it one. */
+    logo: string;
   }[];
   /**
    * The signed-in shopper first name, when the surface drawing this knows it.
@@ -1957,11 +1959,85 @@ function Flap({ value, unit, accent }: { value: string; unit: string; accent: st
 }
 
 /**
+ * The mark on a payment banner.
+ *
+ * A provider's real logo if the merchant has given it one on the Payments
+ * screen; otherwise its initials on a white chip. The initials are a slot
+ * rather than a drawing of somebody else's trademark - a hand-drawn
+ * approximation of ValU's mark would be worse than two clean letters, because
+ * it would be wrong in a way that looks deliberate.
+ */
+function PayMark({ name, logo }: { name: string; logo: string }) {
+  const initials = name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase();
+  return (
+    <span className="grid h-7 w-7 shrink-0 place-items-center overflow-hidden rounded-lg bg-white shadow-[0_1px_2px_rgba(0,0,0,0.18)]">
+      {logo ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={logo} alt="" className="h-full w-full object-contain p-[3px]" />
+      ) : (
+        <span className="text-[10px] font-extrabold leading-none text-slate-800">{initials}</span>
+      )}
+    </span>
+  );
+}
+
+/** One banner's worth of a payment way, on its own ground. */
+function PayFace({
+  way,
+  title,
+  ar,
+  accent,
+  leaving,
+}: {
+  way: NonNullable<HomeData["payments"]>[number];
+  title: string;
+  ar: boolean;
+  accent: string;
+  /** True for the one on its way out, which travels up instead of in. */
+  leaving?: boolean;
+}) {
+  const ground = str(way.color, accent);
+  const name = ar ? way.nameAr || way.name : way.name;
+  const note = ar ? way.noteAr || way.note : way.note;
+  return (
+    <span
+      className={`${leaving ? "app-pay-out" : "app-pay-in"} absolute inset-0 flex items-center gap-2 overflow-hidden px-2.5`}
+      style={{
+        background: `linear-gradient(135deg, ${ground} 0%, ${ground} 55%, rgba(0,0,0,0.22) 160%)`,
+      }}
+      aria-hidden={leaving}
+    >
+      {/* The light crossing it. Behind everything, and slow. */}
+      <span className="pointer-events-none absolute inset-y-0 start-0 w-1/4 overflow-hidden" aria-hidden>
+        <span className="app-pay-sheen block h-full w-full bg-white/18" />
+      </span>
+
+      <PayMark name={way.name} logo={str(way.logo)} />
+      <span className="relative flex min-w-0 flex-1 flex-col justify-center leading-tight">
+        <span className="flex items-baseline gap-1.5">
+          <span className="shrink-0 text-[12px] font-extrabold text-white">{name}</span>
+          <span className="shrink-0 rounded bg-white/20 px-1 py-px text-[7px] font-bold uppercase tracking-[0.08em] text-white/90">
+            {title || (ar ? "ادفعي كما يناسبك" : "Pay your way")}
+          </span>
+        </span>
+        {note && <span className="mt-px truncate text-[9.5px] text-white/80">{note}</span>}
+      </span>
+    </span>
+  );
+}
+
+/**
  * A thin strip naming the ways the shop takes money, one at a time.
  *
  * What it names is read from the merchant's payment settings, the same place
  * the checkout reads, so the strip cannot advertise a provider that was
- * switched off a month ago - and a shop that takes one way shows one line,
+ * switched off a month ago - and a shop that takes one way shows one banner,
  * standing still, rather than a carousel of one.
  *
  * It rises rather than slides. Everything else on this screen travels
@@ -1983,58 +2059,54 @@ function PayStrip({
   const every = Math.max(0, Math.min(12, Number(s.every ?? 3) || 0));
   const title = str(s.title);
   const [at, setAt] = useState(0);
+  // The one on its way out, so the change is a handover rather than a
+  // flicker: one banner leaves over the top while the next comes up behind.
+  const [from, setFrom] = useState<number | null>(null);
 
   useEffect(() => {
     if (every <= 0 || ways.length < 2) return;
-    if (typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
-      // Still turning, just not travelling: someone who has asked for less
-      // motion has not asked to be shown one payment method for ever.
-      const quiet = setInterval(() => setAt((i) => (i + 1) % ways.length), every * 1000);
-      return () => clearInterval(quiet);
-    }
-    const t = setInterval(() => setAt((i) => (i + 1) % ways.length), every * 1000);
-    return () => clearInterval(t);
+    const clears: number[] = [];
+    const t = setInterval(() => {
+      setAt((i) => {
+        setFrom(i);
+        return (i + 1) % ways.length;
+      });
+      // The one that left is dropped once it has finished leaving. Without
+      // this it stays in the page for ever at nought opacity: invisible, and
+      // still a layer the browser composites on every frame.
+      clears.push(window.setTimeout(() => setFrom(null), 620));
+    }, every * 1000);
+    return () => {
+      clearInterval(t);
+      clears.forEach((c) => window.clearTimeout(c));
+    };
   }, [every, ways.length]);
 
   if (!ways.length) return null;
   const way = ways[at % ways.length];
-  const name = ar ? way.nameAr || way.name : way.name;
-  const note = ar ? way.noteAr || way.note : way.note;
-  const ground = str(way.color, accent);
+  const going = from === null || from === at ? null : ways[from % ways.length];
 
   return (
     <section>
-      {/* The window is the banner. What turns over inside it carries its own
-          ground, so a shopper sees a different thing rather than the same box
-          with new words in it. */}
-      <div className="relative h-10 overflow-hidden rounded-xl">
-        <div
-          key={way.id}
-          className="app-rise absolute inset-0 flex items-center gap-2 px-2.5"
-          style={{ background: ground, ["--hold" as string]: `${every * 1000}ms` }}
-        >
-          <span className="shrink-0 rounded-md bg-white/20 px-1.5 py-[3px] text-[8px] font-bold uppercase tracking-[0.08em] text-white backdrop-blur-sm">
-            {title || (ar ? "ادفعي كما يناسبك" : "Pay your way")}
+      <div className="relative h-12 overflow-hidden rounded-xl">
+        {going && (
+          <PayFace key={"out-" + going.id + at} way={going} title={title} ar={ar} accent={accent} leaving />
+        )}
+        <PayFace key={"in-" + way.id + at} way={way} title={title} ar={ar} accent={accent} />
+        {ways.length > 1 && (
+          <span className="pointer-events-none absolute bottom-1 end-2.5 z-10 flex items-center gap-[3px]" aria-hidden>
+            {ways.slice(0, 8).map((w, i) => (
+              <span
+                key={w.id}
+                className="block h-[3px] rounded-full transition-all"
+                style={{
+                  width: i === at % Math.min(ways.length, 8) ? 9 : 3,
+                  background: i === at % Math.min(ways.length, 8) ? "#ffffff" : "rgba(255,255,255,0.45)",
+                }}
+              />
+            ))}
           </span>
-          <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
-            <span className="shrink-0 text-[12px] font-extrabold text-white">{name}</span>
-            {note && <span className="min-w-0 truncate text-[10px] text-white/75">{note}</span>}
-          </span>
-          {ways.length > 1 && (
-            <span className="flex shrink-0 items-center gap-[3px]" aria-hidden>
-              {ways.slice(0, 6).map((w, i) => (
-                <span
-                  key={w.id}
-                  className="block h-1 rounded-full"
-                  style={{
-                    width: i === at % Math.min(ways.length, 6) ? 7 : 3,
-                    background: i === at % Math.min(ways.length, 6) ? "#ffffff" : "rgba(255,255,255,0.45)",
-                  }}
-                />
-              ))}
-            </span>
-          )}
-        </div>
+        )}
       </div>
     </section>
   );
