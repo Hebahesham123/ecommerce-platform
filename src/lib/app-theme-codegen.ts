@@ -566,6 +566,36 @@ export function track(
   api("/track", { method: "POST", body: JSON.stringify({ type, channel: "app", platform: Platform.OS, visitorId: visitor, ...data }) }).catch(() => {});
 }
 
+/** One product held up in a reel. */
+export type ReelProduct = {
+  id: string;
+  itemId: string | null;
+  productName: string;
+  imageUrl: string | null;
+  price: number | null;
+  pinned: boolean;
+  sortOrder: number;
+  available?: number;
+};
+
+/** A kept live, as a reel: the stream to play and what was sold in it. */
+export type Reel = {
+  id: string;
+  title: string;
+  hostName: string | null;
+  coverUrl: string | null;
+  /** The adaptive stream once it is ready, the original file until then. */
+  recordingUrl: string | null;
+  likes: number;
+  products: ReelProduct[];
+};
+
+export const fetchReels = () => api<Reel[]>("/reels");
+
+/** A like, or taking it back. Returns the new total. */
+export const likeReel = (id: string, on: boolean) =>
+  api<{ likes: number }>("/reels/" + encodeURIComponent(id) + "/like", { method: on ? "POST" : "DELETE" }).then((r) => r.likes);
+
 /** Which screen she is on, for the shop to choose an offer for. */
 export type OfferContext = {
   pageType: "index" | "product" | "collection" | "cart" | "search" | "checkout" | "other";
@@ -6839,6 +6869,483 @@ const styles = StyleSheet.create({
   };
 }
 
+// The reels feed, drawn by the app itself and played by the phone's own video
+// player — the website inside a web view was a page, a script and a player to
+// load before the first frame.
+function reelsScreenFile(): GeneratedFile {
+  return {
+    path: "components/ReelsScreen.tsx",
+    language: "tsx",
+    contents: `/**
+ * Reels: every live that was kept, one after another, each with what was sold
+ * in it. Generated from the dashboard — App → App theme.
+ *
+ * Played by the phone's own video player (ExoPlayer, AVPlayer) straight from
+ * the streaming service, a few seconds at a time at whatever quality the
+ * connection can carry. Only the reel on screen and its neighbours are loaded,
+ * so the next one is already buffered by the time she swipes to it, and the
+ * cover shows the instant a reel arrives rather than a black frame.
+ */
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  Animated,
+  Easing,
+  FlatList,
+  Image,
+  Modal,
+  Pressable,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
+  View,
+  type ViewToken,
+} from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useVideoPlayer, VideoView } from "expo-video";
+import Svg, { Path, Rect } from "react-native-svg";
+import { SITE_ORIGIN, fetchReels, likeReel, type Reel, type ReelProduct } from "../api";
+import { Fade } from "./Fade";
+import { money } from "./Pieces";
+
+const LIKED = "reel_like_";
+
+/* ---- icons, as the website draws them ---------------------------------- */
+function Icon({ name, filled }: { name: "heart" | "bag" | "tote" | "star" | "share" | "close" | "sound"; filled?: boolean }) {
+  const common = { stroke: "#ffffff", strokeWidth: 1.8, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+  return (
+    <Svg width={name === "close" || name === "share" || name === "sound" ? 20 : 24} height={name === "close" || name === "share" || name === "sound" ? 20 : 24} viewBox="0 0 24 24" fill="none">
+      {name === "heart" ? (
+        <Path {...common} fill={filled ? "#ffffff" : "none"} d="M12 20s-7.2-4.5-9.1-8.4C1.3 8.3 3.1 5 6.4 5c2 0 3.3 1.1 4.1 2.2l1.5 2 1.5-2C14.3 6.1 15.6 5 17.6 5c3.3 0 5.1 3.3 3.5 6.6C19.2 15.5 12 20 12 20Z" />
+      ) : name === "bag" ? (
+        <>
+          <Path {...common} d="M5.5 8h13l-1 11.5a1 1 0 0 1-1 .9H7.5a1 1 0 0 1-1-.9L5.5 8Z" />
+          <Path {...common} d="M9 8V6.5a3 3 0 0 1 6 0V8" />
+        </>
+      ) : name === "tote" ? (
+        <>
+          <Rect {...common} x="3.2" y="6.4" width="17.6" height="13.2" rx="3" />
+          <Path {...common} d="M9 10.2a3 3 0 0 0 6 0" />
+        </>
+      ) : name === "star" ? (
+        <Path {...common} d="m12 4 2.3 4.9 5.2.7-3.8 3.7 1 5.3-4.7-2.6-4.7 2.6 1-5.3L4.5 9.6l5.2-.7L12 4Z" />
+      ) : name === "share" ? (
+        <>
+          <Path {...common} d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7" />
+          <Path {...common} d="M12 3v13M8 7l4-4 4 4" />
+        </>
+      ) : name === "sound" ? (
+        <>
+          <Path {...common} d="M4 9v6h4l5 4V5L8 9H4Z" />
+          <Path {...common} d="M17 9.5a4 4 0 0 1 0 5M19.5 7a7 7 0 0 1 0 10" />
+        </>
+      ) : (
+        <Path {...common} strokeWidth={2} d="M6 6l12 12M18 6L6 18" />
+      )}
+    </Svg>
+  );
+}
+
+function Action({ icon, label, onPress, active, highlight }: { icon: React.ReactNode; label?: string; onPress: () => void; active?: boolean; highlight?: boolean }) {
+  return (
+    <Pressable onPress={onPress} style={styles.action} hitSlop={6}>
+      <View style={[styles.actionCircle, highlight ? styles.actionHighlight : active ? styles.actionActive : null]}>{icon}</View>
+      {label ? <Text style={styles.actionLabel}>{label}</Text> : null}
+    </Pressable>
+  );
+}
+
+const compact = (n: number) => (n >= 1000 ? (Math.round(n / 100) / 10).toString() + "k" : String(n));
+
+/* ---- the products under a reel: a ring that drifts while there are several -- */
+const CARD = 84;
+const GAP = 8;
+
+function ProductRing({
+  products,
+  added,
+  onOpen,
+  onAdd,
+}: {
+  products: ReelProduct[];
+  added: string | null;
+  onOpen: (p: ReelProduct) => void;
+  onAdd: (p: ReelProduct) => void;
+}) {
+  const many = products.length > 1;
+  // Laid end to end twice, so the second copy is already arriving as the
+  // first leaves and the row never visibly jumps back to the start.
+  const ring = many ? products.concat(products) : products;
+  const half = products.length * (CARD + GAP);
+  const drift = useRef(new Animated.Value(0)).current;
+  const [held, setHeld] = useState(false);
+  useEffect(() => {
+    if (!many || held) return;
+    drift.setValue(0);
+    const loop = Animated.loop(
+      Animated.timing(drift, { toValue: -half, duration: half * 45, easing: Easing.linear, useNativeDriver: true }),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [many, held, half, drift]);
+
+  const card = (p: ReelProduct, i: number) => {
+    const soldOut = (p.available ?? 0) <= 0;
+    const on = added === p.id;
+    return (
+      <View key={p.id + "-" + i} style={styles.card}>
+        <Pressable onPress={() => onOpen(p)}>
+          <View style={styles.cardPhoto}>
+            {p.imageUrl ? <Image source={{ uri: p.imageUrl }} style={[styles.cardImage, soldOut ? { opacity: 0.45 } : null]} /> : null}
+          </View>
+          <Text style={styles.cardName} numberOfLines={1}>{p.productName}</Text>
+          <Text style={styles.cardPrice}>{p.price != null ? money(p.price) : ""}</Text>
+        </Pressable>
+        <Pressable
+          disabled={soldOut}
+          onPress={() => onAdd(p)}
+          style={[styles.cardButton, soldOut ? styles.cardButtonOff : on ? styles.cardButtonOn : null]}
+        >
+          <Text style={styles.cardButtonText} numberOfLines={1}>{soldOut ? "SOLD OUT" : on ? "ADDED" : "ADD TO CART"}</Text>
+        </Pressable>
+      </View>
+    );
+  };
+
+  // A thumb on the row stops the drift exactly where it is and hands the row
+  // over to her, rather than snapping it back to the start.
+  const row = useRef<ScrollView | null>(null);
+  const hold = () => {
+    if (held) return;
+    drift.stopAnimation((at) => {
+      drift.setValue(0);
+      row.current?.scrollTo({ x: -at, animated: false });
+    });
+    setHeld(true);
+  };
+
+  if (!many) return <View style={[styles.ring, styles.ringRow]}>{ring.map(card)}</View>;
+  return (
+    <ScrollView ref={row} horizontal showsHorizontalScrollIndicator={false} style={styles.ring} onTouchStart={hold}>
+      <Animated.View style={[styles.ringRow, { transform: [{ translateX: drift }] }]}>{ring.map(card)}</Animated.View>
+    </ScrollView>
+  );
+}
+
+/* ---- one reel ---------------------------------------------------------- */
+function ReelItem({
+  reel,
+  height,
+  active,
+  near,
+  muted,
+  cartCount,
+  onToggleSound,
+  onClose,
+  onOpenProduct,
+  onAdd,
+  onCheckout,
+  onReview,
+  onShowProducts,
+}: {
+  reel: Reel;
+  height: number;
+  active: boolean;
+  near: boolean;
+  muted: boolean;
+  cartCount: number;
+  onToggleSound: () => void;
+  onClose: () => void;
+  onOpenProduct: (p: ReelProduct) => void;
+  onAdd: (p: ReelProduct) => void;
+  onCheckout: () => void;
+  onReview: (p: ReelProduct | null) => void;
+  onShowProducts: () => void;
+}) {
+  // Only the reels about to be seen are given a source; the rest cost nothing.
+  const player = useVideoPlayer(near && reel.recordingUrl ? reel.recordingUrl : null, (p) => {
+    p.loop = true;
+    p.muted = true;
+  });
+  const [playing, setPlaying] = useState(false);
+  const [likes, setLikes] = useState(reel.likes);
+  const [liked, setLiked] = useState(false);
+  const [added, setAdded] = useState<string | null>(null);
+
+  useEffect(() => {
+    const sub = player.addListener("playingChange", (e) => setPlaying(Boolean(e.isPlaying)));
+    return () => sub.remove();
+  }, [player]);
+
+  useEffect(() => {
+    player.muted = muted;
+  }, [player, muted]);
+
+  useEffect(() => {
+    if (active) player.play();
+    else player.pause();
+  }, [player, active]);
+
+  useEffect(() => {
+    AsyncStorage.getItem(LIKED + reel.id)
+      .then((v) => setLiked(v === "1"))
+      .catch(() => {});
+  }, [reel.id]);
+
+  // The heart fills at once; the shop is told afterwards, and taking it back
+  // is the same tap.
+  const like = () => {
+    const next = !liked;
+    setLiked(next);
+    setLikes((n) => Math.max(0, n + (next ? 1 : -1)));
+    (next ? AsyncStorage.setItem(LIKED + reel.id, "1") : AsyncStorage.removeItem(LIKED + reel.id)).catch(() => {});
+    likeReel(reel.id, next)
+      .then((n) => setLikes(n))
+      .catch(() => {});
+  };
+
+  const share = () => {
+    const url = SITE_ORIGIN + "/store/reels?reel=" + encodeURIComponent(reel.id);
+    Share.share({ message: url, url, title: reel.title }).catch(() => {});
+  };
+
+  const add = (p: ReelProduct) => {
+    onAdd(p);
+    setAdded(p.id);
+    setTimeout(() => setAdded((cur) => (cur === p.id ? null : cur)), 1800);
+  };
+
+  const ordered = useMemo(
+    () => reel.products.slice().sort((a, b) => Number(b.pinned) - Number(a.pinned) || a.sortOrder - b.sortOrder),
+    [reel.products],
+  );
+
+  return (
+    <View style={[styles.reel, { height }]}>
+      <Pressable style={StyleSheet.absoluteFill} onPress={onToggleSound}>
+        {near ? <VideoView player={player} style={StyleSheet.absoluteFill} contentFit="cover" nativeControls={false} /> : null}
+        {/* The cover until the first frame, never a black screen. */}
+        {!playing && reel.coverUrl ? <Image source={{ uri: reel.coverUrl }} style={StyleSheet.absoluteFill} resizeMode="cover" /> : null}
+        {!playing && active && reel.recordingUrl ? (
+          <View style={styles.spinner} pointerEvents="none">
+            <ActivityIndicator color="#ffffff" />
+          </View>
+        ) : null}
+      </Pressable>
+
+      <Fade angle={0} colors={["rgba(0,0,0,0.8)", "rgba(0,0,0,0)", "rgba(0,0,0,0)"]} locations={[0, 0.45, 1]} style={styles.shade} />
+
+      <Pressable style={styles.close} onPress={onClose} hitSlop={8}>
+        <Icon name="close" />
+      </Pressable>
+
+      {muted && playing ? (
+        <Pressable style={styles.soundPill} onPress={onToggleSound}>
+          <Icon name="sound" />
+          <Text style={styles.soundText}>Tap for sound</Text>
+        </Pressable>
+      ) : null}
+
+      <View style={styles.bottom} pointerEvents="box-none">
+        <View style={styles.bottomLeft} pointerEvents="box-none">
+          {ordered.length ? <ProductRing products={ordered} added={added} onOpen={onOpenProduct} onAdd={add} /> : null}
+        </View>
+        <View style={styles.actions}>
+          <Action icon={<Icon name="heart" filled={liked} />} label={likes > 0 ? compact(likes) : ""} onPress={like} active={liked} />
+          {ordered.length ? <Action icon={<Icon name="bag" />} label={String(ordered.length)} onPress={onShowProducts} /> : null}
+          {cartCount > 0 ? <Action icon={<Icon name="tote" />} label={String(cartCount)} onPress={onCheckout} highlight /> : null}
+          <Action icon={<Icon name="star" />} label="Review" onPress={() => onReview(ordered.find((p) => p.pinned) ?? ordered[0] ?? null)} />
+          <Action icon={<Icon name="share" />} onPress={share} />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+/* ---- the feed ------------------------------------------------------------ */
+export function ReelsScreen({
+  startId,
+  paused,
+  cartCount,
+  onClose,
+  onOpenProduct,
+  onAdd,
+  onCheckout,
+  onOpenPage,
+}: {
+  /** Open on this reel rather than the newest. */
+  startId: string | null;
+  /** Covered by a product opened from it: nothing plays underneath. */
+  paused: boolean;
+  cartCount: number;
+  onClose: () => void;
+  onOpenProduct: (itemId: string) => void;
+  onAdd: (itemId: string) => void;
+  onCheckout: () => void;
+  /** One of the website's pages, inside the app (the review form). */
+  onOpenPage: (path: string) => void;
+}) {
+  const [reels, setReels] = useState<Reel[] | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [height, setHeight] = useState(0);
+  const [index, setIndex] = useState(0);
+  const [muted, setMuted] = useState(true);
+  const [sheet, setSheet] = useState<Reel | null>(null);
+
+  useEffect(() => {
+    fetchReels()
+      .then((list) => {
+        const playable = list.filter((r) => r.recordingUrl);
+        setReels(playable);
+        const at = startId ? playable.findIndex((r) => r.id === startId) : -1;
+        if (at > 0) setIndex(at);
+      })
+      .catch(() => setFailed(true));
+  }, [startId]);
+
+  const onViewable = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+    const first = viewableItems.find((v) => v.isViewable);
+    if (first && typeof first.index === "number") setIndex(first.index);
+  }).current;
+
+  const openProduct = useCallback((p: ReelProduct) => p.itemId && onOpenProduct(p.itemId), [onOpenProduct]);
+  const add = useCallback((p: ReelProduct) => p.itemId && onAdd(p.itemId), [onAdd]);
+
+  const review = (p: ReelProduct | null) => {
+    onOpenPage(p && p.itemId ? "/shop/reviews?product=" + encodeURIComponent(p.itemId) : "/shop/reviews");
+  };
+
+  return (
+    <View style={styles.screen} onLayout={(e) => setHeight(e.nativeEvent.layout.height)}>
+      {!reels || !height ? (
+        <View style={styles.center}>
+          {failed ? (
+            <Text style={styles.empty}>Reels could not be loaded.</Text>
+          ) : (
+            <ActivityIndicator color="#ffffff" />
+          )}
+        </View>
+      ) : reels.length === 0 ? (
+        <View style={styles.center}>
+          <Text style={styles.empty}>Nothing to watch yet.</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={reels}
+          keyExtractor={(r) => r.id}
+          pagingEnabled
+          showsVerticalScrollIndicator={false}
+          initialScrollIndex={index}
+          getItemLayout={(_, i) => ({ length: height, offset: height * i, index: i })}
+          onViewableItemsChanged={onViewable}
+          viewabilityConfig={{ itemVisiblePercentThreshold: 60 }}
+          windowSize={3}
+          initialNumToRender={2}
+          maxToRenderPerBatch={2}
+          decelerationRate="fast"
+          renderItem={({ item, index: i }) => (
+            <ReelItem
+              reel={item}
+              height={height}
+              active={!paused && i === index}
+              near={Math.abs(i - index) <= 1}
+              muted={muted}
+              cartCount={cartCount}
+              onToggleSound={() => setMuted((m) => !m)}
+              onClose={onClose}
+              onOpenProduct={openProduct}
+              onAdd={add}
+              onCheckout={onCheckout}
+              onReview={review}
+              onShowProducts={() => setSheet(item)}
+            />
+          )}
+        />
+      )}
+
+      {/* Everything that was sold in this reel. */}
+      <Modal visible={Boolean(sheet)} transparent animationType="slide" onRequestClose={() => setSheet(null)}>
+        <Pressable style={styles.sheetVeil} onPress={() => setSheet(null)}>
+          <Pressable style={styles.sheet} onPress={() => {}}>
+            <View style={styles.sheetGrip} />
+            <Text style={styles.sheetTitle}>In this live</Text>
+            <ScrollView style={{ maxHeight: 420 }}>
+              {(sheet?.products ?? []).map((p) => {
+                const soldOut = (p.available ?? 0) <= 0;
+                return (
+                  <View key={p.id} style={styles.sheetRow}>
+                    <Pressable
+                      style={styles.sheetMain}
+                      onPress={() => {
+                        setSheet(null);
+                        openProduct(p);
+                      }}
+                    >
+                      <View style={styles.sheetPhoto}>{p.imageUrl ? <Image source={{ uri: p.imageUrl }} style={styles.cardImage} /> : null}</View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.sheetName} numberOfLines={2}>{p.productName}</Text>
+                        <Text style={styles.sheetPrice}>{p.price != null ? money(p.price) : ""}</Text>
+                      </View>
+                    </Pressable>
+                    <Pressable disabled={soldOut} onPress={() => add(p)} style={[styles.sheetAdd, soldOut ? styles.cardButtonOff : null]}>
+                      <Text style={styles.cardButtonText}>{soldOut ? "SOLD OUT" : "ADD"}</Text>
+                    </Pressable>
+                  </View>
+                );
+              })}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: "#000000" },
+  center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
+  empty: { color: "#ffffff", fontSize: 14, opacity: 0.8 },
+  reel: { width: "100%", backgroundColor: "#000000", overflow: "hidden" },
+  spinner: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
+  shade: { position: "absolute", left: 0, right: 0, bottom: 0, height: "55%" },
+  close: { position: "absolute", top: 14, left: 14, width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.4)" },
+  soundPill: { position: "absolute", alignSelf: "center", top: "45%", flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 999, paddingHorizontal: 18, paddingVertical: 10, backgroundColor: "rgba(0,0,0,0.55)" },
+  soundText: { color: "#ffffff", fontSize: 14, fontWeight: "700" },
+  bottom: { position: "absolute", left: 0, right: 0, bottom: 0, flexDirection: "row", alignItems: "flex-end", padding: 12, paddingBottom: 16, gap: 12 },
+  bottomLeft: { flex: 1, minWidth: 0 },
+  actions: { alignItems: "center", gap: 14, paddingBottom: 4 },
+  action: { width: 48, alignItems: "center" },
+  actionCircle: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.4)" },
+  actionActive: { backgroundColor: "rgba(225,29,72,0.9)" },
+  actionHighlight: { backgroundColor: "#e11d48" },
+  actionLabel: { marginTop: 4, color: "#ffffff", fontSize: 10, fontWeight: "700" },
+  ring: { maxWidth: 260 },
+  ringRow: { flexDirection: "row", gap: GAP },
+  card: { width: CARD, marginRight: 0 },
+  cardPhoto: { width: CARD, height: CARD, borderRadius: 12, overflow: "hidden", backgroundColor: "rgba(255,255,255,0.1)", borderWidth: 1, borderColor: "rgba(255,255,255,0.25)" },
+  cardImage: { width: "100%", height: "100%" },
+  cardName: { marginTop: 4, color: "#ffffff", fontSize: 10, fontWeight: "500", textAlign: "center" },
+  cardPrice: { marginTop: 1, color: "#ffffff", fontSize: 10, fontWeight: "700", textAlign: "center" },
+  cardButton: { marginTop: 4, borderRadius: 8, paddingVertical: 6, alignItems: "center", backgroundColor: "#8a5a2b" },
+  cardButtonOn: { backgroundColor: "#059669" },
+  cardButtonOff: { backgroundColor: "rgba(255,255,255,0.25)" },
+  cardButtonText: { color: "#ffffff", fontSize: 8, fontWeight: "800", letterSpacing: 0.6 },
+  sheetVeil: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.5)" },
+  sheet: { backgroundColor: "#ffffff", borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 16, paddingBottom: 28 },
+  sheetGrip: { alignSelf: "center", width: 40, height: 4, borderRadius: 2, backgroundColor: "#cbd5e1", marginBottom: 12 },
+  sheetTitle: { fontSize: 16, fontWeight: "700", color: "#0f172a", marginBottom: 12 },
+  sheetRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 6 },
+  sheetMain: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10 },
+  sheetPhoto: { width: 56, height: 56, borderRadius: 10, overflow: "hidden", backgroundColor: "#f1f5f9" },
+  sheetName: { fontSize: 13, color: "#0f172a" },
+  sheetPrice: { marginTop: 2, fontSize: 13, fontWeight: "700", color: "#0f172a" },
+  sheetAdd: { borderRadius: 10, paddingHorizontal: 14, paddingVertical: 9, backgroundColor: "#8a5a2b" },
+});
+`,
+  };
+}
+
 function liveScreenFile(): GeneratedFile {
   return {
     path: "components/LiveScreen.tsx",
@@ -9257,7 +9764,8 @@ import { ProductScreen } from "./components/ProductScreen";
 import { CartScreen } from "./components/CartScreen";
 import { CheckoutScreen, type Address } from "./components/CheckoutScreen";
 import { SignInScreen } from "./components/SignInScreen";
-import { WebPage } from "./components/WebPage";${
+import { WebPage } from "./components/WebPage";
+import { ReelsScreen } from "./components/ReelsScreen";${
       live ? '\nimport { LiveScreen } from "./components/LiveScreen";' : ""
     }
 
@@ -9270,7 +9778,9 @@ type Screen =
   | { kind: "product"; id: string; fromReel?: boolean }
   | { kind: "checkout" }
   | { kind: "signin" }
-  | { kind: "placed"; orderNumber: string };
+  | { kind: "placed"; orderNumber: string }
+  /** One of the website's pages, inside the app: the review form. */
+  | { kind: "web"; path: string; title: string };
 
 type Line = { itemId: string; quantity: number };
 
@@ -9287,9 +9797,9 @@ export default function App() {
   const [phone, setPhone] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  // Which reel the feed opens on. Plain "/store/reels" unless a tap on a
-  // replay somewhere else asked for one by name.
-  const [reelPath, setReelPath] = useState("/store/reels");
+  // Which reel the feed opens on: the newest, unless a tap on a replay
+  // somewhere else asked for one by name.
+  const [reelStart, setReelStart] = useState<string | null>(null);
   // What is typed in the header's search. The header is above every tab, so
   // the words belong here rather than to the home screen.
   const [query, setQuery] = useState("");
@@ -9516,7 +10026,7 @@ export default function App() {
     // A specific replay, e.g. from a Home tile — open the feed on that one
     // rather than on whatever is newest.
     if (screen.startsWith("reel:")) {
-      setReelPath(\`/store/reels?reel=\${encodeURIComponent(screen.slice(5))}\`);
+      setReelStart(screen.slice(5));
       return goTab("reels");
     }
     if (
@@ -9547,12 +10057,16 @@ export default function App() {
   // dragging the product down shows the reel behind it, and going back finds
   // the same video at the same moment rather than a page loading again.
   const reels = (
-    <WebPage
+    <ReelsScreen
       key="reels"
-      path={reelPath}
+      startId={reelStart}
       paused={stack.length > 0}
+      cartCount={count}
       onClose={() => goTab("shop")}
-      onProduct={(id) => push({ kind: "product", id, fromReel: true })}
+      onOpenProduct={(id) => push({ kind: "product", id, fromReel: true })}
+      onAdd={(itemId) => add(itemId)}
+      onCheckout={() => goTab("cart")}
+      onOpenPage={(path) => push({ kind: "web", path, title: "Review" })}
     />
   );
 
@@ -9585,6 +10099,8 @@ export default function App() {
         onOpenProduct={(id) => push({ kind: "product", id })}
         onOpenScreen={goScreen}
       />
+    ) : top.kind === "web" ? (
+      <WebPage path={top.path} />
     ) : top.kind === "checkout" ? (
       <CheckoutScreen phone={phone ?? ""} busy={busy} onPlace={place} />
     ) : top.kind === "signin" ? (
@@ -9646,7 +10162,9 @@ export default function App() {
         ? "Sign in"
         : top.kind === "collection"
           ? top.title ?? ""
-          : ""
+          : top.kind === "web"
+            ? top.title
+            : ""
     : theme.storeName;
 
   // Which screen she is on, for the shop to choose a popup for.
@@ -9924,6 +10442,7 @@ export function generateApp(theme: AppTheme, baseUrl: string): GeneratedFile[] {
     fadeFile(),
     chromeFile(),
     offerPopupFile(),
+    reelsScreenFile(),
     liveScreenFile(),
     ...(Object.keys(BLOCK_META) as BlockType[]).map(sectionFile).sort((a, b) => a.path.localeCompare(b.path)),
   ];

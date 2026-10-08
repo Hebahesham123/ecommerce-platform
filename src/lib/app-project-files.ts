@@ -81,6 +81,8 @@ function packageJson(theme: AppTheme): GeneratedFile {
       "react-native-svg": "15.8.0",
       // A product opened from a reel is dragged down to go back to it.
       "react-native-gesture-handler": "~2.20.2",
+      // Reels play in the phone's own video player, straight from the stream.
+      "expo-video": "~2.0.6",
       react: "18.3.1",
       "react-native": "0.76.6",
       "react-native-safe-area-context": "4.12.0",
@@ -142,6 +144,7 @@ function appJson(theme: AppTheme): GeneratedFile {
         adaptiveIcon: { backgroundColor: theme.settings.accent || "#ffffff" },
         package: id,
       },
+      plugins: ["expo-video"],
     },
   });
 }
