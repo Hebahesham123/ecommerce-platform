@@ -4184,7 +4184,7 @@ function BrandWall({
   handlers: HomeHandlers;
 }) {
   const s = block.settings ?? {};
-  const perRow = Math.max(2, Math.min(5, int(s.perRow, 3)));
+  const perRow = Math.max(2, Math.min(5, int(s.perRow, 4)));
   const showCount = s.showCount !== false;
   const go = opener(data, handlers);
 
@@ -4196,7 +4196,10 @@ function BrandWall({
         item,
         handle,
         name: str(item.label, found?.title ?? handle),
-        image: str(item.imageUrl) || found?.image || null,
+        // The house's own mark, if the merchant has one. The collection's
+        // photograph is deliberately not a fallback: a picture of a bag is
+        // not a logo, and a wall of bags says nothing about whose they are.
+        logo: str(item.imageUrl),
         count: found?.productCount ?? 0,
         known: Boolean(found),
       };
@@ -4228,23 +4231,31 @@ function BrandWall({
           <button
             key={h.item.id}
             onClick={() => go(h.item)}
-            className="flex min-w-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white text-start"
+            className="flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl border border-slate-200 bg-white px-2 py-2.5"
           >
-            <Thumb src={h.image} className="aspect-[4/3] w-full" radius="rounded-none" blend />
-            <span className="block px-2 py-1.5">
-              {/* The wordmark is the thing she came for, so it is the thing
-                  set largest and in the shop's own ink. */}
-              <span className="block truncate text-[11px] font-extrabold uppercase tracking-[0.04em] text-slate-900">
-                {h.name}
-              </span>
-              {showCount && h.count > 0 && (
-                <span className="mt-px block text-[9px] text-slate-500">
-                  {ar
-                    ? `${new Intl.NumberFormat("ar-EG").format(h.count)} قطعة`
-                    : `${new Intl.NumberFormat("en-US").format(h.count)} piece${h.count === 1 ? "" : "s"}`}
+            {/* The mark, or the name set as one. Two lines at most, because a
+                house with a long name - Yves Saint Laurent - should read as
+                its name rather than as an ellipsis. */}
+            <span className="flex h-7 w-full items-center justify-center">
+              {h.logo ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={h.logo} alt="" className="max-h-full w-auto max-w-full object-contain" />
+              ) : (
+                // Wide tracking is what pushed BALENCIAGA past its tile at four
+                // across. The letters sit closer now, and a word with nowhere
+                // left to go breaks rather than running under the edge.
+                <span className="line-clamp-2 break-words text-center text-[9px] font-extrabold uppercase leading-[1.15] tracking-[0.01em] text-slate-900">
+                  {h.name}
                 </span>
               )}
             </span>
+            {showCount && h.count > 0 && (
+              <span className="block text-[9px] leading-none text-slate-400">
+                {ar
+                  ? `${new Intl.NumberFormat("ar-EG").format(h.count)} قطعة`
+                  : `${new Intl.NumberFormat("en-US").format(h.count)}`}
+              </span>
+            )}
           </button>
         ))}
       </div>

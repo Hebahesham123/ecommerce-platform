@@ -1751,7 +1751,7 @@ export function BrandWall({
   onOpenScreen?: (screen: string) => void;
 }) {
   const items = settings.items ?? [];
-  const perRow = Math.max(2, Math.min(5, Number(settings.perRow || 3)));
+  const perRow = Math.max(2, Math.min(5, Number(settings.perRow || 4)));
   const showCount = settings.showCount !== false;
   const go = (to: LinkTo) => openLink(to, { onOpenCollection, onOpenProduct, onOpenScreen });
 
@@ -1761,7 +1761,7 @@ export function BrandWall({
       return {
         item: i,
         name: i.label || found?.title || i.handle || "",
-        image: i.imageUrl || found?.image || undefined,
+        logo: i.imageUrl || undefined,
         count: found?.productCount ?? 0,
         known: Boolean(found),
       };
@@ -1792,17 +1792,14 @@ export function BrandWall({
             onPress={() => go(h.item)}
           >
             <View style={styles.card}>
-              {h.image ? (
-                <Image source={{ uri: h.image }} style={styles.photo} />
-              ) : (
-                <View style={[styles.photo, { backgroundColor: theme.card.photoBg }]} />
-              )}
-              <View style={styles.body}>
-                <Text style={styles.name} numberOfLines={1}>{h.name.toUpperCase()}</Text>
-                {showCount && h.count > 0 ? (
-                  <Text style={styles.count}>{h.count + (h.count === 1 ? " piece" : " pieces")}</Text>
-                ) : null}
+              <View style={styles.markRow}>
+                {h.logo ? (
+                  <Image source={{ uri: h.logo }} style={styles.mark} resizeMode="contain" />
+                ) : (
+                  <Text style={styles.name} numberOfLines={2}>{h.name.toUpperCase()}</Text>
+                )}
               </View>
+              {showCount && h.count > 0 ? <Text style={styles.count}>{String(h.count)}</Text> : null}
             </View>
           </Pressable>
         ))}
@@ -1817,11 +1814,11 @@ const styles = StyleSheet.create({
   seeAll: { fontSize: 12, fontWeight: "600", color: colors.accent },
   grid: { flexDirection: "row", flexWrap: "wrap", marginHorizontal: -4, marginTop: 8, rowGap: gap.item },
   cell: { paddingHorizontal: 4 },
-  card: { borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, overflow: "hidden" },
-  photo: { width: "100%", aspectRatio: 4 / 3, backgroundColor: theme.card.photoBg },
-  body: { paddingHorizontal: 8, paddingVertical: 6 },
-  name: { fontSize: 11, fontWeight: "800", letterSpacing: 0.4, color: colors.ink },
-  count: { marginTop: 1, fontSize: 9, color: colors.inkSoft },
+  card: { borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center", paddingHorizontal: 8, paddingVertical: 10, gap: 4 },
+  markRow: { height: 28, width: "100%", alignItems: "center", justifyContent: "center" },
+  mark: { height: 28, width: "100%" },
+  name: { fontSize: 10, fontWeight: "800", letterSpacing: 0.6, lineHeight: 12, textAlign: "center", color: colors.ink },
+  count: { fontSize: 9, color: colors.inkSoft },
 });
 `,
     pay_strip: `import React, { useEffect, useRef, useState } from "react";
