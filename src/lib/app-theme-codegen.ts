@@ -4657,7 +4657,18 @@ import { inherit, openLink, type LinkTo } from "./Pieces";
 import type { HomePayload } from "../api";
 
 export type Circle = { id: string; imageUrl?: string; label?: string; note?: string; handle?: string; url?: string };
+
+/** A rail that scrolls, or a row that wraps. */
+function Rail({ grid, children }: { grid: boolean; children: React.ReactNode }) {
+  if (grid) return <View style={styles.grid}>{children}</View>;
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+      {children}
+    </ScrollView>
+  );
+}
 export type CircleRowSettings = {
+  perRow?: number;
   title?: string;
   subtitle?: string;
   seeAllLabel?: string;
@@ -4700,6 +4711,10 @@ export function CircleRow({
   const go = (to: LinkTo) => openLink(to, { onOpenCollection, onOpenProduct, onOpenScreen });
   const size = settings.size && settings.size > 0 ? settings.size : 76;
   const cell = Math.max(size + 14, 56);
+  // Nought is a rail. Anything else is a grid that many across, with the
+  // tiles taking the width their column gives them.
+  const perRow = Math.max(0, Math.min(6, Number(settings.perRow || 0)));
+  const grid = perRow > 0;
   const shape = settings.shape ?? "circle";
   const tileRadius =
     shape === "square" ? 0 : shape === "rounded" ? (settings.radius && settings.radius > 0 ? settings.radius : 22) : Math.round(size / 2);
@@ -4728,13 +4743,19 @@ export function CircleRow({
           </Pressable>
         ) : null}
       </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+      <Rail grid={grid}>
         {items.map((i) => {
           const borrowed = inherit(i, collections);
           const photo = i.imageUrl || borrowed.image;
-          const round = { width: size, height: size, borderRadius: tileRadius };
+          const round = grid
+            ? { width: "100%" as const, aspectRatio: 1, borderRadius: tileRadius }
+            : { width: size, height: size, borderRadius: tileRadius };
           return (
-            <Pressable key={i.id} style={[styles.cell, { width: cell }]} onPress={() => go(i)}>
+            <Pressable
+              key={i.id}
+              style={[styles.cell, grid ? { width: (100 / perRow) + "%", paddingHorizontal: 4 } : { width: cell }]}
+              onPress={() => go(i)}
+            >
               {photo ? (
                 <Image source={{ uri: photo }} style={round} />
               ) : (
@@ -4759,7 +4780,7 @@ export function CircleRow({
             </Pressable>
           );
         })}
-      </ScrollView>
+      </Rail>
     </View>
   );
 }
@@ -4771,6 +4792,7 @@ const styles = StyleSheet.create({
   seeAll: { fontSize: 12, fontWeight: "600", color: colors.accent },
   row: { gap: gap.item, paddingVertical: spacing.sm },
   cell: { alignItems: "center" },
+  grid: { flexDirection: "row", flexWrap: "wrap", marginHorizontal: -4, rowGap: gap.item },
   note: { marginTop: 6, fontSize: 11, fontWeight: "700", color: colors.accent, textAlign: "center" },
   label: { fontSize: 10, color: colors.inkSoft, textAlign: "center" },
 });
@@ -6390,6 +6412,7 @@ function settingsObject(block: Block): Record<string, unknown> {
       "labelSize",
       "labelBold",
       "labelColor",
+      "perRow",
       "linkColor",
       "bg",
     ],

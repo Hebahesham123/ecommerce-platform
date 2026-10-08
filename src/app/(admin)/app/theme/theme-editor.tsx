@@ -3832,6 +3832,21 @@ function BlockGroup({
         </>
       )}
 
+      {block.type === "circle_row" && (
+        <SpaceRow
+          label={ar ? "كم في الصف" : "How many across"}
+          value={num0("perRow", 0)}
+          onChange={(v) => onPatch({ perRow: v })}
+          min={0}
+          max={6}
+          note={
+            ar
+              ? "صفر يبقيه شريطاً يُمرَّر جانبياً. أي رقم آخر يرتّبه شبكة بهذا العدد في الصف، فتظهر كل الأقسام دفعة واحدة بدل أن يختفي نصفها خارج الشاشة."
+              : "Nought keeps it a rail that scrolls sideways. Any other number lays it out as a grid that many across, so every department shows at once instead of half of them sitting off the edge."
+          }
+        />
+      )}
+
       {block.type === "hero" && (
         <SpaceRow
           label={ar ? "ارتفاع البانر" : "How tall the banner stands"}

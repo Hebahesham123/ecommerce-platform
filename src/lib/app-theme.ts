@@ -1534,6 +1534,10 @@ export function newBlock(type: BlockType): Block {
       size: 64,
       showLabel: true,
       showNote: true,
+      // How many across. Nought keeps it a rail that scrolls sideways, which
+      // suits a row to browse past; a number lays it out as a grid, which
+      // suits the one section whose job is to show everything at once.
+      perRow: 0,
       items: shape ? [shape.blank()] : [],
     },
     pick_colour: {

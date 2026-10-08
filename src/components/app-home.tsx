@@ -4074,6 +4074,11 @@ function CircleRow({
   const bg = str(s.bg);
   // The cell is the tile plus a little air, and wide enough for its label.
   const cell = Math.max(size + 14, 56);
+  // Nought is a rail. Anything else is a grid that many across, where the
+  // tile takes the width the column gives it rather than the size setting -
+  // a grid whose tiles do not reach the edges is a grid with a wobble in it.
+  const perRow = Math.max(0, Math.min(6, int(s.perRow, 0)));
+  const grid = perRow > 0;
 
   return (
     <section
@@ -4089,20 +4094,35 @@ function CircleRow({
         titleSize={int(s.titleSize, 16)}
         linkColor={str(s.linkColor)}
       />
-      <div className="-mx-4 mt-2 flex overflow-x-auto px-4 pb-1" style={{ gap: "var(--app-item-gap, 8px)" }}>
+      <div
+        className={
+          grid
+            ? "mt-2 grid"
+            : "-mx-4 mt-2 flex overflow-x-auto px-4 pb-1"
+        }
+        style={
+          grid
+            ? { gap: "var(--app-item-gap, 8px)", gridTemplateColumns: `repeat(${perRow}, minmax(0, 1fr))` }
+            : { gap: "var(--app-item-gap, 8px)" }
+        }
+      >
         {items.map((item) => {
           const borrowed = inherit(item, data);
           return (
             <button
               key={item.id}
               onClick={() => go(item)}
-              className="flex shrink-0 flex-col items-center"
-              style={{ width: cell }}
+              className={`flex flex-col items-center ${grid ? "min-w-0" : "shrink-0"}`}
+              style={grid ? undefined : { width: cell }}
             >
               <Thumb
                 src={borrowed.image}
-                className={shape === "circle" ? "border border-slate-200" : ""}
-                style={{ width: size, height: size, borderRadius: tileRadius }}
+                className={`${shape === "circle" ? "border border-slate-200 " : ""}${grid ? "aspect-square w-full" : ""}`}
+                style={
+                  grid
+                    ? { borderRadius: tileRadius }
+                    : { width: size, height: size, borderRadius: tileRadius }
+                }
               />
               {showNote && str(item.note) && (
                 <span className="mt-1.5 w-full truncate text-center text-[11px] font-bold" style={{ color: accent }}>
