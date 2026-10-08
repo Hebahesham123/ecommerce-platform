@@ -3832,6 +3832,21 @@ function BlockGroup({
         </>
       )}
 
+      {block.type === "brand_wall" && (
+        <SpaceRow
+          label={ar ? "كم صفاً" : "How many rows"}
+          value={num0("rows", 2)}
+          onChange={(v) => onPatch({ rows: v })}
+          min={0}
+          max={4}
+          note={
+            ar
+              ? "صفان يمرّان جانبياً يأخذان نفس المساحة مهما زاد عدد الماركات. صفر يجعلها شبكة تلتفّ وتظهر كاملة دفعة واحدة."
+              : "Two rows travelling sideways take the same slice of the screen however many houses you carry. Nought wraps them into a grid instead, showing the whole wall at once."
+          }
+        />
+      )}
+
       {block.type === "circle_row" && (
         <SpaceRow
           label={ar ? "كم في الصف" : "How many across"}

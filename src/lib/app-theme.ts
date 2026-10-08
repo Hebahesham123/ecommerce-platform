@@ -1580,8 +1580,11 @@ export function newBlock(type: BlockType): Block {
       seeAllHandle: "",
       seeAllUrl: "",
       // Three across reads as a wall; four makes a wordmark too small to be
-      // the thing a shopper came for.
+      // the thing a shopper came for. Only used when the wall wraps.
       perRow: 3,
+      // How many rows travel sideways. Nought wraps instead, which suits a
+      // shop that wants its whole wall on the screen at once.
+      rows: 2,
       // The count under each name, read off the catalogue rather than typed.
       showCount: true,
       items: shape ? [shape.blank()] : [],

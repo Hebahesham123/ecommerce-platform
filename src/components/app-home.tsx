@@ -4185,6 +4185,10 @@ function BrandWall({
 }) {
   const s = block.settings ?? {};
   const perRow = Math.max(2, Math.min(5, int(s.perRow, 4)));
+  // Two rows that travel sideways take a fixed slice of the screen however
+  // many houses she carries. Nought goes back to wrapping.
+  const rows = Math.max(0, Math.min(4, int(s.rows, 2)));
+  const rail = rows > 0;
   const showCount = s.showCount !== false;
   const go = opener(data, handlers);
 
@@ -4221,11 +4225,25 @@ function BrandWall({
         linkColor={str(s.linkColor)}
       />
       <div
-        className="mt-2 grid"
-        style={{
-          gap: "var(--app-item-gap, 8px)",
-          gridTemplateColumns: `repeat(${perRow}, minmax(0, 1fr))`,
-        }}
+        className={
+          rail
+            ? "-mx-4 mt-2 grid grid-flow-col overflow-x-auto px-4 pb-1"
+            : "mt-2 grid"
+        }
+        style={
+          rail
+            ? {
+                gap: "var(--app-item-gap, 8px)",
+                gridTemplateRows: `repeat(${rows}, minmax(0, auto))`,
+                // A column narrow enough that the next one shows at the edge,
+                // which is the only thing that says the wall carries on.
+                gridAutoColumns: "minmax(88px, 1fr)",
+              }
+            : {
+                gap: "var(--app-item-gap, 8px)",
+                gridTemplateColumns: `repeat(${perRow}, minmax(0, 1fr))`,
+              }
+        }
       >
         {houses.map((h) => (
           <button

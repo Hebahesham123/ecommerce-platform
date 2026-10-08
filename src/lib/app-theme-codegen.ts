@@ -1723,6 +1723,7 @@ export type BrandWallSettings = {
   seeAllHandle?: string;
   seeAllUrl?: string;
   perRow?: number;
+  rows?: number;
   showCount?: boolean;
   titleSize?: number;
   linkColor?: string;
@@ -6567,7 +6568,7 @@ function settingsObject(block: Block): Record<string, unknown> {
   const keep: Record<BlockType, string[]> = {
     hero: [],
     pay_strip: ["every", "title"],
-    brand_wall: ["title", "subtitle", "seeAllLabel", "seeAllHandle", "seeAllUrl", "perRow", "showCount", "titleSize", "linkColor"],
+    brand_wall: ["title", "subtitle", "seeAllLabel", "seeAllHandle", "seeAllUrl", "perRow", "rows", "showCount", "titleSize", "linkColor"],
     bundle_save: [
       "eyebrow",
       "title",
