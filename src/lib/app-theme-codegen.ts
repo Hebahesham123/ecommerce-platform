@@ -1763,6 +1763,7 @@ export function BrandWall({
         item: i,
         name: i.label || found?.title || i.handle || "",
         logo: i.imageUrl || undefined,
+        photo: found?.image || undefined,
         count: found?.productCount ?? 0,
         known: Boolean(found),
       };
@@ -1793,14 +1794,24 @@ export function BrandWall({
             onPress={() => go(h.item)}
           >
             <View style={styles.card}>
-              <View style={styles.markRow}>
-                {h.logo ? (
+              {h.logo ? (
+                <View style={styles.markRow}>
                   <Image source={{ uri: h.logo }} style={styles.mark} resizeMode="contain" />
-                ) : (
-                  <Text style={styles.name} numberOfLines={2}>{h.name.toUpperCase()}</Text>
-                )}
-              </View>
-              {showCount && h.count > 0 ? <Text style={styles.count}>{String(h.count)}</Text> : null}
+                </View>
+              ) : (
+                <>
+                  {h.photo ? <Image source={{ uri: h.photo }} style={styles.photo} /> : <View style={styles.photo} />}
+                  {/* Dark enough that the name is read first: a brand card
+                      where the photograph wins sold nobody the brand. */}
+                  <View style={styles.scrim} />
+                  <View style={styles.plate}>
+                    <Text style={styles.name} numberOfLines={2}>{h.name.toUpperCase()}</Text>
+                    {showCount && h.count > 0 ? (
+                      <Text style={styles.count}>{h.count + (h.count === 1 ? " piece" : " pieces")}</Text>
+                    ) : null}
+                  </View>
+                </>
+              )}
             </View>
           </Pressable>
         ))}
@@ -1815,11 +1826,14 @@ const styles = StyleSheet.create({
   seeAll: { fontSize: 12, fontWeight: "600", color: colors.accent },
   grid: { flexDirection: "row", flexWrap: "wrap", marginHorizontal: -4, marginTop: 8, rowGap: gap.item },
   cell: { paddingHorizontal: 4 },
-  card: { borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center", paddingHorizontal: 8, paddingVertical: 10, gap: 4 },
-  markRow: { height: 28, width: "100%", alignItems: "center", justifyContent: "center" },
-  mark: { height: 28, width: "100%" },
-  name: { fontSize: 10, fontWeight: "800", letterSpacing: 0.6, lineHeight: 12, textAlign: "center", color: colors.ink },
-  count: { fontSize: 9, color: colors.inkSoft },
+  card: { borderRadius: radius.lg, overflow: "hidden", backgroundColor: "#0a0807", aspectRatio: 4 / 5 },
+  markRow: { flex: 1, backgroundColor: "#fff", alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
+  mark: { height: "56%", width: "100%" },
+  photo: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, width: "100%", height: "100%", backgroundColor: theme.card.photoBg },
+  scrim: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(10,8,7,0.5)" },
+  plate: { position: "absolute", left: 0, right: 0, bottom: 0, paddingHorizontal: 8, paddingBottom: 8, alignItems: "center" },
+  name: { fontSize: 12, fontWeight: "600", letterSpacing: 1.4, lineHeight: 14, textAlign: "center", color: "#fff", fontFamily: theme.titleFont },
+  count: { marginTop: 2, fontSize: 9, color: "rgba(255,255,255,0.7)" },
 });
 `,
     pay_strip: `import React, { useEffect, useRef, useState } from "react";

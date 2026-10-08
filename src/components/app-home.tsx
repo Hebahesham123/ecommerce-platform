@@ -4200,10 +4200,11 @@ function BrandWall({
         item,
         handle,
         name: str(item.label, found?.title ?? handle),
-        // The house's own mark, if the merchant has one. The collection's
-        // photograph is deliberately not a fallback: a picture of a bag is
-        // not a logo, and a wall of bags says nothing about whose they are.
+        // The house's own mark, if the merchant has one.
         logo: str(item.imageUrl),
+        // A piece from the house, used as the ground the name is set over -
+        // never as a stand-in for the mark itself.
+        photo: found?.image ?? null,
         count: found?.productCount ?? 0,
         known: Boolean(found),
       };
@@ -4237,7 +4238,7 @@ function BrandWall({
                 gridTemplateRows: `repeat(${rows}, minmax(0, auto))`,
                 // A column narrow enough that the next one shows at the edge,
                 // which is the only thing that says the wall carries on.
-                gridAutoColumns: "minmax(88px, 1fr)",
+                gridAutoColumns: "minmax(104px, 1fr)",
               }
             : {
                 gap: "var(--app-item-gap, 8px)",
@@ -4249,29 +4250,48 @@ function BrandWall({
           <button
             key={h.item.id}
             onClick={() => go(h.item)}
-            className="flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl border border-slate-200 bg-white px-2 py-2.5"
+            className="relative block min-w-0 overflow-hidden rounded-xl bg-slate-900 text-start"
           >
-            {/* The mark, or the name set as one. Two lines at most, because a
-                house with a long name - Yves Saint Laurent - should read as
-                its name rather than as an ellipsis. */}
-            <span className="flex h-7 w-full items-center justify-center">
-              {h.logo ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={h.logo} alt="" className="max-h-full w-auto max-w-full object-contain" />
-              ) : (
-                // Wide tracking is what pushed BALENCIAGA past its tile at four
-                // across. The letters sit closer now, and a word with nowhere
-                // left to go breaks rather than running under the edge.
-                <span className="line-clamp-2 break-words text-center text-[9px] font-extrabold uppercase leading-[1.15] tracking-[0.01em] text-slate-900">
+            {h.logo ? (
+              // A real mark gets white behind it and nothing else: a logo laid
+              // over a photograph is a logo nobody can read.
+              <span className="grid aspect-[4/5] w-full place-items-center bg-white px-2">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={h.logo} alt="" className="max-h-[56%] w-auto max-w-full object-contain" />
+              </span>
+            ) : (
+              <>
+                <Thumb src={h.photo} className="aspect-[4/5] w-full" radius="rounded-none" />
+                {/* Dark enough that the name is read first. A brand card where
+                    the photograph wins is a card that sold nobody the brand. */}
+                <span
+                  className="pointer-events-none absolute inset-0 block"
+                  style={{
+                    background:
+                      "linear-gradient(180deg, rgba(10,8,7,0.22) 0%, rgba(10,8,7,0.52) 55%, rgba(10,8,7,0.78) 100%)",
+                  }}
+                />
+              </>
+            )}
+
+            {!h.logo && (
+              <span className="absolute inset-x-0 bottom-0 block px-2 pb-2 pt-6 text-center">
+                <span className="app-display block break-words text-[12px] font-semibold uppercase leading-[1.1] tracking-[0.12em] text-white">
                   {h.name}
                 </span>
-              )}
-            </span>
-            {showCount && h.count > 0 && (
-              <span className="block text-[9px] leading-none text-slate-400">
-                {ar
-                  ? `${new Intl.NumberFormat("ar-EG").format(h.count)} قطعة`
-                  : `${new Intl.NumberFormat("en-US").format(h.count)}`}
+                {showCount && h.count > 0 && (
+                  <span className="mt-0.5 block text-[9px] leading-none text-white/70">
+                    {ar
+                      ? `${new Intl.NumberFormat("ar-EG").format(h.count)} قطعة`
+                      : `${new Intl.NumberFormat("en-US").format(h.count)} piece${h.count === 1 ? "" : "s"}`}
+                  </span>
+                )}
+              </span>
+            )}
+
+            {h.logo && showCount && h.count > 0 && (
+              <span className="absolute inset-x-0 bottom-0 block bg-white/90 px-2 pb-1 pt-0.5 text-center text-[9px] leading-none text-slate-500">
+                {new Intl.NumberFormat(ar ? "ar-EG" : "en-US").format(h.count)}
               </span>
             )}
           </button>
