@@ -6890,6 +6890,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   ActivityIndicator,
   Animated,
+  BackHandler,
   Easing,
   FlatList,
   Image,
@@ -6899,6 +6900,7 @@ import {
   Share,
   StyleSheet,
   Text,
+  TextInput,
   View,
   type ViewToken,
 } from "react-native";
@@ -6956,7 +6958,87 @@ function Action({ icon, label, onPress, active, highlight }: { icon: React.React
   );
 }
 
-const compact = (n: number) => (n >= 1000 ? (Math.round(n / 100) / 10).toString() + "k" : String(n));
+const compact = (n: number) =>
+  n >= 1000000
+    ? (Math.round(n / 100000) / 10).toString() + "M"
+    : n >= 1000
+      ? (Math.round(n / 100) / 10).toString() + "K"
+      : String(n);
+
+/**
+ * The picture on a reel's tile: the cover chosen for the live, or else a
+ * frame the streaming service takes from the video itself.
+ */
+function thumbOf(r: Reel): string | null {
+  if (r.coverUrl) return r.coverUrl;
+  const u = r.recordingUrl || "";
+  const at = u.indexOf("/manifest/");
+  return u.indexOf("cloudflarestream.com") >= 0 && at > 0 ? u.slice(0, at) + "/thumbnails/thumbnail.jpg?time=2s&height=480" : null;
+}
+
+/** The grid: every reel at a glance, a search above it, like Explore. */
+function ReelGrid({
+  reels,
+  width,
+  query,
+  onQuery,
+  onOpen,
+}: {
+  reels: Reel[];
+  width: number;
+  query: string;
+  onQuery: (q: string) => void;
+  onOpen: (index: number) => void;
+}) {
+  const tile = (width - 2 * GRID_GAP) / 3;
+  return (
+    <View style={styles.gridScreen}>
+      <View style={styles.searchBox}>
+        <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+          <Path d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14ZM20 20l-3.2-3.2" stroke="#64748b" strokeWidth={2} strokeLinecap="round" />
+        </Svg>
+        <TextInput
+          value={query}
+          onChangeText={onQuery}
+          placeholder="Search"
+          placeholderTextColor="#64748b"
+          style={styles.searchInput}
+          returnKeyType="search"
+        />
+      </View>
+      {reels.length === 0 ? (
+        <Text style={styles.gridEmpty}>{query ? "No reels match your search." : "Nothing to watch yet."}</Text>
+      ) : (
+        <FlatList
+          data={reels}
+          keyExtractor={(r) => r.id}
+          numColumns={3}
+          columnWrapperStyle={{ gap: GRID_GAP }}
+          contentContainerStyle={{ gap: GRID_GAP, paddingBottom: 12 }}
+          keyboardShouldPersistTaps="handled"
+          renderItem={({ item, index }) => {
+            const thumb = thumbOf(item);
+            return (
+              <Pressable onPress={() => onOpen(index)} style={{ width: tile, height: tile * 1.34, backgroundColor: "#e2e8f0" }}>
+                {thumb ? <Image source={{ uri: thumb }} style={StyleSheet.absoluteFill} resizeMode="cover" /> : null}
+                {item.likes > 0 ? (
+                  <View style={styles.tileCount}>
+                    <Svg width={14} height={14} viewBox="0 0 24 24" fill="#ffffff">
+                      <Path d="M12 20s-7.2-4.5-9.1-8.4C1.3 8.3 3.1 5 6.4 5c2 0 3.3 1.1 4.1 2.2l1.5 2 1.5-2C14.3 6.1 15.6 5 17.6 5c3.3 0 5.1 3.3 3.5 6.6C19.2 15.5 12 20 12 20Z" />
+                    </Svg>
+                    <Text style={styles.tileCountText}>{compact(item.likes)}</Text>
+                  </View>
+                ) : null}
+              </Pressable>
+            );
+          }}
+        />
+      )}
+    </View>
+  );
+}
+
+const GRID_GAP = 2;
 
 /* ---- the products under a reel: a ring that drifts while there are several -- */
 const CARD = 84;
@@ -7192,6 +7274,11 @@ export function ReelsScreen({
   const [index, setIndex] = useState(0);
   const [muted, setMuted] = useState(true);
   const [sheet, setSheet] = useState<Reel | null>(null);
+  const [width, setWidth] = useState(0);
+  // The grid first; a reel opens full screen on top of it. A replay tapped
+  // somewhere else in the app opens straight onto that reel.
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
 
   useEffect(() => {
     fetchReels()
@@ -7199,10 +7286,32 @@ export function ReelsScreen({
         const playable = list.filter((r) => r.recordingUrl);
         setReels(playable);
         const at = startId ? playable.findIndex((r) => r.id === startId) : -1;
-        if (at > 0) setIndex(at);
+        if (at >= 0) {
+          setIndex(at);
+          setOpen(true);
+        }
       })
       .catch(() => setFailed(true));
   }, [startId]);
+
+  // The phone's back button closes the reel before it leaves the tab.
+  useEffect(() => {
+    if (!open) return;
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      setOpen(false);
+      return true;
+    });
+    return () => sub.remove();
+  }, [open]);
+
+  // What the search matches: the reel, its host, and what was sold in it.
+  const shown = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!reels || !q) return reels ?? [];
+    return reels.filter((r) =>
+      [r.title, r.hostName ?? "", ...r.products.map((p) => p.productName)].join(" ").toLowerCase().includes(q),
+    );
+  }, [reels, query]);
 
   const onViewable = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
     const first = viewableItems.find((v) => v.isViewable);
@@ -7217,22 +7326,35 @@ export function ReelsScreen({
   };
 
   return (
-    <View style={styles.screen} onLayout={(e) => setHeight(e.nativeEvent.layout.height)}>
+    <View
+      style={[styles.screen, open ? null : styles.gridScreen]}
+      onLayout={(e) => {
+        setHeight(e.nativeEvent.layout.height);
+        setWidth(e.nativeEvent.layout.width);
+      }}
+    >
       {!reels || !height ? (
         <View style={styles.center}>
           {failed ? (
-            <Text style={styles.empty}>Reels could not be loaded.</Text>
+            <Text style={[styles.empty, open ? null : { color: "#0f172a" }]}>Reels could not be loaded.</Text>
           ) : (
-            <ActivityIndicator color="#ffffff" />
+            <ActivityIndicator color={open ? "#ffffff" : "#94a3b8"} />
           )}
         </View>
-      ) : reels.length === 0 ? (
-        <View style={styles.center}>
-          <Text style={styles.empty}>Nothing to watch yet.</Text>
-        </View>
+      ) : !open ? (
+        <ReelGrid
+          reels={shown}
+          width={width}
+          query={query}
+          onQuery={setQuery}
+          onOpen={(i) => {
+            setIndex(i);
+            setOpen(true);
+          }}
+        />
       ) : (
         <FlatList
-          data={reels}
+          data={shown}
           keyExtractor={(r) => r.id}
           pagingEnabled
           showsVerticalScrollIndicator={false}
@@ -7248,12 +7370,12 @@ export function ReelsScreen({
             <ReelItem
               reel={item}
               height={height}
-              active={!paused && i === index}
+              active={!paused && open && i === index}
               near={Math.abs(i - index) <= 1}
               muted={muted}
               cartCount={cartCount}
               onToggleSound={() => setMuted((m) => !m)}
-              onClose={onClose}
+              onClose={() => setOpen(false)}
               onOpenProduct={openProduct}
               onAdd={add}
               onCheckout={onCheckout}
@@ -7304,6 +7426,12 @@ export function ReelsScreen({
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#000000" },
+  gridScreen: { flex: 1, backgroundColor: "#ffffff" },
+  searchBox: { flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 12, marginTop: 10, marginBottom: 10, height: 40, borderRadius: 12, paddingHorizontal: 12, backgroundColor: "#efefef" },
+  searchInput: { flex: 1, fontSize: 16, color: "#0f172a", paddingVertical: 0 },
+  gridEmpty: { padding: 32, textAlign: "center", fontSize: 14, color: "#64748b" },
+  tileCount: { position: "absolute", left: 6, bottom: 6, flexDirection: "row", alignItems: "center", gap: 4 },
+  tileCountText: { color: "#ffffff", fontSize: 13, fontWeight: "700", textShadowColor: "rgba(0,0,0,0.6)", textShadowRadius: 3 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
   empty: { color: "#ffffff", fontSize: 14, opacity: 0.8 },
   reel: { width: "100%", backgroundColor: "#000000", overflow: "hidden" },
