@@ -68,7 +68,7 @@ export const DEFAULT_METHODS: PaymentMethod[] = [
     note: "Up to 60 months, 0% interest on selected plans. We confirm the plan with you on WhatsApp before dispatch.",
     noteAr: "حتى ٦٠ شهرًا بدون فوائد على خطط مختارة — نؤكد الخطة معك على واتساب قبل الشحن.",
     color: "#e4572e",
-    logo: "",
+    logo: "/payments/valu.png",
     enabled: true,
   },
   {
@@ -79,7 +79,7 @@ export const DEFAULT_METHODS: PaymentMethod[] = [
     note: "Split into 3 or 6 payments, no bank account needed. We set it up with you after the order.",
     noteAr: "قسّمي على ٣ أو ٦ دفعات بدون حساب بنكي — نرتّبها معك بعد الطلب.",
     color: "#2f2a6b",
-    logo: "",
+    logo: "/payments/sympl.png",
     enabled: true,
   },
   {
@@ -90,7 +90,7 @@ export const DEFAULT_METHODS: PaymentMethod[] = [
     note: "Instalments through Halan. We confirm the plan with you before dispatch.",
     noteAr: "تقسيط عبر حالًا — نؤكد الخطة معك قبل الشحن.",
     color: "#f0803c",
-    logo: "",
+    logo: "/payments/halan.png",
     enabled: true,
   },
   {
@@ -101,7 +101,7 @@ export const DEFAULT_METHODS: PaymentMethod[] = [
     note: "Instalments through Souhoola. We confirm the plan with you before dispatch.",
     noteAr: "تقسيط عبر سهولة — نؤكد الخطة معك قبل الشحن.",
     color: "#0f7b7b",
-    logo: "",
+    logo: "/payments/souhoola.png",
     enabled: true,
   },
   {
@@ -112,7 +112,7 @@ export const DEFAULT_METHODS: PaymentMethod[] = [
     note: "Instalments through Aman. We confirm the plan with you before dispatch.",
     noteAr: "تقسيط عبر أمان — نؤكد الخطة معك قبل الشحن.",
     color: "#d1343f",
-    logo: "",
+    logo: "/payments/aman.png",
     enabled: true,
   },
   {
@@ -123,7 +123,7 @@ export const DEFAULT_METHODS: PaymentMethod[] = [
     note: "Instalments through Forsa. We confirm the plan with you before dispatch.",
     noteAr: "تقسيط عبر فرصة — نؤكد الخطة معك قبل الشحن.",
     color: "#1f5fa8",
-    logo: "",
+    logo: "/payments/forsa.png",
     enabled: true,
   },
   {
@@ -134,7 +134,7 @@ export const DEFAULT_METHODS: PaymentMethod[] = [
     note: "Instalments through Tru Finance. We confirm the plan with you before dispatch.",
     noteAr: "تقسيط عبر ترو — نؤكد الخطة معك قبل الشحن.",
     color: "#152a52",
-    logo: "",
+    logo: "/payments/tru.png",
     enabled: true,
   },
   {
@@ -145,7 +145,7 @@ export const DEFAULT_METHODS: PaymentMethod[] = [
     note: "Pay by card when your order arrives — the courier carries a machine.",
     noteAr: "تدفعين بالبطاقة عند وصول الطلب — المندوب معه ماكينة.",
     color: "#4a3b2f",
-    logo: "",
+    logo: "/payments/card.png",
     enabled: true,
   },
   {
@@ -156,7 +156,7 @@ export const DEFAULT_METHODS: PaymentMethod[] = [
     note: "We send you the account to transfer to once the order is placed, and dispatch when it lands.",
     noteAr: "نرسل لك الحساب للتحويل عليه بعد تأكيد الطلب، ونشحن فور وصوله.",
     color: "#b8187e",
-    logo: "",
+    logo: "/payments/instapay.png",
     enabled: true,
   },
 ];

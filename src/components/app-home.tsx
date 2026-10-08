@@ -1967,7 +1967,7 @@ function Flap({ value, unit, accent }: { value: string; unit: string; accent: st
  * approximation of ValU's mark would be worse than two clean letters, because
  * it would be wrong in a way that looks deliberate.
  */
-function PayMark({ name, logo }: { name: string; logo: string }) {
+function PayMark({ name, logo, kind }: { name: string; logo: string; kind: string }) {
   const initials = name
     .split(/\s+/)
     .filter(Boolean)
@@ -1976,10 +1976,18 @@ function PayMark({ name, logo }: { name: string; logo: string }) {
     .join("")
     .toUpperCase();
   return (
-    <span className="grid h-7 w-7 shrink-0 place-items-center overflow-hidden rounded-lg bg-white shadow-[0_1px_2px_rgba(0,0,0,0.18)]">
+    <span className="grid h-8 min-w-8 max-w-[58px] shrink-0 place-items-center overflow-hidden rounded-lg bg-white px-1 shadow-[0_1px_2px_rgba(0,0,0,0.18)]">
       {logo ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={logo} alt="" className="h-full w-full object-contain p-[3px]" />
+        <img src={logo} alt="" className="h-full w-auto max-w-full object-contain py-[3px]" />
+      ) : kind === "cod" ? (
+        // Money at the door is not a brand, so it gets a drawn note rather
+        // than two letters pretending to be a mark.
+        <svg viewBox="0 0 24 24" className="h-4 w-4 text-slate-700" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <rect x="2" y="6" width="20" height="12" rx="2" />
+          <circle cx="12" cy="12" r="2.6" />
+          <path d="M6 12h.01M18 12h.01" />
+        </svg>
       ) : (
         <span className="text-[10px] font-extrabold leading-none text-slate-800">{initials}</span>
       )}
@@ -2018,7 +2026,7 @@ function PayFace({
         <span className="app-pay-sheen block h-full w-full bg-white/18" />
       </span>
 
-      <PayMark name={way.name} logo={str(way.logo)} />
+      <PayMark name={way.name} logo={str(way.logo)} kind={str(way.kind)} />
       <span className="relative flex min-w-0 flex-1 flex-col justify-center leading-tight">
         <span className="flex items-baseline gap-1.5">
           <span className="shrink-0 text-[12px] font-extrabold text-white">{name}</span>
