@@ -656,6 +656,36 @@ export async function likeReplay(liveId: string, delta: 1 | -1 = 1): Promise<Res
 }
 
 /**
+ * One view of a reel, once a viewer has let it play for two seconds.
+ *
+ * The same viewer is counted once per reel per half hour, so scrolling back
+ * and forth over one reel is one view, not twenty. Remembered per server
+ * instance, which is enough to stop the casual repeat; the count itself is
+ * done in the database so two viewers at once cannot overwrite each other.
+ */
+const viewedRecently = new Map<string, number>();
+const VIEW_WINDOW_MS = 30 * 60 * 1000;
+
+export async function viewReplay(liveId: string, viewerKey: string): Promise<Result<number | null>> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  if (!viewerKey) return { ok: true, data: null };
+  const key = liveId + "|" + viewerKey;
+  const at = viewedRecently.get(key) ?? 0;
+  if (Date.now() - at < VIEW_WINDOW_MS) return { ok: true, data: null };
+  viewedRecently.set(key, Date.now());
+  if (viewedRecently.size > 5000) {
+    for (const k of [...viewedRecently.keys()].slice(0, 1000)) viewedRecently.delete(k);
+  }
+  try {
+    const { data, error } = await getServerSupabase().rpc("live_view", { p_id: liveId });
+    if (error) return { ok: false, error: /live_view/.test(error.message) ? "migration_missing" : error.message };
+    return { ok: true, data: Number(data ?? 0) };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+/**
  * How recently we asked the provider about something.
  *
  * Both healers run wherever a live is read, which is the right place for

@@ -587,10 +587,16 @@ export type Reel = {
   /** The adaptive stream once it is ready, the original file until then. */
   recordingUrl: string | null;
   likes: number;
+  /** Times watched for two seconds or more. */
+  views?: number;
   products: ReelProduct[];
 };
 
 export const fetchReels = () => api<Reel[]>("/reels");
+
+/** She watched it: counted by the shop once per half hour per phone. */
+export const viewReel = (id: string) =>
+  api("/reels/" + encodeURIComponent(id) + "/view", { method: "POST" }).catch(() => {});
 
 /** A like, or taking it back. Returns the new total. */
 export const likeReel = (id: string, on: boolean) =>
@@ -6930,11 +6936,13 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useVideoPlayer, VideoView } from "expo-video";
 import Svg, { Path, Rect } from "react-native-svg";
-import { SITE_ORIGIN, fetchReels, likeReel, type Reel, type ReelProduct } from "../api";
+import { SITE_ORIGIN, fetchReels, likeReel, viewReel, type Reel, type ReelProduct } from "../api";
 import { Fade } from "./Fade";
 import { money } from "./Pieces";
 
 const LIKED = "reel_like_";
+/** Reels already counted as watched since the app opened. */
+const counted = new Set<string>();
 
 /* ---- icons, as the website draws them ---------------------------------- */
 function Icon({ name, filled }: { name: "heart" | "bag" | "tote" | "star" | "share" | "close" | "sound"; filled?: boolean }) {
@@ -6989,14 +6997,15 @@ const compact = (n: number) =>
       : String(n);
 
 /**
- * The picture on a reel's tile: the cover chosen for the live, or else a
- * frame the streaming service takes from the video itself.
+ * The picture on a reel's tile: a frame from the reel's own video, the way a
+ * feed of videos looks, and the live's cover only while the video is still
+ * being converted and has no frames to give.
  */
 function thumbOf(r: Reel): string | null {
-  if (r.coverUrl) return r.coverUrl;
   const u = r.recordingUrl || "";
   const at = u.indexOf("/manifest/");
-  return u.indexOf("cloudflarestream.com") >= 0 && at > 0 ? u.slice(0, at) + "/thumbnails/thumbnail.jpg?time=2s&height=480" : null;
+  if (u.indexOf("cloudflarestream.com") >= 0 && at > 0) return u.slice(0, at) + "/thumbnails/thumbnail.jpg?time=2s&height=480";
+  return r.coverUrl;
 }
 
 /** The grid: every reel at a glance, a search above it, like Explore. */
@@ -7044,7 +7053,22 @@ function ReelGrid({
             return (
               <Pressable onPress={() => onOpen(index)} style={{ width: tile, height: tile * 1.34, backgroundColor: "#e2e8f0" }}>
                 {thumb ? <Image source={{ uri: thumb }} style={StyleSheet.absoluteFill} resizeMode="cover" /> : null}
-                {item.likes > 0 ? (
+                {/* A reel, not a photo: the mark Instagram puts in the corner. */}
+                <View style={styles.tileMark} pointerEvents="none">
+                  <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                    <Rect x="3.4" y="4.6" width="17.2" height="14.8" rx="3.2" stroke="#ffffff" strokeWidth={1.8} />
+                    <Path d="M10.4 9.6 15 12l-4.6 2.4Z" fill="#ffffff" />
+                  </Svg>
+                </View>
+                {(item.views ?? 0) > 0 ? (
+                  <View style={styles.tileCount}>
+                    <Svg width={15} height={15} viewBox="0 0 24 24" fill="none">
+                      <Path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" stroke="#ffffff" strokeWidth={1.8} />
+                      <Path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="#ffffff" strokeWidth={1.8} />
+                    </Svg>
+                    <Text style={styles.tileCountText}>{compact(item.views ?? 0)}</Text>
+                  </View>
+                ) : item.likes > 0 ? (
                   <View style={styles.tileCount}>
                     <Svg width={14} height={14} viewBox="0 0 24 24" fill="#ffffff">
                       <Path d="M12 20s-7.2-4.5-9.1-8.4C1.3 8.3 3.1 5 6.4 5c2 0 3.3 1.1 4.1 2.2l1.5 2 1.5-2C14.3 6.1 15.6 5 17.6 5c3.3 0 5.1 3.3 3.5 6.6C19.2 15.5 12 20 12 20Z" />
@@ -7191,6 +7215,16 @@ function ReelItem({
     if (active) player.play();
     else player.pause();
   }, [player, active]);
+
+  // A view, once it has actually been watched for two seconds.
+  useEffect(() => {
+    if (!active || !playing || counted.has(reel.id)) return;
+    const t = setTimeout(() => {
+      counted.add(reel.id);
+      viewReel(reel.id);
+    }, 2000);
+    return () => clearTimeout(t);
+  }, [active, playing, reel.id]);
 
   useEffect(() => {
     AsyncStorage.getItem(LIKED + reel.id)
@@ -7453,6 +7487,7 @@ const styles = StyleSheet.create({
   searchBox: { flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: 12, marginTop: 10, marginBottom: 10, height: 40, borderRadius: 12, paddingHorizontal: 12, backgroundColor: "#efefef" },
   searchInput: { flex: 1, fontSize: 16, color: "#0f172a", paddingVertical: 0 },
   gridEmpty: { padding: 32, textAlign: "center", fontSize: 14, color: "#64748b" },
+  tileMark: { position: "absolute", top: 6, right: 6 },
   tileCount: { position: "absolute", left: 6, bottom: 6, flexDirection: "row", alignItems: "center", gap: 4 },
   tileCountText: { color: "#ffffff", fontSize: 13, fontWeight: "700", textShadowColor: "rgba(0,0,0,0.6)", textShadowRadius: 3 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },

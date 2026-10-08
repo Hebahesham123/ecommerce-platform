@@ -38,7 +38,9 @@ import type { LiveMessage, LiveStream } from "@/lib/live";
  */
 
 export async function listLivesAction(): Promise<Result<LiveStream[]>> {
-  return listLives();
+  // Videos uploaded as reels are managed under App, Reels; they never went on air.
+  const res = await listLives();
+  return res.ok ? { ok: true, data: res.data.filter((l) => l.kind !== "upload") } : res;
 }
 
 export async function getLiveAction(id: string): Promise<Result<LiveStream>> {

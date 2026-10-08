@@ -338,6 +338,18 @@ function Reel({
   const [added, setAdded] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
 
+  // A view, once it has actually been watched for two seconds — not a reel
+  // that flicked past on the way to another.
+  const viewed = useRef(false);
+  useEffect(() => {
+    if (!active || !playing || viewed.current) return;
+    const t = setTimeout(() => {
+      viewed.current = true;
+      fetch(`/api/storefront/reels/${reel.id}/view`, { method: "POST" }).catch(() => {});
+    }, 2000);
+    return () => clearTimeout(t);
+  }, [active, playing, reel.id]);
+
   // A playlist where there is one, the whole file where there is not. Only
   // for reels near enough to be watched — the rest are not given a source at
   // all, which is the cheapest possible way of not loading them.
