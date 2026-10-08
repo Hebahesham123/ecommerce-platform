@@ -252,7 +252,16 @@ export type Home = {
   }[];
   productCount: number;
   /** The ways the shop takes money, as the checkout knows them. */
-  payments?: { id: string; name: string; nameAr: string; kind: string; note: string; noteAr: string }[];
+  payments?: {
+    id: string;
+    name: string;
+    nameAr: string;
+    kind: string;
+    note: string;
+    noteAr: string;
+    /** The ground this one is drawn on. Empty falls back to the shop's accent. */
+    color: string;
+  }[];
 };
 export type PricedLine = {
   itemId: string;

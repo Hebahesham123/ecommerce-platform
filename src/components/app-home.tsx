@@ -88,7 +88,16 @@ export type HomeData = {
    * so the strip on the home screen cannot advertise a provider that was
    * switched off on the settings screen a month ago.
    */
-  payments?: { id: string; name: string; nameAr: string; kind: string; note: string; noteAr: string }[];
+  payments?: {
+    id: string;
+    name: string;
+    nameAr: string;
+    kind: string;
+    note: string;
+    noteAr: string;
+    /** The ground this one is drawn on. Empty falls back to the shop's accent. */
+    color: string;
+  }[];
   /**
    * The signed-in shopper first name, when the surface drawing this knows it.
    * Only the live-now offer uses it, and it degrades to an unnamed greeting,
@@ -1991,41 +2000,41 @@ function PayStrip({
   const way = ways[at % ways.length];
   const name = ar ? way.nameAr || way.name : way.name;
   const note = ar ? way.noteAr || way.note : way.note;
+  const ground = str(way.color, accent);
 
   return (
     <section>
-      <div
-        className="flex h-9 items-center gap-2 overflow-hidden rounded-xl px-2.5"
-        style={{ background: `${accent}12` }}
-      >
-        <span
-          className="shrink-0 rounded-md px-1.5 py-[3px] text-[8px] font-bold uppercase tracking-[0.08em] text-white"
-          style={{ background: accent }}
+      {/* The window is the banner. What turns over inside it carries its own
+          ground, so a shopper sees a different thing rather than the same box
+          with new words in it. */}
+      <div className="relative h-10 overflow-hidden rounded-xl">
+        <div
+          key={way.id}
+          className="app-rise absolute inset-0 flex items-center gap-2 px-2.5"
+          style={{ background: ground, ["--hold" as string]: `${every * 1000}ms` }}
         >
-          {title || (ar ? "ادفعي كما يناسبك" : "Pay your way")}
-        </span>
-        {/* Keyed on which way it is, so the line is rebuilt and rises again
-            rather than the text swapping inside a span that never moved. */}
-        <span key={way.id} className="app-rise flex min-w-0 flex-1 items-baseline gap-1.5" style={{ ["--hold" as string]: `${every * 1000}ms` }}>
-          <span className="shrink-0 text-[11px] font-bold" style={{ color: accent }}>
-            {name}
+          <span className="shrink-0 rounded-md bg-white/20 px-1.5 py-[3px] text-[8px] font-bold uppercase tracking-[0.08em] text-white backdrop-blur-sm">
+            {title || (ar ? "ادفعي كما يناسبك" : "Pay your way")}
           </span>
-          {note && <span className="min-w-0 truncate text-[10px] text-slate-500">{note}</span>}
-        </span>
-        {ways.length > 1 && (
-          <span className="flex shrink-0 items-center gap-[3px]" aria-hidden>
-            {ways.slice(0, 6).map((w, i) => (
-              <span
-                key={w.id}
-                className="block h-1 rounded-full transition-all"
-                style={{
-                  width: i === at % Math.min(ways.length, 6) ? 7 : 3,
-                  background: i === at % Math.min(ways.length, 6) ? accent : `${accent}40`,
-                }}
-              />
-            ))}
+          <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
+            <span className="shrink-0 text-[12px] font-extrabold text-white">{name}</span>
+            {note && <span className="min-w-0 truncate text-[10px] text-white/75">{note}</span>}
           </span>
-        )}
+          {ways.length > 1 && (
+            <span className="flex shrink-0 items-center gap-[3px]" aria-hidden>
+              {ways.slice(0, 6).map((w, i) => (
+                <span
+                  key={w.id}
+                  className="block h-1 rounded-full"
+                  style={{
+                    width: i === at % Math.min(ways.length, 6) ? 7 : 3,
+                    background: i === at % Math.min(ways.length, 6) ? "#ffffff" : "rgba(255,255,255,0.45)",
+                  }}
+                />
+              ))}
+            </span>
+          )}
+        </div>
       </div>
     </section>
   );

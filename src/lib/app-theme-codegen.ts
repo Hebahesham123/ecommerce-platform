@@ -548,7 +548,7 @@ export type HomePayload = {
     href: string;
   }[];
   /** The ways the shop takes money, as the checkout knows them. */
-  payments?: { id: string; name: string; nameAr: string; kind: string; note: string; noteAr: string }[];
+  payments?: { id: string; name: string; nameAr: string; kind: string; note: string; noteAr: string; color: string }[];
 };
 
 /** Everything the front page needs, in one request. */
@@ -1675,7 +1675,7 @@ function sectionFile(type: BlockType): GeneratedFile {
 import { Animated, StyleSheet, Text, View } from "react-native";
 import { colors } from "../theme";
 
-type Way = { id: string; name: string; nameAr: string; kind: string; note: string; noteAr: string };
+type Way = { id: string; name: string; nameAr: string; kind: string; note: string; noteAr: string; color: string };
 
 /**
  * A thin strip naming the ways the shop takes money, one at a time.
@@ -1714,30 +1714,32 @@ export function PayStrip({
   const lift = rise.interpolate({ inputRange: [0, 1], outputRange: [14, 0] });
 
   return (
-    <View style={styles.strip}>
-      <View style={styles.tag}>
-        <Text style={styles.tagText}>{settings.title || "Pay your way"}</Text>
-      </View>
-      <View style={styles.window}>
-        <Animated.View style={[styles.line, { opacity: rise, transform: [{ translateY: lift }] }]}>
+    <View style={styles.window}>
+      <Animated.View
+        style={[styles.strip, { backgroundColor: way.color || colors.accent, opacity: rise, transform: [{ translateY: lift }] }]}
+      >
+        <View style={styles.tag}>
+          <Text style={styles.tagText}>{settings.title || "Pay your way"}</Text>
+        </View>
+        <View style={styles.line}>
           <Text style={styles.name}>{way.name}</Text>
           {way.note ? (
             <Text style={styles.note} numberOfLines={1}>{way.note}</Text>
           ) : null}
-        </Animated.View>
-      </View>
+        </View>
+      </Animated.View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  strip: { flexDirection: "row", alignItems: "center", gap: 8, height: 36, borderRadius: 12, paddingHorizontal: 10, backgroundColor: colors.accent + "12" },
-  tag: { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 3, backgroundColor: colors.accent },
+  window: { height: 40, borderRadius: 12, overflow: "hidden", justifyContent: "center" },
+  strip: { flexDirection: "row", alignItems: "center", gap: 8, height: 40, paddingHorizontal: 10 },
+  tag: { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 3, backgroundColor: "rgba(255,255,255,0.2)" },
   tagText: { fontSize: 8, fontWeight: "700", letterSpacing: 0.8, textTransform: "uppercase", color: "#fff" },
-  window: { flex: 1, minWidth: 0, overflow: "hidden", justifyContent: "center" },
-  line: { flexDirection: "row", alignItems: "baseline", gap: 6 },
-  name: { fontSize: 11, fontWeight: "700", color: colors.accent },
-  note: { flexShrink: 1, fontSize: 10, color: colors.inkSoft },
+  line: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "baseline", gap: 6 },
+  name: { fontSize: 12, fontWeight: "800", color: "#fff" },
+  note: { flexShrink: 1, fontSize: 10, color: "rgba(255,255,255,0.75)" },
 });
 `,
     banner: `import React from "react";

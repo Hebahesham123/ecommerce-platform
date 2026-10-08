@@ -26,6 +26,15 @@ export type PaymentMethod = {
   noteAr: string;
   /** Optional mark, for a provider with a logo of its own. */
   logo: string;
+  /**
+   * The ground this provider is drawn on, as a hex colour.
+   *
+   * Theirs, not the shop's: a strip of payment ways in one brown is a strip
+   * nobody reads twice. Empty falls back to the shop's accent, and anything
+   * here can be overwritten on the Payments screen - a colour is styling
+   * rather than a claim about the provider.
+   */
+  color: string;
   enabled: boolean;
 };
 
@@ -47,6 +56,7 @@ export const DEFAULT_METHODS: PaymentMethod[] = [
     kind: "cod",
     note: "Pay the courier when your order arrives. Available everywhere we ship.",
     noteAr: "تدفعين للمندوب عند وصول الطلب — متاح في كل المحافظات.",
+    color: "#1f6f5c",
     logo: "",
     enabled: true,
   },
@@ -57,6 +67,7 @@ export const DEFAULT_METHODS: PaymentMethod[] = [
     kind: "instalment",
     note: "Up to 60 months, 0% interest on selected plans. We confirm the plan with you on WhatsApp before dispatch.",
     noteAr: "حتى ٦٠ شهرًا بدون فوائد على خطط مختارة — نؤكد الخطة معك على واتساب قبل الشحن.",
+    color: "#e4572e",
     logo: "",
     enabled: true,
   },
@@ -67,6 +78,7 @@ export const DEFAULT_METHODS: PaymentMethod[] = [
     kind: "instalment",
     note: "Split into 3 or 6 payments, no bank account needed. We set it up with you after the order.",
     noteAr: "قسّمي على ٣ أو ٦ دفعات بدون حساب بنكي — نرتّبها معك بعد الطلب.",
+    color: "#2f2a6b",
     logo: "",
     enabled: true,
   },
@@ -77,6 +89,7 @@ export const DEFAULT_METHODS: PaymentMethod[] = [
     kind: "instalment",
     note: "Instalments through Halan. We confirm the plan with you before dispatch.",
     noteAr: "تقسيط عبر حالًا — نؤكد الخطة معك قبل الشحن.",
+    color: "#f0803c",
     logo: "",
     enabled: true,
   },
@@ -87,6 +100,7 @@ export const DEFAULT_METHODS: PaymentMethod[] = [
     kind: "instalment",
     note: "Instalments through Souhoola. We confirm the plan with you before dispatch.",
     noteAr: "تقسيط عبر سهولة — نؤكد الخطة معك قبل الشحن.",
+    color: "#0f7b7b",
     logo: "",
     enabled: true,
   },
@@ -97,6 +111,7 @@ export const DEFAULT_METHODS: PaymentMethod[] = [
     kind: "instalment",
     note: "Instalments through Aman. We confirm the plan with you before dispatch.",
     noteAr: "تقسيط عبر أمان — نؤكد الخطة معك قبل الشحن.",
+    color: "#d1343f",
     logo: "",
     enabled: true,
   },
@@ -107,6 +122,7 @@ export const DEFAULT_METHODS: PaymentMethod[] = [
     kind: "instalment",
     note: "Instalments through Forsa. We confirm the plan with you before dispatch.",
     noteAr: "تقسيط عبر فرصة — نؤكد الخطة معك قبل الشحن.",
+    color: "#1f5fa8",
     logo: "",
     enabled: true,
   },
@@ -117,6 +133,7 @@ export const DEFAULT_METHODS: PaymentMethod[] = [
     kind: "instalment",
     note: "Instalments through Tru Finance. We confirm the plan with you before dispatch.",
     noteAr: "تقسيط عبر ترو — نؤكد الخطة معك قبل الشحن.",
+    color: "#152a52",
     logo: "",
     enabled: true,
   },
@@ -127,6 +144,7 @@ export const DEFAULT_METHODS: PaymentMethod[] = [
     kind: "cod",
     note: "Pay by card when your order arrives — the courier carries a machine.",
     noteAr: "تدفعين بالبطاقة عند وصول الطلب — المندوب معه ماكينة.",
+    color: "#4a3b2f",
     logo: "",
     enabled: true,
   },
@@ -137,6 +155,7 @@ export const DEFAULT_METHODS: PaymentMethod[] = [
     kind: "wallet",
     note: "We send you the account to transfer to once the order is placed, and dispatch when it lands.",
     noteAr: "نرسل لك الحساب للتحويل عليه بعد تأكيد الطلب، ونشحن فور وصوله.",
+    color: "#b8187e",
     logo: "",
     enabled: true,
   },
@@ -159,6 +178,9 @@ const KINDS: PaymentKind[] = ["cod", "instalment", "wallet", "transfer"];
  * A store that has never opened that screen gets the website's own set, so
  * both storefronts say something true on day one rather than nothing.
  */
+/** The defaults by id, so a merchant's own row can still borrow a colour. */
+const DEFAULT_BY_ID = new Map(DEFAULT_METHODS.map((m) => [m.id, m]));
+
 export function methodsFrom(raw: unknown): PaymentMethod[] {
   const saved = (raw ?? {}) as Record<string, unknown>;
   const rows = Array.isArray(saved.methods) ? (saved.methods as Record<string, unknown>[]) : [];
@@ -174,6 +196,8 @@ export function methodsFrom(raw: unknown): PaymentMethod[] {
           note: str(r.note),
           noteAr: str(r.note_ar) || str(r.noteAr),
           logo: str(r.logo),
+          // A merchant's own colour wins; the known providers keep theirs.
+          color: str(r.color) || DEFAULT_BY_ID.get(str(r.id))?.color || "",
           // A row a merchant added is on unless they said otherwise.
           enabled: r.enabled !== false && r.enabled !== "false",
         };

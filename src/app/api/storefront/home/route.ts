@@ -193,7 +193,15 @@ export async function GET() {
       // languages travel: this route does not know which one is reading it.
       payments: (await getPaymentMethods())
         .filter((m) => m.enabled)
-        .map((m) => ({ id: m.id, name: m.name, nameAr: m.nameAr, kind: m.kind, note: m.note, noteAr: m.noteAr })),
+        .map((m) => ({
+          id: m.id,
+          name: m.name,
+          nameAr: m.nameAr,
+          kind: m.kind,
+          note: m.note,
+          noteAr: m.noteAr,
+          color: m.color,
+        })),
     });
   } catch (e) {
     return fail((e as Error).message, 503);
