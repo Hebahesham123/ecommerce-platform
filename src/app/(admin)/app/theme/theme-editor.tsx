@@ -1826,7 +1826,7 @@ export function ThemeEditor() {
               {/* The bar the merchant just arranged, on every screen. */}
               <nav className="flex border-t border-slate-200 bg-white">
                 {draft.tabs
-                  .filter((t) => t.visible)
+                  .filter((t) => t.visible && t.key !== "live")
                   .map((t) => (
                     <button
                       key={t.key}

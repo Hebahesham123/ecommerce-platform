@@ -104,7 +104,8 @@ export function TabsPanel({
   ar: boolean;
   onChange: (tabs: Tab[]) => void;
 }) {
-  const visible = tabs.filter((t) => t.visible).length;
+  // The app has no Live tab any more: lives open from the shop's live row.
+  const visible = tabs.filter((t) => t.visible && t.key !== "live").length;
 
   function move(i: number, by: 1 | -1) {
     const j = i + by;
@@ -122,7 +123,7 @@ export function TabsPanel({
           : "The order here is the order along the bottom of the screen. Leave a name empty and the app uses its own word, in the shopper's language."}
       </p>
       <ul className="space-y-1">
-        {tabs.map((tab, i) => (
+        {tabs.map((tab, i) => tab.key === "live" ? null : (
           <li key={tab.key} className="rounded-xl border border-line bg-surface-page p-2">
             <div className="flex items-center gap-1.5">
               <span className="grid w-5 shrink-0 place-items-center text-ink-muted">

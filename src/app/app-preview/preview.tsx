@@ -345,7 +345,8 @@ export function Preview({
   // The bar the merchant arranged: their order, their wording, and only the
   // tabs they kept. An empty label means the app's own word, in this language.
   const tabs = (theme?.tabs ?? DEFAULT_TABS)
-    .filter((t) => t.visible)
+    // Lives open from the live row on the shop; the app has no Live tab.
+    .filter((t) => t.visible && t.key !== "live")
     .map((t) => ({
       key: t.key as Tab,
       label: t.label || TAB_DEFAULTS[t.key][ar ? "ar" : "en"],

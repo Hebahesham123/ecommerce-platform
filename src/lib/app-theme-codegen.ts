@@ -188,8 +188,10 @@ export function appPack(theme: AppTheme) {
       itemTight: Math.max(2, Math.round((Number(t.itemGap) || 0) * 0.67)),
     },
     screens: theme.screens,
+    // Lives are reached from the live row at the top of the shop; there is
+    // no Live tab in the app any more.
     tabs: theme.tabs
-      .filter((x) => x.visible)
+      .filter((x) => x.visible && x.key !== "live")
       .map((x) => ({ key: x.key, label: x.label || TAB_DEFAULTS[x.key].en })),
     home: place("home"),
     product: place("product"),
@@ -3746,7 +3748,7 @@ export function LiveNow({
                 onPress={() => {
                   // A live on air now is a broadcast, not a reel: it keeps the
                   // way in it always had.
-                  if (p.onAir) return go(p);
+                  if (p.onAir) return onOpenScreen?.("live:" + p.id);
                   // A recording opens in the app's own reels feed, on the reel
                   // it is - not a bare video file in the system browser.
                   if (reelId) return onOpenScreen?.("reel:" + reelId);
@@ -7805,171 +7807,6 @@ const styles = StyleSheet.create({
   };
 }
 
-function liveScreenFile(): GeneratedFile {
-  return {
-    path: "components/LiveScreen.tsx",
-    language: "tsx",
-    contents: `/**
- * The Live tab. Generated from the dashboard - App - App theme.
- *
- * The shop's real lives, as the editor shows them: whoever is on air first,
- * then what is scheduled. Under them, the recordings, each of which opens in
- * the app's reels feed on that reel. The sessions typed into the editor only
- * stand in while the shop has no lives at all.
- */
-import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { colors, radius, spacing, theme } from "../theme";
-import { SITE_ORIGIN, fetchHome, type HomePayload } from "../api";
-import { openLink, type LinkTo } from "./Pieces";
-
-type Live = HomePayload["lives"][number];
-
-function when(iso: string | null) {
-  if (!iso) return "";
-  try {
-    return new Date(iso).toLocaleString(undefined, { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-  } catch {
-    return "";
-  }
-}
-
-export function LiveScreen({
-  onOpenCollection,
-  onOpenProduct,
-  onOpenScreen,
-}: {
-  onOpenCollection?: (handle: string) => void;
-  onOpenProduct?: (id: string) => void;
-  onOpenScreen?: (screen: string) => void;
-}) {
-  const [lives, setLives] = useState<Live[] | null>(null);
-  useEffect(() => {
-    fetchHome()
-      .then((d) => setLives(d.lives || []))
-      .catch(() => setLives([]));
-  }, []);
-
-  if (!lives) {
-    return (
-      <View style={styles.empty}>
-        <ActivityIndicator color={colors.accent} />
-      </View>
-    );
-  }
-
-  const rank = (st: string) => (st === "live" ? 0 : 1);
-  const upcoming = lives
-    .filter((l) => l.status === "live" || l.status === "scheduled")
-    .sort((a, b) => rank(a.status) - rank(b.status) || String(a.scheduledAt || "").localeCompare(String(b.scheduledAt || "")));
-  const replays = lives.filter((l) => l.status === "ended");
-  const go = (to: LinkTo) => openLink(to, { onOpenCollection, onOpenProduct, onOpenScreen });
-
-  // Nothing real yet: the sessions the merchant typed into the editor.
-  if (!upcoming.length && !replays.length) {
-    const sessions = theme.live;
-    if (!sessions.length) {
-      return (
-        <View style={styles.empty}>
-          <Text style={styles.emptyText}>Nothing live yet.</Text>
-        </View>
-      );
-    }
-    return (
-      <ScrollView contentContainerStyle={styles.wrap}>
-        {sessions.map((s) => (
-          <Row key={s.id} image={s.imageUrl} badge={s.live ? "LIVE" : ""} name={s.name} detail={s.detail} cta={s.live ? "Watch" : "Remind me"} onPress={() => go(s)} />
-        ))}
-      </ScrollView>
-    );
-  }
-
-  return (
-    <ScrollView contentContainerStyle={styles.wrap}>
-      {upcoming.map((l) => (
-        <Row
-          key={l.id}
-          image={l.coverUrl}
-          badge={l.status === "live" ? "LIVE" : ""}
-          name={l.hostName || l.title}
-          detail={l.status === "live" ? (l.peakViewers ? String(l.peakViewers) : "") : when(l.scheduledAt)}
-          cta={l.status === "live" ? "Watch" : "Remind me"}
-          onPress={() => Linking.openURL(SITE_ORIGIN + l.href).catch(() => {})}
-        />
-      ))}
-      {replays.length ? <Text style={styles.heading}>REPLAYS</Text> : null}
-      {replays.map((l) => (
-        <Row
-          key={l.id}
-          image={l.coverUrl}
-          badge="REPLAY"
-          dark
-          name={l.title || l.hostName || ""}
-          detail={l.hostName && l.title ? "with " + l.hostName : ""}
-          cta="Play"
-          onPress={() => onOpenScreen?.("reel:" + l.id)}
-        />
-      ))}
-    </ScrollView>
-  );
-}
-
-function Row({
-  image,
-  badge,
-  dark,
-  name,
-  detail,
-  cta,
-  onPress,
-}: {
-  image?: string | null;
-  badge: string;
-  dark?: boolean;
-  name: string;
-  detail?: string;
-  cta: string;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable style={styles.row} onPress={onPress}>
-      <View>
-        {image ? <Image source={{ uri: image }} style={styles.thumb} /> : <View style={styles.thumb} />}
-        {badge ? (
-          <View style={[styles.badge, dark ? { backgroundColor: "#211a15" } : null]}>
-            <Text style={styles.badgeText}>{badge}</Text>
-          </View>
-        ) : null}
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.name} numberOfLines={1}>{name}</Text>
-        {detail ? <Text style={styles.detail} numberOfLines={1}>{detail}</Text> : null}
-      </View>
-      <View style={styles.cta}>
-        <Text style={styles.ctaText}>{cta}</Text>
-      </View>
-    </Pressable>
-  );
-}
-
-const styles = StyleSheet.create({
-  wrap: { padding: spacing.lg, gap: spacing.md },
-  empty: { flex: 1, padding: 32, alignItems: "center" },
-  emptyText: { fontSize: 12, lineHeight: 18, color: colors.inkSoft, textAlign: "center" },
-  heading: { marginTop: spacing.sm, fontSize: 10, fontWeight: "700", letterSpacing: 1.8, color: colors.accent },
-  row: { flexDirection: "row", alignItems: "center", gap: spacing.md, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, padding: spacing.md },
-  thumb: { width: 56, height: 56, borderRadius: 12, backgroundColor: colors.page },
-  badge: { position: "absolute", bottom: -4, alignSelf: "center", borderRadius: 4, backgroundColor: "#e11d48", paddingHorizontal: 5, paddingVertical: 1 },
-  badgeText: { fontSize: 8, fontWeight: "700", color: "#fff" },
-  name: { fontSize: 12, fontWeight: "700", color: colors.ink },
-  detail: { fontSize: 11, color: colors.inkSoft },
-  cta: { borderRadius: 999, backgroundColor: colors.accent, paddingHorizontal: 12, paddingVertical: 6 },
-  ctaText: { fontSize: 11, fontWeight: "600", color: "#fff" },
-});
-`,
-  };
-}
-
 // The editor's icons, path for path (src/components/app-tab-icons.tsx and
 // app-header.tsx). Emoji stood in for them before, and looked like someone
 // else's app.
@@ -8415,7 +8252,7 @@ import { TabIcon } from "./Icons";
 
 export type TabKey = ${TAB_KEYS.map((k) => q(k)).join(" | ")};
 
-const KEYS: string[] = [${TAB_KEYS.map((k) => q(k)).join(", ")}];
+const KEYS: string[] = [${TAB_KEYS.filter((k) => k !== "live").map((k) => q(k)).join(", ")}];
 
 /**
  * Order, wording and which appear are the merchant's, from the theme the app
@@ -10164,13 +10001,8 @@ const styles = StyleSheet.create({
 
 // ------------------------------------------------------- the app itself --
 function appFile(): GeneratedFile {
-  // The Live tab's screen is only generated when the merchant shows the tab, so
-  // nothing above may name it otherwise.
-  // Reels does not use this screen any more (it opens the real site), so this
-  // is now exactly what it says: is the Live tab itself on.
-  // Which tabs show is decided when the app opens, so the Live screen is
-  // always part of the build.
-  const live = true;
+  // There is no Live tab: a live is opened from the live row on the shop.
+  const live = false;
   return {
     path: "App.tsx",
     language: "tsx",
@@ -10488,6 +10320,12 @@ export default function App() {
       setReelStart(screen.slice(5));
       return goTab("reels");
     }
+    // A live on air, from the row at the top of the shop: its broadcast,
+    // inside the app.
+    if (screen.startsWith("live:")) {
+      return push({ kind: "web", path: "/store/live/" + encodeURIComponent(screen.slice(5)), title: "Live" });
+    }
+    if (screen === "live") return goTab("shop");
     if (
       screen === "cart" ||
       screen === "orders" ||
@@ -10902,7 +10740,6 @@ export function generateApp(theme: AppTheme, baseUrl: string): GeneratedFile[] {
     chromeFile(),
     offerPopupFile(),
     reelsScreenFile(),
-    liveScreenFile(),
     ...(Object.keys(BLOCK_META) as BlockType[]).map(sectionFile).sort((a, b) => a.path.localeCompare(b.path)),
   ];
 }
