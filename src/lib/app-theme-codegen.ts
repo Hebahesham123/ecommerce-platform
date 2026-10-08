@@ -3481,10 +3481,14 @@ const styles = StyleSheet.create({
 `,
 
     live_now: `import React, { useEffect, useState } from "react";
-import { Image, Linking, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Animated, Easing, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useVideoPlayer, VideoView } from "expo-video";
+import Svg, { Path } from "react-native-svg";
 import { colors, gap, radius, spacing } from "../theme";
 import { SectionHeading, inherit, openLink, type LinkTo } from "./Pieces";
-import { fetchAccount, type HomePayload } from "../api";
+import { Fade } from "./Fade";
+import { fetchAccount, fetchReels, likeReel, type HomePayload, type Reel } from "../api";
 
 export type LivePerson = {
   id: string;
@@ -3495,6 +3499,9 @@ export type LivePerson = {
   videoUrl?: string;
   /** False for a recording, true for a live that is on air now. */
   onAir?: boolean;
+  /** A live on air: its hearts, and how many things are pinned to it. */
+  likes?: number;
+  pieces?: number;
   handle?: string;
   productId?: string;
   screen?: string;
@@ -3511,6 +3518,8 @@ export type LiveNowSettings = {
   replaysProductId?: string;
   replaysScreen?: string;
   replaysUrl?: string;
+  /** Recordings play inside their tiles. On unless switched off. */
+  autoplayReplays?: boolean;
   offerEnabled?: boolean;
   offerTitle?: string;
   offerText?: string;
@@ -3601,6 +3610,8 @@ export function LiveNow({
       viewers: l.peakViewers ? String(l.peakViewers) : undefined,
       url: l.href,
       onAir: true,
+      likes: l.likes ?? 0,
+      pieces: l.pieces ?? 0,
     })),
     ...(settings.items ?? [])
       .filter((i) => i.videoUrl || i.imageUrl || i.name)
@@ -3633,7 +3644,16 @@ export function LiveNow({
   const offerHeight = typeof settings.offerHeight === "number" && settings.offerHeight > 0 ? settings.offerHeight : undefined;
   const offerTitleSize = settings.offerTitleSize && settings.offerTitleSize > 0 ? settings.offerTitleSize : 13;
   const offerTextSize = settings.offerTextSize && settings.offerTextSize > 0 ? settings.offerTextSize : 11;
-  const cell = Math.max(size + 12, 56);
+  // A card, not a face in a circle: the portrait shape a phone video is. It
+  // takes its width from the size the merchant set, but never less than a
+  // name and a pill need.
+  const tileW = Math.max(Math.round(size * 1.6), 96);
+  const tileH = Math.round(tileW * 1.46);
+  const tileR = shape === "square" ? 6 : 14;
+  const autoplay = settings.autoplayReplays !== false;
+  void ringW;
+  void ringColor;
+  void replayBadge;
 
   // The offer is addressed by name, so ask who is signed in. Signed out this
   // rejects, and the greeting simply loses the name — never a blocked screen.
@@ -3649,6 +3669,26 @@ export function LiveNow({
       alive = false;
     };
   }, []);
+
+  // What each replay tile can play and say: its stream, its likes and how
+  // many things were sold in it — asked once for the whole row.
+  const [reels, setReels] = useState<Record<string, Reel>>({});
+  useEffect(() => {
+    if (!people.some((p) => reelIdOf(p.videoUrl))) return;
+    let alive = true;
+    fetchReels()
+      .then((list) => {
+        if (!alive) return;
+        const byId: Record<string, Reel> = {};
+        for (const r of list) byId[r.id] = r;
+        setReels(byId);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [people.map((p) => p.videoUrl ?? "").join("|")]);
 
   const total = Math.max(0, Math.trunc((settings.offerMinutes ?? 10) * 60));
   const [left, setLeft] = useState(total);
@@ -3673,73 +3713,58 @@ export function LiveNow({
 
       {people.length ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-          {people.map((p) => {
+          {people.map((p, i) => {
             const borrowed = inherit(p, collections);
             const photo = p.imageUrl || borrowed.image;
             const onAirNow = p.onAir !== false;
+            const reelId = reelIdOf(p.videoUrl);
+            const reel = reelId ? reels[reelId] : undefined;
+            const liveId = onAirNow ? p.id : reel ? reel.id : null;
+            const likes = onAirNow ? p.likes ?? 0 : reel ? reel.likes : 0;
+            const pieces = onAirNow ? p.pieces ?? 0 : reel ? reel.products.length : 0;
             return (
-              <Pressable
+              <LiveTile
                 key={p.id}
-                style={[styles.person, { width: cell }]}
+                width={tileW}
+                height={tileH}
+                radius={tileR}
+                photo={photo || null}
+                // Only the first few tiles play at once; a long row would
+                // otherwise be a dozen videos nobody can see.
+                video={autoplay && i < 4 && reel ? reel.recordingUrl : null}
+                name={p.name || borrowed.title || ""}
+                viewers={p.viewers || ""}
+                onAir={onAirNow}
+                liveLabel={liveLabel}
+                badgeBg={badgeBg}
+                badgeFg={badgeFg}
+                nameSize={nameSize}
+                viewersSize={viewersSize}
+                pieces={pieces}
+                liveId={liveId}
+                likes={likes}
                 onPress={() => {
                   // A live on air now is a broadcast, not a reel: it keeps the
                   // way in it always had.
                   if (p.onAir) return go(p);
                   // A recording opens in the app's own reels feed, on the reel
                   // it is - not a bare video file in the system browser.
-                  const id = reelIdOf(p.videoUrl);
-                  if (id) return onOpenScreen?.(\`reel:\${id}\`);
-                  // A recording with no id of ours still belongs in the feed
-                  // rather than in Chrome.
+                  if (reelId) return onOpenScreen?.("reel:" + reelId);
                   if (p.videoUrl) return onOpenScreen?.("reels");
                   go(p);
                 }}
-              >
-                <View
-                  style={{
-                    backgroundColor: ringW > 0 ? ringColor : "transparent",
-                    padding: ringW,
-                    borderRadius: photoRadius + ringW,
-                  }}
-                >
-                  {photo ? (
-                    <Image source={{ uri: photo }} style={{ width: size, height: size, borderRadius: photoRadius }} />
-                  ) : (
-                    <View style={{ width: size, height: size, borderRadius: photoRadius, backgroundColor: colors.page }} />
-                  )}
-                </View>
-                {!onAirNow && p.videoUrl ? (
-                  <View style={[styles.play, { width: size, height: size, borderRadius: photoRadius }]}>
-                    <View style={styles.playDot}>
-                      <Text style={styles.playMark}>{"\u25B6"}</Text>
-                    </View>
-                  </View>
-                ) : null}
-                {(onAirNow ? liveLabel : replayBadge) ? (
-                  <View style={[styles.badge, { backgroundColor: onAirNow ? badgeBg : "#2b1b10" }]}>
-                    <Text style={[styles.badgeText, { color: badgeFg }]}>
-                      {onAirNow ? liveLabel : replayBadge}
-                    </Text>
-                  </View>
-                ) : null}
-                {p.name || borrowed.title ? (
-                  <Text style={[styles.name, { fontSize: nameSize }]} numberOfLines={1}>
-                    {p.name || borrowed.title}
-                  </Text>
-                ) : null}
-                {p.viewers ? (
-                  <Text style={[styles.viewers, { fontSize: viewersSize }]} numberOfLines={1}>
-                    {p.viewers}
-                  </Text>
-                ) : null}
-              </Pressable>
+              />
             );
           })}
 
           {showReplays ? (
             <Pressable
-              style={[styles.person, { width: cell }]}
-              onPress={() => go({ url: settings.replaysUrl, handle: settings.replaysHandle, productId: settings.replaysProductId, screen: settings.replaysScreen })}
+              style={[styles.person, { width: Math.max(size + 12, 56) }]}
+              onPress={() =>
+                settings.replaysUrl || settings.replaysHandle || settings.replaysProductId || settings.replaysScreen
+                  ? go({ url: settings.replaysUrl, handle: settings.replaysHandle, productId: settings.replaysProductId, screen: settings.replaysScreen })
+                  : onOpenScreen?.("reels")
+              }
             >
               <View style={[styles.replays, { width: size, height: size, borderRadius: photoRadius }]}>
                 <Text style={[styles.replaysIcon, { fontSize: Math.round(size / 3.5) }]}>▶</Text>
@@ -3780,18 +3805,210 @@ export function LiveNow({
   );
 }
 
+/* ---- one tile: the video, what is written on it, and the cheer ------------ */
+const CHEER = ["❤️", "🔥", "😍", "👏", "✨", "💖"];
+type Face = { id: number; face: string; lean: number; size: number; delay: number; rise: Animated.Value };
+let faceIds = 0;
+
+function LiveTile({
+  width,
+  height,
+  radius: r,
+  photo,
+  video,
+  name,
+  viewers,
+  onAir,
+  liveLabel,
+  badgeBg,
+  badgeFg,
+  nameSize,
+  viewersSize,
+  pieces,
+  liveId,
+  likes,
+  onPress,
+}: {
+  width: number;
+  height: number;
+  radius: number;
+  photo: string | null;
+  video: string | null;
+  name: string;
+  viewers: string;
+  onAir: boolean;
+  liveLabel: string;
+  badgeBg: string;
+  badgeFg: string;
+  nameSize: number;
+  viewersSize: number;
+  pieces: number;
+  liveId: string | null;
+  likes: number;
+  onPress: () => void;
+}) {
+  // The recording plays inside the tile, silently, from the stream.
+  const player = useVideoPlayer(video, (pl) => {
+    pl.loop = true;
+    pl.muted = true;
+    pl.play();
+  });
+  const [playing, setPlaying] = useState(false);
+  useEffect(() => {
+    const sub = player.addListener("playingChange", (e) => setPlaying(Boolean(e.isPlaying)));
+    return () => sub.remove();
+  }, [player]);
+
+  const [count, setCount] = useState(likes);
+  const [mine, setMine] = useState(false);
+  const [faces, setFaces] = useState<Face[]>([]);
+  useEffect(() => setCount(likes), [likes]);
+  useEffect(() => {
+    if (!liveId) return;
+    AsyncStorage.getItem("reel_like_" + liveId)
+      .then((v) => setMine(v === "1"))
+      .catch(() => {});
+  }, [liveId]);
+
+  // Faces let go and rise the height of the tile, each leaning its own way.
+  // Decoration only: they say nothing about how many are watching.
+  const release = (many: number) => {
+    const born: Face[] = Array.from({ length: many }, (_, i) => ({
+      id: faceIds++,
+      face: CHEER[Math.floor(Math.random() * CHEER.length)],
+      lean: Math.round((Math.random() - 0.5) * 34),
+      size: 11 + Math.round(Math.random() * 7),
+      delay: Math.round(i * 55 + Math.random() * 240),
+      rise: new Animated.Value(0),
+    }));
+    setFaces((all) => [...all, ...born].slice(-24));
+    for (const f of born) {
+      Animated.timing(f.rise, { toValue: 1, duration: 1800, delay: f.delay, easing: Easing.out(Easing.quad), useNativeDriver: true }).start(() =>
+        setFaces((all) => all.filter((x) => x.id !== f.id)),
+      );
+    }
+  };
+
+  // A live tile with nothing moving reads as a photograph; a face drifts up
+  // every second or so on its own.
+  useEffect(() => {
+    if (!liveId) return;
+    let timer: ReturnType<typeof setTimeout>;
+    const beat = () => {
+      release(2 + Math.round(Math.random() * 2));
+      timer = setTimeout(beat, 420 + Math.random() * 620);
+    };
+    timer = setTimeout(beat, Math.random() * 1200);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveId]);
+
+  const tap = () => {
+    if (!liveId) return;
+    const on = !mine;
+    setMine(on);
+    setCount((n) => Math.max(0, n + (on ? 1 : -1)));
+    (on ? AsyncStorage.setItem("reel_like_" + liveId, "1") : AsyncStorage.removeItem("reel_like_" + liveId)).catch(() => {});
+    release(9);
+    likeReel(liveId, on)
+      .then((n) => setCount(n))
+      .catch(() => {});
+  };
+
+  return (
+    <View style={{ width, height, borderRadius: r, overflow: "hidden", backgroundColor: "#17120f" }}>
+      <Pressable style={StyleSheet.absoluteFill} onPress={onPress}>
+        {photo ? <Image source={{ uri: photo }} style={StyleSheet.absoluteFill} resizeMode="cover" /> : null}
+        {video ? (
+          <VideoView
+            player={player}
+            style={[StyleSheet.absoluteFill, { opacity: playing ? 1 : 0 }]}
+            contentFit="cover"
+            nativeControls={false}
+          />
+        ) : null}
+        <Fade
+          angle={0}
+          colors={["rgba(0,0,0,0.88)", "rgba(0,0,0,0.55)", "rgba(0,0,0,0)"]}
+          locations={[0, 0.38, 1]}
+          style={[styles.tileShade, { height: "64%" }]}
+        />
+        {onAir && liveLabel ? (
+          <View style={[styles.liveBadge, { backgroundColor: badgeBg }]}>
+            <View style={[styles.liveDot, { backgroundColor: badgeFg }]} />
+            <Text style={[styles.liveBadgeText, { color: badgeFg }]}>{liveLabel.toUpperCase()}</Text>
+          </View>
+        ) : null}
+        <View style={styles.tileWords}>
+          {name ? <Text style={[styles.tileName, { fontSize: nameSize + 1 }]} numberOfLines={1}>{name}</Text> : null}
+          {viewers ? <Text style={[styles.tileViewers, { fontSize: viewersSize }]} numberOfLines={1}>{viewers}</Text> : null}
+          {pieces > 0 ? (
+            <View style={styles.piecesPill}>
+              <Text style={[styles.piecesText, { fontSize: Math.max(8, viewersSize) }]} numberOfLines={1}>
+                {onAir ? "Shop " + pieces + " piece" + (pieces === 1 ? "" : "s") : "+" + pieces + (pieces === 1 ? " piece" : " pieces")}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+      </Pressable>
+
+      {/* The cheer rises from behind the heart; it is weather, not a control. */}
+      <View pointerEvents="none" style={styles.cheer}>
+        {faces.map((f) => (
+          <Animated.Text
+            key={f.id}
+            style={{
+              position: "absolute",
+              fontSize: f.size,
+              opacity: f.rise.interpolate({ inputRange: [0, 0.75, 1], outputRange: [1, 0.9, 0] }),
+              transform: [
+                { translateY: f.rise.interpolate({ inputRange: [0, 1], outputRange: [0, -height * 0.78] }) },
+                { translateX: f.rise.interpolate({ inputRange: [0, 1], outputRange: [0, f.lean] }) },
+              ],
+            }}
+          >
+            {f.face}
+          </Animated.Text>
+        ))}
+      </View>
+
+      {liveId ? (
+        <Pressable onPress={tap} style={styles.heart} hitSlop={8}>
+          <Svg width={12} height={12} viewBox="0 0 24 24">
+            <Path
+              d="M20.8 5.6a5 5 0 0 0-7.1 0L12 7.3l-1.7-1.7a5 5 0 1 0-7.1 7.1l8.8 8.8 8.8-8.8a5 5 0 0 0 0-7.1Z"
+              fill={mine ? colors.accent : "rgba(255,255,255,0.25)"}
+              stroke={mine ? colors.accent : "#ffffff"}
+              strokeWidth={2.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </Svg>
+          {count > 0 ? <Text style={styles.heartCount}>{count > 999 ? Math.round(count / 100) / 10 + "k" : String(count)}</Text> : null}
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   row: { gap: gap.item, paddingVertical: spacing.sm },
   person: { alignItems: "center" },
-  play: { position: "absolute", top: 0, alignItems: "center", justifyContent: "center" },
-  playDot: { height: 28, width: 28, borderRadius: 14, backgroundColor: "rgba(0,0,0,0.45)", alignItems: "center", justifyContent: "center" },
-  playMark: { color: "#fff", fontSize: 10 },
-  badge: { marginTop: -9, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 },
-  badgeText: { fontSize: 8, fontWeight: "700", letterSpacing: 0.5 },
   name: { marginTop: 7, fontWeight: "600", color: colors.ink, textAlign: "center" },
-  viewers: { color: colors.inkSoft, textAlign: "center" },
   replays: { alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.line, backgroundColor: colors.page },
   replaysIcon: { color: colors.inkSoft },
+  tileShade: { position: "absolute", left: 0, right: 0, bottom: 0 },
+  liveBadge: { position: "absolute", top: 6, left: 6, flexDirection: "row", alignItems: "center", gap: 4, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
+  liveDot: { width: 4, height: 4, borderRadius: 2 },
+  liveBadgeText: { fontSize: 8, fontWeight: "800", letterSpacing: 0.5 },
+  tileWords: { position: "absolute", left: 0, right: 0, bottom: 0, paddingHorizontal: 6, paddingBottom: 6 },
+  tileName: { color: "#ffffff", fontWeight: "800" },
+  tileViewers: { marginTop: 1, color: "rgba(255,255,255,0.75)" },
+  piecesPill: { marginTop: 4, alignSelf: "flex-start", borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, backgroundColor: "rgba(255,255,255,0.2)" },
+  piecesText: { color: "#ffffff", fontWeight: "700" },
+  cheer: { position: "absolute", right: 28, bottom: 32, width: 0, height: 0 },
+  heart: { position: "absolute", top: 6, right: 6, minWidth: 22, height: 22, borderRadius: 11, paddingHorizontal: 5, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 2, backgroundColor: "rgba(0,0,0,0.35)" },
+  heartCount: { color: "#ffffff", fontSize: 9, fontWeight: "800" },
   offer: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingHorizontal: 12, paddingVertical: 8 },
   offerTitle: { fontWeight: "700" },
   offerText: { opacity: 0.85 },
@@ -6319,6 +6536,7 @@ function settingsObject(block: Block): Record<string, unknown> {
       "replaysHandle",
       "replaysUrl",
       "offerEnabled",
+      "autoplayReplays",
       "offerTitle",
       "offerText",
       "offerMinutes",
@@ -6606,6 +6824,7 @@ function settingsObject(block: Block): Record<string, unknown> {
     }
     if (
       k === "showReplays" ||
+      k === "autoplayReplays" ||
       k === "offerEnabled" ||
       k === "showTimer" ||
       k === "showClaimed" ||
@@ -7008,6 +7227,44 @@ function thumbOf(r: Reel): string | null {
   return r.coverUrl;
 }
 
+/**
+ * One tile. The frame shows at once; when it is this tile's turn the reel
+ * itself plays over it, silently, and fades back to the frame when the turn
+ * passes on.
+ */
+function GridTile({ reel, width, height, playing, onPress, children }: { reel: Reel; width: number; height: number; playing: boolean; onPress: () => void; children: React.ReactNode }) {
+  const player = useVideoPlayer(playing && reel.recordingUrl ? reel.recordingUrl : null, (pl) => {
+    pl.loop = true;
+    pl.muted = true;
+  });
+  const [moving, setMoving] = useState(false);
+  useEffect(() => {
+    const sub = player.addListener("playingChange", (e) => setMoving(Boolean(e.isPlaying)));
+    return () => sub.remove();
+  }, [player]);
+  useEffect(() => {
+    if (playing) player.play();
+    else {
+      player.pause();
+      setMoving(false);
+    }
+  }, [player, playing]);
+  const thumb = thumbOf(reel);
+  return (
+    <Pressable onPress={onPress} style={{ width, height, backgroundColor: "#e2e8f0" }}>
+      {thumb ? <Image source={{ uri: thumb }} style={StyleSheet.absoluteFill} resizeMode="cover" /> : null}
+      {playing ? (
+        <VideoView player={player} style={[StyleSheet.absoluteFill, { opacity: moving ? 1 : 0 }]} contentFit="cover" nativeControls={false} />
+      ) : null}
+      {children}
+    </Pressable>
+  );
+}
+
+/** How many tiles play at once, and how long each turn lasts. */
+const AT_ONCE = 2;
+const TURN_MS = 6000;
+
 /** The grid: every reel at a glance, a search above it, like Explore. */
 function ReelGrid({
   reels,
@@ -7023,6 +7280,22 @@ function ReelGrid({
   onOpen: (index: number) => void;
 }) {
   const tile = (width - 2 * GRID_GAP) / 3;
+  // Which tiles are on screen, and whose turn it is to play.
+  const [visible, setVisible] = useState<number[]>([]);
+  const [turn, setTurn] = useState(0);
+  const onViewable = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+    setVisible(viewableItems.map((v) => v.index).filter((i): i is number => typeof i === "number").sort((a, b) => a - b));
+  }).current;
+  useEffect(() => {
+    const t = setInterval(() => setTurn((n) => n + 1), TURN_MS);
+    return () => clearInterval(t);
+  }, []);
+  const playingNow = new Set<number>();
+  if (visible.length) {
+    for (let k = 0; k < Math.min(AT_ONCE, visible.length); k++) {
+      playingNow.add(visible[(turn * AT_ONCE + k) % visible.length]);
+    }
+  }
   return (
     <View style={styles.gridScreen}>
       <View style={styles.searchBox}>
@@ -7048,11 +7321,11 @@ function ReelGrid({
           columnWrapperStyle={{ gap: GRID_GAP }}
           contentContainerStyle={{ gap: GRID_GAP, paddingBottom: 12 }}
           keyboardShouldPersistTaps="handled"
+          onViewableItemsChanged={onViewable}
+          viewabilityConfig={{ itemVisiblePercentThreshold: 70 }}
           renderItem={({ item, index }) => {
-            const thumb = thumbOf(item);
             return (
-              <Pressable onPress={() => onOpen(index)} style={{ width: tile, height: tile * 1.34, backgroundColor: "#e2e8f0" }}>
-                {thumb ? <Image source={{ uri: thumb }} style={StyleSheet.absoluteFill} resizeMode="cover" /> : null}
+              <GridTile reel={item} width={tile} height={tile * 1.34} playing={playingNow.has(index)} onPress={() => onOpen(index)}>
                 {/* A reel, not a photo: the mark Instagram puts in the corner. */}
                 <View style={styles.tileMark} pointerEvents="none">
                   <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
@@ -7076,7 +7349,7 @@ function ReelGrid({
                     <Text style={styles.tileCountText}>{compact(item.likes)}</Text>
                   </View>
                 ) : null}
-              </Pressable>
+              </GridTile>
             );
           }}
         />
