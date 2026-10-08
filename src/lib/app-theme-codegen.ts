@@ -7389,17 +7389,23 @@ const TURN_MS = 6000;
 function ReelGrid({
   reels,
   width,
+  height,
   query,
   onQuery,
   onOpen,
 }: {
   reels: Reel[];
   width: number;
+  /** The whole screen's height, so four reels fill it exactly. */
+  height: number;
   query: string;
   onQuery: (q: string) => void;
   onOpen: (index: number) => void;
 }) {
-  const tile = (width - 2 * GRID_GAP) / 3;
+  // Two across and two down: four reels to a screen, big enough to watch,
+  // and the rest below on scrolling. The search box takes 60 points.
+  const tile = (width - GRID_GAP) / 2;
+  const tileH = Math.max(Math.round(tile * 1.2), Math.floor((height - 60 - GRID_GAP) / 2));
   // Which tiles are on screen, and whose turn it is to play.
   const [visible, setVisible] = useState<number[]>([]);
   const [turn, setTurn] = useState(0);
@@ -7437,7 +7443,7 @@ function ReelGrid({
         <FlatList
           data={reels}
           keyExtractor={(r) => r.id}
-          numColumns={3}
+          numColumns={2}
           columnWrapperStyle={{ gap: GRID_GAP }}
           contentContainerStyle={{ gap: GRID_GAP, paddingBottom: 12 }}
           keyboardShouldPersistTaps="handled"
@@ -7445,7 +7451,7 @@ function ReelGrid({
           viewabilityConfig={{ itemVisiblePercentThreshold: 70 }}
           renderItem={({ item, index }) => {
             return (
-              <GridTile reel={item} width={tile} height={tile * 1.34} playing={playingNow.has(index)} onPress={() => onOpen(index)}>
+              <GridTile reel={item} width={tile} height={tileH} playing={playingNow.has(index)} onPress={() => onOpen(index)}>
                 {/* A reel, not a photo: the mark Instagram puts in the corner. */}
                 <View style={styles.tileMark} pointerEvents="none">
                   <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
@@ -7795,6 +7801,7 @@ export function ReelsScreen({
         <ReelGrid
           reels={shown}
           width={width}
+          height={height}
           query={query}
           onQuery={setQuery}
           onOpen={(i) => {
@@ -10606,7 +10613,7 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
     <SafeAreaProvider>
-    <SafeAreaView style={styles.app} edges={["top", "bottom"]}>
+    <SafeAreaView style={[styles.app, { direction: "ltr" }]} edges={["top", "bottom"]}>
       <StatusBar barStyle="dark-content" translucent backgroundColor="transparent" />
       {chrome ? (
         <AppChrome
@@ -10736,10 +10743,16 @@ function bootFile(): GeneratedFile {
  * looks like the shop did last time rather than like the day it was built.
  */
 import React, { useEffect, useRef, useState } from "react";
-import { AppState, View } from "react-native";
+import { AppState, I18nManager, View } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { api, setVisitor } from "./api";
 import { applyPack, canApplyLive, isApplied, theme } from "./theme";
+
+// The shop is laid out left to right. A phone set to Arabic would otherwise
+// mirror every screen - the tab bar backwards, a reel's buttons on the wrong
+// side. This holds from the next start; the root view below holds it now.
+I18nManager.allowRTL(false);
+I18nManager.forceRTL(false);
 
 const SAVED = "app_theme_pack";
 const VISITOR = "app_visitor";
