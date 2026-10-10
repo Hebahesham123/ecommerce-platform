@@ -5009,7 +5009,7 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-nati
 import Svg, { Circle, Path } from "react-native-svg";
 import { colors, gap, spacing, theme } from "../theme";
 import { inherit, openLink, type LinkTo } from "./Pieces";
-import type { HomePayload } from "../api";
+import { SITE_ORIGIN, type HomePayload } from "../api";
 
 export type Circle = { id: string; imageUrl?: string; label?: string; note?: string; handle?: string; url?: string };
 
@@ -5113,6 +5113,36 @@ function DeptMark({ name, size }: { name: string; size: number }) {
   );
 }
 
+/**
+ * A cut-out hung from its top.
+ *
+ * resizeMode contain centres what it fits, and a department is anything from
+ * a sneaker two and a half times wider than it is tall to a swimsuit twice as
+ * tall as it is wide. Centred, the wide ones sit in the middle of the box and
+ * never reach the card's edge. So the size is worked out here instead: the
+ * aspect arrives with the image, the width with the layout, and the picture
+ * is drawn at the top of the box at whichever of the two fits.
+ */
+function StandPhoto({ uri, height }: { uri: string; height: number }) {
+  const [aspect, setAspect] = React.useState(0);
+  const [box, setBox] = React.useState(0);
+  const w = aspect && box ? Math.min(box, height * aspect) : box;
+  const h = aspect && w ? w / aspect : height;
+  return (
+    <View style={{ width: "100%", alignItems: "center" }} onLayout={(e) => setBox(e.nativeEvent.layout.width)}>
+      <Image
+        source={{ uri }}
+        style={{ width: w, height: h }}
+        resizeMode="contain"
+        onLoad={(e) => {
+          const src: { width?: number; height?: number } = e.nativeEvent.source ?? {};
+          if (src.width && src.height) setAspect(src.width / src.height);
+        }}
+      />
+    </View>
+  );
+}
+
 /** A rail that scrolls, or a row that wraps. */
 function Rail({ grid, children }: { grid: boolean; children: React.ReactNode }) {
   if (grid) return <View style={styles.grid}>{children}</View>;
@@ -5178,9 +5208,9 @@ export function CircleRow({
   // anybody choosing seven colours by hand.
   const tinted = settings.tileStyle === "tinted";
   const cover = settings.tileStyle === "cover";
-  // A coloured card. The product sits inside it here: React Native has no
-  // blend modes, so the white a product was shot on cannot be erased against
-  // the card the way the preview does it.
+  // A coloured card with the product standing out of the top of it. The
+  // pictures are stored cut out of their ground, so nothing has to be erased
+  // against the card and this matches the preview exactly.
   const standout = settings.tileStyle === "standout";
   const CARDS = ["#e7dacd", "#dbe3dd", "#ead8d6", "#dcdfe8", "#eae2cf", "#ded8e4"];
   const coverW = Math.max(Math.round(size * 1.55), 108);
@@ -5191,6 +5221,15 @@ export function CircleRow({
   const titleSize = settings.titleSize && settings.titleSize > 0 ? settings.titleSize : 16;
   const linkSize = titleSize <= 16 ? 12 : Math.round(titleSize * 0.82);
   const labelSize = settings.labelSize && settings.labelSize > 0 ? settings.labelSize : 10;
+  // A path like /departments/bags.png is relative to the shop; a phone needs
+  // the whole address. Anything already absolute is left alone.
+  const full = (u: string) => (u.indexOf("//") >= 0 ? u : SITE_ORIGIN + u);
+  // The card, and the room kept above it for the overflow.
+  const cardH = Math.round(size * 1.34);
+  const standPad = Math.round(size * 0.34);
+  // The cell keeps room above the card; the picture starts part of the way
+  // up it, so the same slice of every department is above the edge.
+  const standLift = Math.max(0, standPad - Math.round(cardH * 0.18));
 
   return (
     <View
@@ -5231,25 +5270,34 @@ export function CircleRow({
             return (
               <Pressable
                 key={i.id}
-                style={[
-                  styles.stand,
-                  { width: grid ? "100%" : size, backgroundColor: CARDS[at % CARDS.length], borderRadius: tileRadius },
-                ]}
+                style={[styles.standCell, { width: grid ? "100%" : size, paddingTop: standPad }]}
                 onPress={() => go(i)}
               >
-                <View style={styles.standMark}>
-                  {i.imageUrl ? (
-                    <Image source={{ uri: i.imageUrl }} style={styles.standPhoto} resizeMode="contain" />
-                  ) : (
-                    <DeptMark name={i.label || borrowed.title} size={Math.round(size * 0.46)} />
-                  )}
+                <View
+                  style={[
+                    styles.stand,
+                    { height: cardH, backgroundColor: CARDS[at % CARDS.length], borderRadius: tileRadius },
+                  ]}
+                >
+                  <View style={styles.standPlate}>
+                    {settings.showLabel !== false ? (
+                      <Text style={styles.standName} numberOfLines={1}>{i.label || borrowed.title}</Text>
+                    ) : null}
+                    {under ? <Text style={styles.standNote} numberOfLines={1}>{under}</Text> : null}
+                  </View>
                 </View>
-                <View style={styles.standPlate}>
-                  {settings.showLabel !== false ? (
-                    <Text style={styles.standName} numberOfLines={1}>{i.label || borrowed.title}</Text>
-                  ) : null}
-                  {under ? <Text style={styles.standNote} numberOfLines={1}>{under}</Text> : null}
-                </View>
+                {i.imageUrl ? (
+                  <View style={[styles.standArt, { top: standLift }]} pointerEvents="none">
+                    <StandPhoto uri={full(i.imageUrl)} height={Math.round(cardH * 0.95)} />
+                  </View>
+                ) : (
+                  <View
+                    style={[styles.standMark, { bottom: Math.round(cardH * 0.3), height: Math.round(cardH * 0.46) }]}
+                    pointerEvents="none"
+                  >
+                    <DeptMark name={i.label || borrowed.title} size={Math.round(cardH * 0.46)} />
+                  </View>
+                )}
               </Pressable>
             );
           }
@@ -5334,9 +5382,10 @@ const styles = StyleSheet.create({
   cell: { alignItems: "center" },
   grid: { flexDirection: "row", flexWrap: "wrap", marginHorizontal: -4, rowGap: gap.item },
   inside: { position: "absolute", left: 6, right: 6, bottom: 6, textAlign: "center", fontSize: 10, fontWeight: "700", color: colors.ink },
-  stand: { aspectRatio: 3 / 4, overflow: "hidden", paddingHorizontal: 6, paddingTop: 6 },
-  standMark: { flex: 1, alignItems: "center", justifyContent: "center", paddingBottom: 14 },
-  standPhoto: { width: "70%", height: "70%" },
+  standCell: { position: "relative" },
+  stand: { width: "100%", overflow: "hidden" },
+  standMark: { position: "absolute", left: 0, right: 0, alignItems: "center", justifyContent: "flex-end" },
+  standArt: { position: "absolute", left: "-6%", right: "-6%", alignItems: "center" },
   standPlate: { position: "absolute", left: 8, right: 8, bottom: 8 },
   standName: { fontSize: 11, fontWeight: "700", color: colors.ink },
   standNote: { marginTop: 1, fontSize: 9, color: colors.inkSoft },

@@ -4163,24 +4163,33 @@ function CircleRow({
                   className="relative block transition-transform duration-300 ease-out group-hover:-translate-y-0.5"
                   style={{ background: tone, borderRadius: tileRadius, height: cardH }}
                 >
-                  {/* A drawn mark, not a photograph. Nothing is behind a
-                      drawing, so it can stand out of the card without
-                      bringing the ground it was shot on with it. A merchant
-                      who has her own mark puts it on the item instead. */}
-                  <span
-                    className="pointer-events-none absolute left-1/2 flex -translate-x-1/2 items-end justify-center transition-transform duration-300 ease-out group-hover:scale-105"
-                    style={{ bottom: "30%", height: Math.round(cardH * 0.46) }}
-                  >
-                    {str(item.imageUrl) ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={str(item.imageUrl)} alt="" className="h-full w-auto object-contain" />
-                    ) : (
+                  {/* The product itself, cut out of the ground it was shot
+                      on, so it can stand out of the card without bringing a
+                      grey rectangle up with it. Where no cut-out has been
+                      set, a drawn mark stands in - a drawing has nothing
+                      behind it either. */}
+                  {str(item.imageUrl) ? (
+                    <span
+                      className="pointer-events-none absolute left-1/2 block w-[112%] -translate-x-1/2 transition-transform duration-300 ease-out group-hover:scale-105"
+                      style={{ top: -Math.round(cardH * 0.18), height: Math.round(cardH * 0.95) }}
+                    >
+                      {/* object-top is the whole trick: contain would centre
+                          the picture in the box and a wide product would stop
+                          short of the edge it is meant to break. */}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={str(item.imageUrl)} alt="" className="h-full w-full object-contain object-top" />
+                    </span>
+                  ) : (
+                    <span
+                      className="pointer-events-none absolute left-1/2 flex -translate-x-1/2 items-end justify-center transition-transform duration-300 ease-out group-hover:scale-105"
+                      style={{ bottom: "30%", height: Math.round(cardH * 0.46) }}
+                    >
                       <DeptMark
                         name={str(item.label, borrowed.title)}
                         className="h-full w-auto text-slate-800/85"
                       />
-                    )}
-                  </span>
+                    </span>
+                  )}
                   <span className="absolute inset-x-0 bottom-0 block px-2 pb-2">
                     {showLabel && (
                       <span className="block truncate text-[11px] font-bold leading-tight text-slate-900">
