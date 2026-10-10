@@ -4163,17 +4163,24 @@ function CircleRow({
                   className="relative block transition-transform duration-300 ease-out group-hover:-translate-y-0.5"
                   style={{ background: tone, borderRadius: tileRadius, height: cardH }}
                 >
-                  {/* Out of the box, not in it. Multiplied, so the white it
-                      was shot on becomes the card. */}
-                  {borrowed.image && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={borrowed.image}
-                      alt=""
-                      className="pointer-events-none absolute left-1/2 w-[88%] -translate-x-1/2 object-contain transition-transform duration-300 ease-out group-hover:scale-105"
-                      style={{ bottom: "36%", height: Math.round(cardH * 0.92), mixBlendMode: "multiply" }}
-                    />
-                  )}
+                  {/* A drawn mark, not a photograph. Nothing is behind a
+                      drawing, so it can stand out of the card without
+                      bringing the ground it was shot on with it. A merchant
+                      who has her own mark puts it on the item instead. */}
+                  <span
+                    className="pointer-events-none absolute left-1/2 flex -translate-x-1/2 items-end justify-center transition-transform duration-300 ease-out group-hover:scale-105"
+                    style={{ bottom: "30%", height: Math.round(cardH * 0.46) }}
+                  >
+                    {str(item.imageUrl) ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={str(item.imageUrl)} alt="" className="h-full w-auto object-contain" />
+                    ) : (
+                      <DeptMark
+                        name={str(item.label, borrowed.title)}
+                        className="h-full w-auto text-slate-800/85"
+                      />
+                    )}
+                  </span>
                   <span className="absolute inset-x-0 bottom-0 block px-2 pb-2">
                     {showLabel && (
                       <span className="block truncate text-[11px] font-bold leading-tight text-slate-900">
@@ -4453,6 +4460,121 @@ function BrandWall({
         ))}
       </div>
     </section>
+  );
+}
+
+/**
+ * The mark for a department, chosen by what it is called.
+ *
+ * Drawn rather than photographed: a photograph of one bag is a picture of
+ * that bag, and a drawing of a bag is a picture of "bags". The words are
+ * matched loosely and in both languages, because a shop names its own
+ * departments and will not be asked to rename them to suit this.
+ */
+function DeptMark({ name, className }: { name: string; className?: string }) {
+  const n = name.toLowerCase();
+  const has = (...words: string[]) => words.some((w) => n.includes(w));
+  const common = {
+    viewBox: "0 0 24 24",
+    className,
+    fill: "none",
+    stroke: "currentColor",
+    // Drawn at 24 and shown near 60, so the line is set for the size it
+    // ends up at rather than the size it is authored at.
+    strokeWidth: 1.15,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    "aria-hidden": true,
+  };
+
+  if (has("bag", "clutch", "tote", "حقيب", "شنط")) {
+    return (
+      <svg {...common}>
+        <path d="M5 8h14l-1.2 12.5H6.2L5 8Z" />
+        <path d="M9 8V6.2a3 3 0 0 1 6 0V8" />
+      </svg>
+    );
+  }
+  if (has("heel", "pump", "stiletto", "كعب")) {
+    return (
+      <svg {...common}>
+        <path d="M4 5.5v7.2A3.3 3.3 0 0 0 7.3 16h6.2l4.6 3.2H21v-1.8c0-2-1.6-3.1-3.7-4-3-1.3-5.2-4-6.2-7.9H4Z" />
+      </svg>
+    );
+  }
+  if (has("sneak", "trainer", "shoe", "footwear", "حذاء", "سنيكرز")) {
+    return (
+      <svg {...common}>
+        <path d="M3 14.2c0-1.7.9-2.7 2.1-3.6L8 8.4l1.9 1.9 2.7-.9 1.9 2c2 .7 4.6 1.4 5.5 2.9V17a1.8 1.8 0 0 1-1.8 1.8H4.8A1.8 1.8 0 0 1 3 17Z" />
+        <path d="M8 8.4V5.6" />
+      </svg>
+    );
+  }
+  if (has("sunglass", "glass", "eyewear", "نظار")) {
+    return (
+      <svg {...common}>
+        <path d="M3 10h7v3.2A2.4 2.4 0 0 1 7.6 15.6H5.4A2.4 2.4 0 0 1 3 13.2Z" />
+        <path d="M14 10h7v3.2a2.4 2.4 0 0 1-2.4 2.4h-2.2A2.4 2.4 0 0 1 14 13.2Z" />
+        <path d="M10 11.2h4" />
+        <path d="M3 10 5.4 7.2M21 10 18.6 7.2" />
+      </svg>
+    );
+  }
+  if (has("sandal", "slipper", "slide", "flip", "صندل", "شبشب")) {
+    return (
+      <svg {...common}>
+        <path d="M7.4 4h9.2l-1 13.6a3.6 3.6 0 0 1-7.2 0Z" />
+        <path d="M8.4 8.4 15.6 10M8.4 11.8 15.6 10" />
+      </svg>
+    );
+  }
+  if (has("perfume", "fragrance", "scent", "عطر", "برفيوم")) {
+    return (
+      <svg {...common}>
+        <path d="M10.2 3.2h3.6v2.6h-3.6Z" />
+        <path d="M8.2 9a3.2 3.2 0 0 1 3.2-3.2h1.2A3.2 3.2 0 0 1 15.8 9v8.8a3 3 0 0 1-3 3h-1.6a3 3 0 0 1-3-3Z" />
+        <path d="M17.6 5.4h1.8M19.4 3.6v3.6" />
+      </svg>
+    );
+  }
+  if (has("swim", "bikini", "beach", "سباحة", "مايوه")) {
+    return (
+      <svg {...common}>
+        <path d="M8 3.6h8l-1 6.2c0 3.2-1.2 5.4-3 7.4-1.8-2-3-4.2-3-7.4Z" />
+        <path d="M9.2 8h5.6" />
+      </svg>
+    );
+  }
+  if (has("belt", "حزام")) {
+    return (
+      <svg {...common}>
+        <path d="M3 9.6h18v4.8H3Z" />
+        <path d="M9.6 9.6v4.8M14.4 9.6v4.8" />
+      </svg>
+    );
+  }
+  if (has("watch", "jewel", "ring", "ساعة", "مجوهرات")) {
+    return (
+      <svg {...common}>
+        <circle cx="12" cy="12" r="4.4" />
+        <path d="M9.2 7.8 9.8 3.4h4.4l.6 4.4M9.2 16.2l.6 4.4h4.4l.6-4.4" />
+      </svg>
+    );
+  }
+  if (has("men", "him", "رجال")) {
+    return (
+      <svg {...common}>
+        <circle cx="12" cy="7.4" r="3.4" />
+        <path d="M5.4 20.4c0-3.6 3-6 6.6-6s6.6 2.4 6.6 6" />
+      </svg>
+    );
+  }
+  // A kind of thing, without pretending to know which kind.
+  return (
+    <svg {...common}>
+      <path d="M3.6 12.4 12.4 3.6h7v7l-8.8 8.8z" />
+      <circle cx="15.8" cy="8.2" r="1.3" fill="currentColor" stroke="none" />
+    </svg>
   );
 }
 

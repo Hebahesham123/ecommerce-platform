@@ -5006,11 +5006,112 @@ const styles = StyleSheet.create({
 
     circle_row: `import React from "react";
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import Svg, { Circle, Path } from "react-native-svg";
 import { colors, gap, spacing, theme } from "../theme";
 import { inherit, openLink, type LinkTo } from "./Pieces";
 import type { HomePayload } from "../api";
 
 export type Circle = { id: string; imageUrl?: string; label?: string; note?: string; handle?: string; url?: string };
+
+/**
+ * The mark for a department, chosen by what it is called.
+ *
+ * Drawn rather than photographed: a photograph of one bag is a picture of
+ * that bag, and a drawing of a bag is a picture of "bags". Matched loosely
+ * and in both languages, because a shop names its own departments.
+ */
+function DeptMark({ name, size }: { name: string; size: number }) {
+  const n = String(name || "").toLowerCase();
+  const has = (...w: string[]) => w.some((x) => n.includes(x));
+  const box = { width: size, height: size, viewBox: "0 0 24 24", fill: "none" as const };
+  const line = {
+    stroke: colors.ink,
+    strokeWidth: 1.15,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+  };
+
+  if (has("bag", "clutch", "tote", "حقيب", "شنط")) {
+    return (
+      <Svg {...box}>
+        <Path {...line} d="M5 8h14l-1.2 12.5H6.2L5 8Z" />
+        <Path {...line} d="M9 8V6.2a3 3 0 0 1 6 0V8" />
+      </Svg>
+    );
+  }
+  if (has("heel", "pump", "stiletto", "كعب")) {
+    return (
+      <Svg {...box}>
+        <Path {...line} d="M4 5.5v7.2A3.3 3.3 0 0 0 7.3 16h6.2l4.6 3.2H21v-1.8c0-2-1.6-3.1-3.7-4-3-1.3-5.2-4-6.2-7.9H4Z" />
+      </Svg>
+    );
+  }
+  if (has("sneak", "trainer", "shoe", "footwear", "حذاء", "سنيكرز")) {
+    return (
+      <Svg {...box}>
+        <Path {...line} d="M3 14.2c0-1.7.9-2.7 2.1-3.6L8 8.4l1.9 1.9 2.7-.9 1.9 2c2 .7 4.6 1.4 5.5 2.9V17a1.8 1.8 0 0 1-1.8 1.8H4.8A1.8 1.8 0 0 1 3 17Z" />
+        <Path {...line} d="M8 8.4V5.6" />
+      </Svg>
+    );
+  }
+  if (has("sunglass", "glass", "eyewear", "نظار")) {
+    return (
+      <Svg {...box}>
+        <Path {...line} d="M3 10h7v3.2A2.4 2.4 0 0 1 7.6 15.6H5.4A2.4 2.4 0 0 1 3 13.2Z" />
+        <Path {...line} d="M14 10h7v3.2a2.4 2.4 0 0 1-2.4 2.4h-2.2A2.4 2.4 0 0 1 14 13.2Z" />
+        <Path {...line} d="M10 11.2h4" />
+        <Path {...line} d="M3 10 5.4 7.2M21 10 18.6 7.2" />
+      </Svg>
+    );
+  }
+  if (has("sandal", "slipper", "slide", "flip", "صندل", "شبشب")) {
+    return (
+      <Svg {...box}>
+        <Path {...line} d="M7.4 4h9.2l-1 13.6a3.6 3.6 0 0 1-7.2 0Z" />
+        <Path {...line} d="M8.4 8.4 15.6 10M8.4 11.8 15.6 10" />
+      </Svg>
+    );
+  }
+  if (has("perfume", "fragrance", "scent", "عطر", "برفيوم")) {
+    return (
+      <Svg {...box}>
+        <Path {...line} d="M10.2 3.2h3.6v2.6h-3.6Z" />
+        <Path {...line} d="M8.2 9a3.2 3.2 0 0 1 3.2-3.2h1.2A3.2 3.2 0 0 1 15.8 9v8.8a3 3 0 0 1-3 3h-1.6a3 3 0 0 1-3-3Z" />
+        <Path {...line} d="M17.6 5.4h1.8M19.4 3.6v3.6" />
+      </Svg>
+    );
+  }
+  if (has("swim", "bikini", "beach", "سباحة", "مايوه")) {
+    return (
+      <Svg {...box}>
+        <Path {...line} d="M8 3.6h8l-1 6.2c0 3.2-1.2 5.4-3 7.4-1.8-2-3-4.2-3-7.4Z" />
+        <Path {...line} d="M9.2 8h5.6" />
+      </Svg>
+    );
+  }
+  if (has("belt", "حزام")) {
+    return (
+      <Svg {...box}>
+        <Path {...line} d="M3 9.6h18v4.8H3Z" />
+        <Path {...line} d="M9.6 9.6v4.8M14.4 9.6v4.8" />
+      </Svg>
+    );
+  }
+  if (has("watch", "jewel", "ring", "ساعة", "مجوهرات")) {
+    return (
+      <Svg {...box}>
+        <Circle {...line} cx="12" cy="12" r="4.4" />
+        <Path {...line} d="M9.2 7.8 9.8 3.4h4.4l.6 4.4M9.2 16.2l.6 4.4h4.4l.6-4.4" />
+      </Svg>
+    );
+  }
+  return (
+    <Svg {...box}>
+      <Path {...line} d="M3.6 12.4 12.4 3.6h7v7l-8.8 8.8z" />
+      <Circle cx="15.8" cy="8.2" r="1.3" fill={colors.ink} />
+    </Svg>
+  );
+}
 
 /** A rail that scrolls, or a row that wraps. */
 function Rail({ grid, children }: { grid: boolean; children: React.ReactNode }) {
@@ -5136,7 +5237,13 @@ export function CircleRow({
                 ]}
                 onPress={() => go(i)}
               >
-                {photo ? <Image source={{ uri: photo }} style={styles.standPhoto} resizeMode="contain" /> : null}
+                <View style={styles.standMark}>
+                  {i.imageUrl ? (
+                    <Image source={{ uri: i.imageUrl }} style={styles.standPhoto} resizeMode="contain" />
+                  ) : (
+                    <DeptMark name={i.label || borrowed.title} size={Math.round(size * 0.46)} />
+                  )}
+                </View>
                 <View style={styles.standPlate}>
                   {settings.showLabel !== false ? (
                     <Text style={styles.standName} numberOfLines={1}>{i.label || borrowed.title}</Text>
@@ -5228,7 +5335,8 @@ const styles = StyleSheet.create({
   grid: { flexDirection: "row", flexWrap: "wrap", marginHorizontal: -4, rowGap: gap.item },
   inside: { position: "absolute", left: 6, right: 6, bottom: 6, textAlign: "center", fontSize: 10, fontWeight: "700", color: colors.ink },
   stand: { aspectRatio: 3 / 4, overflow: "hidden", paddingHorizontal: 6, paddingTop: 6 },
-  standPhoto: { width: "100%", height: "66%" },
+  standMark: { flex: 1, alignItems: "center", justifyContent: "center", paddingBottom: 14 },
+  standPhoto: { width: "70%", height: "70%" },
   standPlate: { position: "absolute", left: 8, right: 8, bottom: 8 },
   standName: { fontSize: 11, fontWeight: "700", color: colors.ink },
   standNote: { marginTop: 1, fontSize: 9, color: colors.inkSoft },
