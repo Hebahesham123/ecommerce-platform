@@ -3778,8 +3778,8 @@ export function LiveNow({
   // A card, not a face in a circle: the portrait shape a phone video is. It
   // takes its width from the size the merchant set, but never less than a
   // name and a pill need.
-  const tileW = Math.max(Math.round(size * 1.6), 96);
-  const tileH = Math.round(tileW * 1.46);
+  const tileW = Math.max(Math.round(size * 1.25), 80);
+  const tileH = Math.round(tileW * 1.38);
   const tileR = shape === "square" ? 6 : 14;
   const autoplay = settings.autoplayReplays !== false;
   void ringW;

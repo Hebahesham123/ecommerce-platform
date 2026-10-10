@@ -359,6 +359,12 @@ export function ThemeEditor() {
                 newArrivals: j.data.newArrivals ?? [],
                 reviews: j.data.reviews ?? [],
                 lives: j.data.lives ?? [],
+                // The editor builds this payload field by field, so anything
+                // new on the endpoint has to be named here too. That is why
+                // the pay strip drew an empty placeholder in the editor while
+                // working perfectly in the app - the second time this exact
+                // thing has bitten, after the brand counts.
+                payments: j.data.payments ?? [],
               }
             : { collections: [], rows: {}, newArrivals: [], reviews: [] },
         ),

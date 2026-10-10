@@ -2905,8 +2905,8 @@ function LiveNow({
   // merchant set so her setting still means something, but it will not go
   // below the width two lines of a name and a pill need, and its height is
   // the portrait shape a phone video actually is.
-  const tileW = Math.max(Math.round(size * 1.6), 96);
-  const tileH = Math.round(tileW * 1.46);
+  const tileW = Math.max(Math.round(size * 1.25), 80);
+  const tileH = Math.round(tileW * 1.38);
   const tileR = shape === "square" ? 6 : 14;
 
   const go = opener(data, handlers);
