@@ -1555,6 +1555,12 @@ export function newBlock(type: BlockType): Block {
       // suits a row to browse past; a number lays it out as a grid, which
       // suits the one section whose job is to show everything at once.
       perRow: 0,
+      /**
+       * "plain" is a picture with its name underneath. "tinted" gives each
+       * tile a ground in the shop's colour and puts the name inside it, which
+       * reads as a way in rather than as a contact sheet.
+       */
+      tileStyle: "plain",
       items: shape ? [shape.blank()] : [],
     },
     pick_colour: {

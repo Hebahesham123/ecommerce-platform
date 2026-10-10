@@ -4089,6 +4089,11 @@ function CircleRow({
   // a grid whose tiles do not reach the edges is a grid with a wobble in it.
   const perRow = Math.max(0, Math.min(6, int(s.perRow, 0)));
   const grid = perRow > 0;
+  // A ground of its own, and the name inside it.
+  const tinted = str(s.tileStyle) === "tinted";
+  // The accent at four strengths, cycling, so the grid has a rhythm without
+  // anybody having to choose seven colours by hand.
+  const TINTS = ["24", "17", "2e", "1d"];
 
   return (
     <section
@@ -4122,24 +4127,52 @@ function CircleRow({
             <button
               key={item.id}
               onClick={() => go(item)}
-              className={`flex flex-col items-center ${grid ? "min-w-0" : "shrink-0"}`}
+              className={`flex flex-col ${tinted ? "" : "items-center"} ${grid ? "min-w-0" : "shrink-0"}`}
               style={grid ? undefined : { width: cell }}
             >
-              <Thumb
-                src={borrowed.image}
-                className={`${shape === "circle" ? "border border-slate-200 " : ""}${grid ? "aspect-square w-full" : ""}`}
-                style={
-                  grid
-                    ? { borderRadius: tileRadius }
-                    : { width: size, height: size, borderRadius: tileRadius }
-                }
-              />
+              {tinted ? (
+                <span
+                  className={`relative block overflow-hidden ${grid ? "w-full" : ""}`}
+                  style={{
+                    background: `${accent}${TINTS[items.indexOf(item) % TINTS.length]}`,
+                    borderRadius: tileRadius,
+                    ...(grid ? {} : { width: size, height: size }),
+                  }}
+                >
+                  {/* Whole, not cropped: a department is a kind of thing, and
+                      half a shoe is a worse picture of "shoes" than a shoe. */}
+                  <Thumb
+                    src={borrowed.image}
+                    className={grid ? "aspect-[5/4] w-full" : ""}
+                    style={{ borderRadius: 0, background: "transparent", ...(grid ? { padding: "14% 14% 26%" } : { width: size, height: size }) }}
+                    fit="contain"
+                    radius="rounded-none"
+                    blend
+                  />
+                  {/* Inside the tile, over its own ground. */}
+                  {showLabel && (
+                    <span className="absolute inset-x-0 bottom-0 block truncate px-1.5 pb-1.5 text-center text-[10px] font-bold text-slate-900">
+                      {str(item.label, borrowed.title)}
+                    </span>
+                  )}
+                </span>
+              ) : (
+                <Thumb
+                  src={borrowed.image}
+                  className={`${shape === "circle" ? "border border-slate-200 " : ""}${grid ? "aspect-square w-full" : ""}`}
+                  style={
+                    grid
+                      ? { borderRadius: tileRadius }
+                      : { width: size, height: size, borderRadius: tileRadius }
+                  }
+                />
+              )}
               {showNote && str(item.note) && (
                 <span className="mt-1.5 w-full truncate text-center text-[11px] font-bold" style={{ color: accent }}>
                   {str(item.note)}
                 </span>
               )}
-              {showLabel && (
+              {showLabel && !tinted && (
                 <span
                   className={`mt-1.5 w-full truncate text-center ${labelBold ? "font-semibold" : ""} ${
                     labelColor ? "" : "text-slate-500"

@@ -5023,6 +5023,8 @@ function Rail({ grid, children }: { grid: boolean; children: React.ReactNode }) 
 }
 export type CircleRowSettings = {
   perRow?: number;
+  /** "tinted" gives each tile a ground and puts the name inside it. */
+  tileStyle?: string;
   title?: string;
   subtitle?: string;
   seeAllLabel?: string;
@@ -5069,6 +5071,11 @@ export function CircleRow({
   // tiles taking the width their column gives them.
   const perRow = Math.max(0, Math.min(6, Number(settings.perRow || 0)));
   const grid = perRow > 0;
+  // A ground of its own, and the name inside it. The tints are the shop's
+  // colour at four strengths, cycling, so the row has a rhythm without
+  // anybody choosing seven colours by hand.
+  const tinted = settings.tileStyle === "tinted";
+  const TINTS = ["24", "17", "2e", "1d"];
   const shape = settings.shape ?? "circle";
   const tileRadius =
     shape === "square" ? 0 : shape === "rounded" ? (settings.radius && settings.radius > 0 ? settings.radius : 22) : Math.round(size / 2);
@@ -5098,19 +5105,35 @@ export function CircleRow({
         ) : null}
       </View>
       <Rail grid={grid}>
-        {items.map((i) => {
+        {items.map((i, at) => {
           const borrowed = inherit(i, collections);
           const photo = i.imageUrl || borrowed.image;
           const round = grid
             ? { width: "100%" as const, aspectRatio: 1, borderRadius: tileRadius }
             : { width: size, height: size, borderRadius: tileRadius };
+          const ground = tinted
+            ? { backgroundColor: colors.accent + TINTS[at % TINTS.length], borderRadius: tileRadius }
+            : null;
           return (
             <Pressable
               key={i.id}
               style={[styles.cell, grid ? { width: (100 / perRow) + "%", paddingHorizontal: 4 } : { width: cell }]}
               onPress={() => go(i)}
             >
-              {photo ? (
+              {tinted ? (
+                <View style={[round, ground]}>
+                  {photo ? (
+                    <Image
+                      source={{ uri: photo }}
+                      style={{ width: "100%", height: "100%" }}
+                      resizeMode="contain"
+                    />
+                  ) : null}
+                  {settings.showLabel !== false ? (
+                    <Text style={styles.inside} numberOfLines={1}>{i.label || borrowed.title}</Text>
+                  ) : null}
+                </View>
+              ) : photo ? (
                 <Image source={{ uri: photo }} style={round} />
               ) : (
                 <View style={[round, { backgroundColor: colors.page }]} />
@@ -5118,7 +5141,7 @@ export function CircleRow({
               {settings.showNote !== false && i.note ? (
                 <Text style={styles.note} numberOfLines={1}>{i.note}</Text>
               ) : null}
-              {settings.showLabel !== false ? (
+              {settings.showLabel !== false && !tinted ? (
                 <Text
                   style={[
                     styles.label,
@@ -5147,6 +5170,7 @@ const styles = StyleSheet.create({
   row: { gap: gap.item, paddingVertical: spacing.sm },
   cell: { alignItems: "center" },
   grid: { flexDirection: "row", flexWrap: "wrap", marginHorizontal: -4, rowGap: gap.item },
+  inside: { position: "absolute", left: 6, right: 6, bottom: 6, textAlign: "center", fontSize: 10, fontWeight: "700", color: colors.ink },
   note: { marginTop: 6, fontSize: 11, fontWeight: "700", color: colors.accent, textAlign: "center" },
   label: { fontSize: 10, color: colors.inkSoft, textAlign: "center" },
 });
@@ -6770,6 +6794,7 @@ function settingsObject(block: Block): Record<string, unknown> {
       "labelBold",
       "labelColor",
       "perRow",
+      "tileStyle",
       "linkColor",
       "bg",
     ],

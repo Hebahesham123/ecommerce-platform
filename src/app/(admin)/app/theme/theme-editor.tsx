@@ -3854,6 +3854,24 @@ function BlockGroup({
       )}
 
       {block.type === "circle_row" && (
+        <Field label={ar ? "شكل المربّع" : "How a tile is drawn"} type="select">
+          <select
+            value={String(block.settings?.tileStyle ?? "plain")}
+            onChange={(e) => onPatch({ tileStyle: e.target.value })}
+            className={input}
+          >
+            <option value="plain">{ar ? "صورة واسم تحتها" : "A picture with its name under it"}</option>
+            <option value="tinted">{ar ? "أرضية ملوّنة والاسم داخلها" : "A tinted ground with the name inside"}</option>
+          </select>
+          <p className="mt-1 text-[11px] text-ink-soft">
+            {ar
+              ? "الأرضية الملوّنة تأخذ لون المتجر بأربع درجات متناوبة، والمنتج يظهر كاملاً فوقها بدل أن يُقتطع."
+              : "The tinted ground takes the shop's colour at four alternating strengths, and the product sits on it whole rather than cropped."}
+          </p>
+        </Field>
+      )}
+
+      {block.type === "circle_row" && (
         <SpaceRow
           label={ar ? "كم في الصف" : "How many across"}
           value={num0("perRow", 0)}
