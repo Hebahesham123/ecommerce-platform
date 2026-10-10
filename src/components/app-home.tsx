@@ -4093,6 +4093,16 @@ function CircleRow({
   const tinted = str(s.tileStyle) === "tinted";
   // The picture is the card, and the name is written on it.
   const cover = str(s.tileStyle) === "cover";
+  // A coloured card with the product standing out of the top of it.
+  const standout = str(s.tileStyle) === "standout";
+  /**
+   * Soft tones rather than the saturated ones in the reference.
+   *
+   * The products are shot on white, and that white is multiplied away against
+   * the card. Multiply only erases white against a light ground - on a strong
+   * colour it would stain the product instead of clearing its background.
+   */
+  const CARDS = ["#e7dacd", "#dbe3dd", "#ead8d6", "#dcdfe8", "#eae2cf", "#ded8e4"];
   const coverNote = str(s.coverNote);
   // The accent at four strengths, cycling, so the grid has a rhythm without
   // anybody having to choose seven colours by hand.
@@ -4126,6 +4136,58 @@ function CircleRow({
       >
         {items.map((item) => {
           const borrowed = inherit(item, data);
+
+          if (standout) {
+            const found = data.collections.find((c) => c.handle === str(item.handle));
+            const count = found?.productCount ?? 0;
+            const under =
+              str(item.note) ||
+              coverNote ||
+              (count > 0
+                ? ar
+                  ? `${new Intl.NumberFormat("ar-EG").format(count)} قطعة`
+                  : `${new Intl.NumberFormat("en-US").format(count)} piece${count === 1 ? "" : "s"}`
+                : "");
+            const tone = CARDS[items.indexOf(item) % CARDS.length];
+            const cardH = Math.round(size * 1.34);
+            return (
+              <button
+                key={item.id}
+                onClick={() => go(item)}
+                className={`group block shrink-0 text-start ${grid ? "min-w-0" : "snap-start"}`}
+                // Room above the card for the part of the product that stands
+                // out of it.
+                style={{ width: grid ? undefined : size, paddingTop: Math.round(size * 0.34) }}
+              >
+                <span
+                  className="relative block transition-transform duration-300 ease-out group-hover:-translate-y-0.5"
+                  style={{ background: tone, borderRadius: tileRadius, height: cardH }}
+                >
+                  {/* Out of the box, not in it. Multiplied, so the white it
+                      was shot on becomes the card. */}
+                  {borrowed.image && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={borrowed.image}
+                      alt=""
+                      className="pointer-events-none absolute left-1/2 w-[88%] -translate-x-1/2 object-contain transition-transform duration-300 ease-out group-hover:scale-105"
+                      style={{ bottom: "36%", height: Math.round(cardH * 0.92), mixBlendMode: "multiply" }}
+                    />
+                  )}
+                  <span className="absolute inset-x-0 bottom-0 block px-2 pb-2">
+                    {showLabel && (
+                      <span className="block truncate text-[11px] font-bold leading-tight text-slate-900">
+                        {str(item.label, borrowed.title)}
+                      </span>
+                    )}
+                    {under && (
+                      <span className="mt-px block truncate text-[9px] leading-none text-slate-500">{under}</span>
+                    )}
+                  </span>
+                </span>
+              </button>
+            );
+          }
 
           if (cover) {
               // How many that collection really holds. A count nobody typed

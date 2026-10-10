@@ -3863,6 +3863,7 @@ function BlockGroup({
             <option value="plain">{ar ? "صورة واسم تحتها" : "A picture with its name under it"}</option>
             <option value="tinted">{ar ? "أرضية ملوّنة والاسم داخلها" : "A tinted ground with the name inside"}</option>
             <option value="cover">{ar ? "الصورة هي البطاقة والاسم فوقها" : "The picture is the card, name written on it"}</option>
+            <option value="standout">{ar ? "بطاقة ملوّنة والمنتج واقف خارجها" : "A coloured card with the product standing out of it"}</option>
           </select>
           <p className="mt-1 text-[11px] text-ink-soft">
             {ar

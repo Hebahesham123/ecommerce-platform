@@ -1559,7 +1559,9 @@ export function newBlock(type: BlockType): Block {
        * "plain" is a picture with its name underneath. "tinted" gives each
        * tile a ground in the shop's colour and puts the name inside it.
        * "cover" makes the picture the card and writes the name over it,
-       * with how many pieces that collection holds underneath.
+       * with how many pieces that collection holds underneath. "standout"
+       * gives each card a colour and stands the product up out of the top of
+       * it, with the name at the foot.
        */
       tileStyle: "plain",
       /** The second line on a cover card. Empty shows the real count instead. */

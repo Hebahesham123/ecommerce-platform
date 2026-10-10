@@ -5077,6 +5077,11 @@ export function CircleRow({
   // anybody choosing seven colours by hand.
   const tinted = settings.tileStyle === "tinted";
   const cover = settings.tileStyle === "cover";
+  // A coloured card. The product sits inside it here: React Native has no
+  // blend modes, so the white a product was shot on cannot be erased against
+  // the card the way the preview does it.
+  const standout = settings.tileStyle === "standout";
+  const CARDS = ["#e7dacd", "#dbe3dd", "#ead8d6", "#dcdfe8", "#eae2cf", "#ded8e4"];
   const coverW = Math.max(Math.round(size * 1.55), 108);
   const TINTS = ["24", "17", "2e", "1d"];
   const shape = settings.shape ?? "circle";
@@ -5117,6 +5122,31 @@ export function CircleRow({
           const ground = tinted
             ? { backgroundColor: colors.accent + TINTS[at % TINTS.length], borderRadius: tileRadius }
             : null;
+          if (standout) {
+            const found = collections.find((c) => c.handle === i.handle);
+            const count = found?.productCount ?? 0;
+            const under =
+              i.note || settings.coverNote || (count > 0 ? count + (count === 1 ? " piece" : " pieces") : "");
+            return (
+              <Pressable
+                key={i.id}
+                style={[
+                  styles.stand,
+                  { width: grid ? "100%" : size, backgroundColor: CARDS[at % CARDS.length], borderRadius: tileRadius },
+                ]}
+                onPress={() => go(i)}
+              >
+                {photo ? <Image source={{ uri: photo }} style={styles.standPhoto} resizeMode="contain" /> : null}
+                <View style={styles.standPlate}>
+                  {settings.showLabel !== false ? (
+                    <Text style={styles.standName} numberOfLines={1}>{i.label || borrowed.title}</Text>
+                  ) : null}
+                  {under ? <Text style={styles.standNote} numberOfLines={1}>{under}</Text> : null}
+                </View>
+              </Pressable>
+            );
+          }
+
           if (cover) {
             // How many that collection really holds, read when this draws.
             const found = collections.find((c) => c.handle === i.handle);
@@ -5197,6 +5227,11 @@ const styles = StyleSheet.create({
   cell: { alignItems: "center" },
   grid: { flexDirection: "row", flexWrap: "wrap", marginHorizontal: -4, rowGap: gap.item },
   inside: { position: "absolute", left: 6, right: 6, bottom: 6, textAlign: "center", fontSize: 10, fontWeight: "700", color: colors.ink },
+  stand: { aspectRatio: 3 / 4, overflow: "hidden", paddingHorizontal: 6, paddingTop: 6 },
+  standPhoto: { width: "100%", height: "66%" },
+  standPlate: { position: "absolute", left: 8, right: 8, bottom: 8 },
+  standName: { fontSize: 11, fontWeight: "700", color: colors.ink },
+  standNote: { marginTop: 1, fontSize: 9, color: colors.inkSoft },
   cover: { aspectRatio: 4 / 5, overflow: "hidden", backgroundColor: "#0a0807" },
   coverPhoto: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, width: "100%", height: "100%" },
   coverScrim: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(10,8,7,0.42)" },
