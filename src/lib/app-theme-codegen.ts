@@ -5023,8 +5023,9 @@ function Rail({ grid, children }: { grid: boolean; children: React.ReactNode }) 
 }
 export type CircleRowSettings = {
   perRow?: number;
-  /** "tinted" gives each tile a ground and puts the name inside it. */
+  /** "tinted" grounds the tile; "cover" makes the picture the card. */
   tileStyle?: string;
+  coverNote?: string;
   title?: string;
   subtitle?: string;
   seeAllLabel?: string;
@@ -5075,6 +5076,8 @@ export function CircleRow({
   // colour at four strengths, cycling, so the row has a rhythm without
   // anybody choosing seven colours by hand.
   const tinted = settings.tileStyle === "tinted";
+  const cover = settings.tileStyle === "cover";
+  const coverW = Math.max(Math.round(size * 1.55), 108);
   const TINTS = ["24", "17", "2e", "1d"];
   const shape = settings.shape ?? "circle";
   const tileRadius =
@@ -5114,6 +5117,29 @@ export function CircleRow({
           const ground = tinted
             ? { backgroundColor: colors.accent + TINTS[at % TINTS.length], borderRadius: tileRadius }
             : null;
+          if (cover) {
+            // How many that collection really holds, read when this draws.
+            const found = collections.find((c) => c.handle === i.handle);
+            const count = found?.productCount ?? 0;
+            const under =
+              i.note || settings.coverNote || (count > 0 ? count + (count === 1 ? " piece" : " pieces") : "");
+            return (
+              <Pressable
+                key={i.id}
+                style={[styles.cover, { width: grid ? "100%" : coverW, borderRadius: tileRadius }]}
+                onPress={() => go(i)}
+              >
+                {photo ? <Image source={{ uri: photo }} style={styles.coverPhoto} /> : null}
+                <View style={styles.coverScrim} />
+                <View style={styles.coverPlate}>
+                  {settings.showLabel !== false ? (
+                    <Text style={styles.coverName} numberOfLines={1}>{i.label || borrowed.title}</Text>
+                  ) : null}
+                  {under ? <Text style={styles.coverNote} numberOfLines={1}>{under}</Text> : null}
+                </View>
+              </Pressable>
+            );
+          }
           return (
             <Pressable
               key={i.id}
@@ -5171,6 +5197,12 @@ const styles = StyleSheet.create({
   cell: { alignItems: "center" },
   grid: { flexDirection: "row", flexWrap: "wrap", marginHorizontal: -4, rowGap: gap.item },
   inside: { position: "absolute", left: 6, right: 6, bottom: 6, textAlign: "center", fontSize: 10, fontWeight: "700", color: colors.ink },
+  cover: { aspectRatio: 4 / 5, overflow: "hidden", backgroundColor: "#0a0807" },
+  coverPhoto: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, width: "100%", height: "100%" },
+  coverScrim: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(10,8,7,0.42)" },
+  coverPlate: { position: "absolute", left: 0, right: 0, bottom: 0, paddingHorizontal: 10, paddingBottom: 10 },
+  coverName: { fontSize: 13, fontWeight: "700", color: "#fff" },
+  coverNote: { marginTop: 2, fontSize: 10, color: "rgba(255,255,255,0.75)" },
   note: { marginTop: 6, fontSize: 11, fontWeight: "700", color: colors.accent, textAlign: "center" },
   label: { fontSize: 10, color: colors.inkSoft, textAlign: "center" },
 });
@@ -6795,6 +6827,7 @@ function settingsObject(block: Block): Record<string, unknown> {
       "labelColor",
       "perRow",
       "tileStyle",
+      "coverNote",
       "linkColor",
       "bg",
     ],

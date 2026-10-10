@@ -1557,10 +1557,13 @@ export function newBlock(type: BlockType): Block {
       perRow: 0,
       /**
        * "plain" is a picture with its name underneath. "tinted" gives each
-       * tile a ground in the shop's colour and puts the name inside it, which
-       * reads as a way in rather than as a contact sheet.
+       * tile a ground in the shop's colour and puts the name inside it.
+       * "cover" makes the picture the card and writes the name over it,
+       * with how many pieces that collection holds underneath.
        */
       tileStyle: "plain",
+      /** The second line on a cover card. Empty shows the real count instead. */
+      coverNote: "",
       items: shape ? [shape.blank()] : [],
     },
     pick_colour: {

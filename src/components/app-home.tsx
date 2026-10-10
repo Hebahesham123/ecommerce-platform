@@ -4091,6 +4091,9 @@ function CircleRow({
   const grid = perRow > 0;
   // A ground of its own, and the name inside it.
   const tinted = str(s.tileStyle) === "tinted";
+  // The picture is the card, and the name is written on it.
+  const cover = str(s.tileStyle) === "cover";
+  const coverNote = str(s.coverNote);
   // The accent at four strengths, cycling, so the grid has a rhythm without
   // anybody having to choose seven colours by hand.
   const TINTS = ["24", "17", "2e", "1d"];
@@ -4113,7 +4116,7 @@ function CircleRow({
         className={
           grid
             ? "mt-2 grid"
-            : "-mx-4 mt-2 flex overflow-x-auto px-4 pb-1"
+            : "-mx-4 mt-2 flex snap-x overflow-x-auto px-4 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         }
         style={
           grid
@@ -4123,7 +4126,60 @@ function CircleRow({
       >
         {items.map((item) => {
           const borrowed = inherit(item, data);
-          return (
+
+          if (cover) {
+              // How many that collection really holds. A count nobody typed
+              // cannot be the wrong count next week.
+              const found = data.collections.find((c) => c.handle === str(item.handle));
+              const count = found?.productCount ?? 0;
+              const under =
+                str(item.note) ||
+                coverNote ||
+                (count > 0
+                  ? ar
+                    ? `${new Intl.NumberFormat("ar-EG").format(count)} قطعة`
+                    : `${new Intl.NumberFormat("en-US").format(count)} piece${count === 1 ? "" : "s"}`
+                  : "");
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => go(item)}
+                  className={`group relative block overflow-hidden text-start transition-transform duration-300 ease-out hover:scale-[1.03] active:scale-[0.98] ${
+                    grid ? "min-w-0" : "shrink-0 snap-start"
+                  }`}
+                  style={{
+                    borderRadius: tileRadius,
+                    ...(grid ? {} : { width: Math.max(Math.round(size * 1.55), 108) }),
+                  }}
+                >
+                  <Thumb
+                    src={borrowed.image}
+                    className={`${grid ? "aspect-[4/5]" : "aspect-[4/5]"} w-full transition-transform duration-500 ease-out group-hover:scale-105`}
+                    radius="rounded-none"
+                  />
+                  {/* Dark where the words are, clear where the picture is. */}
+                  <span
+                    className="pointer-events-none absolute inset-0 block"
+                    style={{
+                      background:
+                        "linear-gradient(180deg, rgba(10,8,7,0.06) 0%, rgba(10,8,7,0.34) 48%, rgba(10,8,7,0.76) 100%)",
+                    }}
+                  />
+                  <span className="absolute inset-x-0 bottom-0 block px-2.5 pb-2.5 pt-7">
+                    {showLabel && (
+                      <span className="block truncate text-[13px] font-bold leading-tight text-white">
+                        {str(item.label, borrowed.title)}
+                      </span>
+                    )}
+                    {under && (
+                      <span className="mt-0.5 block truncate text-[10px] leading-none text-white/75">{under}</span>
+                    )}
+                  </span>
+                </button>
+              );
+            }
+
+            return (
             <button
               key={item.id}
               onClick={() => go(item)}
@@ -4183,7 +4239,7 @@ function CircleRow({
                 </span>
               )}
             </button>
-          );
+            );
         })}
       </div>
     </section>
