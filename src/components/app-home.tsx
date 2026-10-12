@@ -4416,7 +4416,7 @@ function BrandWall({
                 gridTemplateRows: `repeat(${rows}, minmax(0, auto))`,
                 // A column narrow enough that the next one shows at the edge,
                 // which is the only thing that says the wall carries on.
-                gridAutoColumns: "minmax(210px, 1fr)",
+                gridAutoColumns: "minmax(178px, 1fr)",
               }
             : {
                 gap: "var(--app-item-gap, 8px)",
@@ -4428,9 +4428,9 @@ function BrandWall({
           <button
             key={h.item.id}
             onClick={() => go(h.item)}
-            className="group flex h-[72px] min-w-0 items-stretch overflow-hidden rounded-xl text-start transition-transform duration-300 ease-out hover:-translate-y-0.5"
+            className="group flex h-[60px] min-w-0 items-stretch overflow-hidden rounded-[10px] text-start transition-transform duration-300 ease-out hover:-translate-y-0.5"
           >
-            <span className="grid w-[72px] shrink-0 place-items-center bg-slate-900 p-2">
+            <span className="grid w-[60px] shrink-0 place-items-center bg-slate-900 p-1.5">
               {h.logo ? (
                 // The marks are stored dark on transparent, which is right on
                 // a white tile and invisible on this one. brightness(0) makes
@@ -4445,22 +4445,22 @@ function BrandWall({
                   style={{ filter: "brightness(0) invert(1)" }}
                 />
               ) : (
-                <span className="block break-words text-center text-[9px] font-bold uppercase leading-[1.1] tracking-[0.1em] text-white">
+                <span className="block break-words text-center text-[8px] font-bold uppercase leading-[1.1] tracking-[0.08em] text-white">
                   {h.name}
                 </span>
               )}
             </span>
-            <span className="flex min-w-0 flex-1 flex-col justify-center bg-slate-100 px-2.5 py-2">
-              <span className="block truncate text-[12px] leading-tight text-slate-900">{h.name}</span>
+            <span className="flex min-w-0 flex-1 flex-col justify-center bg-slate-100 px-2 py-1.5">
+              <span className="block truncate text-[11px] leading-tight text-slate-900">{h.name}</span>
               {showCount && h.count > 0 && (
-                <span className="mt-px block truncate text-[10px] leading-tight text-slate-400">
+                <span className="mt-px block truncate text-[9px] leading-tight text-slate-400">
                   {ar
                     ? `${new Intl.NumberFormat("ar-EG").format(h.count)} قطعة`
                     : `${new Intl.NumberFormat("en-US").format(h.count)} piece${h.count === 1 ? "" : "s"}`}
                 </span>
               )}
               <span
-                className="mt-0.5 block truncate text-[12px] font-semibold leading-tight"
+                className="mt-px block truncate text-[11px] font-semibold leading-tight"
                 style={{ color: linkColor }}
               >
                 {ar ? "زيارة المتجر \u2039" : "Visit the store \u203A"}
