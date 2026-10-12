@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useHlsSource } from "@/lib/use-hls";
+import { brandMark } from "@/lib/brand-marks";
 import {
   ALL_ROWS_CAP,
   DEFAULT_SETTINGS,
@@ -4363,9 +4364,10 @@ function BrandWall({
   const perRow = Math.max(2, Math.min(5, int(s.perRow, 4)));
   // Two rows that travel sideways take a fixed slice of the screen however
   // many houses she carries. Nought goes back to wrapping.
-  const rows = Math.max(0, Math.min(4, int(s.rows, 2)));
+  const rows = Math.max(0, Math.min(4, int(s.rows, 3)));
   const rail = rows > 0;
   const showCount = s.showCount !== false;
+  const linkColor = str(s.linkColor) || accent;
   const go = opener(data, handlers);
 
   const houses = items
@@ -4376,10 +4378,11 @@ function BrandWall({
         item,
         handle,
         name: str(item.label, found?.title ?? handle),
-        // The house's picture, in the order it should be believed: pasted on
-        // this item, then set on the collection. Both are hers; either is a
-        // brand image and is drawn as one.
-        logo: str(item.imageUrl) || (found?.ownImage ? (found.image ?? "") : ""),
+        // The house's mark, in the order it should be believed: pasted on
+        // this item, because that is her saying so; then the one this
+        // repository ships for that handle; then a collection picture, but
+        // only if it is hers rather than the first product's.
+        logo: str(item.imageUrl) || brandMark(handle) || (found?.ownImage ? (found.image ?? "") : ""),
         count: found?.productCount ?? 0,
         known: Boolean(found),
       };
@@ -4413,7 +4416,7 @@ function BrandWall({
                 gridTemplateRows: `repeat(${rows}, minmax(0, auto))`,
                 // A column narrow enough that the next one shows at the edge,
                 // which is the only thing that says the wall carries on.
-                gridAutoColumns: "minmax(104px, 1fr)",
+                gridAutoColumns: "minmax(210px, 1fr)",
               }
             : {
                 gap: "var(--app-item-gap, 8px)",
@@ -4425,29 +4428,43 @@ function BrandWall({
           <button
             key={h.item.id}
             onClick={() => go(h.item)}
-            className="group block min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white text-start transition-transform duration-300 ease-out hover:-translate-y-0.5"
+            className="group flex h-[72px] min-w-0 items-stretch overflow-hidden rounded-xl text-start transition-transform duration-300 ease-out hover:-translate-y-0.5"
           >
-            <span className="flex aspect-[4/5] w-full flex-col items-center justify-center px-2 py-2">
-              <span className="flex min-h-0 flex-1 items-center justify-center">
-                {h.logo ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={h.logo} alt="" className="max-h-full w-auto max-w-full object-contain" />
-                ) : (
-                  // No logo set, so the word is the mark. Letter-spaced small
-                  // caps is how a house writes its own name, and it is legible
-                  // at this size in a way a darkened photograph never was.
-                  <span className="block break-words text-center text-[12px] font-bold uppercase leading-[1.15] tracking-[0.14em] text-slate-900">
-                    {h.name}
-                  </span>
-                )}
-              </span>
+            <span className="grid w-[72px] shrink-0 place-items-center bg-slate-900 p-2">
+              {h.logo ? (
+                // The marks are stored dark on transparent, which is right on
+                // a white tile and invisible on this one. brightness(0) makes
+                // the mark solid black whatever it was, and invert(1) makes
+                // that white - so any mark comes out clean without keeping a
+                // second copy of every file.
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={h.logo}
+                  alt=""
+                  className="max-h-full w-auto max-w-full object-contain"
+                  style={{ filter: "brightness(0) invert(1)" }}
+                />
+              ) : (
+                <span className="block break-words text-center text-[9px] font-bold uppercase leading-[1.1] tracking-[0.1em] text-white">
+                  {h.name}
+                </span>
+              )}
+            </span>
+            <span className="flex min-w-0 flex-1 flex-col justify-center bg-slate-100 px-2.5 py-2">
+              <span className="block truncate text-[12px] leading-tight text-slate-900">{h.name}</span>
               {showCount && h.count > 0 && (
-                <span className="mt-1 block shrink-0 text-[9px] leading-none text-slate-400">
+                <span className="mt-px block truncate text-[10px] leading-tight text-slate-400">
                   {ar
                     ? `${new Intl.NumberFormat("ar-EG").format(h.count)} قطعة`
                     : `${new Intl.NumberFormat("en-US").format(h.count)} piece${h.count === 1 ? "" : "s"}`}
                 </span>
               )}
+              <span
+                className="mt-0.5 block truncate text-[12px] font-semibold leading-tight"
+                style={{ color: linkColor }}
+              >
+                {ar ? "زيارة المتجر \u2039" : "Visit the store \u203A"}
+              </span>
             </span>
           </button>
         ))}

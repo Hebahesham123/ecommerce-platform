@@ -11,6 +11,7 @@ import {
   type Item,
 } from "@/lib/app-theme";
 import { projectFiles } from "@/lib/app-project-files";
+import { BRAND_MARKS } from "@/lib/brand-marks";
 
 /**
  * The app's code, written by the editor.
@@ -1710,12 +1711,21 @@ function sectionFile(type: BlockType): GeneratedFile {
   const name = componentName(type);
   const body: Record<BlockType, string> = {
     brand_wall: `import React from "react";
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { colors, gap, radius, spacing, theme } from "../theme";
 import { inherit, openLink, type LinkTo } from "./Pieces";
-import type { HomePayload } from "../api";
+import { SITE_ORIGIN, type HomePayload } from "../api";
 
 export type Brand = { id: string; handle?: string; label?: string; imageUrl?: string };
+
+/**
+ * The houses the shop ships a mark for, baked in when this app was
+ * generated. A list rather than a lookup: which files exist is known at
+ * generation time, and asking the network for filenames would be a strange
+ * thing for a phone to do.
+ */
+const MARKS: readonly string[] = ${JSON.stringify(BRAND_MARKS)};
+const HAS_MARK = new Set<string>(MARKS);
 export type BrandWallSettings = {
   title?: string;
   subtitle?: string;
@@ -1752,7 +1762,11 @@ export function BrandWall({
   onOpenScreen?: (screen: string) => void;
 }) {
   const items = settings.items ?? [];
-  const perRow = Math.max(2, Math.min(5, Number(settings.perRow || 4)));
+  const rows = Math.max(1, Math.min(4, Number(settings.rows || 3)));
+  // A mark stored as /brands/gucci.webp is relative to the shop, and a phone
+  // has no shop to be relative to.
+  const full = (u: string) => (u.indexOf("//") >= 0 ? u : SITE_ORIGIN + u);
+  const markFor = (handle: string) => (HAS_MARK.has(handle) ? SITE_ORIGIN + "/brands/" + handle + ".webp" : "");
   const showCount = settings.showCount !== false;
   const go = (to: LinkTo) => openLink(to, { onOpenCollection, onOpenProduct, onOpenScreen });
 
@@ -1762,9 +1776,13 @@ export function BrandWall({
       return {
         item: i,
         name: i.label || found?.title || i.handle || "",
-        // Hers first: pasted on the item, then set on the collection. The
-        // first product's photograph is a stand-in and is treated as one.
-        logo: i.imageUrl || (found?.ownImage ? found.image || undefined : undefined),
+        // Hers first, because that is her saying so; then the mark this
+        // shop ships for the handle; then a collection picture, but only if
+        // it is hers rather than the first product's.
+        logo:
+          i.imageUrl ||
+          markFor(i.handle || "") ||
+          (found?.ownImage ? found.image || undefined : undefined),
         count: found?.productCount ?? 0,
         known: Boolean(found),
       };
@@ -1772,6 +1790,8 @@ export function BrandWall({
     .filter((h) => h.name && (!h.known || h.count > 0));
 
   if (!houses.length) return null;
+  const columns: (typeof houses)[] = [];
+  for (let i = 0; i < houses.length; i += rows) columns.push(houses.slice(i, i + rows));
 
   return (
     <View>
@@ -1787,31 +1807,46 @@ export function BrandWall({
           </Pressable>
         ) : null}
       </View>
-      <View style={styles.grid}>
-        {houses.map((h) => (
-          <Pressable
-            key={h.item.id}
-            style={[styles.cell, { width: 100 / perRow + "%" }]}
-            onPress={() => go(h.item)}
-          >
-            <View style={styles.card}>
-              <View style={styles.markRow}>
-                {h.logo ? (
-                  <Image source={{ uri: h.logo }} style={styles.mark} resizeMode="contain" />
-                ) : (
-                  // No logo set, so the word is the mark. A house is a
-                  // wordmark before it is a picture, and letter-spaced small
-                  // caps is how it writes its own name.
-                  <Text style={styles.name} numberOfLines={3}>{h.name.toUpperCase()}</Text>
-                )}
-              </View>
-              {showCount && h.count > 0 ? (
-                <Text style={styles.count}>{h.count + (h.count === 1 ? " piece" : " pieces")}</Text>
-              ) : null}
-            </View>
-          </Pressable>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
+        {columns.map((col, at) => (
+          <View key={at} style={styles.col}>
+            {col.map((h) => (
+              <Pressable key={h.item.id} style={styles.card} onPress={() => go(h.item)}>
+                <View style={styles.markBox}>
+                  {h.logo ? (
+                    // The marks are stored dark on transparent, which is
+                    // right on a white tile and invisible on this one.
+                    // tintColor repaints every opaque pixel, so one file
+                    // serves both grounds.
+                    <Image
+                      source={{ uri: full(h.logo) }}
+                      style={styles.mark}
+                      resizeMode="contain"
+                      tintColor="#fff"
+                    />
+                  ) : (
+                    <Text style={styles.markWord} numberOfLines={3}>{h.name.toUpperCase()}</Text>
+                  )}
+                </View>
+                <View style={styles.panel}>
+                  <Text style={styles.name} numberOfLines={1}>{h.name}</Text>
+                  {showCount && h.count > 0 ? (
+                    <Text style={styles.count} numberOfLines={1}>
+                      {h.count + (h.count === 1 ? " piece" : " pieces")}
+                    </Text>
+                  ) : null}
+                  <Text
+                    style={[styles.visit, settings.linkColor ? { color: settings.linkColor } : null]}
+                    numberOfLines={1}
+                  >
+                    {"Visit the store ›"}
+                  </Text>
+                </View>
+              </Pressable>
+            ))}
+          </View>
         ))}
-      </View>
+      </ScrollView>
     </View>
   );
 }
@@ -1820,23 +1855,16 @@ const styles = StyleSheet.create({
   head: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: spacing.sm },
   heading: { flex: 1, fontSize: 17, fontWeight: "700", color: colors.ink, fontFamily: theme.titleFont },
   seeAll: { fontSize: 12, fontWeight: "600", color: colors.accent },
-  grid: { flexDirection: "row", flexWrap: "wrap", marginHorizontal: -4, marginTop: 8, rowGap: gap.item },
-  cell: { paddingHorizontal: 4 },
-  card: {
-    borderRadius: radius.lg,
-    overflow: "hidden",
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    aspectRatio: 4 / 5,
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    alignItems: "center",
-  },
-  markRow: { flex: 1, alignSelf: "stretch", alignItems: "center", justifyContent: "center" },
-  mark: { height: "100%", width: "100%" },
-  name: { fontSize: 12, fontWeight: "700", letterSpacing: 1.6, lineHeight: 14, textAlign: "center", color: colors.ink },
-  count: { marginTop: 4, fontSize: 9, color: colors.inkSoft },
+  rail: { gap: gap.item, paddingVertical: spacing.sm },
+  col: { gap: gap.item },
+  card: { flexDirection: "row", width: 210, height: 72, borderRadius: radius.lg, overflow: "hidden" },
+  markBox: { width: 72, backgroundColor: "#0f172a", alignItems: "center", justifyContent: "center", padding: 8 },
+  mark: { width: "100%", height: "100%" },
+  markWord: { fontSize: 9, fontWeight: "700", letterSpacing: 0.9, lineHeight: 11, textAlign: "center", color: "#fff" },
+  panel: { flex: 1, backgroundColor: "#f1f5f9", paddingHorizontal: 10, paddingVertical: 8, justifyContent: "center" },
+  name: { fontSize: 12, color: colors.ink },
+  count: { marginTop: 1, fontSize: 10, color: colors.inkSoft },
+  visit: { marginTop: 2, fontSize: 12, fontWeight: "700", color: colors.accent },
 });
 `,
     pay_strip: `import React, { useEffect, useRef, useState } from "react";
