@@ -3840,8 +3840,23 @@ function BlockGroup({
 
       {block.type === "brand_wall" && (
         <SpaceRow
+          label={ar ? "عرض المربّع" : "How wide a brand tile is"}
+          value={num0("size", 178)}
+          onChange={(v) => onPatch({ size: v })}
+          min={110}
+          max={300}
+          note={
+            ar
+              ? "بالبكسل. كل شيء آخر يتبعه: المربّع الأسود بارتفاع البطاقة، وحجم الخط يصغر مع المساحة المتاحة للكلمات. تحت ١٤٨ تبدأ أطول الأسماء تُختصر بنقاط — والحل اسم أقصر، فالشاشة التي أرسلتِها نفسها تكتب YSL لا Yves Saint Laurent."
+              : "In pixels. Everything else follows it: the black square is as tall as the card, and the type scales with the room the words have rather than with the card, so it never outgrows its panel. Below 148 the longest names shorten with an ellipsis — the cure for that is a shorter name, which is why your own reference writes YSL rather than Yves Saint Laurent."
+          }
+        />
+      )}
+
+      {block.type === "brand_wall" && (
+        <SpaceRow
           label={ar ? "كم صفاً" : "How many rows"}
-          value={num0("rows", 2)}
+          value={num0("rows", 3)}
           onChange={(v) => onPatch({ rows: v })}
           min={0}
           max={4}

@@ -1734,6 +1734,7 @@ export type BrandWallSettings = {
   seeAllUrl?: string;
   perRow?: number;
   rows?: number;
+  size?: number;
   showCount?: boolean;
   titleSize?: number;
   linkColor?: string;
@@ -1763,6 +1764,17 @@ export function BrandWall({
 }) {
   const items = settings.items ?? [];
   const rows = Math.max(1, Math.min(4, Number(settings.rows || 3)));
+  // How wide a tile is. The card keeps its shape, the mark square is as tall
+  // as the card, and the type scales from that height so a smaller tile does
+  // not keep full-size words. Floored at nine, below which a name stops
+  // being readable.
+  const size = Math.max(110, Math.min(300, Number(settings.size || 178)));
+  const cardH = Math.round(size * 0.34);
+  // The room the words have: the tile less the mark square and the panel's
+  // padding. Scaling from this keeps a long name inside its panel at every
+  // width rather than at most of them.
+  const panelW = size - cardH - 16;
+  const nameSize = Math.max(9, Math.min(13, Math.round(panelW * 0.1)));
   // A mark stored as /brands/gucci.webp is relative to the shop, and a phone
   // has no shop to be relative to.
   const full = (u: string) => (u.indexOf("//") >= 0 ? u : SITE_ORIGIN + u);
@@ -1811,8 +1823,12 @@ export function BrandWall({
         {columns.map((col, at) => (
           <View key={at} style={styles.col}>
             {col.map((h) => (
-              <Pressable key={h.item.id} style={styles.card} onPress={() => go(h.item)}>
-                <View style={styles.markBox}>
+              <Pressable
+                key={h.item.id}
+                style={[styles.card, { width: size, height: cardH }]}
+                onPress={() => go(h.item)}
+              >
+                <View style={[styles.markBox, { width: cardH }]}>
                   {h.logo ? (
                     // The marks are stored dark on transparent, which is
                     // right on a white tile and invisible on this one.
@@ -1825,18 +1841,24 @@ export function BrandWall({
                       tintColor="#fff"
                     />
                   ) : (
-                    <Text style={styles.markWord} numberOfLines={3}>{h.name.toUpperCase()}</Text>
+                    <Text style={[styles.markWord, { fontSize: Math.max(7, nameSize - 3) }]} numberOfLines={3}>
+                      {h.name.toUpperCase()}
+                    </Text>
                   )}
                 </View>
                 <View style={styles.panel}>
-                  <Text style={styles.name} numberOfLines={1}>{h.name}</Text>
+                  <Text style={[styles.name, { fontSize: nameSize }]} numberOfLines={1}>{h.name}</Text>
                   {showCount && h.count > 0 ? (
-                    <Text style={styles.count} numberOfLines={1}>
+                    <Text style={[styles.count, { fontSize: Math.max(8, nameSize - 2) }]} numberOfLines={1}>
                       {h.count + (h.count === 1 ? " piece" : " pieces")}
                     </Text>
                   ) : null}
                   <Text
-                    style={[styles.visit, settings.linkColor ? { color: settings.linkColor } : null]}
+                    style={[
+                      styles.visit,
+                      { fontSize: nameSize },
+                      settings.linkColor ? { color: settings.linkColor } : null,
+                    ]}
                     numberOfLines={1}
                   >
                     {"Visit the store ›"}
@@ -1857,8 +1879,8 @@ const styles = StyleSheet.create({
   seeAll: { fontSize: 12, fontWeight: "600", color: colors.accent },
   rail: { gap: gap.item, paddingVertical: spacing.sm },
   col: { gap: gap.item },
-  card: { flexDirection: "row", width: 178, height: 60, borderRadius: 10, overflow: "hidden" },
-  markBox: { width: 60, backgroundColor: "#0f172a", alignItems: "center", justifyContent: "center", padding: 6 },
+  card: { flexDirection: "row", borderRadius: 10, overflow: "hidden" },
+  markBox: { backgroundColor: "#0f172a", alignItems: "center", justifyContent: "center", padding: 6 },
   mark: { width: "100%", height: "100%" },
   markWord: { fontSize: 8, fontWeight: "700", letterSpacing: 0.6, lineHeight: 10, textAlign: "center", color: "#fff" },
   panel: { flex: 1, backgroundColor: "#f1f5f9", paddingHorizontal: 8, paddingVertical: 6, justifyContent: "center" },

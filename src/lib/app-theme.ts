@@ -1595,7 +1595,9 @@ export function newBlock(type: BlockType): Block {
       perRow: 3,
       // How many rows travel sideways. Nought wraps instead, which suits a
       // shop that wants its whole wall on the screen at once.
-      rows: 2,
+      rows: 3,
+      // How wide one tile is. The rest of the tile is worked out from it.
+      size: 178,
       // The count under each name, read off the catalogue rather than typed.
       showCount: true,
       items: shape ? [shape.blank()] : [],

@@ -4368,6 +4368,19 @@ function BrandWall({
   const rail = rows > 0;
   const showCount = s.showCount !== false;
   const linkColor = str(s.linkColor) || accent;
+  // How wide a tile is. Everything else on it follows: the card keeps its
+  // shape, the mark square is as tall as the card, and the type is scaled
+  // from that so a smaller tile does not keep full-size words.
+  const size = Math.max(110, Math.min(300, int(s.size, 178)));
+  const cardH = Math.round(size * 0.34);
+  // The room the words actually have: the tile less the mark square and the
+  // panel's own padding. Scaling the type from this rather than from the
+  // card's height is what keeps a long name inside its panel at every width
+  // instead of only at most of them.
+  const panelW = size - cardH - 16;
+  // Floored, because below nine pixels a name is not a name any more - and
+  // that floor is why the longest names still shorten on the smallest tiles.
+  const nameSize = Math.max(9, Math.min(13, Math.round(panelW * 0.1)));
   const go = opener(data, handlers);
 
   const houses = items
@@ -4416,7 +4429,7 @@ function BrandWall({
                 gridTemplateRows: `repeat(${rows}, minmax(0, auto))`,
                 // A column narrow enough that the next one shows at the edge,
                 // which is the only thing that says the wall carries on.
-                gridAutoColumns: "minmax(178px, 1fr)",
+                gridAutoColumns: `minmax(${size}px, 1fr)`,
               }
             : {
                 gap: "var(--app-item-gap, 8px)",
@@ -4428,9 +4441,13 @@ function BrandWall({
           <button
             key={h.item.id}
             onClick={() => go(h.item)}
-            className="group flex h-[60px] min-w-0 items-stretch overflow-hidden rounded-[10px] text-start transition-transform duration-300 ease-out hover:-translate-y-0.5"
+            className="group flex min-w-0 items-stretch overflow-hidden rounded-[10px] text-start transition-transform duration-300 ease-out hover:-translate-y-0.5"
+            style={{ height: cardH }}
           >
-            <span className="grid w-[60px] shrink-0 place-items-center bg-slate-900 p-1.5">
+            <span
+              className="grid shrink-0 place-items-center bg-slate-900 p-1.5"
+              style={{ width: cardH }}
+            >
               {h.logo ? (
                 // The marks are stored dark on transparent, which is right on
                 // a white tile and invisible on this one. brightness(0) makes
@@ -4445,23 +4462,31 @@ function BrandWall({
                   style={{ filter: "brightness(0) invert(1)" }}
                 />
               ) : (
-                <span className="block break-words text-center text-[8px] font-bold uppercase leading-[1.1] tracking-[0.08em] text-white">
+                <span
+                  className="block break-words text-center font-bold uppercase leading-[1.1] tracking-[0.08em] text-white"
+                  style={{ fontSize: Math.max(7, nameSize - 3) }}
+                >
                   {h.name}
                 </span>
               )}
             </span>
             <span className="flex min-w-0 flex-1 flex-col justify-center bg-slate-100 px-2 py-1.5">
-              <span className="block truncate text-[11px] leading-tight text-slate-900">{h.name}</span>
+              <span className="block truncate leading-tight text-slate-900" style={{ fontSize: nameSize }}>
+                {h.name}
+              </span>
               {showCount && h.count > 0 && (
-                <span className="mt-px block truncate text-[9px] leading-tight text-slate-400">
+                <span
+                  className="mt-px block truncate leading-tight text-slate-400"
+                  style={{ fontSize: Math.max(8, nameSize - 2) }}
+                >
                   {ar
                     ? `${new Intl.NumberFormat("ar-EG").format(h.count)} قطعة`
                     : `${new Intl.NumberFormat("en-US").format(h.count)} piece${h.count === 1 ? "" : "s"}`}
                 </span>
               )}
               <span
-                className="mt-px block truncate text-[11px] font-semibold leading-tight"
-                style={{ color: linkColor }}
+                className="mt-px block truncate font-semibold leading-tight"
+                style={{ color: linkColor, fontSize: nameSize }}
               >
                 {ar ? "زيارة المتجر \u2039" : "Visit the store \u203A"}
               </span>
