@@ -4157,7 +4157,7 @@ function CircleRow({
                 className={`group block shrink-0 text-start ${grid ? "min-w-0" : "snap-start"}`}
                 // Room above the card for the part of the product that stands
                 // out of it.
-                style={{ width: grid ? undefined : size, paddingTop: Math.round(size * 0.34) }}
+                style={{ width: grid ? undefined : size, paddingTop: Math.round(size * 0.45) }}
               >
                 <span
                   className="relative block transition-transform duration-300 ease-out group-hover:-translate-y-0.5"
@@ -4170,14 +4170,18 @@ function CircleRow({
                       behind it either. */}
                   {str(item.imageUrl) ? (
                     <span
-                      className="pointer-events-none absolute left-1/2 block w-[112%] -translate-x-1/2 transition-transform duration-300 ease-out group-hover:scale-105"
-                      style={{ top: -Math.round(cardH * 0.18), height: Math.round(cardH * 0.95) }}
+                      className="pointer-events-none absolute left-1/2 block w-full -translate-x-1/2 transition-transform duration-300 ease-out group-hover:scale-105"
+                      style={{ bottom: Math.round(cardH * 0.24), height: Math.round(cardH * 1.08) }}
                     >
-                      {/* object-top is the whole trick: contain would centre
-                          the picture in the box and a wide product would stop
-                          short of the edge it is meant to break. */}
+                      {/* object-bottom is what makes this a baseline: contain
+                          would otherwise centre the picture in its box, and
+                          then standing on the same line would mean nothing.
+                          Each product is as big as its own shape allows, so a
+                          bottle rises out of the card and a sneaker stays
+                          inside it rather than barging into the card next
+                          door. */}
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={str(item.imageUrl)} alt="" className="h-full w-full object-contain object-top" />
+                      <img src={str(item.imageUrl)} alt="" className="h-full w-full object-contain object-bottom" />
                     </span>
                   ) : (
                     <span

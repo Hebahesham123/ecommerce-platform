@@ -5116,12 +5116,13 @@ function DeptMark({ name, size }: { name: string; size: number }) {
 /**
  * A cut-out hung from its top.
  *
- * resizeMode contain centres what it fits, and a department is anything from
- * a sneaker two and a half times wider than it is tall to a swimsuit twice as
- * tall as it is wide. Centred, the wide ones sit in the middle of the box and
- * never reach the card's edge. So the size is worked out here instead: the
- * aspect arrives with the image, the width with the layout, and the picture
- * is drawn at the top of the box at whichever of the two fits.
+ * resizeMode contain centres what it fits, and the web has object-bottom to
+ * stop it. React Native has nothing of the sort, so the size is worked out
+ * here instead: the aspect arrives with the image, the width with the layout,
+ * and the picture is drawn standing on the bottom of its box at whichever of
+ * the two fits. That shared bottom edge is the baseline the whole row rests
+ * on, and it is why a tall bottle rises out of its card while a wide sneaker
+ * stays inside its own.
  */
 function StandPhoto({ uri, height }: { uri: string; height: number }) {
   const [aspect, setAspect] = React.useState(0);
@@ -5129,7 +5130,10 @@ function StandPhoto({ uri, height }: { uri: string; height: number }) {
   const w = aspect && box ? Math.min(box, height * aspect) : box;
   const h = aspect && w ? w / aspect : height;
   return (
-    <View style={{ width: "100%", alignItems: "center" }} onLayout={(e) => setBox(e.nativeEvent.layout.width)}>
+    <View
+      style={{ width: "100%", height, alignItems: "center", justifyContent: "flex-end" }}
+      onLayout={(e) => setBox(e.nativeEvent.layout.width)}
+    >
       <Image
         source={{ uri }}
         style={{ width: w, height: h }}
@@ -5226,10 +5230,13 @@ export function CircleRow({
   const full = (u: string) => (u.indexOf("//") >= 0 ? u : SITE_ORIGIN + u);
   // The card, and the room kept above it for the overflow.
   const cardH = Math.round(size * 1.34);
-  const standPad = Math.round(size * 0.34);
-  // The cell keeps room above the card; the picture starts part of the way
-  // up it, so the same slice of every department is above the edge.
-  const standLift = Math.max(0, standPad - Math.round(cardH * 0.18));
+  const standPad = Math.round(size * 0.45);
+  // Where the picture's box begins, measured from the top of the cell. Its
+  // foot sits a little above the card's bottom edge, clear of the label, and
+  // it is a card and a bit tall - so the tallest products reach well above
+  // the card and the cell keeps room for them.
+  const standBoxH = Math.round(cardH * 1.08);
+  const standLift = Math.max(0, standPad + cardH - Math.round(cardH * 0.24) - standBoxH);
 
   return (
     <View
@@ -5288,7 +5295,7 @@ export function CircleRow({
                 </View>
                 {i.imageUrl ? (
                   <View style={[styles.standArt, { top: standLift }]} pointerEvents="none">
-                    <StandPhoto uri={full(i.imageUrl)} height={Math.round(cardH * 0.95)} />
+                    <StandPhoto uri={full(i.imageUrl)} height={standBoxH} />
                   </View>
                 ) : (
                   <View
@@ -5385,7 +5392,7 @@ const styles = StyleSheet.create({
   standCell: { position: "relative" },
   stand: { width: "100%", overflow: "hidden" },
   standMark: { position: "absolute", left: 0, right: 0, alignItems: "center", justifyContent: "flex-end" },
-  standArt: { position: "absolute", left: "-6%", right: "-6%", alignItems: "center" },
+  standArt: { position: "absolute", left: 0, right: 0, alignItems: "center" },
   standPlate: { position: "absolute", left: 8, right: 8, bottom: 8 },
   standName: { fontSize: 11, fontWeight: "700", color: colors.ink },
   standNote: { marginTop: 1, fontSize: 9, color: colors.inkSoft },
