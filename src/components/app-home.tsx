@@ -4157,7 +4157,7 @@ function CircleRow({
                 className={`group block shrink-0 text-start ${grid ? "min-w-0" : "snap-start"}`}
                 // Room above the card for the part of the product that stands
                 // out of it.
-                style={{ width: grid ? undefined : size, paddingTop: Math.round(size * 0.45) }}
+                style={{ width: grid ? undefined : size, paddingTop: Math.round(size * 0.36) }}
               >
                 <span
                   className="relative block transition-transform duration-300 ease-out group-hover:-translate-y-0.5"
@@ -4170,8 +4170,11 @@ function CircleRow({
                       behind it either. */}
                   {str(item.imageUrl) ? (
                     <span
-                      className="pointer-events-none absolute left-1/2 block w-full -translate-x-1/2 transition-transform duration-300 ease-out group-hover:scale-105"
-                      style={{ bottom: Math.round(cardH * 0.24), height: Math.round(cardH * 1.08) }}
+                      className="pointer-events-none absolute left-1/2 block w-[92%] -translate-x-1/2 transition-transform duration-300 ease-out group-hover:scale-105"
+                      // The label plate starts 32px up from the foot of the
+                      // card and has no ground of its own, so the baseline
+                      // sits clear of it rather than on it.
+                      style={{ bottom: Math.round(cardH * 0.32), height: Math.round(cardH * 0.92) }}
                     >
                       {/* object-bottom is what makes this a baseline: contain
                           would otherwise centre the picture in its box, and

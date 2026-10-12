@@ -5230,13 +5230,13 @@ export function CircleRow({
   const full = (u: string) => (u.indexOf("//") >= 0 ? u : SITE_ORIGIN + u);
   // The card, and the room kept above it for the overflow.
   const cardH = Math.round(size * 1.34);
-  const standPad = Math.round(size * 0.45);
+  const standPad = Math.round(size * 0.36);
   // Where the picture's box begins, measured from the top of the cell. Its
-  // foot sits a little above the card's bottom edge, clear of the label, and
-  // it is a card and a bit tall - so the tallest products reach well above
-  // the card and the cell keeps room for them.
-  const standBoxH = Math.round(cardH * 1.08);
-  const standLift = Math.max(0, standPad + cardH - Math.round(cardH * 0.24) - standBoxH);
+  // foot sits clear of the label rather than on it - the label plate starts
+  // about a third of the way up the card and has no ground of its own, so a
+  // heel's point would otherwise land straight on the word underneath.
+  const standBoxH = Math.round(cardH * 0.92);
+  const standLift = Math.max(0, standPad + cardH - Math.round(cardH * 0.32) - standBoxH);
 
   return (
     <View
@@ -5392,7 +5392,7 @@ const styles = StyleSheet.create({
   standCell: { position: "relative" },
   stand: { width: "100%", overflow: "hidden" },
   standMark: { position: "absolute", left: 0, right: 0, alignItems: "center", justifyContent: "flex-end" },
-  standArt: { position: "absolute", left: 0, right: 0, alignItems: "center" },
+  standArt: { position: "absolute", left: "4%", right: "4%", alignItems: "center" },
   standPlate: { position: "absolute", left: 8, right: 8, bottom: 8 },
   standName: { fontSize: 11, fontWeight: "700", color: colors.ink },
   standNote: { marginTop: 1, fontSize: 9, color: colors.inkSoft },
