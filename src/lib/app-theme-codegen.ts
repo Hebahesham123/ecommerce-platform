@@ -5225,7 +5225,7 @@ export function CircleRow({
   const titleSize = settings.titleSize && settings.titleSize > 0 ? settings.titleSize : 16;
   const linkSize = titleSize <= 16 ? 12 : Math.round(titleSize * 0.82);
   const labelSize = settings.labelSize && settings.labelSize > 0 ? settings.labelSize : 10;
-  // A path like /departments/bags.png is relative to the shop; a phone needs
+  // A path like /departments/bags.webp is relative to the shop; a phone needs
   // the whole address. Anything already absolute is left alone.
   const full = (u: string) => (u.indexOf("//") >= 0 ? u : SITE_ORIGIN + u);
   // The card, and the room kept above it for the overflow.
