@@ -4380,9 +4380,6 @@ function BrandWall({
         // this item, then set on the collection. Both are hers; either is a
         // brand image and is drawn as one.
         logo: str(item.imageUrl) || (found?.ownImage ? (found.image ?? "") : ""),
-        // Only when she has set neither: the first product's photograph, a
-        // stand-in used as a ground to set the name over, never as the mark.
-        photo: found?.ownImage ? null : (found?.image ?? null),
         count: found?.productCount ?? 0,
         known: Boolean(found),
       };
@@ -4428,50 +4425,30 @@ function BrandWall({
           <button
             key={h.item.id}
             onClick={() => go(h.item)}
-            className="relative block min-w-0 overflow-hidden rounded-xl bg-slate-900 text-start"
+            className="group block min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white text-start transition-transform duration-300 ease-out hover:-translate-y-0.5"
           >
-            {h.logo ? (
-              // A real mark gets white behind it and nothing else: a logo laid
-              // over a photograph is a logo nobody can read.
-              <span className="grid aspect-[4/5] w-full place-items-center bg-white px-2">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={h.logo} alt="" className="max-h-[56%] w-auto max-w-full object-contain" />
-              </span>
-            ) : (
-              <>
-                <Thumb src={h.photo} className="aspect-[4/5] w-full" radius="rounded-none" />
-                {/* Dark enough that the name is read first. A brand card where
-                    the photograph wins is a card that sold nobody the brand. */}
-                <span
-                  className="pointer-events-none absolute inset-0 block"
-                  style={{
-                    background:
-                      "linear-gradient(180deg, rgba(10,8,7,0.22) 0%, rgba(10,8,7,0.52) 55%, rgba(10,8,7,0.78) 100%)",
-                  }}
-                />
-              </>
-            )}
-
-            {!h.logo && (
-              <span className="absolute inset-x-0 bottom-0 block px-2 pb-2 pt-6 text-center">
-                <span className="app-display block break-words text-[12px] font-semibold uppercase leading-[1.1] tracking-[0.12em] text-white">
-                  {h.name}
-                </span>
-                {showCount && h.count > 0 && (
-                  <span className="mt-0.5 block text-[9px] leading-none text-white/70">
-                    {ar
-                      ? `${new Intl.NumberFormat("ar-EG").format(h.count)} قطعة`
-                      : `${new Intl.NumberFormat("en-US").format(h.count)} piece${h.count === 1 ? "" : "s"}`}
+            <span className="flex aspect-[4/5] w-full flex-col items-center justify-center px-2 py-2">
+              <span className="flex min-h-0 flex-1 items-center justify-center">
+                {h.logo ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={h.logo} alt="" className="max-h-full w-auto max-w-full object-contain" />
+                ) : (
+                  // No logo set, so the word is the mark. Letter-spaced small
+                  // caps is how a house writes its own name, and it is legible
+                  // at this size in a way a darkened photograph never was.
+                  <span className="block break-words text-center text-[12px] font-bold uppercase leading-[1.15] tracking-[0.14em] text-slate-900">
+                    {h.name}
                   </span>
                 )}
               </span>
-            )}
-
-            {h.logo && showCount && h.count > 0 && (
-              <span className="absolute inset-x-0 bottom-0 block bg-white/90 px-2 pb-1 pt-0.5 text-center text-[9px] leading-none text-slate-500">
-                {new Intl.NumberFormat(ar ? "ar-EG" : "en-US").format(h.count)}
-              </span>
-            )}
+              {showCount && h.count > 0 && (
+                <span className="mt-1 block shrink-0 text-[9px] leading-none text-slate-400">
+                  {ar
+                    ? `${new Intl.NumberFormat("ar-EG").format(h.count)} قطعة`
+                    : `${new Intl.NumberFormat("en-US").format(h.count)} piece${h.count === 1 ? "" : "s"}`}
+                </span>
+              )}
+            </span>
           </button>
         ))}
       </div>
