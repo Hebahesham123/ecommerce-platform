@@ -4343,18 +4343,24 @@ export type CountdownDealsSettings = {
 
 const two = (n: number) => (n < 10 ? "0" + n : String(n));
 
+type DealCard = HomePayload["rows"][string][number];
+
 export function CountdownDeals({
   settings,
   collections,
+  rows,
   onOpenCollection,
   onOpenProduct,
   onOpenScreen,
+  onAdd,
 }: {
   settings: CountdownDealsSettings;
   collections: HomePayload["collections"];
+  rows: HomePayload["rows"];
   onOpenCollection?: (handle: string) => void;
   onOpenProduct?: (id: string) => void;
   onOpenScreen?: (screen: string) => void;
+  onAdd?: (variantId: string, productId: string) => void;
 }) {
   const items = (settings.items ?? []).filter((i) => i.price || i.imageUrl || i.handle);
   const total = Math.max(0, Math.trunc((settings.endsInMinutes ?? 135) * 60));
@@ -4373,6 +4379,25 @@ export function CountdownDeals({
   const badgeBg = settings.badgeBg || colors.accent;
   const parts = [two(Math.floor(left / 3600)), two(Math.floor((left % 3600) / 60)), two(left % 60)];
   const units = ["H", "M", "S"];
+
+  /**
+   * One product per deal, and a different one each time.
+   *
+   * A deal naming a collection used to draw that collection's lead picture,
+   * so two collections leading with the same bag showed the same bag twice.
+   * Each deal now takes a product no earlier deal has taken, preferring one
+   * that can go in the bag in a single tap - a deal the shopper cannot act
+   * on is a poor deal to feature.
+   */
+  const chosen: Record<string, DealCard | undefined> = {};
+  const taken: string[] = [];
+  for (const i of items) {
+    const pool = (rows[i.handle || ""] || []).filter((c) => taken.indexOf(c.id) < 0);
+    const one =
+      pool.filter((c) => c.variantId != null && (c.variantCount || 1) === 1)[0] || pool[0] || undefined;
+    chosen[i.id] = one;
+    if (one) taken.push(one.id);
+  }
 
   return (
     <>
@@ -4400,7 +4425,12 @@ export function CountdownDeals({
         {items.map((i, idx) => {
           const lead = settings.featureFirst === true && idx === 0;
           const borrowed = inherit(i, collections);
-          const photo = i.imageUrl || borrowed.image;
+          const product = chosen[i.id];
+          // Hers if she pasted one, then the product this deal was given,
+          // and only then the collection's lead - the last of which is what
+          // made two deals look identical.
+          const photo = i.imageUrl || product?.image || borrowed.image;
+          const single = product != null && product.variantId != null && (product.variantCount || 1) === 1;
           const pct = Math.max(0, Math.min(100, parseInt(i.claimed ?? "", 10) || 0));
           const shot = [styles.photo, { height: lead ? 176 : 124 }];
           return (
@@ -4431,6 +4461,20 @@ export function CountdownDeals({
                   </View>
                 ) : null}
               </View>
+              {onAdd && product ? (
+                <Pressable
+                  style={styles.add}
+                  onPress={() => {
+                    // A product with sizes has no one variant to add, so it
+                    // opens for her to choose rather than guessing one.
+                    if (single && product.variantId) onAdd(product.variantId, product.id);
+                    else if (onOpenProduct) onOpenProduct(product.id);
+                  }}
+                  accessibilityLabel={single ? "Add to bag" : "Choose a size"}
+                >
+                  <Text style={styles.addMark}>+</Text>
+                </Pressable>
+              ) : null}
             </Pressable>
           );
         })}
@@ -4461,6 +4505,18 @@ const styles = StyleSheet.create({
   track: { height: 6, borderRadius: 3, backgroundColor: colors.page, overflow: "hidden" },
   fill: { height: 6, borderRadius: 3, backgroundColor: colors.accent },
   claimed: { marginTop: 4, fontSize: 9, color: colors.inkSoft },
+  add: {
+    position: "absolute",
+    right: 4,
+    bottom: 4,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.accent,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  addMark: { color: "#fff", fontSize: 18, lineHeight: 20, fontWeight: "700" },
 });
 `,
 
@@ -6816,7 +6872,7 @@ function blockCase(type: BlockType): string {
     trust_badges: [],
     live_now: ["lives={data.lives}", "collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     coming_up_live: ["lives={data.lives}", "collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
-    countdown_deals: ["collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
+    countdown_deals: ["collections={data.collections}", "rows={data.rows}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}", "onAdd={onAdd}"],
     info_rows: ["onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     shipping_goal: [],
     payment_plans: ["onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],

@@ -3361,6 +3361,35 @@ function CountdownDeals({
   // one lead gives the eye somewhere to start.
   const featureFirst = s.featureFirst === true;
 
+  /**
+   * One product per deal, and a different one each time.
+   *
+   * A deal naming a collection used to draw that collection's lead picture,
+   * so two collections leading with the same bag showed the same bag twice.
+   * Here each deal takes a product out of its collection that no earlier deal
+   * has taken.
+   *
+   * Among the ones still free it prefers a product that can be added to the
+   * bag in one tap - one variant, so there is a size to add. A deal the
+   * shopper cannot act on is a poor deal to feature.
+   */
+  const chosen = new Map<string, Card | null>();
+  {
+    const taken = new Set<string>();
+    for (const item of items) {
+      const named = productFor(item, data);
+      if (named) {
+        chosen.set(str(item.id), named);
+        taken.add(named.id);
+        continue;
+      }
+      const pool = (data.rows?.[str(item.handle)] ?? []).filter((c) => !taken.has(c.id));
+      const pick = pool.find((c) => c.variantId != null && (c.variantCount ?? 1) === 1) ?? pool[0] ?? null;
+      chosen.set(str(item.id), pick);
+      if (pick) taken.add(pick.id);
+    }
+  }
+
   return (
     <section>
       <div className="flex items-center justify-between gap-2">
@@ -3397,10 +3426,12 @@ function CountdownDeals({
           const borrowed = inherit(item, data);
           const claimed = str(item.claimed);
           const pct = Math.max(0, Math.min(100, parseInt(claimed, 10) || 0));
-          // What this deal is, as a product, when it points at one. A deal
+          // What this deal is, as a product: the one picked for it above,
+          // which is its own rather than shared with another deal. A deal
           // with a single variant can go straight in the bag; anything else
-          // opens, for the same reason the product cards do.
-          const product = productFor(item, data);
+          // opens, because a product with sizes has no one variant to add
+          // and guessing one is how a return starts.
+          const product = chosen.get(str(item.id)) ?? null;
           const single = product?.variantId != null && (product?.variantCount ?? 1) === 1;
           const dealLeft = typeof product?.available === "number" ? product.available : null;
           const dealNotes = cardNotes(
@@ -3426,7 +3457,10 @@ function CountdownDeals({
                   wider rather than by leaving a step behind it. */}
               <span className="relative block flex-1">
                 <Thumb
-                  src={borrowed.image}
+                  // Her own picture if she pasted one, then the product this
+                  // deal was given, and only then the collection's lead - the
+                  // last of which is what made two deals look identical.
+                  src={str(item.imageUrl) || product?.image || borrowed.image}
                   className="h-full w-full"
                   style={{ borderRadius: cards.radius, minHeight: lead ? 168 : 120 }}
                   blend

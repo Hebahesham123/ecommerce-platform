@@ -143,6 +143,18 @@ export async function GET() {
           else newArrivalsLimit = Math.max(newArrivalsLimit, int(s.limit, 12, 40));
           break;
         }
+        // A deal points at a collection and shows one thing out of it. Its
+        // products have to be asked for here too, or every deal falls back to
+        // the collection's lead picture - and two collections that lead with
+        // the same bag then show the same bag twice. A few each is plenty:
+        // the row needs enough to tell them apart, not a whole collection.
+        case "countdown_deals": {
+          for (const item of itemsOf(block)) {
+            const handle = String(item.handle ?? "").trim().toLowerCase();
+            if (handle) want(handle, 8);
+          }
+          break;
+        }
         case "reviews":
           reviewsLimit = Math.max(reviewsLimit, int(s.limit, 6, 20));
           break;
