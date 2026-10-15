@@ -5,8 +5,9 @@ import { useI18n, num } from "@/lib/i18n";
 import { PageHeader } from "@/components/page-header";
 import { Card, Badge } from "@/components/ui";
 import { KpiRow, StatTile } from "@/components/dashboard-ui";
-import { IcBell, IcEye, IcMobile, IcSend, IcTrash, IcX } from "@/components/icons";
-import { ImageUpload, LinkPicker, type LinkValue } from "@/components/pickers";
+import { IcBell, IcEye, IcImage, IcMobile, IcSend, IcTrash, IcX } from "@/components/icons";
+import { LinkPicker, type LinkValue } from "@/components/pickers";
+import { ImagePicker } from "@/components/image-picker";
 import type { AppNotification } from "@/lib/app-notifications";
 import {
   audienceSizeAction,
@@ -97,6 +98,7 @@ export default function AppNotificationsPage() {
   const [size, setSize] = useState<{ installs: number; popups: number } | null>(null);
   const [sending, setSending] = useState(false);
   const [confirm, setConfirm] = useState(false);
+  const [picking, setPicking] = useState(false);
 
   async function load() {
     const res = await listNotificationsAction();
@@ -263,14 +265,30 @@ export default function AppNotificationsPage() {
               <div>
                 <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">{ar ? "صورة (اختياري)" : "Image (optional)"}</span>
                 <div className="mt-1.5 flex items-center gap-2">
-                  <input className={input} value={image} onChange={(e) => setImage(e.target.value)} placeholder="https://…" />
-                  <ImageUpload ar={ar} onUploaded={setImage} />
+                  {image && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={image} alt="" className="h-14 w-14 shrink-0 rounded-lg border border-line object-cover" />
+                  )}
+                  <button className="btn-outline h-9 gap-1.5 px-3 text-sm" onClick={() => setPicking(true)}>
+                    <IcImage className="h-4 w-4" />
+                    {image ? (ar ? "تغيير الصورة" : "Change image") : ar ? "اختاري من الملفات" : "Choose from Files"}
+                  </button>
                   {image && (
                     <button className="btn-ghost h-9 w-9 p-0" onClick={() => setImage("")} aria-label="Remove image">
                       <IcX className="h-4 w-4" />
                     </button>
                   )}
                 </div>
+                {picking && (
+                  <ImagePicker
+                    libraryOnly
+                    value={image}
+                    onChange={setImage}
+                    onClose={() => setPicking(false)}
+                    ar={ar}
+                    title={ar ? "صورة الإشعار" : "Notification image"}
+                  />
+                )}
               </div>
 
               <div>

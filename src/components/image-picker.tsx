@@ -21,12 +21,15 @@ export function ImagePicker({
   onClose,
   ar,
   title,
+  libraryOnly = false,
 }: {
   value: string;
   onChange: (url: string) => void;
   onClose: () => void;
   ar: boolean;
   title?: string;
+  /** Only the pictures already in Content → Files: no upload, no pasted link. */
+  libraryOnly?: boolean;
 }) {
   const [tab, setTab] = useState<"library" | "link">("library");
   const [files, setFiles] = useState<FileAsset[]>([]);
@@ -85,6 +88,11 @@ export function ImagePicker({
           </button>
         </div>
 
+        {libraryOnly ? (
+          <p className="mb-3 text-xs text-ink-soft">
+            {ar ? "الصور الموجودة في المحتوى ← الملفات." : "The images in Content → Files."}
+          </p>
+        ) : (
         <div className="mb-3 flex gap-1.5">
           <button
             onClick={() => setTab("library")}
@@ -107,6 +115,7 @@ export function ImagePicker({
             <IcLink className="h-3.5 w-3.5" /> {ar ? "رابط" : "Link"}
           </button>
         </div>
+        )}
 
         <input
           ref={inputRef}
@@ -169,12 +178,18 @@ export function ImagePicker({
                   <p className="text-sm text-ink-soft">
                     {ar ? "لا توجد صور بعد" : "No images yet"}
                   </p>
+                  {libraryOnly ? (
+                    <p className="mt-1 text-xs text-ink-soft">
+                      {ar ? "ارفعي الصور من المحتوى ← الملفات أولاً." : "Upload images in Content → Files first."}
+                    </p>
+                  ) : (
                   <button
                     onClick={() => inputRef.current?.click()}
                     className="btn-outline mt-3 h-9 px-3 text-xs"
                   >
                     <IcUpload className="h-3.5 w-3.5" /> {ar ? "ارفعي صورة" : "Upload one"}
                   </button>
+                  )}
                 </div>
               ) : (
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
