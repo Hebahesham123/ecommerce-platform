@@ -47,6 +47,9 @@ function when(iso: string | null, ar: boolean) {
 
 /** How it will look on a phone's lock screen. */
 function PhonePreview({ title, body, image, ar }: { title: string; body: string; image: string; ar: boolean }) {
+  // An address that does not open is said so, not shown as a broken picture:
+  // a phone would not be able to show it either.
+  const [broken, setBroken] = useState<string | null>(null);
   return (
     <div className="mx-auto w-full max-w-[300px] rounded-[2rem] bg-gradient-to-b from-[#3a2a20] to-[#1d1511] p-3 pt-10 shadow-lg">
       <div className="mb-6 text-center text-3xl font-light text-white/90">9:41</div>
@@ -60,12 +63,17 @@ function PhonePreview({ title, body, image, ar }: { title: string; body: string;
             <div className="truncate text-[13px] font-semibold text-black">{title || (ar ? "العنوان" : "Title")}</div>
             <div className="line-clamp-3 text-[12px] leading-snug text-black/80">{body || (ar ? "نص الإشعار" : "Your message")}</div>
           </div>
-          {image && (
+          {image && broken !== image && (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={image} alt="" className="h-10 w-10 shrink-0 rounded-md object-cover" />
+            <img src={image} alt="" onError={() => setBroken(image)} className="h-10 w-10 shrink-0 rounded-md object-cover" />
           )}
         </div>
       </div>
+      {image && broken === image && (
+        <p className="mt-2 rounded-lg bg-rose-500/90 px-2 py-1.5 text-center text-[11px] text-white">
+          {ar ? "تعذر فتح الصورة من هذا الرابط — لن تظهر على الهاتف." : "This image address doesn't open — it won't show on the phone."}
+        </p>
+      )}
     </div>
   );
 }
