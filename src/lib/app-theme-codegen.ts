@@ -551,7 +551,7 @@ export type HomePayload = {
     href: string;
   }[];
   /** The ways the shop takes money, as the checkout knows them. */
-  payments?: { id: string; name: string; nameAr: string; kind: string; note: string; noteAr: string; color: string }[];
+  payments?: { id: string; name: string; nameAr: string; kind: string; note: string; noteAr: string; color: string; logo?: string }[];
 };
 
 /** Everything the front page needs, in one request. */
@@ -1890,18 +1890,23 @@ const styles = StyleSheet.create({
 });
 `,
     pay_strip: `import React, { useEffect, useRef, useState } from "react";
-import { Animated, StyleSheet, Text, View } from "react-native";
+import { Animated, Image, StyleSheet, Text, View } from "react-native";
+import Svg, { Circle as SvgCircle, Path, Rect } from "react-native-svg";
+import { LinearGradient } from "expo-linear-gradient";
 import { colors } from "../theme";
 
-type Way = { id: string; name: string; nameAr: string; kind: string; note: string; noteAr: string; color: string };
+type Way = { id: string; name: string; nameAr: string; kind: string; note: string; noteAr: string; color: string; logo?: string };
 
 /**
- * A thin strip naming the ways the shop takes money, one at a time.
+ * A thin strip naming the ways the shop takes money, one at a time — drawn
+ * as the App theme editor's preview draws it: the provider's mark on a white
+ * chip, its name with the strip's tag beside it, the note underneath, and a
+ * dot for each way.
  *
  * What it names comes from the merchant's payment settings, the same place
  * the checkout reads, so the strip cannot advertise a provider that was
- * switched off a month ago. A shop that takes one way shows one line standing
- * still rather than a carousel of one.
+ * switched off a month ago. A shop that takes one way shows one banner
+ * standing still rather than a carousel of one.
  *
  * It rises rather than slides: everything else on this screen travels
  * sideways, and one strip moving the other way gets read.
@@ -1915,7 +1920,7 @@ export function PayStrip({
 }) {
   const every = Math.max(0, Math.min(12, Number(settings.every === undefined ? 3 : settings.every) || 0));
   const [at, setAt] = useState(0);
-  const rise = useRef(new Animated.Value(0)).current;
+  const rise = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     if (every <= 0 || payments.length < 2) return;
@@ -1929,35 +1934,108 @@ export function PayStrip({
 
   if (!payments.length) return null;
   const way = payments[at % payments.length];
+  const ground = way.color || colors.accent;
   const lift = rise.interpolate({ inputRange: [0, 1], outputRange: [14, 0] });
+  const dots = payments.slice(0, 8);
 
   return (
     <View style={styles.window}>
-      <Animated.View
-        style={[styles.strip, { backgroundColor: way.color || colors.accent, opacity: rise, transform: [{ translateY: lift }] }]}
-      >
-        <View style={styles.tag}>
-          <Text style={styles.tagText}>{settings.title || "Pay your way"}</Text>
-        </View>
-        <View style={styles.line}>
-          <Text style={styles.name}>{way.name}</Text>
+      <Animated.View style={[styles.face, { backgroundColor: ground, opacity: rise, transform: [{ translateY: lift }] }]}>
+        {/* The provider's colour, deepening a little towards the far corner. */}
+        <LinearGradient
+          colors={["rgba(0,0,0,0)", "rgba(0,0,0,0)", "rgba(0,0,0,0.13)"]}
+          locations={[0, 0.55, 1]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+        <Mark way={way} />
+        <View style={styles.words}>
+          <View style={styles.top}>
+            <Text style={styles.name} numberOfLines={1}>
+              {way.name}
+            </Text>
+            <View style={styles.tag}>
+              <Text style={styles.tagText} numberOfLines={1}>
+                {settings.title || "Pay your way"}
+              </Text>
+            </View>
+          </View>
           {way.note ? (
-            <Text style={styles.note} numberOfLines={1}>{way.note}</Text>
+            <Text style={styles.note} numberOfLines={1}>
+              {way.note}
+            </Text>
           ) : null}
         </View>
       </Animated.View>
+      {payments.length > 1 ? (
+        <View style={styles.dots} pointerEvents="none">
+          {dots.map((w, i) => {
+            const on = i === at % dots.length;
+            return <View key={w.id} style={[styles.dot, on ? styles.dotOn : null]} />;
+          })}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+/**
+ * The provider's own logo if the merchant gave it one; a drawn note for money
+ * at the door, which is not a brand; otherwise its initials. Two clean letters
+ * rather than a hand-drawn guess at somebody else's trademark.
+ */
+function Mark({ way }: { way: Way }) {
+  const initials = way.name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase();
+  return (
+    <View style={styles.chip}>
+      {way.logo ? (
+        <Image source={{ uri: way.logo }} style={styles.logo} resizeMode="contain" />
+      ) : way.kind === "cod" ? (
+        <Svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#334155" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+          <Rect x={2} y={6} width={20} height={12} rx={2} />
+          <SvgCircle cx={12} cy={12} r={2.6} />
+          <Path d="M6 12h.01M18 12h.01" />
+        </Svg>
+      ) : (
+        <Text style={styles.initials}>{initials}</Text>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  window: { height: 40, borderRadius: 12, overflow: "hidden", justifyContent: "center" },
-  strip: { flexDirection: "row", alignItems: "center", gap: 8, height: 40, paddingHorizontal: 10 },
-  tag: { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 3, backgroundColor: "rgba(255,255,255,0.2)" },
-  tagText: { fontSize: 8, fontWeight: "700", letterSpacing: 0.8, textTransform: "uppercase", color: "#fff" },
-  line: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "baseline", gap: 6 },
-  name: { fontSize: 12, fontWeight: "800", color: "#fff" },
-  note: { flexShrink: 1, fontSize: 10, color: "rgba(255,255,255,0.75)" },
+  window: { height: 44, borderRadius: 12, overflow: "hidden" },
+  face: { ...StyleSheet.absoluteFillObject, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 9, overflow: "hidden" },
+  chip: {
+    height: 27,
+    minWidth: 27,
+    maxWidth: 56,
+    paddingHorizontal: 4,
+    borderRadius: 7,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+    elevation: 1,
+  },
+  logo: { height: 19, width: 48 },
+  initials: { fontSize: 11, fontWeight: "800", color: "#1e293b" },
+  words: { flex: 1, minWidth: 0, justifyContent: "center" },
+  top: { flexDirection: "row", alignItems: "center", gap: 6 },
+  name: { flexShrink: 1, fontSize: 13, fontWeight: "800", color: "#fff" },
+  tag: { flexShrink: 0, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1.5, backgroundColor: "rgba(255,255,255,0.2)" },
+  tagText: { fontSize: 7.5, fontWeight: "700", letterSpacing: 0.6, textTransform: "uppercase", color: "rgba(255,255,255,0.9)" },
+  note: { marginTop: 2, fontSize: 10.5, color: "rgba(255,255,255,0.8)" },
+  dots: { position: "absolute", bottom: 4, right: 9, flexDirection: "row", alignItems: "center", gap: 2.5 },
+  dot: { width: 3, height: 3, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.45)" },
+  dotOn: { width: 8, backgroundColor: "#fff" },
 });
 `,
     banner: `import React from "react";
