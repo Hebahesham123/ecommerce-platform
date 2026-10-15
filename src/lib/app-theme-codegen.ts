@@ -4455,7 +4455,7 @@ export function CountdownDeals({
                 {settings.showClaimed !== false && i.claimed ? (
                   <View style={{ marginTop: 6 }}>
                     <View style={styles.track}>
-                      <View style={[styles.fill, { width: pct + "%" }]} />
+                      <View style={[styles.fill, { width: (pct + "%") as import("react-native").DimensionValue }]} />
                     </View>
                     <Text style={styles.claimed}>{i.claimed}</Text>
                   </View>
@@ -5113,7 +5113,8 @@ const styles = StyleSheet.create({
 
     circle_row: `import React from "react";
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import Svg, { Circle, Path } from "react-native-svg";
+// The drawing circle is SvgCircle here: Circle is this row's own item type.
+import Svg, { Circle as SvgCircle, Path } from "react-native-svg";
 import { colors, gap, spacing, theme } from "../theme";
 import { inherit, openLink, type LinkTo } from "./Pieces";
 import { SITE_ORIGIN, type HomePayload } from "../api";
@@ -5207,7 +5208,7 @@ function DeptMark({ name, size }: { name: string; size: number }) {
   if (has("watch", "jewel", "ring", "ساعة", "مجوهرات")) {
     return (
       <Svg {...box}>
-        <Circle {...line} cx="12" cy="12" r="4.4" />
+        <SvgCircle {...line} cx="12" cy="12" r="4.4" />
         <Path {...line} d="M9.2 7.8 9.8 3.4h4.4l.6 4.4M9.2 16.2l.6 4.4h4.4l.6-4.4" />
       </Svg>
     );
@@ -5215,7 +5216,7 @@ function DeptMark({ name, size }: { name: string; size: number }) {
   return (
     <Svg {...box}>
       <Path {...line} d="M3.6 12.4 12.4 3.6h7v7l-8.8 8.8z" />
-      <Circle cx="15.8" cy="8.2" r="1.3" fill={colors.ink} />
+      <SvgCircle cx="15.8" cy="8.2" r="1.3" fill={colors.ink} />
     </Svg>
   );
 }
@@ -5442,7 +5443,7 @@ export function CircleRow({
           return (
             <Pressable
               key={i.id}
-              style={[styles.cell, grid ? { width: (100 / perRow) + "%", paddingHorizontal: 4 } : { width: cell }]}
+              style={[styles.cell, grid ? { width: (100 / perRow + "%") as import("react-native").DimensionValue, paddingHorizontal: 4 } : { width: cell }]}
               onPress={() => go(i)}
             >
               {tinted ? (
