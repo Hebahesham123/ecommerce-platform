@@ -1310,7 +1310,9 @@ function piecesFile(): GeneratedFile {
     language: "tsx",
     contents: `import React, { useEffect, useRef, useState } from "react";
 import { Animated, Image, Linking, Pressable, StyleSheet, Text, View } from "react-native";
-import { colors, radius, spacing, theme } from "../theme";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import Svg, { Circle, Path } from "react-native-svg";
+import { colors, spacing, theme } from "../theme";
 import type { Card, HomePayload } from "../api";
 
 /** The bits every section is made of, so they all look like one app. */
@@ -1442,7 +1444,102 @@ function Stars({ score, size = 9 }: { score: number; size?: number }) {
   );
 }
 
-type Note = { key: string; text: string; ink: string; mark: string };
+export type Note = { key: string; text: string; ink: string; mark: string };
+
+/**
+ * The mark in front of a fact, drawn the way the editor draws it: an 11px
+ * line drawing, so the kind of fact is known before it is read.
+ */
+function NoteMark({ kind, color }: { kind: string; color: string }) {
+  const line = {
+    fill: "none",
+    stroke: color,
+    strokeWidth: 2,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+  };
+  if (kind === "van") {
+    return (
+      <Svg width={11} height={11} viewBox="0 0 24 24">
+        <Path d="M3 7h10v9H3zM13 10h4l3 3v3h-7z" {...line} />
+        <Circle cx={7} cy={18} r={1.6} {...line} />
+        <Circle cx={17} cy={18} r={1.6} {...line} />
+      </Svg>
+    );
+  }
+  if (kind === "star") {
+    return (
+      <Svg width={11} height={11} viewBox="0 0 24 24">
+        <Path d="m12 3.6 2.5 5.1 5.6.8-4 3.9 1 5.6-5.1-2.7-5 2.7 1-5.6-4.1-3.9 5.6-.8z" fill={color} />
+      </Svg>
+    );
+  }
+  if (kind === "drop") {
+    return (
+      <Svg width={11} height={11} viewBox="0 0 24 24">
+        <Path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm1 5v6.2l2.3-2.3 1.4 1.4L12 17.1l-4.7-4.8 1.4-1.4L11 13.2V7Z" fill={color} />
+      </Svg>
+    );
+  }
+  if (kind === "bag") {
+    return (
+      <Svg width={11} height={11} viewBox="0 0 24 24">
+        <Path d="M5 8h14l-1 12H6zM9 8V6a3 3 0 0 1 6 0v2" {...line} />
+      </Svg>
+    );
+  }
+  if (kind === "few") {
+    return (
+      <Svg width={11} height={11} viewBox="0 0 24 24">
+        <Path d="M12 3 3 8v8l9 5 9-5V8z" {...line} />
+        <Path d="M3 8l9 5 9-5M12 13v8" {...line} />
+      </Svg>
+    );
+  }
+  return (
+    <Svg width={11} height={11} viewBox="0 0 24 24">
+      <Path d="M4 12 12 4h7v7l-8 8z" {...line} />
+      <Circle cx={15.5} cy={8.5} r={1.3} fill={color} />
+    </Svg>
+  );
+}
+
+/** The plus on a card's round add button: 14px, a 2.5 stroke, round ends. */
+export function PlusMark({ size = 14, color = "#fff", weight = 2.5 }: { size?: number; color?: string; weight?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path d="M12 5v14M5 12h14" fill="none" stroke={color} strokeWidth={weight} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
+const HEART = "M20.8 5.6a5 5 0 0 0-7.1 0L12 7.3l-1.7-1.7a5 5 0 1 0-7.1 7.1l8.8 8.8 8.8-8.8a5 5 0 0 0 0-7.1Z";
+const WISH = "wish_";
+
+/**
+ * Whether this phone has hearted a product, kept on the phone the way a liked
+ * reel is, so the heart is still filled the next time the card is drawn.
+ */
+function useWished(id: string): [boolean, () => void] {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    let live = true;
+    AsyncStorage.getItem(WISH + id)
+      .then((v) => {
+        if (live) setOn(v === "1");
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [id]);
+  const toggle = () => {
+    const next = !on;
+    setOn(next);
+    (next ? AsyncStorage.setItem(WISH + id, "1") : AsyncStorage.removeItem(WISH + id)).catch(() => {});
+  };
+  return [on, toggle];
+}
 
 /**
  * The card's note: one true thing at a time, turning over.
@@ -1450,7 +1547,7 @@ type Note = { key: string; text: string; ink: string; mark: string };
  * It turns on its top edge rather than sliding, because a line that slides is
  * a ticker and a shopper learns to let a ticker run past.
  */
-function CardNote({ notes }: { notes: Note[] }) {
+export function CardNote({ notes }: { notes: Note[] }) {
   const [at, setAt] = useState(0);
   const turn = useRef(new Animated.Value(1)).current;
 
@@ -1470,7 +1567,7 @@ function CardNote({ notes }: { notes: Note[] }) {
   return (
     <View style={styles.noteRow}>
       <Animated.View style={[styles.noteFace, { opacity: turn, transform: [{ perspective: 300 }, { rotateX: tilt }] }]}>
-        <Text style={[styles.noteMark, { color: note.ink }]}>{note.mark}</Text>
+        <NoteMark kind={note.mark} color={note.ink} />
         <Text style={[styles.noteText, { color: note.ink }]} numberOfLines={1}>{note.text}</Text>
       </Animated.View>
     </View>
@@ -1484,40 +1581,81 @@ function CardNote({ notes }: { notes: Note[] }) {
  * made here. Nothing is written for the card: the discount is the gap between
  * the two prices and the count is of order lines that were not cancelled.
  */
-function notesFor(card: Card, scarce: boolean, left: number | null): Note[] {
+export function notesFor(card: Card | null | undefined, scarce: boolean, left: number | null): Note[] {
   if (!theme.card.ticker) return [];
   const notes: Note[] = [];
-  notes.push({ key: "van", mark: "\u{1F69A}", ink: "#15803d", text: "Free delivery on everything" });
+  notes.push({ key: "van", mark: "van", ink: "#15803d", text: "Free delivery on everything" });
   const score = Number(theme.card.rating);
   if (Number.isFinite(score) && score > 0) {
     notes.push({
       key: "star",
-      mark: "\u2605",
+      mark: "star",
       ink: "#b45309",
       text: theme.card.reviews
         ? theme.card.rating + " from " + theme.card.reviews + " ratings"
         : theme.card.rating + " out of 5",
     });
   }
-  if (card.compareAt != null && card.priceMin != null && card.compareAt > card.priceMin) {
-    notes.push({ key: "drop", mark: "\u2193", ink: "#b42318", text: "You save " + money(card.compareAt - card.priceMin) });
+  if (card && card.compareAt != null && card.priceMin != null && card.compareAt > card.priceMin) {
+    notes.push({ key: "drop", mark: "drop", ink: "#b42318", text: "You save " + money(card.compareAt - card.priceMin) });
   }
-  const sold = Number(card.sold || 0);
+  const sold = Number((card && card.sold) || 0);
   if (sold > 0) {
-    notes.push({ key: "bag", mark: "\u{1F6CD}", ink: "#334155", text: sold.toLocaleString("en-US") + " sold" });
+    notes.push({ key: "bag", mark: "bag", ink: "#334155", text: new Intl.NumberFormat("en-US").format(sold) + " sold" });
   }
-  if (scarce && left !== null) {
-    notes.push({ key: "few", mark: "\u25C6", ink: "#b42318", text: left === 1 ? "Last one" : "Only " + left + " left" });
+  if (left === 1) {
+    notes.push({ key: "few", mark: "few", ink: "#b42318", text: "Last one" });
+  } else if (scarce && left !== null) {
+    notes.push({ key: "few", mark: "few", ink: "#b42318", text: "Only " + left + " left" });
   }
   if (theme.card.tickerText) {
-    notes.push({ key: "own", mark: "\u25CF", ink: "#334155", text: theme.card.tickerText });
+    notes.push({ key: "own", mark: "tag", ink: "#334155", text: theme.card.tickerText });
   }
   return notes;
 }
 
+/**
+ * The name, minus the brand that is already printed above it, so the words a
+ * card can show are words of the product rather than of the house.
+ */
+export function withoutVendor(name: string, vendor?: string | null) {
+  const v = String(vendor || "").trim();
+  const n = String(name || "").trim();
+  if (!v || n.toLowerCase().indexOf(v.toLowerCase()) !== 0) return n;
+  return n.slice(v.length).trim() || n;
+}
+
+/** A product card's heart: the editor's, in the card's top corner. */
+function Heart({ on, onPress, market }: { on: boolean; onPress: () => void; market: boolean }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      hitSlop={6}
+      accessibilityLabel="Add to wishlist"
+      style={market ? styles.heartBare : styles.heartDisc}
+    >
+      <Svg width={market ? 16 : 14} height={market ? 16 : 14} viewBox="0 0 24 24">
+        <Path
+          d={HEART}
+          fill={on ? colors.accent : "none"}
+          stroke={on ? colors.accent : market ? "#334155" : "#94a3b8"}
+          strokeWidth={market ? 1.8 : 2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </Svg>
+    </Pressable>
+  );
+}
+
+/**
+ * One product, everywhere a product is drawn - the same card the editor
+ * draws, measure for measure. A row of them is 148 wide in the marketplace
+ * look and 160 in the classic one, the editor's own widths.
+ */
 export function ProductTile({
   card,
-  width = 128,
+  width = theme.card.look === "market" ? 148 : 160,
   fill = false,
   shape = "square",
   fit = "cover",
@@ -1536,6 +1674,7 @@ export function ProductTile({
   /** Put the one variant in the basket. Without it the card has no button. */
   onAdd?: (variantId: string, productId: string) => void;
 }) {
+  const [wished, toggleWish] = useWished(card.id);
   const score = Number(theme.card.rating);
   const stars = theme.card.stars && Number.isFinite(score) && score > 0;
   // Only once it is scarce: a full bar on everything says nothing, and a bar
@@ -1544,34 +1683,34 @@ export function ProductTile({
   const scarce = theme.card.stock && left !== null && left > 0 && left <= theme.card.lowAt;
   const single = card.variantId != null && (card.variantCount || 1) === 1;
   const market = theme.card.look === "market";
+  const canAdd = Boolean(onAdd);
+  const add = () => (single && card.variantId ? onAdd?.(card.variantId, card.id) : onPress?.(card.id));
   const off =
     card.compareAt != null && card.priceMin != null && card.compareAt > card.priceMin
       ? Math.round(((card.compareAt - card.priceMin) / card.compareAt) * 100)
       : 0;
   const notes = notesFor(card, scarce, left);
-  const ratio = shape === "wide" ? 0.75 : shape === "tall" ? 1.34 : 1;
-  const box = fill ? styles.fillImage : { width, height: Math.round(width * ratio) };
+  // width / height: 4:3 wide, square, 3:4 tall - as the editor's aspect classes.
+  const aspect = shape === "wide" ? 4 / 3 : shape === "tall" ? 3 / 4 : 1;
+  const photo = card.image ? (
+    <Image
+      source={{ uri: card.image }}
+      style={[styles.photo, { aspectRatio: aspect }]}
+      resizeMode={fit === "contain" ? "contain" : "cover"}
+    />
+  ) : (
+    <View style={[styles.photo, { aspectRatio: aspect }]} />
+  );
 
   if (market) {
     return (
-      <View style={[styles.flat, fill ? styles.fill : { width }]}>
+      <View style={[styles.marketCard, fill ? styles.fill : { width }]}>
         <Pressable onPress={() => onPress?.(card.id)}>
-          <View style={styles.panel}>
-            {card.image ? (
-              <Image source={{ uri: card.image }} style={[styles.panelImage, box]} resizeMode={fit === "contain" ? "contain" : "cover"} />
-            ) : (
-              <View style={[styles.panelImage, box]} />
-            )}
-            {/* Across from where the heart sits, measured from the same edge. */}
-            {off > 0 ? (
-              <View style={styles.offStamp}>
-                <Text style={styles.offStampText}>{"-" + off + "%"}</Text>
-              </View>
-            ) : null}
-          </View>
-          <View style={styles.marketBody}>
+          {/* The picture owns the corner, flush with the card's edges. */}
+          <View style={styles.panel}>{photo}</View>
+          <View style={[styles.marketBody, { paddingRight: canAdd ? 32 : 6 }]}>
             <View style={styles.nameRow}>
-              <Text style={styles.marketName} numberOfLines={1}>{card.name}</Text>
+              <Text style={styles.marketName} numberOfLines={1}>{withoutVendor(card.name, card.vendor)}</Text>
               {stars ? (
                 <View style={styles.scoreTail}>
                   <Text style={styles.chipStar}>{"★"}</Text>
@@ -1586,12 +1725,20 @@ export function ProductTile({
             <CardNote notes={notes} />
           </View>
         </Pressable>
-        {theme.card.add && onAdd ? (
+        {/* Across from the heart and measured from the same edge. */}
+        {off > 0 ? (
+          <View pointerEvents="none" style={styles.offStamp}>
+            <Text style={styles.offStampText}>{"−" + off + "%"}</Text>
+          </View>
+        ) : null}
+        <Heart on={wished} onPress={toggleWish} market />
+        {canAdd ? (
           <Pressable
             style={styles.plus}
-            onPress={() => (single && card.variantId ? onAdd(card.variantId, card.id) : onPress?.(card.id))}
+            onPress={add}
+            accessibilityLabel={single ? "Add to bag" : "Choose a size"}
           >
-            <Text style={styles.plusMark}>+</Text>
+            <PlusMark />
           </Pressable>
         ) : null}
       </View>
@@ -1599,100 +1746,142 @@ export function ProductTile({
   }
 
   return (
-    <Pressable style={[styles.tile, fill ? styles.fill : { width }]} onPress={() => onPress?.(card.id)}>
-      {card.image ? (
-        <Image source={{ uri: card.image }} style={[styles.tileImage, box]} resizeMode={fit === "contain" ? "contain" : "cover"} />
-      ) : (
-        <View style={[styles.tileImage, box]} />
-      )}
-      <View style={styles.tileBody}>
-        {/* One line. A name too long for it stops at a word, not mid-word. */}
-        <Text style={styles.tileName} numberOfLines={1}>{shortName(card.name)}</Text>
-        {stars ? (
-          <View style={styles.starRow}>
-            <Stars score={score} />
-            <Text style={styles.scoreText}>{theme.card.rating}</Text>
-            {theme.card.reviews ? <Text style={styles.countText}>{"(" + theme.card.reviews + ")"}</Text> : null}
+    <View style={[styles.tile, fill ? styles.fill : { width }]}>
+      <Pressable onPress={() => onPress?.(card.id)}>
+        <View style={styles.tileFrame}>
+          <View style={styles.tilePhoto}>{photo}</View>
+        </View>
+        <View style={[styles.tileBody, { paddingRight: canAdd && !theme.card.add ? 36 : 8 }]}>
+          {card.vendor ? (
+            <Text style={styles.vendor} numberOfLines={1}>{card.vendor.toUpperCase()}</Text>
+          ) : null}
+          {/* One line. A name too long for it stops at a word, not mid-word. */}
+          <Text style={styles.tileName} numberOfLines={1}>{shortName(withoutVendor(card.name, card.vendor))}</Text>
+          {stars ? (
+            <View style={styles.starRow}>
+              <Stars score={score} />
+              <Text style={styles.scoreText}>{theme.card.rating}</Text>
+              {theme.card.reviews ? <Text style={styles.countText}>{"(" + theme.card.reviews + ")"}</Text> : null}
+            </View>
+          ) : null}
+          <View style={styles.priceRow}>
+            <Text style={styles.price}>{money(card.priceMin)}</Text>
+            {off > 0 ? <Text style={styles.compareAt}>{money(card.compareAt)}</Text> : null}
           </View>
-        ) : null}
-        <View style={styles.priceRow}>
-          <Text style={styles.price}>{money(card.priceMin)}</Text>
-          {card.compareAt != null && card.priceMin != null && card.compareAt > card.priceMin ? (
-            <Text style={styles.compareAt}>{money(card.compareAt)}</Text>
+          <CardNote notes={notes} />
+          {scarce ? (
+            <View style={styles.leftWrap}>
+              <View style={styles.leftTrack}>
+                <View
+                  style={[
+                    styles.leftFill,
+                    { width: Math.max(8, Math.round(((theme.card.lowAt - (left as number) + 1) / theme.card.lowAt) * 100)) + "%" },
+                  ]}
+                />
+              </View>
+              <Text style={styles.leftText}>{"Only " + left + " left"}</Text>
+            </View>
           ) : null}
         </View>
-        <CardNote notes={notes} />
-        {scarce ? (
-          <View style={styles.leftWrap}>
-            <View style={styles.leftTrack}>
-              <View
-                style={[
-                  styles.leftFill,
-                  { width: Math.max(8, Math.round(((theme.card.lowAt - (left as number) + 1) / theme.card.lowAt) * 100)) + "%" },
-                ]}
-              />
-            </View>
-            <Text style={styles.leftText}>{"Only " + left + " left"}</Text>
-          </View>
-        ) : null}
-        {theme.card.add && onAdd ? (
-          <Pressable
-            style={styles.tileCta}
-            onPress={() => (single && card.variantId ? onAdd(card.variantId, card.id) : onPress?.(card.id))}
-          >
-            <Text style={styles.tileCtaText}>
-              {single ? (theme.card.addLabel || "Add to bag").toUpperCase() : "CHOOSE SIZE"}
-            </Text>
-          </Pressable>
-        ) : null}
-      </View>
-    </Pressable>
+      </Pressable>
+      {theme.card.add && canAdd ? (
+        <Pressable style={styles.tileCta} onPress={add}>
+          {single ? <PlusMark size={12} weight={3} /> : null}
+          <Text style={styles.tileCtaText}>
+            {single ? (theme.card.addLabel || "Add to bag").toUpperCase() : "CHOOSE SIZE"}
+          </Text>
+        </Pressable>
+      ) : null}
+      {off > 0 ? (
+        <View pointerEvents="none" style={[styles.offStamp, styles.lift]}>
+          <Text style={styles.offStampText}>{"−" + off + "%"}</Text>
+        </View>
+      ) : null}
+      <Heart on={wished} onPress={toggleWish} market={false} />
+      {canAdd && !theme.card.add ? (
+        <Pressable
+          style={[styles.plus, styles.plusClassic]}
+          onPress={add}
+          accessibilityLabel={single ? "Add to bag" : "Choose a size"}
+        >
+          <PlusMark />
+        </Pressable>
+      ) : null}
+    </View>
   );
 }
 
+/** Tailwind's shadow-sm: 0 1px 2px rgba(0,0,0,0.05). */
+const lift = {
+  shadowColor: "#000",
+  shadowOpacity: 0.05,
+  shadowRadius: 1,
+  shadowOffset: { width: 0, height: 1 },
+  elevation: 1,
+};
+
 const styles = StyleSheet.create({
   headingRow: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: spacing.sm },
-  heading: { flex: 1, fontSize: 17, fontWeight: "700", color: colors.ink, fontFamily: theme.titleFont },
+  // The editor's section title: 16px bold, drawn tight (-0.025em), or at the
+  // display face's own -0.01em when the titles are set in it.
+  heading: { flex: 1, fontSize: 16, fontWeight: "700", color: colors.ink, fontFamily: theme.titleFont, letterSpacing: theme.titleFont ? -0.16 : -0.4 },
   seeAll: { fontSize: 12, fontWeight: "600", color: colors.accent },
-  tile: { borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, overflow: "hidden" },
   fill: { width: "100%" },
-  fillImage: { width: "100%", aspectRatio: 1 },
-  tileImage: { backgroundColor: theme.card.photoBg },
-  tileBody: { paddingHorizontal: spacing.sm, paddingTop: 6, paddingBottom: spacing.sm },
-  tileName: { fontSize: 11, lineHeight: 15, color: colors.ink },
-  starRow: { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 2 },
-  scoreText: { fontSize: 9, fontWeight: "700", color: colors.inkMuted },
-  countText: { fontSize: 9, color: colors.inkSoft },
-  noteRow: { marginTop: 4, height: 15, justifyContent: "center", overflow: "hidden" },
-  noteFace: { flexDirection: "row", alignItems: "center", gap: 4 },
-  noteMark: { fontSize: 9, lineHeight: 11 },
-  noteText: { fontSize: 9, fontWeight: "700", flexShrink: 1 },
-  flat: { position: "relative" },
-  panel: { borderRadius: theme.card.radius, overflow: "hidden", backgroundColor: theme.card.photoBg },
-  panelImage: { backgroundColor: theme.card.photoBg },
-  offStamp: { position: "absolute", left: 6, top: 6, backgroundColor: colors.accent, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
-  offStampText: { fontSize: 10, fontWeight: "700", color: "#fff" },
-  plus: { position: "absolute", right: 2, bottom: 4, width: 28, height: 28, borderRadius: 14, backgroundColor: colors.accent, alignItems: "center", justifyContent: "center", shadowColor: "#0f172a", shadowOpacity: 0.12, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 2 },
-  plusMark: { fontSize: 17, lineHeight: 19, fontWeight: "600", color: "#fff" },
-  marketBody: { paddingTop: 4, paddingBottom: 4, paddingLeft: 2, paddingRight: 34 },
-  nameRow: { flexDirection: "row", alignItems: "center", gap: 4 },
-  marketName: { flex: 1, fontSize: 11, lineHeight: 15, fontWeight: "500", color: colors.ink },
-  scoreTail: { flexDirection: "row", alignItems: "center", gap: 2 },
-  chipStar: { fontSize: 9, color: "#15803d" },
-  chipScore: { fontSize: 9, fontWeight: "700", color: colors.inkMuted },
-  dropRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
-  dropDisc: { width: 14, height: 14, borderRadius: 7, backgroundColor: "#b42318", alignItems: "center", justifyContent: "center" },
-  dropMark: { fontSize: 9, lineHeight: 11, fontWeight: "800", color: "#fff" },
-  priceBig: { fontSize: 13, fontWeight: "800", color: colors.ink },
+  photo: { width: "100%", backgroundColor: theme.card.photoBg },
+  lift,
+
+  // ---- the classic card: a bordered tile, the picture inset in it ----
+  tile: { borderRadius: 16, borderWidth: 1, borderColor: "#e2e8f0", backgroundColor: "#ffffff", overflow: "hidden" },
+  tileFrame: { padding: 6 },
+  tilePhoto: { borderRadius: 12, overflow: "hidden", backgroundColor: theme.card.photoBg },
+  tileBody: { paddingLeft: 8, paddingBottom: 8 },
+  vendor: { fontSize: 9, lineHeight: 13, fontWeight: "700", letterSpacing: 0.72, color: "#0f172a" },
+  tileName: { fontSize: 11, lineHeight: 15, color: "#64748b" },
+  starRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 },
+  scoreText: { fontSize: 9, fontWeight: "600", color: "#475569" },
+  countText: { fontSize: 9, color: "#94a3b8" },
+  price: { fontSize: 13, fontWeight: "700", color: colors.accent },
   leftWrap: { marginTop: 4 },
-  leftTrack: { height: 3, borderRadius: 2, backgroundColor: colors.line, overflow: "hidden" },
+  leftTrack: { height: 3, borderRadius: 2, backgroundColor: "#e2e8f0", overflow: "hidden" },
   leftFill: { height: 3, borderRadius: 2, backgroundColor: colors.accent },
-  leftText: { marginTop: 2, fontSize: 9, fontWeight: "700", color: colors.accent },
-  tileCta: { marginTop: 6, height: 30, borderRadius: radius.sm, backgroundColor: colors.accent, alignItems: "center", justifyContent: "center" },
-  tileCtaText: { fontSize: 10, fontWeight: "800", letterSpacing: 0.8, color: "#fff" },
+  leftText: { marginTop: 2, fontSize: 9, fontWeight: "600", color: colors.accent },
+  tileCta: { marginHorizontal: 8, marginBottom: 8, height: 32, borderRadius: 8, backgroundColor: colors.accent, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4 },
+  tileCtaText: { fontSize: 11, fontWeight: "700", letterSpacing: 0.88, color: "#fff" },
+  heartDisc: { position: "absolute", right: 8, top: 8, width: 28, height: 28, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.9)", alignItems: "center", justifyContent: "center", ...lift },
+  plusClassic: { right: 8, bottom: 8 },
+
+  // ---- the marketplace card: white, borderless, the picture flush ----
+  // 0 1px 3px rgba(15,23,42,0.08), the editor's shadow. No overflow clip, so
+  // iOS keeps the shadow; the panel clips the picture to the same corner.
+  marketCard: {
+    position: "relative",
+    backgroundColor: "#ffffff",
+    borderRadius: theme.card.radius,
+    shadowColor: "#0f172a",
+    shadowOpacity: 0.08,
+    shadowRadius: 1.5,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
+  panel: { borderRadius: theme.card.radius, overflow: "hidden", backgroundColor: theme.card.photoBg },
+  marketBody: { paddingTop: 4, paddingBottom: 6, paddingLeft: 6 },
+  nameRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  marketName: { flex: 1, fontSize: 11, lineHeight: 14, fontWeight: "500", color: "#0f172a" },
+  scoreTail: { flexDirection: "row", alignItems: "center", gap: 2 },
+  chipStar: { fontSize: 9, lineHeight: 11, color: "#15803d" },
+  chipScore: { fontSize: 9, lineHeight: 13, fontWeight: "700", color: "#334155" },
   priceRow: { flexDirection: "row", alignItems: "baseline", gap: 6, marginTop: 2 },
-  price: { fontSize: 14, fontWeight: "700", color: colors.accent },
-  compareAt: { fontSize: 10, color: colors.inkSoft, textDecorationLine: "line-through" },
+  priceBig: { fontSize: 13, lineHeight: 16, fontWeight: "800", color: "#0f172a" },
+  compareAt: { fontSize: 10, lineHeight: 15, color: "#94a3b8", textDecorationLine: "line-through" },
+  offStamp: { position: "absolute", left: 8, top: 8, backgroundColor: colors.accent, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  offStampText: { fontSize: 10, lineHeight: 15, fontWeight: "700", color: "#fff" },
+  heartBare: { position: "absolute", right: 8, top: 8, width: 24, height: 24, alignItems: "center", justifyContent: "center" },
+  plus: { position: "absolute", right: 2, bottom: 4, width: 28, height: 28, borderRadius: 14, backgroundColor: colors.accent, alignItems: "center", justifyContent: "center", ...lift },
+
+  // ---- the turning note under the price ----
+  noteRow: { marginTop: 4, height: 15, justifyContent: "center", overflow: "hidden" },
+  noteFace: { flexDirection: "row", alignItems: "center", gap: 4, transformOrigin: "top" },
+  noteText: { fontSize: 9, lineHeight: 11, fontWeight: "700", flexShrink: 1 },
 });
 `,
   };
@@ -1711,9 +1900,9 @@ function sectionFile(type: BlockType): GeneratedFile {
   const name = componentName(type);
   const body: Record<BlockType, string> = {
     brand_wall: `import React from "react";
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { colors, gap, radius, spacing, theme } from "../theme";
-import { inherit, openLink, type LinkTo } from "./Pieces";
+import { Image, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { colors, gap, spacing, theme } from "../theme";
+import { openLink, type LinkTo } from "./Pieces";
 import { SITE_ORIGIN, type HomePayload } from "../api";
 
 export type Brand = { id: string; handle?: string; label?: string; imageUrl?: string };
@@ -1762,13 +1951,14 @@ export function BrandWall({
   onOpenProduct?: (id: string) => void;
   onOpenScreen?: (screen: string) => void;
 }) {
+  const screen = useWindowDimensions().width;
   const items = settings.items ?? [];
-  const rows = Math.max(1, Math.min(4, Number(settings.rows || 3)));
+  const rows = Math.max(1, Math.min(4, Math.trunc(Number(settings.rows) > 0 ? Number(settings.rows) : 3)));
   // How wide a tile is. The card keeps its shape, the mark square is as tall
   // as the card, and the type scales from that height so a smaller tile does
   // not keep full-size words. Floored at nine, below which a name stops
   // being readable.
-  const size = Math.max(110, Math.min(300, Number(settings.size || 178)));
+  const size = Math.max(110, Math.min(300, Math.trunc(Number(settings.size) > 0 ? Number(settings.size) : 178)));
   const cardH = Math.round(size * 0.34);
   // The room the words have: the tile less the mark square and the panel's
   // padding. Scaling from this keeps a long name inside its panel at every
@@ -1804,28 +1994,48 @@ export function BrandWall({
   if (!houses.length) return null;
   const columns: (typeof houses)[] = [];
   for (let i = 0; i < houses.length; i += rows) columns.push(houses.slice(i, i + rows));
+  // Each column is at least the tile width and shares out any room left over,
+  // the way the editor sizes its columns (minmax(size, 1fr)): a short wall
+  // fills the row rather than stopping part way across it.
+  const room = screen - spacing.lg * 2;
+  const natural = columns.length * size + (columns.length - 1) * gap.item;
+  const colW = natural < room ? (room - (columns.length - 1) * gap.item) / columns.length : size;
+  const titleSize = settings.titleSize && settings.titleSize > 0 ? settings.titleSize : 16;
+  const linkSize = titleSize <= 16 ? 12 : Math.round(titleSize * 0.82);
+  const markSize = Math.max(7, nameSize - 3);
+  const link = settings.linkColor || colors.accent;
 
   return (
     <View>
-      <View style={styles.head}>
-        <Text style={[styles.heading, settings.titleSize ? { fontSize: settings.titleSize } : null]} numberOfLines={1}>
-          {settings.title ?? ""}
-        </Text>
-        {settings.seeAllLabel ? (
-          <Pressable onPress={() => go({ handle: settings.seeAllHandle, url: settings.seeAllUrl })}>
-            <Text style={[styles.seeAll, settings.linkColor ? { color: settings.linkColor } : null]}>
-              {settings.seeAllLabel}
-            </Text>
-          </Pressable>
-        ) : null}
-      </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>
+      {settings.title || settings.subtitle || settings.seeAllLabel ? (
+        <View style={styles.head}>
+          <View style={styles.headText}>
+            {settings.title ? (
+              <Text style={[styles.heading, { fontSize: titleSize }]} numberOfLines={1}>
+                {settings.title}
+              </Text>
+            ) : null}
+            {settings.subtitle ? <Text style={styles.subtitle} numberOfLines={1}>{settings.subtitle}</Text> : null}
+          </View>
+          {settings.seeAllLabel ? (
+            <Pressable onPress={() => go({ handle: settings.seeAllHandle, url: settings.seeAllUrl })}>
+              <Text style={[styles.seeAll, { color: link, fontSize: linkSize }]}>{settings.seeAllLabel + " ›"}</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.railBox}
+        contentContainerStyle={styles.rail}
+      >
         {columns.map((col, at) => (
           <View key={at} style={styles.col}>
             {col.map((h) => (
               <Pressable
                 key={h.item.id}
-                style={[styles.card, { width: size, height: cardH }]}
+                style={[styles.card, { width: colW, height: cardH }]}
                 onPress={() => go(h.item)}
               >
                 <View style={[styles.markBox, { width: cardH }]}>
@@ -1841,24 +2051,31 @@ export function BrandWall({
                       tintColor="#fff"
                     />
                   ) : (
-                    <Text style={[styles.markWord, { fontSize: Math.max(7, nameSize - 3) }]} numberOfLines={3}>
+                    <Text
+                      style={[
+                        styles.markWord,
+                        { fontSize: markSize, lineHeight: Math.round(markSize * 1.1), letterSpacing: markSize * 0.08 },
+                      ]}
+                      numberOfLines={3}
+                    >
                       {h.name.toUpperCase()}
                     </Text>
                   )}
                 </View>
                 <View style={styles.panel}>
-                  <Text style={[styles.name, { fontSize: nameSize }]} numberOfLines={1}>{h.name}</Text>
+                  <Text style={[styles.name, { fontSize: nameSize, lineHeight: Math.round(nameSize * 1.25) }]} numberOfLines={1}>
+                    {h.name}
+                  </Text>
                   {showCount && h.count > 0 ? (
-                    <Text style={[styles.count, { fontSize: Math.max(8, nameSize - 2) }]} numberOfLines={1}>
-                      {h.count + (h.count === 1 ? " piece" : " pieces")}
+                    <Text
+                      style={[styles.count, { fontSize: Math.max(8, nameSize - 2), lineHeight: Math.round(Math.max(8, nameSize - 2) * 1.25) }]}
+                      numberOfLines={1}
+                    >
+                      {new Intl.NumberFormat("en-US").format(h.count) + (h.count === 1 ? " piece" : " pieces")}
                     </Text>
                   ) : null}
                   <Text
-                    style={[
-                      styles.visit,
-                      { fontSize: nameSize },
-                      settings.linkColor ? { color: settings.linkColor } : null,
-                    ]}
+                    style={[styles.visit, { fontSize: nameSize, lineHeight: Math.round(nameSize * 1.25), color: link }]}
                     numberOfLines={1}
                   >
                     {"Visit the store ›"}
@@ -1874,19 +2091,25 @@ export function BrandWall({
 }
 
 const styles = StyleSheet.create({
-  head: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: spacing.sm },
-  heading: { flex: 1, fontSize: 17, fontWeight: "700", color: colors.ink, fontFamily: theme.titleFont },
-  seeAll: { fontSize: 12, fontWeight: "600", color: colors.accent },
-  rail: { gap: gap.item, paddingVertical: spacing.sm },
+  // The editor's heading for a row: the title over its small line, the link
+  // centred against the pair.
+  head: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm },
+  headText: { flex: 1, minWidth: 0 },
+  heading: { fontSize: 16, fontWeight: "700", color: "#0f172a", fontFamily: theme.titleFont, letterSpacing: theme.titleFont ? -0.16 : -0.4 },
+  subtitle: { fontSize: 11, lineHeight: 16, color: "#64748b" },
+  seeAll: { fontWeight: "700" },
+  // Out to the screen's edges like the editor's rail, the page margin put back inside.
+  railBox: { marginHorizontal: -spacing.lg, marginTop: spacing.sm },
+  rail: { gap: gap.item, paddingHorizontal: spacing.lg, paddingBottom: spacing.xs },
   col: { gap: gap.item },
   card: { flexDirection: "row", borderRadius: 10, overflow: "hidden" },
   markBox: { backgroundColor: "#0f172a", alignItems: "center", justifyContent: "center", padding: 6 },
   mark: { width: "100%", height: "100%" },
-  markWord: { fontSize: 8, fontWeight: "700", letterSpacing: 0.6, lineHeight: 10, textAlign: "center", color: "#fff" },
-  panel: { flex: 1, backgroundColor: "#f1f5f9", paddingHorizontal: 8, paddingVertical: 6, justifyContent: "center" },
-  name: { fontSize: 11, color: colors.ink },
-  count: { marginTop: 1, fontSize: 9, color: colors.inkSoft },
-  visit: { marginTop: 1, fontSize: 11, fontWeight: "700", color: colors.accent },
+  markWord: { fontWeight: "700", textAlign: "center", color: "#fff" },
+  panel: { flex: 1, minWidth: 0, backgroundColor: "#f1f5f9", paddingHorizontal: 8, paddingVertical: 6, justifyContent: "center" },
+  name: { color: "#0f172a" },
+  count: { marginTop: 1, color: "#94a3b8" },
+  visit: { marginTop: 1, fontWeight: "600" },
 });
 `,
     pay_strip: `import React, { useEffect, useRef, useState } from "react";
@@ -2177,24 +2400,36 @@ export function NewArrivals({
   settings,
   products,
   onOpenProduct,
+  onAdd,
 }: {
   settings: NewArrivalsSettings;
   products: Card[];
   onOpenProduct?: (id: string) => void;
+  onAdd?: (variantId: string, productId: string) => void;
 }) {
-  const shown = products.slice(0, settings.limit ?? 12);
+  const shown = products.slice(0, settings.limit && settings.limit > 0 ? settings.limit : 12);
   if (!shown.length) return null;
   return (
     <>
       <SectionHeading title={settings.title || "New arrivals"} />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-        {shown.map((p) => <ProductTile key={p.id} card={p} onPress={onOpenProduct} />)}
+      {/* Out to the screen's edges, as the editor's row runs, with the page's
+          own margin put back inside it. */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.rail}
+        contentContainerStyle={styles.row}
+      >
+        {shown.map((p) => <ProductTile key={p.id} card={p} onPress={onOpenProduct} onAdd={onAdd} />)}
       </ScrollView>
     </>
   );
 }
 
-const styles = StyleSheet.create({ row: { gap: gap.item, paddingVertical: spacing.sm } });
+const styles = StyleSheet.create({
+  rail: { marginHorizontal: -spacing.lg, marginTop: spacing.sm },
+  row: { gap: gap.item, paddingHorizontal: spacing.lg, paddingBottom: spacing.xs },
+});
 `,
 
     collection_row: `import React from "react";
@@ -2314,9 +2549,9 @@ const styles = StyleSheet.create({
 `,
 
     reviews: `import React from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
-import { colors, gap, radius, spacing } from "../theme";
-import { SectionHeading } from "./Pieces";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { colors, gap, radius, spacing, theme } from "../theme";
+import { openLink } from "./Pieces";
 import type { HomePayload } from "../api";
 
 export type ReviewsSettings = {
@@ -2324,29 +2559,54 @@ export type ReviewsSettings = {
   subtitle?: string;
   ratingLabel?: string;
   seeAllLabel?: string;
+  seeAllHandle?: string;
+  seeAllUrl?: string;
+  seeAllProductId?: string;
+  seeAllScreen?: string;
   limit?: number;
 };
 
 export function Reviews({
   settings,
   reviews,
+  onOpenCollection,
+  onOpenProduct,
+  onOpenScreen,
 }: {
   settings: ReviewsSettings;
   reviews: HomePayload["reviews"];
+  onOpenCollection?: (handle: string) => void;
+  onOpenProduct?: (id: string) => void;
+  onOpenScreen?: (screen: string) => void;
 }) {
-  const shown = reviews.slice(0, settings.limit ?? 6);
+  const shown = reviews.slice(0, settings.limit && settings.limit > 0 ? Math.trunc(settings.limit) : 6);
   if (!shown.length) return null;
+  const title = settings.ratingLabel || settings.title || "What customers say";
+  const seeAll = () =>
+    openLink(
+      { url: settings.seeAllUrl, handle: settings.seeAllHandle, productId: settings.seeAllProductId, screen: settings.seeAllScreen },
+      { onOpenCollection, onOpenProduct, onOpenScreen },
+    );
   return (
     <>
-      <SectionHeading title={settings.ratingLabel || settings.title || "What customers say"} />
-      {settings.subtitle ? <Text style={styles.sub}>{settings.subtitle}</Text> : null}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+      <View style={styles.headRow}>
+        <View style={{ flex: 1 }}>
+          {title ? <Text style={styles.heading} numberOfLines={1}>{title}</Text> : null}
+          {settings.subtitle ? <Text style={styles.sub} numberOfLines={1}>{settings.subtitle}</Text> : null}
+        </View>
+        {settings.seeAllLabel ? (
+          <Pressable onPress={seeAll}>
+            <Text style={styles.seeAll}>{settings.seeAllLabel + " \\u203a"}</Text>
+          </Pressable>
+        ) : null}
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.rail} contentContainerStyle={styles.row}>
         {shown.map((r) => (
           <View key={r.id} style={styles.card}>
             <View style={styles.head}>
               <Text style={styles.name}>{r.name}</Text>
               {r.productRating != null ? (
-                <Text style={styles.stars}>{"★".repeat(r.productRating)}</Text>
+                <Text style={styles.stars}>{"★".repeat(Math.max(0, Math.min(5, Math.round(r.productRating))))}</Text>
               ) : null}
             </View>
             {r.comment ? <Text style={styles.comment} numberOfLines={3}>{r.comment}</Text> : null}
@@ -2358,13 +2618,17 @@ export function Reviews({
 }
 
 const styles = StyleSheet.create({
-  row: { gap: gap.item, paddingVertical: spacing.sm },
+  headRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm },
+  heading: { fontSize: 16, lineHeight: 24, fontWeight: "700", color: colors.ink, fontFamily: theme.titleFont, letterSpacing: theme.titleFont ? -0.16 : -0.4 },
+  sub: { fontSize: 11, lineHeight: 16, color: "#64748b" },
+  seeAll: { fontSize: 12, lineHeight: 18, fontWeight: "700", color: colors.accent },
+  rail: { marginHorizontal: -spacing.lg, marginTop: spacing.sm },
+  row: { gap: gap.item, paddingHorizontal: spacing.lg, paddingBottom: 4 },
   card: { width: 224, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface, padding: spacing.md },
   head: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  name: { fontSize: 12, fontWeight: "600", color: colors.ink },
-  stars: { fontSize: 12, color: "#f59e0b" },
-  comment: { marginTop: 4, fontSize: 11, lineHeight: 16, color: colors.inkMuted },
-  sub: { fontSize: 11, color: colors.inkSoft },
+  name: { fontSize: 12, lineHeight: 16, fontWeight: "600", color: colors.ink },
+  stars: { fontSize: 12, lineHeight: 16, color: "#f59e0b" },
+  comment: { marginTop: 4, fontSize: 11, lineHeight: 18, color: colors.inkMuted },
 });
 `,
 
@@ -2372,6 +2636,7 @@ const styles = StyleSheet.create({
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { colors, radius } from "../theme";
 import { openLink } from "./Pieces";
+import { Fade } from "./Fade";
 import type { HomePayload } from "../api";
 
 export type Slide = {
@@ -2409,14 +2674,22 @@ export function Hero({
 }) {
   const slides = settings.items ?? [];
   const [at, setAt] = useState(0);
-  const every = settings.autoplaySeconds === undefined ? 5 : settings.autoplaySeconds;
-  const tall = settings.height === undefined ? 240 : settings.height;
-  const span = Math.max(50, Math.min(100, settings.width === undefined ? 86 : settings.width));
+  // The editor's reading: a number that is not above nought means "as usual".
+  const pos = (v: unknown, d: number) => {
+    const x = Number(v);
+    return Number.isFinite(x) && x > 0 ? Math.trunc(x) : d;
+  };
+  const every = pos(settings.autoplaySeconds, 5);
+  const tall = pos(settings.height, 240);
+  const span = Math.max(50, Math.min(100, pos(settings.width, 86)));
   const rail = useRef<{ scrollTo: (to: { x: number; animated?: boolean }) => void } | null>(null);
   const far = useRef(0);
   const seen = useRef(0);
+  // The page's width inside its gutter: a slide's share is a share of this,
+  // while the rail itself runs to the screen's edges so the next slide peeks.
   const [wide, setWide] = useState(0);
-  const step = wide > 0 ? Math.round((wide * span) / 100) + 8 : 0;
+  const card = wide > 0 ? (span >= 98 ? wide : Math.round((wide * span) / 100)) : 0;
+  const step = card > 0 ? card + 8 : 0;
 
   /**
    * The slides move on by themselves.
@@ -2451,13 +2724,14 @@ export function Hero({
         snapToInterval={step > 0 ? step : undefined}
         decelerationRate="fast"
         onContentSizeChange={(w: number) => {
-          far.current = Math.max(0, w - wide);
+          far.current = Math.max(0, w - (wide + 32));
         }}
         onScroll={(e: { nativeEvent: { contentOffset: { x: number } } }) => {
           seen.current = e.nativeEvent.contentOffset.x;
           if (step > 0) setAt(Math.max(0, Math.min(slides.length - 1, Math.round(seen.current / step))));
         }}
         scrollEventThrottle={64}
+        style={styles.bleed}
         contentContainerStyle={styles.rail}
       >
         {slides.map((sl) => {
@@ -2468,14 +2742,14 @@ export function Hero({
             <Pressable
               key={sl.id}
               onPress={() => openLink(sl, { onOpenCollection, onOpenProduct, onOpenScreen })}
-              style={[styles.wrap, { height: tall, width: wide > 0 ? Math.round((wide * span) / 100) : undefined }]}
+              style={[styles.wrap, { height: tall, width: card > 0 ? card : undefined }]}
             >
-              {image ? <Image source={{ uri: image }} style={styles.image} /> : null}
-              <View style={styles.overlay}>
+              {image ? <Image source={{ uri: image }} style={styles.image} resizeMode="cover" /> : null}
+              <Fade angle={0} colors={["rgba(0,0,0,0.6)", "rgba(0,0,0,0)"]} style={styles.overlay}>
                 {sl.kicker ? <Text style={styles.kicker}>{sl.kicker}</Text> : null}
                 {sl.heading ? <Text style={styles.heading}>{sl.heading}</Text> : null}
                 {sl.subheading ? <Text style={styles.sub}>{sl.subheading}</Text> : null}
-              </View>
+              </Fade>
             </Pressable>
           );
         })}
@@ -2500,13 +2774,16 @@ export function Hero({
 }
 
 const styles = StyleSheet.create({
-  rail: { gap: 8 },
-  wrap: { borderRadius: radius.lg, overflow: "hidden", backgroundColor: colors.page },
+  // The rail runs to the screen's edges and gives the gutter back inside, so
+  // a slide sits on the page's line while the next one peeks to the edge.
+  bleed: { marginHorizontal: -16 },
+  rail: { gap: 8, paddingHorizontal: 16, paddingBottom: 2 },
+  wrap: { borderRadius: radius.lg, overflow: "hidden", backgroundColor: "#f1f5f9" },
   image: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, width: "100%", height: "100%" },
-  overlay: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, justifyContent: "flex-end", padding: 12, backgroundColor: "rgba(0,0,0,0.3)" },
-  kicker: { fontSize: 10, letterSpacing: 1.5, textTransform: "uppercase", color: "rgba(255,255,255,0.8)" },
-  heading: { fontSize: 20, fontWeight: "700", color: "#fff" },
-  sub: { fontSize: 11, color: "rgba(255,255,255,0.85)" },
+  overlay: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, justifyContent: "flex-end", padding: 12 },
+  kicker: { fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: "rgba(255,255,255,0.8)" },
+  heading: { fontSize: 18, lineHeight: 28, fontWeight: "700", color: "#fff" },
+  sub: { fontSize: 11, lineHeight: 16, color: "rgba(255,255,255,0.85)" },
   dots: { flexDirection: "row", justifyContent: "center", gap: 6, marginTop: 8 },
   dot: { height: 6, width: 6, borderRadius: 3, backgroundColor: "#cbd5e1" },
   dotOn: { width: 16, backgroundColor: colors.accent },
@@ -2548,7 +2825,7 @@ const styles = StyleSheet.create({
 
     collection_tabs: `import React, { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { colors, gap, radius, spacing } from "../theme";
+import { colors, gap, radius, spacing, theme } from "../theme";
 import { ProductTile, SectionHeading } from "./Pieces";
 import type { HomePayload } from "../api";
 
@@ -2572,21 +2849,24 @@ export function CollectionTabs({
   rows,
   onOpenCollection,
   onOpenProduct,
+  onAdd,
 }: {
   settings: CollectionTabsSettings;
   rows: HomePayload["rows"];
   onOpenCollection?: (handle: string) => void;
   onOpenProduct?: (id: string) => void;
+  onAdd?: (variantId: string, productId: string) => void;
 }) {
   const tabs = (settings.items ?? []).filter((t) => t.handle);
   const [at, setAt] = useState(0);
   if (!tabs.length) return null;
 
   const active = tabs[Math.min(at, tabs.length - 1)];
-  const products = (rows[active.handle!] ?? []).slice(0, settings.limit ?? 8);
-  const align =
-    settings.align === "center" ? "center" : settings.align === "right" ? "flex-end" : "flex-start";
+  const limit = settings.limit && settings.limit > 0 ? Math.trunc(settings.limit) : 8;
+  const products = (rows[active.handle!] ?? []).slice(0, limit);
   const stretch = settings.stretchTabs === true;
+  // The editor's card in a row: 148 wide in the market look, 160 otherwise.
+  const tileWidth = theme.card.look === "market" ? 148 : 160;
 
   return (
     <View>
@@ -2611,7 +2891,7 @@ export function CollectionTabs({
           ))}
         </View>
       ) : (
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.bleed} contentContainerStyle={styles.tabs}>
         {tabs.map((t, i) => (
           <Pressable
             key={t.id}
@@ -2625,31 +2905,41 @@ export function CollectionTabs({
         ))}
       </ScrollView>
       )}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-        {products.map((p) => (
-          <ProductTile
-            key={p.id}
-            card={p}
-            shape={settings.imageShape ?? "square"}
-            fit={settings.imageFit ?? "cover"}
-            onPress={onOpenProduct}
-          />
-        ))}
-      </ScrollView>
+      {products.length ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.bleed} contentContainerStyle={styles.row}>
+          {products.map((p) => (
+            <ProductTile
+              key={p.id}
+              card={p}
+              width={tileWidth}
+              shape={settings.imageShape || "square"}
+              fit={settings.imageFit || "cover"}
+              onPress={onOpenProduct}
+              onAdd={onAdd}
+            />
+          ))}
+        </ScrollView>
+      ) : (
+        <Text style={styles.empty}>Nothing in this tab</Text>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  tabs: { gap: 6, paddingVertical: spacing.sm },
-  tabsRow: { flexDirection: "row", gap: 6, paddingVertical: spacing.sm },
-  tabGrow: { flex: 1, alignItems: "center" },
-  row: { gap: gap.item, paddingVertical: spacing.sm },
+  // The rows run to the screen edges, as in the editor, with the page padding
+  // put back inside them.
+  bleed: { marginTop: spacing.sm, marginHorizontal: -spacing.lg },
+  tabs: { gap: gap.item * 0.5, paddingHorizontal: spacing.lg, paddingBottom: spacing.xs },
+  tabsRow: { flexDirection: "row", gap: gap.item * 0.5, marginTop: spacing.sm, paddingBottom: spacing.xs },
+  tabGrow: { flex: 1, minWidth: 0, alignItems: "center" },
+  row: { gap: gap.item, paddingHorizontal: spacing.lg, paddingBottom: spacing.xs },
   tab: { borderRadius: radius.pill, paddingHorizontal: 12, paddingVertical: 6 },
   tabOn: { backgroundColor: colors.accent },
-  tabOff: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.line },
-  tabTextOn: { fontSize: 12, fontWeight: "500", color: "#fff" },
-  tabTextOff: { fontSize: 12, fontWeight: "500", color: colors.inkMuted },
+  tabOff: { backgroundColor: colors.surface, borderWidth: 1, borderColor: "#cbd5e1" },
+  tabTextOn: { fontSize: 12, lineHeight: 16, fontWeight: "500", color: "#fff" },
+  tabTextOff: { fontSize: 12, lineHeight: 16, fontWeight: "500", color: "#475569" },
+  empty: { paddingVertical: 24, textAlign: "center", fontSize: 11, lineHeight: 16.5, color: "#94a3b8" },
 });
 `,
 
@@ -2711,7 +3001,7 @@ const styles = StyleSheet.create({
 });
 `,
 
-    sale_seal: `import React, { useEffect, useRef } from "react";
+    sale_seal: `import React, { useEffect, useRef, useState } from "react";
 import { Animated, Easing, Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { Fade } from "./Fade";
 import { colors, theme } from "../theme";
@@ -2736,6 +3026,54 @@ export type SaleSealSettings = {
   height?: number;
   radius?: number;
 } & LinkTo;
+
+/** A colour at a given strength, as the editor writes it: the hex plus two digits of alpha. */
+function alpha(c: string, a: string) {
+  if (/^#[0-9a-f]{6}$/i.test(c)) return c + a;
+  if (/^#[0-9a-f]{3}$/i.test(c)) return "#" + c[1] + c[1] + c[2] + c[2] + c[3] + c[3] + a;
+  return c;
+}
+
+/**
+ * A picture cropped to fill its frame around the point she chose ("50% 40%"),
+ * the way object-position crops it in the editor. Until both sizes are known
+ * it is centred, which is what cover does on its own.
+ */
+function FocalImage({ uri, focal }: { uri: string; focal?: string }) {
+  const [box, setBox] = useState<{ w: number; h: number } | null>(null);
+  const [nat, setNat] = useState<{ w: number; h: number } | null>(null);
+  useEffect(() => {
+    let live = true;
+    Image.getSize(
+      uri,
+      (w, h) => {
+        if (live) setNat({ w, h });
+      },
+      () => {},
+    );
+    return () => {
+      live = false;
+    };
+  }, [uri]);
+  const m = String(focal || "").match(/(-?[\\d.]+)%\\s+(-?[\\d.]+)%/);
+  const fx = m ? Math.max(0, Math.min(1, Number(m[1]) / 100)) : 0.5;
+  const fy = m ? Math.max(0, Math.min(1, Number(m[2]) / 100)) : 0.5;
+  let placed: { position: "absolute"; left: number; top: number; width: number; height: number } | null = null;
+  if (box && nat && nat.w > 0 && nat.h > 0) {
+    const k = Math.max(box.w / nat.w, box.h / nat.h);
+    const w = nat.w * k;
+    const h = nat.h * k;
+    placed = { position: "absolute", left: (box.w - w) * fx, top: (box.h - h) * fy, width: w, height: h };
+  }
+  return (
+    <View
+      style={styles.photo}
+      onLayout={(e) => setBox({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}
+    >
+      <Image source={{ uri }} style={placed || styles.photo} resizeMode="cover" />
+    </View>
+  );
+}
 
 /** A minute a turn: noticed rather than watched. */
 function useTurn() {
@@ -2774,11 +3112,11 @@ export function SaleSeal({
   const reach = seal / 2 - 9;
   const opens = Boolean(settings.handle || settings.url || settings.productId || settings.screen);
 
-  const line = String(settings.ringText || "").replace(/\s*·\s*/g, " · ").trim();
+  const line = String(settings.ringText || "").replace(/\\s*·\\s*/g, " · ").trim();
   const letters = (line + " · " + line + " · ").split("");
 
   const panel = (
-    <View style={[styles.panel, { backgroundColor: bg }]}>
+    <View style={[styles.panel, { backgroundColor: bg }, stacked ? { width: "100%", minHeight: Math.round(h * 0.78) } : null]}>
       <Fade angle={150} colors={[bg, settings.bg2 || colors.accent]} style={StyleSheet.absoluteFill} />
       <View style={[styles.seal, { width: seal, height: seal }]}>
         <Animated.View style={[styles.ring, { transform: [{ rotate: turn }] }]}>
@@ -2800,7 +3138,7 @@ export function SaleSeal({
             </Text>
           ))}
         </Animated.View>
-        <View style={[styles.inner, { borderColor: ring }]}>
+        <View style={[styles.inner, { borderColor: alpha(ring, "59") }]}>
           {settings.smallText ? (
             <Text style={[styles.small, { color: ring, fontFamily: theme.titleFont }]}>{settings.smallText}</Text>
           ) : null}
@@ -2820,8 +3158,8 @@ export function SaleSeal({
   );
 
   const picture = settings.imageUrl ? (
-    <View style={stacked ? { width: "100%", height: Math.round(h * 0.55) } : { width: "42%" }}>
-      <Image source={{ uri: settings.imageUrl }} style={styles.photo} resizeMode="cover" />
+    <View style={[styles.picture, stacked ? { width: "100%", height: Math.round(h * 0.55) } : { width: "42%" }]}>
+      <FocalImage uri={settings.imageUrl} focal={settings.focal} />
       {settings.badge ? (
         <View style={[styles.badge, { backgroundColor: settings.badgeBg || "#2b1b10" }]}>
           <Text style={[styles.badgeText, { color: settings.badgeColor || "#ffffff" }]}>{settings.badge}</Text>
@@ -2843,21 +3181,23 @@ export function SaleSeal({
 }
 
 const styles = StyleSheet.create({
-  wrap: { flexDirection: "row", overflow: "hidden", backgroundColor: colors.surface },
+  wrap: { flexDirection: "row", overflow: "hidden" },
+  picture: { overflow: "hidden" },
   column: { flexDirection: "column" },
   panel: { flex: 1, alignItems: "center", justifyContent: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 16 },
   seal: { alignItems: "center", justifyContent: "center" },
   ring: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, alignItems: "center", justifyContent: "center" },
-  letter: { position: "absolute", fontSize: 8, fontWeight: "700" },
-  inner: { position: "absolute", left: 13, right: 13, top: 13, bottom: 13, borderRadius: 999, borderWidth: 1, opacity: 0.95, alignItems: "center", justifyContent: "center" },
-  small: { fontSize: 13, fontStyle: "italic" },
-  big: { fontSize: 30, fontWeight: "700" },
+  letter: { position: "absolute", fontSize: 8, fontWeight: "700", letterSpacing: 0.16 },
+  // A hairline ring at 35% of the ring colour, 13 in from the seal's edge.
+  inner: { position: "absolute", left: 13, right: 13, top: 13, bottom: 13, borderRadius: 999, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  small: { fontSize: 13, lineHeight: 14, fontStyle: "italic", includeFontPadding: false },
+  big: { fontSize: 30, lineHeight: 32, fontWeight: "700", includeFontPadding: false },
   tagline: { textAlign: "center", fontSize: 11, lineHeight: 15, opacity: 0.9 },
   cta: { marginTop: 2, borderRadius: 999, paddingHorizontal: 16, paddingVertical: 6 },
-  ctaText: { fontSize: 11, fontWeight: "700", letterSpacing: 1.2 },
+  ctaText: { fontSize: 11, lineHeight: 16, fontWeight: "700", letterSpacing: 1.32 },
   photo: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, width: "100%", height: "100%" },
   badge: { position: "absolute", right: 8, top: 8, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
-  badgeText: { fontSize: 10, fontWeight: "700" },
+  badgeText: { fontSize: 10, lineHeight: 15, fontWeight: "700" },
 });
 `,
 
@@ -2940,6 +3280,59 @@ function Ribbon({ text, color }: { text: string; color: string }) {
         {copy(1)}
       </Animated.View>
     </ScrollView>
+  );
+}
+
+/**
+ * The light that crosses the bold card every few seconds, the way a shop
+ * window catches the sun: a third of the card wide, leaning, sweeping from
+ * just off the left edge to well past the right, then resting off the card.
+ */
+function Shine() {
+  const [wide, setWide] = useState(0);
+  const run = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!wide) return;
+    run.setValue(0);
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(run, { toValue: 1, duration: 2475, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.delay(2025),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [wide, run]);
+  const band = wide / 3;
+  return (
+    <View
+      pointerEvents="none"
+      style={StyleSheet.absoluteFill}
+      onLayout={(e) => setWide(e.nativeEvent.layout.width)}
+    >
+      {wide ? (
+        <Animated.View
+          style={[
+            styles.shine,
+            {
+              left: -band,
+              width: band,
+              transform: [
+                { translateX: run.interpolate({ inputRange: [0, 1], outputRange: [-1.4 * band, 3.2 * band] }) },
+                { skewX: "-18deg" },
+              ],
+            },
+          ]}
+        >
+          <Fade
+            angle={90}
+            colors={["rgba(255,255,255,0)", "rgba(255,255,255,0.22)", "rgba(255,255,255,0)"]}
+            locations={[0, 0.5, 1]}
+            style={StyleSheet.absoluteFill}
+          />
+        </Animated.View>
+      ) : null}
+    </View>
   );
 }
 
@@ -3036,8 +3429,9 @@ export function FreeShipping({
             colors={[settings.bg || "#2b1b10", settings.bg2 || colors.accent]}
             style={[StyleSheet.absoluteFill, { borderRadius: r }]}
           />
+          <Shine />
           <View style={styles.boldCopy}>
-            <Text style={[styles.boldBig, { fontFamily: theme.titleFont }]}>{big}</Text>
+            <Text style={[styles.boldBig, { fontFamily: theme.titleFont, letterSpacing: theme.titleFont ? -0.42 : 0 }]}>{big}</Text>
             <View style={styles.boldWords}>
               <Text style={styles.boldSmall}>{small.toUpperCase()}</Text>
               {settings.subtitle ? <Text style={styles.boldSub}>{settings.subtitle}</Text> : null}
@@ -3199,13 +3593,16 @@ const styles = StyleSheet.create({
   bold: { flexDirection: "row", alignItems: "center", gap: 12, overflow: "hidden", paddingHorizontal: 16, paddingVertical: 14 },
   boldCopy: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "flex-end", gap: 10 },
   boldWords: { flexShrink: 1, paddingBottom: 4 },
-  boldBig: { fontSize: 42, lineHeight: 44, fontWeight: "700", color: "#ffffff" },
-  boldSmall: { fontSize: 13, fontWeight: "700", letterSpacing: 2.3, color: "#ffffff" },
-  boldSub: { marginTop: 2, fontSize: 11, color: "rgba(255,255,255,0.8)" },
+  // The editor's numbers, line heights included: a web page sets text at one
+  // and a half times its size, and the card's height follows from that.
+  boldBig: { fontSize: 42, lineHeight: 42, fontWeight: "700", color: "#ffffff" },
+  boldSmall: { fontSize: 13, lineHeight: 19.5, fontWeight: "700", letterSpacing: 2.34, color: "#ffffff" },
+  boldSub: { marginTop: 2, fontSize: 11, lineHeight: 16.5, color: "rgba(255,255,255,0.8)" },
   boldWas: { borderRadius: 12, paddingHorizontal: 10, paddingVertical: 6, alignItems: "center", backgroundColor: "rgba(20,12,7,0.28)" },
-  boldWasLabel: { fontSize: 9, fontWeight: "700", letterSpacing: 1.3 },
-  boldWasPrice: { marginTop: 2, fontSize: 15, fontWeight: "700", color: "#ffffff", textDecorationLine: "line-through" },
-  boldNote: { marginTop: 6, textAlign: "center", fontSize: 10, color: "#64748b" },
+  boldWasLabel: { fontSize: 9, lineHeight: 13.5, fontWeight: "700", letterSpacing: 1.26 },
+  boldWasPrice: { marginTop: 2, fontSize: 15, lineHeight: 22.5, fontWeight: "700", color: "#ffffff", textDecorationLine: "line-through", textDecorationStyle: "solid" },
+  boldNote: { marginTop: 6, textAlign: "center", fontSize: 10, lineHeight: 15, color: "#64748b" },
+  shine: { position: "absolute", top: 0, bottom: 0 },
   rule: { borderTopWidth: 1, borderBottomWidth: 1, paddingVertical: 12, alignItems: "center" },
   ruleLine: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 },
   ruleStar: { fontSize: 10 },
@@ -3268,11 +3665,97 @@ const styles = StyleSheet.create({
 });
 `,
 
-    moments: `import React from "react";
+    moments: `import React, { useEffect, useState } from "react";
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Fade } from "./Fade";
 import { colors, gap, spacing } from "../theme";
 import { SectionHeading, openLink, type LinkTo } from "./Pieces";
+
+/**
+ * Where a CSS object-position puts the picture, as two fractions.
+ *
+ * "50% 25%", "center top", "left 30%" all read the way a browser reads them:
+ * the first percentage across, the second down, keywords by their meaning,
+ * and anything missing in the middle.
+ */
+export function focalPoint(focal: string | undefined, fallback: string): { x: number; y: number } {
+  const read = (text: string) => {
+    let x: number | null = null;
+    let y: number | null = null;
+    const loose: number[] = [];
+    for (const word of text.trim().toLowerCase().split(/\\s+/).filter(Boolean)) {
+      if (word === "left") x = 0;
+      else if (word === "right") x = 1;
+      else if (word === "top") y = 0;
+      else if (word === "bottom") y = 1;
+      else if (word === "center") loose.push(0.5);
+      else {
+        const n = parseFloat(word);
+        if (Number.isFinite(n)) loose.push(Math.max(0, Math.min(100, n)) / 100);
+      }
+    }
+    for (const n of loose) {
+      if (x === null) x = n;
+      else if (y === null) y = n;
+    }
+    return { x: x === null ? 0.5 : x, y: y === null ? 0.5 : y };
+  };
+  return read(focal && focal.trim() ? focal : fallback);
+}
+
+/**
+ * A picture that covers its box and keeps the merchant's focal point in view,
+ * the way CSS object-fit: cover with object-position does on the website.
+ *
+ * React Native's own "cover" always centres. Here the picture's real size is
+ * learned once it loads, it is scaled to cover the box exactly as the browser
+ * scales it, and the overflow is split by the focal point: at "50% 25%" a
+ * quarter of what does not fit is cut from the top and three quarters from
+ * the bottom. Until both sizes are known it is drawn centred, so nothing jumps
+ * from empty to full.
+ */
+export function FocalImage({ uri, focal, fallback = "50% 50%" }: { uri: string; focal?: string; fallback?: string }) {
+  const [box, setBox] = useState<{ w: number; h: number } | null>(null);
+  const [ratio, setRatio] = useState<number | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    setRatio(null);
+    Image.getSize(
+      uri,
+      (w, h) => {
+        if (live && w > 0 && h > 0) setRatio(w / h);
+      },
+      () => {},
+    );
+    return () => {
+      live = false;
+    };
+  }, [uri]);
+
+  const { x, y } = focalPoint(focal, fallback);
+  let placed: { left: number; top: number; width: number; height: number } | null = null;
+  if (box && ratio && box.w > 0 && box.h > 0) {
+    // Cover: one side fits exactly, the other runs past the box.
+    const wider = box.w / box.h > ratio;
+    const width = wider ? box.w : box.h * ratio;
+    const height = wider ? box.w / ratio : box.h;
+    placed = { left: (box.w - width) * x, top: (box.h - height) * y, width, height };
+  }
+
+  return (
+    <View
+      style={styles.focalBox}
+      onLayout={(e) => setBox({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}
+    >
+      <Image
+        source={{ uri }}
+        style={placed ? { position: "absolute", ...placed } : styles.focalFill}
+        resizeMode={placed ? "stretch" : "cover"}
+      />
+    </View>
+  );
+}
 
 export type Moment = { id: string; imageUrl?: string; label?: string; focal?: string } & LinkTo;
 export type MomentsSettings = {
@@ -3294,16 +3777,6 @@ export type MomentsSettings = {
   items?: Moment[];
 };
 
-/** "50% 25%" is where the website puts the eye; React Native can only meet it
- *  half way, so the picture is anchored top, centre or bottom. */
-function anchor(focal?: string): "top" | "center" | "bottom" {
-  const y = Number(String(focal ?? "").trim().split(/\s+/)[1]?.replace("%", ""));
-  if (!Number.isFinite(y)) return "center";
-  if (y <= 33) return "top";
-  if (y >= 67) return "bottom";
-  return "center";
-}
-
 export function Moments({
   settings,
   onOpenCollection,
@@ -3315,18 +3788,25 @@ export function Moments({
   onOpenProduct?: (id: string) => void;
   onOpenScreen?: (screen: string) => void;
 }) {
+  // The grid's width, so its columns can be measured out the way CSS grid
+  // measures them: equal, with the gap between, wrapping onto a new line
+  // when there are more pictures than columns.
+  const [rowWidth, setRowWidth] = useState(0);
   const items = (settings.items ?? []).filter((i) => i.imageUrl || i.label);
   if (!items.length) return null;
   const w = settings.cardWidth && settings.cardWidth > 0 ? settings.cardWidth : 150;
   const h = settings.cardHeight && settings.cardHeight > 0 ? settings.cardHeight : 210;
-  const r = settings.radius && settings.radius >= 0 ? settings.radius : 14;
+  const r = settings.radius && settings.radius > 0 ? settings.radius : 14;
   const word = settings.labelColor || "#ffffff";
-  const across = !settings.perRow ? 5 : Math.max(0, Math.round(settings.perRow));
+  const across = settings.perRow && settings.perRow > 0 ? Math.trunc(settings.perRow) : 5;
   const grid = across >= 2;
   // Five across leaves about sixty pixels a card, and a word set at thirteen
   // would not fit in it. The shade over the picture shrinks with the card too:
   // half of it is right at two hundred pixels tall and a slab at ninety.
   const tight = across >= 5;
+  const between = gap.item * 0.67;
+  // Rounded down a hair, so the last column never wraps over a rounding error.
+  const column = rowWidth > 0 ? Math.floor(((rowWidth - between * (across - 1)) / across) * 100) / 100 : 0;
 
   const cards = items.map((m) => (
           <Pressable
@@ -3334,13 +3814,13 @@ export function Moments({
             style={[
               styles.card,
               grid
-                ? { flex: 1, aspectRatio: w > 0 && h > 0 ? w / h : 5 / 7, borderRadius: r }
+                ? { width: column || undefined, flex: column ? undefined : 1, aspectRatio: w / h, borderRadius: r }
                 : { width: w, height: h, borderRadius: r },
             ]}
             onPress={() => openLink(m, { onOpenCollection, onOpenProduct, onOpenScreen })}
           >
             {m.imageUrl ? (
-              <Image source={{ uri: m.imageUrl }} style={styles.img} resizeMode="cover" resizeMethod="resize" />
+              <FocalImage uri={m.imageUrl} focal={m.focal} fallback="50% 30%" />
             ) : (
               <View style={[styles.img, { backgroundColor: colors.line }]} />
             )}
@@ -3361,11 +3841,17 @@ export function Moments({
   return (
     <View>
       {settings.title ? <SectionHeading title={settings.title} /> : null}
-      {settings.subtitle ? <Text style={styles.subtitle}>{settings.subtitle}</Text> : null}
+      {settings.subtitle ? (
+        <Text style={styles.subtitle} numberOfLines={2}>
+          {settings.subtitle}
+        </Text>
+      ) : null}
       {grid ? (
-        <View style={styles.grid}>{cards}</View>
+        <View style={styles.grid} onLayout={(e) => setRowWidth(e.nativeEvent.layout.width)}>
+          {cards}
+        </View>
       ) : (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.bleed} contentContainerStyle={styles.row}>
           {cards}
         </ScrollView>
       )}
@@ -3374,20 +3860,24 @@ export function Moments({
 }
 
 const styles = StyleSheet.create({
-  subtitle: { marginTop: 2, fontSize: 11, lineHeight: 16, color: colors.inkSoft },
-  row: { gap: gap.itemTight, paddingVertical: spacing.sm },
-  grid: { flexDirection: "row", gap: gap.itemTight, paddingVertical: spacing.sm },
+  subtitle: { marginTop: 2, fontSize: 11, lineHeight: 15.1, color: "#64748b" },
+  // Two thirds of the item gap, as in the editor.
+  bleed: { marginTop: spacing.sm, marginHorizontal: -spacing.lg },
+  row: { gap: gap.item * 0.67, paddingHorizontal: spacing.lg, paddingBottom: spacing.xs },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: gap.item * 0.67, marginTop: spacing.sm },
   card: { overflow: "hidden", backgroundColor: colors.line },
   img: { position: "absolute", left: 0, top: 0, right: 0, bottom: 0 },
+  focalBox: { position: "absolute", left: 0, top: 0, right: 0, bottom: 0, overflow: "hidden" },
+  focalFill: { position: "absolute", left: 0, top: 0, width: "100%", height: "100%" },
   scrim: { position: "absolute", left: 0, right: 0, bottom: 0, height: "50%" },
   scrimTight: { position: "absolute", left: 0, right: 0, bottom: 0, height: "42%" },
-  word: { position: "absolute", left: 12, right: 12, bottom: 10, fontSize: 13, fontWeight: "600" },
-  wordTight: { position: "absolute", left: 5, right: 5, bottom: 5, fontSize: 9, fontWeight: "700" },
+  word: { position: "absolute", left: 12, right: 12, bottom: 10, fontSize: 13, lineHeight: 19.5, fontWeight: "600" },
+  wordTight: { position: "absolute", left: 6, right: 6, bottom: 6, fontSize: 9, lineHeight: 13.5, fontWeight: "600" },
 });
 `,
 
     bundle_save: `import React, { useState } from "react";
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Image, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { colors, gap, radius, spacing, theme } from "../theme";
 import { money, shortName } from "./Pieces";
 import type { HomePayload } from "../api";
@@ -3440,11 +3930,22 @@ export function BundleSave({
   onAdd?: (variantId: string, productId: string) => void;
 }) {
   const handle = (settings.handle || "").toLowerCase();
-  const pool = (handle ? rows[handle] : undefined) || newArrivals || [];
-  const cards = pool.slice(0, settings.limit && settings.limit > 0 ? settings.limit : 12);
-  const want = Math.max(2, settings.itemCount || 3);
-  const off = Math.max(0, Math.min(90, settings.percentOff === undefined ? 10 : settings.percentOff));
+  // The collection chosen, else what is new, else the first row with anything
+  // in it - the same order the dashboard's preview takes them in.
+  const firstRow = Object.keys(rows || {})
+    .map((k) => rows[k])
+    .find((row) => row && row.length);
+  const pool =
+    (handle && rows[handle] ? rows[handle] : undefined) ||
+    (newArrivals && newArrivals.length ? newArrivals : undefined) ||
+    firstRow ||
+    [];
+  const cards = pool.slice(0, settings.limit && settings.limit > 0 ? Math.trunc(settings.limit) : 12);
+  const want = Math.max(2, settings.itemCount && settings.itemCount > 0 ? Math.trunc(settings.itemCount) : 3);
+  const off = Math.max(0, Math.min(90, settings.percentOff && settings.percentOff > 0 ? Math.trunc(settings.percentOff) : 10));
   const ink = settings.inkColor || "#2b1b10";
+  // The preview writes the quieter lines in the ink at 60%.
+  const inkSoft = /^#[0-9a-f]{6}$/i.test(ink) ? ink + "99" : ink;
   const paper = settings.bg || "#fffaf3";
   const r = settings.radius ? settings.radius : 16;
 
@@ -3485,7 +3986,7 @@ export function BundleSave({
         {settings.title ? (
           <Text style={[styles.title, { color: ink, fontFamily: theme.titleFont }]}>{settings.title}</Text>
         ) : null}
-        <Text style={[styles.rule, { color: ink }]}>
+        <Text style={[styles.rule, { color: inkSoft }]}>
           {offers ? "Pick " + want + " — the cheapest comes down " + off + "%" : "Pick " + want + " and add them together"}
         </Text>
 
@@ -3519,7 +4020,7 @@ export function BundleSave({
 
         <View style={styles.foot}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.count}>{picked.length + " of " + want + " picked"}</Text>
+            <Text style={[styles.count, { color: inkSoft }]}>{picked.length + " of " + want + " picked"}</Text>
             {picked.length ? (
               <Text style={[styles.total, { color: ink }]}>
                 {money(total - saving)}
@@ -3547,7 +4048,7 @@ export function BundleSave({
         </View>
 
         {settings.code ? (
-          <Text style={styles.note}>
+          <Text style={[styles.note, { color: inkSoft }]}>
             {(settings.note || "Use the code at checkout") + ": "}
             <Text style={[styles.code, { color: colors.accent }]}>{settings.code}</Text>
           </Text>
@@ -3560,38 +4061,38 @@ export function BundleSave({
 const styles = StyleSheet.create({
   card: { overflow: "hidden", borderWidth: 1 },
   band: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingVertical: 8 },
-  eyebrow: { flex: 1, fontSize: 10, fontWeight: "800", letterSpacing: 1.8 },
+  eyebrow: { flex: 1, fontSize: 10, fontWeight: "700", letterSpacing: 1.8 },
   pill: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
-  pillText: { fontSize: 11, fontWeight: "800", color: "#fff" },
+  pillText: { fontSize: 11, fontWeight: "700", color: "#fff" },
   body: { paddingHorizontal: 12, paddingTop: 10, paddingBottom: 12 },
-  title: { fontSize: 17, fontWeight: "700" },
-  rule: { marginTop: 2, fontSize: 11, opacity: 0.6 },
+  title: { fontSize: 17, fontWeight: "700", lineHeight: 21, letterSpacing: theme.titleFont ? -0.17 : 0 },
+  rule: { marginTop: 2, fontSize: 11, lineHeight: 16 },
   rail: { marginHorizontal: -12, marginTop: 10 },
-  row: { flexDirection: "row", gap: gap.itemTight, paddingHorizontal: 12, paddingBottom: 4 },
+  row: { flexDirection: "row", gap: Math.round(gap.item * 0.75), paddingHorizontal: 12, paddingBottom: 4 },
   pick: { width: 86, borderRadius: radius.md, overflow: "hidden", backgroundColor: colors.surface },
-  pickImage: { width: "100%", height: 86, backgroundColor: theme.card.photoBg },
+  pickImage: { width: "100%", aspectRatio: 1, backgroundColor: theme.card.photoBg },
   tick: { position: "absolute", top: 4, right: 4, width: 18, height: 18, borderRadius: 9, alignItems: "center", justifyContent: "center" },
-  tickText: { fontSize: 11, fontWeight: "800", color: "#fff" },
+  tickText: { fontSize: 11, fontWeight: "700", color: "#fff" },
   pickBody: { paddingHorizontal: 6, paddingTop: 4, paddingBottom: 6 },
-  pickName: { fontSize: 9, color: "#64748b" },
-  pickPrice: { fontSize: 11, fontWeight: "700" },
-  foot: { flexDirection: "row", alignItems: "flex-end", gap: spacing.sm, marginTop: 10 },
-  count: { fontSize: 11, color: colors.inkSoft },
-  total: { fontSize: 15, fontWeight: "700" },
-  saving: { fontSize: 11, fontWeight: "700" },
+  pickName: { fontSize: 9, lineHeight: 11, color: "#64748b" },
+  pickPrice: { fontSize: 11, lineHeight: 16, fontWeight: "700" },
+  foot: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: spacing.sm, marginTop: 10 },
+  count: { fontSize: 11, lineHeight: 16 },
+  total: { fontSize: 15, lineHeight: 22, fontWeight: "700" },
+  saving: { fontSize: 11, fontWeight: "600" },
   cta: { height: 40, justifyContent: "center", borderRadius: radius.md, paddingHorizontal: 16 },
-  ctaText: { fontSize: 12, fontWeight: "800", letterSpacing: 1.2, color: "#fff" },
-  note: { marginTop: 8, fontSize: 10, color: colors.inkSoft },
-  code: { fontWeight: "800" },
+  ctaText: { fontSize: 12, fontWeight: "700", letterSpacing: 1.44, color: "#fff" },
+  note: { marginTop: 8, fontSize: 10, lineHeight: 15 },
+  code: { fontWeight: "700", fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace" },
 });
 `,
 
     tiers: `import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { colors, gap, radius, spacing, theme } from "../theme";
-import { SectionHeading, openLink, type LinkTo } from "./Pieces";
+import { openLink, type LinkTo } from "./Pieces";
 
-export type Tier = { id: string; prefix?: string; amount?: string; label?: string } & LinkTo;
+export type Tier ={ id: string; prefix?: string; amount?: string; label?: string } & LinkTo;
 export type TiersSettings = {
   title?: string;
   cardBg?: string;
@@ -3618,21 +4119,32 @@ export function Tiers({
   const line = settings.lineColor || "#e7d8c4";
   const ink = settings.inkColor || "#2b1b10";
   const muted = settings.mutedColor || "#8a6e57";
+  // Two columns, as the preview's grid draws them: rows of two, the last one
+  // keeping its half rather than stretching across.
+  const pairs: Tier[][] = [];
+  for (let n = 0; n < tiers.length; n += 2) pairs.push(tiers.slice(n, n + 2));
   return (
     <View>
-      <SectionHeading title={settings.title ?? ""} />
+      {settings.title ? (
+        <Text style={styles.heading} numberOfLines={1}>{settings.title}</Text>
+      ) : null}
       <View style={styles.grid}>
-        {tiers.map((t) => (
-          <Pressable
-            key={t.id}
-            style={[styles.card, { backgroundColor: cardBg, borderColor: line }]}
-            onPress={() => openLink(t, { onOpenCollection, onOpenProduct, onOpenScreen })}
-          >
-            {t.prefix ? <Text style={[styles.prefix, { color: muted }]}>{t.prefix.toUpperCase()}</Text> : null}
-            <Text style={[styles.amount, { color: ink, fontFamily: theme.titleFont }]}>{t.amount}</Text>
-            <View style={[styles.rule, { backgroundColor: colors.accent }]} />
-            <Text style={[styles.label, { color: muted }]} numberOfLines={1}>{t.label}</Text>
-          </Pressable>
+        {pairs.map((pair, row) => (
+          <View key={row} style={styles.pair}>
+            {pair.map((t) => (
+              <Pressable
+                key={t.id}
+                style={[styles.card, { backgroundColor: cardBg, borderColor: line }]}
+                onPress={() => openLink(t, { onOpenCollection, onOpenProduct, onOpenScreen })}
+              >
+                {t.prefix ? <Text style={[styles.prefix, { color: muted }]}>{t.prefix.toUpperCase()}</Text> : null}
+                <Text style={[styles.amount, { color: ink }]}>{t.amount}</Text>
+                <View style={[styles.rule, { backgroundColor: colors.accent }]} />
+                <Text style={[styles.label, { color: muted }]} numberOfLines={1}>{t.label}</Text>
+              </Pressable>
+            ))}
+            {pair.length < 2 ? <View style={styles.spare} /> : null}
+          </View>
         ))}
       </View>
     </View>
@@ -3640,12 +4152,15 @@ export function Tiers({
 }
 
 const styles = StyleSheet.create({
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: gap.itemTight, paddingVertical: spacing.sm },
-  card: { flexGrow: 1, flexBasis: "46%", borderRadius: radius.lg, borderWidth: 1, padding: 14 },
-  prefix: { fontSize: 9, letterSpacing: 1.6, fontWeight: "600" },
-  amount: { marginTop: 4, fontSize: 19, fontWeight: "700" },
+  heading: { fontSize: 16, lineHeight: 24, fontWeight: "700", color: colors.ink, fontFamily: theme.titleFont, letterSpacing: theme.titleFont ? -0.16 : -0.4 },
+  grid: { marginTop: spacing.sm, gap: gap.itemTight },
+  pair: { flexDirection: "row", gap: gap.itemTight },
+  card: { flex: 1, borderRadius: radius.lg, borderWidth: 1, padding: 14 },
+  spare: { flex: 1 },
+  prefix: { fontSize: 9, lineHeight: 13, letterSpacing: 1.62, fontWeight: "600" },
+  amount: { marginTop: 4, fontSize: 19, lineHeight: 21, fontWeight: "700", fontFamily: theme.titleFont, letterSpacing: theme.titleFont ? -0.19 : 0 },
   rule: { marginTop: 8, height: 1, width: 24 },
-  label: { marginTop: 8, fontSize: 11 },
+  label: { marginTop: 8, fontSize: 11, lineHeight: 16 },
 });
 `,
 
@@ -3741,7 +4256,7 @@ const styles = StyleSheet.create({
 `,
 
     live_now: `import React, { useEffect, useState } from "react";
-import { Animated, Easing, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Animated, Easing, Image, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useVideoPlayer, VideoView } from "expo-video";
 import Svg, { Path } from "react-native-svg";
@@ -3972,7 +4487,12 @@ export function LiveNow({
       {settings.title ? <SectionHeading title={settings.title} /> : null}
 
       {people.length ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={[styles.bleed, { marginTop: settings.title ? 6 : 0 }]}
+          contentContainerStyle={styles.row}
+        >
           {people.map((p, i) => {
             const borrowed = inherit(p, collections);
             const photo = p.imageUrl || borrowed.image;
@@ -4200,8 +4720,8 @@ function LiveTile({
           </View>
         ) : null}
         <View style={styles.tileWords}>
-          {name ? <Text style={[styles.tileName, { fontSize: nameSize + 1 }]} numberOfLines={1}>{name}</Text> : null}
-          {viewers ? <Text style={[styles.tileViewers, { fontSize: viewersSize }]} numberOfLines={1}>{viewers}</Text> : null}
+          {name ? <Text style={[styles.tileName, { fontSize: nameSize + 1, lineHeight: Math.round((nameSize + 1) * 1.25) }]} numberOfLines={1}>{name}</Text> : null}
+          {viewers ? <Text style={[styles.tileViewers, { fontSize: viewersSize, lineHeight: Math.round(viewersSize * 1.25) }]} numberOfLines={1}>{viewers}</Text> : null}
           {pieces > 0 ? (
             <View style={styles.piecesPill}>
               <Text style={[styles.piecesText, { fontSize: Math.max(8, viewersSize) }]} numberOfLines={1}>
@@ -4252,35 +4772,39 @@ function LiveTile({
 }
 
 const styles = StyleSheet.create({
-  row: { gap: gap.item, paddingVertical: spacing.sm },
+  // The row runs to the screen's edges and gives the gutter back inside, as
+  // the editor's does, so the last tile slides off the edge rather than
+  // stopping short of it.
+  bleed: { marginHorizontal: -16 },
+  row: { gap: gap.item, paddingHorizontal: 16, paddingBottom: 2 },
   person: { alignItems: "center" },
-  name: { marginTop: 7, fontWeight: "600", color: colors.ink, textAlign: "center" },
-  replays: { alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.line, backgroundColor: colors.page },
-  replaysIcon: { color: colors.inkSoft },
+  name: { marginTop: 8, width: "100%", fontWeight: "600", color: "#64748b", textAlign: "center" },
+  replays: { alignItems: "center", justifyContent: "center", borderWidth: 1, borderStyle: "dashed", borderColor: "#cbd5e1", backgroundColor: "#f8fafc" },
+  replaysIcon: { color: "#94a3b8" },
   tileShade: { position: "absolute", left: 0, right: 0, bottom: 0 },
   liveBadge: { position: "absolute", top: 6, left: 6, flexDirection: "row", alignItems: "center", gap: 4, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
   liveDot: { width: 4, height: 4, borderRadius: 2 },
-  liveBadgeText: { fontSize: 8, fontWeight: "800", letterSpacing: 0.5 },
+  liveBadgeText: { fontSize: 8, fontWeight: "700", letterSpacing: 0.2 },
   tileWords: { position: "absolute", left: 0, right: 0, bottom: 0, paddingHorizontal: 6, paddingBottom: 6 },
-  tileName: { color: "#ffffff", fontWeight: "800" },
+  tileName: { color: "#ffffff", fontWeight: "700" },
   tileViewers: { marginTop: 1, color: "rgba(255,255,255,0.75)" },
   piecesPill: { marginTop: 4, alignSelf: "flex-start", borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3, backgroundColor: "rgba(255,255,255,0.2)" },
-  piecesText: { color: "#ffffff", fontWeight: "700" },
+  piecesText: { color: "#ffffff", fontWeight: "600" },
   cheer: { position: "absolute", right: 28, bottom: 32, width: 0, height: 0 },
   heart: { position: "absolute", top: 6, right: 6, minWidth: 22, height: 22, borderRadius: 11, paddingHorizontal: 5, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 2, backgroundColor: "rgba(0,0,0,0.35)" },
-  heartCount: { color: "#ffffff", fontSize: 9, fontWeight: "800" },
-  offer: { flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingHorizontal: 12, paddingVertical: 8 },
+  heartCount: { color: "#ffffff", fontSize: 9, fontWeight: "700" },
+  offer: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12, paddingVertical: 8 },
   offerTitle: { fontWeight: "700" },
   offerText: { opacity: 0.85 },
   timer: { paddingHorizontal: 8, paddingVertical: 4 },
-  timerText: { fontWeight: "700" },
+  timerText: { fontWeight: "700", fontVariant: ["tabular-nums"], fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace" },
 });
 `,
 
     coming_up_live: `import React, { useState } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
-import { colors, gap, radius, spacing } from "../theme";
-import { SectionHeading, inherit, openLink, type LinkTo } from "./Pieces";
+import { colors, gap, radius, spacing, theme } from "../theme";
+import { inherit, openLink, type LinkTo } from "./Pieces";
 import type { HomePayload } from "../api";
 
 export type Session = { id: string; imageUrl?: string; title?: string; when?: string; handle?: string; url?: string };
@@ -4317,7 +4841,7 @@ export function ComingUpLive({
           imageUrl: l.coverUrl ?? undefined,
           title: l.title,
           when: l.scheduledAt
-            ? new Date(l.scheduledAt).toLocaleString(undefined, {
+            ? new Date(l.scheduledAt).toLocaleString("en-GB", {
                 weekday: "short",
                 day: "numeric",
                 month: "short",
@@ -4341,7 +4865,7 @@ export function ComingUpLive({
 
   return (
     <>
-      {settings.title ? <SectionHeading title={settings.title} /> : null}
+      {settings.title ? <Text style={styles.heading} numberOfLines={1}>{settings.title}</Text> : null}
       <View style={[styles.card, { backgroundColor: bg, borderRadius: r }]}>
         {items.map((i) => {
           const borrowed = inherit(i, collections);
@@ -4376,23 +4900,24 @@ export function ComingUpLive({
 }
 
 const styles = StyleSheet.create({
-  card: { marginTop: spacing.sm, borderWidth: 1, borderColor: colors.line, padding: spacing.md, gap: spacing.md },
-  row: { flexDirection: "row", alignItems: "center", gap: gap.item },
-  thumb: { width: 48, height: 48, borderRadius: 10, backgroundColor: colors.page },
-  title: { fontSize: 12, fontWeight: "700", color: colors.ink },
-  when: { fontSize: 11, color: colors.inkSoft },
-  session: { flex: 1, flexDirection: "row", alignItems: "center", gap: gap.item },
+  heading: { fontSize: 16, lineHeight: 24, fontWeight: "700", color: colors.ink, fontFamily: theme.titleFont, letterSpacing: theme.titleFont ? -0.16 : -0.4 },
+  card: { marginTop: spacing.sm, borderWidth: 1, borderColor: colors.line, padding: spacing.md, gap: gap.item },
+  row: { flexDirection: "row", alignItems: "center", gap: 12 },
+  thumb: { width: 48, height: 48, borderRadius: 10, backgroundColor: "#f1f5f9" },
+  title: { fontSize: 12, lineHeight: 18, fontWeight: "700", color: colors.ink },
+  when: { fontSize: 11, lineHeight: 16, color: "#64748b" },
+  session: { flex: 1, flexDirection: "row", alignItems: "center", gap: 12 },
   remind: { borderRadius: radius.pill, borderWidth: 1, borderColor: colors.accent, backgroundColor: colors.accent, paddingHorizontal: 12, paddingVertical: 6 },
   remindOn: { backgroundColor: colors.surface },
-  remindText: { fontSize: 11, fontWeight: "600", color: "#fff" },
+  remindText: { fontSize: 11, lineHeight: 16, fontWeight: "600", color: "#fff" },
   remindTextOn: { color: colors.accent },
 });
 `,
 
-    countdown_deals: `import React, { useEffect, useState } from "react";
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { colors, gap, radius, spacing, theme } from "../theme";
-import { inherit, openLink, type LinkTo } from "./Pieces";
+    countdown_deals: `import React, { useEffect, useRef, useState } from "react";
+import { Animated, Easing, Image, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { colors, gap, spacing, theme } from "../theme";
+import { CardNote, PlusMark, inherit, notesFor, openLink, type LinkTo } from "./Pieces";
 import type { HomePayload } from "../api";
 
 export type Deal = {
@@ -4408,7 +4933,7 @@ export type Deal = {
   url?: string;
 };
 export type CountdownDealsSettings = {
-  /** Whether the first item is shown big, above the rest. */
+  /** Whether the first item leads the row, wider than the rest. */
   featureFirst?: boolean;
   title?: string;
   endsInMinutes?: number;
@@ -4420,13 +4945,80 @@ export type CountdownDealsSettings = {
 };
 
 const two = (n: number) => (n < 10 ? "0" + n : String(n));
+const MONO = Platform.OS === "ios" ? "Menlo" : "monospace";
 
 type DealCard = HomePayload["rows"][string][number];
+
+/** The live dot: a solid dot with a ring leaving it, once a second. */
+function Ping() {
+  const t = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.timing(t, { toValue: 1, duration: 1000, easing: Easing.bezier(0, 0, 0.2, 1), useNativeDriver: true }),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [t]);
+  return (
+    <View style={styles.pingBox}>
+      <Animated.View
+        style={[
+          styles.pingDot,
+          {
+            position: "absolute",
+            opacity: t.interpolate({ inputRange: [0, 0.75, 1], outputRange: [0.75, 0, 0] }),
+            transform: [{ scale: t.interpolate({ inputRange: [0, 0.75, 1], outputRange: [1, 2, 2] }) }],
+          },
+        ]}
+      />
+      <View style={styles.pingDot} />
+    </View>
+  );
+}
+
+/**
+ * One tile of the clock, flipping over on its top edge when its number
+ * changes, with what it counts written under it.
+ */
+function Flap({ value, unit }: { value: string; unit: string }) {
+  const turn = useRef(new Animated.Value(1)).current;
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    turn.setValue(0);
+    Animated.timing(turn, { toValue: 1, duration: 420, easing: Easing.bezier(0.3, 0.8, 0.4, 1), useNativeDriver: true }).start();
+  }, [value, turn]);
+  return (
+    <View style={styles.flapCol}>
+      <Animated.View
+          style={[
+            styles.flap,
+            {
+              opacity: turn.interpolate({ inputRange: [0, 0.6, 1], outputRange: [0.35, 1, 1] }),
+              transform: [
+                { perspective: 160 },
+                { rotateX: turn.interpolate({ inputRange: [0, 0.6, 1], outputRange: ["-82deg", "8deg", "0deg"] }) },
+              ],
+            },
+          ]}
+        >
+          <Text style={styles.flapText}>{value}</Text>
+          {/* The fold across the middle of a split-flap tile. */}
+          <View pointerEvents="none" style={styles.fold} />
+      </Animated.View>
+      <Text style={styles.flapUnit}>{unit}</Text>
+    </View>
+  );
+}
 
 export function CountdownDeals({
   settings,
   collections,
   rows,
+  newArrivals,
   onOpenCollection,
   onOpenProduct,
   onOpenScreen,
@@ -4435,13 +5027,15 @@ export function CountdownDeals({
   settings: CountdownDealsSettings;
   collections: HomePayload["collections"];
   rows: HomePayload["rows"];
+  newArrivals?: HomePayload["newArrivals"];
   onOpenCollection?: (handle: string) => void;
   onOpenProduct?: (id: string) => void;
   onOpenScreen?: (screen: string) => void;
   onAdd?: (variantId: string, productId: string) => void;
 }) {
   const items = (settings.items ?? []).filter((i) => i.price || i.imageUrl || i.handle);
-  const total = Math.max(0, Math.trunc((settings.endsInMinutes ?? 135) * 60));
+  const minutes = settings.endsInMinutes && settings.endsInMinutes > 0 ? settings.endsInMinutes : 135;
+  const total = Math.max(0, Math.trunc(minutes * 60));
   const [left, setLeft] = useState(total);
   useEffect(() => setLeft(total), [total]);
   useEffect(() => {
@@ -4453,23 +5047,38 @@ export function CountdownDeals({
 
   const go = (to: LinkTo) => openLink(to, { onOpenCollection, onOpenProduct, onOpenScreen });
 
-  const r = settings.radius && settings.radius > 0 ? settings.radius : 14;
   const badgeBg = settings.badgeBg || colors.accent;
   const parts = [two(Math.floor(left / 3600)), two(Math.floor((left % 3600) / 60)), two(left % 60)];
   const units = ["H", "M", "S"];
 
+  // Every product the phone has, for a deal that names one.
+  const all: DealCard[] = (newArrivals || []).slice();
+  for (const k of Object.keys(rows)) for (const c of rows[k] || []) all.push(c);
+  const named = (i: Deal): DealCard | undefined => {
+    const pid = i.productId || "";
+    if (!pid && !i.handle) return undefined;
+    const hit = pid ? all.find((c) => c.id === pid || c.handle === pid) : undefined;
+    if (hit || pid) return hit;
+    return all.find((c) => c.handle === i.handle);
+  };
+
   /**
    * One product per deal, and a different one each time.
    *
-   * A deal naming a collection used to draw that collection's lead picture,
-   * so two collections leading with the same bag showed the same bag twice.
-   * Each deal now takes a product no earlier deal has taken, preferring one
-   * that can go in the bag in a single tap - a deal the shopper cannot act
-   * on is a poor deal to feature.
+   * A deal naming a product is that product. A deal naming a collection takes
+   * a product out of it that no earlier deal has taken, preferring one that
+   * can go in the bag in a single tap - a deal the shopper cannot act on is a
+   * poor deal to feature.
    */
   const chosen: Record<string, DealCard | undefined> = {};
   const taken: string[] = [];
   for (const i of items) {
+    const own = named(i);
+    if (own) {
+      chosen[i.id] = own;
+      taken.push(own.id);
+      continue;
+    }
     const pool = (rows[i.handle || ""] || []).filter((c) => taken.indexOf(c.id) < 0);
     const one =
       pool.filter((c) => c.variantId != null && (c.variantCount || 1) === 1)[0] || pool[0] || undefined;
@@ -4482,24 +5091,21 @@ export function CountdownDeals({
       <View style={styles.head}>
         <Text style={styles.heading} numberOfLines={1}>{settings.title ?? ""}</Text>
         {settings.showTimer !== false ? (
-          <View style={[styles.timer, { backgroundColor: colors.accent + "14" }]}>
-            <View
-              style={[styles.dot, { backgroundColor: colors.accent, opacity: left % 2 === 0 ? 1 : 0.3 }]}
-            />
-            {parts.map((p, i) => (
-              <View key={i} style={styles.tickWrap}>
-                {i > 0 ? <Text style={[styles.colon, { color: colors.accent }]}>:</Text> : null}
-                <View style={[styles.tick, { backgroundColor: colors.accent }]}>
-                  <Text style={styles.tickText}>{p}</Text>
-                  <Text style={styles.tickUnit}>{units[i]}</Text>
-                </View>
-              </View>
+          <View style={[styles.timer, { backgroundColor: colors.accent + "12" }]}>
+            <Ping />
+            {parts.map((p, k) => (
+              <Flap key={k} value={p} unit={units[k]} />
             ))}
           </View>
         ) : null}
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.rail}
+        contentContainerStyle={styles.row}
+      >
         {items.map((i, idx) => {
           const lead = settings.featureFirst === true && idx === 0;
           const borrowed = inherit(i, collections);
@@ -4507,53 +5113,58 @@ export function CountdownDeals({
           // Hers if she pasted one, then the product this deal was given,
           // and only then the collection's lead - the last of which is what
           // made two deals look identical.
-          const photo = i.imageUrl || product?.image || borrowed.image;
+          const photo = i.imageUrl || (product && product.image) || borrowed.image;
           const single = product != null && product.variantId != null && (product.variantCount || 1) === 1;
           const pct = Math.max(0, Math.min(100, parseInt(i.claimed ?? "", 10) || 0));
-          const shot = [styles.photo, { height: lead ? 176 : 124 }];
+          const dealLeft = product && typeof product.available === "number" ? product.available : null;
+          const scarce = theme.card.stock && dealLeft !== null && dealLeft > 0 && dealLeft <= theme.card.lowAt;
+          const notes = notesFor(product, scarce, dealLeft);
           return (
-            <Pressable
-              key={i.id}
-              style={[styles.card, { borderRadius: r, width: lead ? 224 : 158 }]}
-              onPress={() => go(i)}
-            >
-              <View>
-                {photo ? <Image source={{ uri: photo }} style={shot} /> : <View style={shot} />}
-                {i.badge ? (
-                  <View style={[styles.badge, { backgroundColor: badgeBg }]}>
-                    <Text style={styles.badgeText}>{i.badge}</Text>
-                  </View>
-                ) : null}
-              </View>
-              <View style={styles.body}>
-                <View style={styles.priceRow}>
-                  <Text style={styles.price}>{i.price}</Text>
-                  {i.comparePrice ? <Text style={styles.was}>{i.comparePrice}</Text> : null}
-                </View>
-                {settings.showClaimed !== false && i.claimed ? (
-                  <View style={{ marginTop: 6 }}>
-                    <View style={styles.track}>
-                      <View style={[styles.fill, { width: (pct + "%") as import("react-native").DimensionValue }]} />
+            <View key={i.id} style={[styles.card, { width: lead ? 224 : 158 }]}>
+              <Pressable style={styles.open} onPress={() => go(i)}>
+                {/* The picture takes whatever height the row settles on, so the
+                    prices line up across it and a featured card leads by being
+                    wider rather than by leaving a step behind it. */}
+                <View style={[styles.shot, { borderRadius: theme.card.radius, minHeight: lead ? 168 : 120 }]}>
+                  {photo ? <Image source={{ uri: photo }} style={styles.photo} resizeMode="cover" /> : null}
+                  {i.badge ? (
+                    <View style={[styles.badge, { backgroundColor: badgeBg }]}>
+                      <Text style={styles.badgeText}>{i.badge}</Text>
                     </View>
-                    <Text style={styles.claimed}>{i.claimed}</Text>
+                  ) : null}
+                </View>
+                <View style={styles.body}>
+                  <View style={styles.priceRow}>
+                    <Text style={styles.price}>{i.price}</Text>
+                    {i.comparePrice ? <Text style={styles.was}>{i.comparePrice}</Text> : null}
                   </View>
-                ) : null}
-              </View>
-              {onAdd && product ? (
+                  <CardNote notes={notes} />
+                  {settings.showClaimed !== false && i.claimed ? (
+                    <View style={styles.claimWrap}>
+                      <View style={styles.track}>
+                        <View style={[styles.fill, { width: (pct + "%") as import("react-native").DimensionValue }]} />
+                      </View>
+                      <Text style={styles.claimed}>{i.claimed}</Text>
+                    </View>
+                  ) : null}
+                </View>
+              </Pressable>
+              {/* The same plus the product cards carry, in the same corner. A
+                  deal nobody can add without choosing a size opens instead of
+                  guessing one for her. */}
+              {theme.card.add && (onAdd || onOpenProduct) ? (
                 <Pressable
                   style={styles.add}
                   onPress={() => {
-                    // A product with sizes has no one variant to add, so it
-                    // opens for her to choose rather than guessing one.
-                    if (single && product.variantId) onAdd(product.variantId, product.id);
-                    else if (onOpenProduct) onOpenProduct(product.id);
+                    if (single && product && product.variantId && onAdd) onAdd(product.variantId, product.id);
+                    else go(i);
                   }}
-                  accessibilityLabel={single ? "Add to bag" : "Choose a size"}
+                  accessibilityLabel={single ? theme.card.addLabel || "Add to bag" : "Choose a size"}
                 >
-                  <Text style={styles.addMark}>+</Text>
+                  <PlusMark />
                 </Pressable>
               ) : null}
-            </Pressable>
+            </View>
           );
         })}
       </ScrollView>
@@ -4563,29 +5174,45 @@ export function CountdownDeals({
 
 const styles = StyleSheet.create({
   head: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm },
-  heading: { flex: 1, fontSize: 16, fontWeight: "700", color: colors.ink, fontFamily: theme.titleFont },
-  timer: { flexDirection: "row", alignItems: "center", gap: 4, borderRadius: 999, paddingLeft: 6, paddingRight: 8, paddingVertical: 4 },
-  dot: { width: 6, height: 6, borderRadius: 3, marginRight: 2 },
-  tickWrap: { flexDirection: "row", alignItems: "center" },
-  colon: { fontSize: 11, fontWeight: "700", opacity: 0.4, paddingHorizontal: 3, paddingBottom: 4 },
-  tick: { alignItems: "center", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 4 },
-  tickText: { fontSize: 12, fontWeight: "700", color: "#fff" },
-  tickUnit: { fontSize: 7, fontWeight: "600", color: "#fff", opacity: 0.75, marginTop: 2 },
-  row: { gap: gap.item, paddingVertical: spacing.sm },
-  card: { width: 158, overflow: "hidden", borderWidth: 1, borderColor: colors.line, backgroundColor: colors.surface },
-  photo: { width: "100%", height: 120, backgroundColor: theme.card.photoBg },
+  heading: { flex: 1, fontSize: 16, fontWeight: "700", color: colors.ink, fontFamily: theme.titleFont, letterSpacing: theme.titleFont ? -0.16 : -0.4 },
+  timer: { flexDirection: "row", alignItems: "center", gap: 5, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 4 },
+  pingBox: { width: 6, height: 6, marginBottom: 8, alignItems: "center", justifyContent: "center" },
+  pingDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.accent },
+  flapCol: { alignItems: "center" },
+  flap: {
+    borderRadius: 7,
+    paddingHorizontal: 7,
+    paddingVertical: 5,
+    backgroundColor: colors.accent,
+    transformOrigin: "top",
+    shadowColor: "#0f172a",
+    shadowOpacity: 0.25,
+    shadowRadius: 1,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
+  flapText: { fontFamily: MONO, fontSize: 13, lineHeight: 14, fontWeight: "700", color: "#fff", fontVariant: ["tabular-nums"], includeFontPadding: false },
+  fold: { position: "absolute", left: 0, right: 0, top: "50%", height: StyleSheet.hairlineWidth, backgroundColor: "rgba(0,0,0,0.16)" },
+  flapUnit: { marginTop: 3, fontSize: 7, lineHeight: 8, fontWeight: "700", letterSpacing: 0.7, color: colors.accent + "99" },
+  rail: { marginHorizontal: -spacing.lg, marginTop: spacing.sm },
+  row: { gap: gap.item, paddingHorizontal: spacing.lg, paddingBottom: spacing.xs, alignItems: "stretch" },
+  card: { position: "relative" },
+  open: { flex: 1 },
+  shot: { flex: 1, overflow: "hidden", backgroundColor: theme.card.photoBg },
+  photo: { position: "absolute", left: 0, right: 0, top: 0, bottom: 0, width: "100%", height: "100%" },
   badge: { position: "absolute", top: 6, left: 6, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
-  badgeText: { fontSize: 10, fontWeight: "700", color: "#fff" },
-  body: { padding: 8 },
+  badgeText: { fontSize: 10, lineHeight: 15, fontWeight: "700", color: "#fff" },
+  body: { paddingLeft: 8, paddingTop: 8, paddingBottom: 8, paddingRight: 32 },
   priceRow: { flexDirection: "row", alignItems: "baseline", gap: 4 },
-  price: { fontSize: 13, fontWeight: "700", color: colors.accent },
-  was: { fontSize: 10, color: colors.inkSoft, textDecorationLine: "line-through" },
-  track: { height: 6, borderRadius: 3, backgroundColor: colors.page, overflow: "hidden" },
+  price: { fontSize: 13, lineHeight: 19, fontWeight: "700", color: colors.accent },
+  was: { fontSize: 10, lineHeight: 15, color: "#94a3b8", textDecorationLine: "line-through" },
+  claimWrap: { marginTop: 6 },
+  track: { height: 6, borderRadius: 3, backgroundColor: "#f1f5f9", overflow: "hidden" },
   fill: { height: 6, borderRadius: 3, backgroundColor: colors.accent },
-  claimed: { marginTop: 4, fontSize: 9, color: colors.inkSoft },
+  claimed: { marginTop: 4, fontSize: 9, lineHeight: 13, color: "#64748b" },
   add: {
     position: "absolute",
-    right: 4,
+    right: 2,
     bottom: 4,
     width: 28,
     height: 28,
@@ -4593,15 +5220,19 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accent,
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: "#000",
+    shadowOpacity: 0.05,
+    shadowRadius: 1,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
   },
-  addMark: { color: "#fff", fontSize: 18, lineHeight: 20, fontWeight: "700" },
 });
 `,
 
     info_rows: `import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { colors, gap, radius, spacing } from "../theme";
-import { SectionHeading, openLink, type LinkTo } from "./Pieces";
+import { colors, gap, radius, spacing, theme } from "../theme";
+import { openLink, type LinkTo } from "./Pieces";
 
 export type InfoRow = {
   id: string;
@@ -4637,7 +5268,7 @@ export function InfoRows({
 
   return (
     <>
-      {settings.title ? <SectionHeading title={settings.title} /> : null}
+      {settings.title ? <Text style={styles.heading} numberOfLines={1}>{settings.title}</Text> : null}
       <View style={{ marginTop: spacing.sm, gap: gap.itemTight }}>
         {items.map((i) => (
           <Pressable
@@ -4646,7 +5277,7 @@ export function InfoRows({
             onPress={() => go(i)}
           >
             {i.emoji ? (
-              <View style={styles.icon}>
+              <View style={[styles.icon, { backgroundColor: colors.accent + "1f" }]}>
                 <Text style={styles.iconText}>{i.emoji}</Text>
               </View>
             ) : null}
@@ -4663,12 +5294,13 @@ export function InfoRows({
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: "row", alignItems: "center", gap: gap.item, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 12, paddingVertical: 10 },
-  icon: { width: 32, height: 32, borderRadius: radius.sm, alignItems: "center", justifyContent: "center", backgroundColor: colors.page },
-  iconText: { fontSize: 16 },
-  title: { fontSize: 12, fontWeight: "700", color: colors.ink },
-  subtitle: { fontSize: 11, color: colors.inkSoft },
-  note: { fontSize: 11, fontWeight: "600", color: colors.accent },
+  heading: { fontSize: 16, lineHeight: 24, fontWeight: "700", color: colors.ink, fontFamily: theme.titleFont, letterSpacing: theme.titleFont ? -0.16 : -0.4 },
+  row: { flexDirection: "row", alignItems: "center", gap: 12, borderWidth: 1, borderColor: colors.line, paddingHorizontal: 12, paddingVertical: 10 },
+  icon: { width: 32, height: 32, borderRadius: radius.sm, alignItems: "center", justifyContent: "center" },
+  iconText: { fontSize: 16, lineHeight: 24 },
+  title: { fontSize: 12, lineHeight: 18, fontWeight: "700", color: colors.ink },
+  subtitle: { fontSize: 11, lineHeight: 16, color: "#64748b" },
+  note: { fontSize: 11, lineHeight: 16, fontWeight: "600", color: colors.accent },
 });
 `,
 
@@ -4757,16 +5389,16 @@ export function PaymentPlans({
     <>
       <View style={styles.head}>
         <View style={{ flex: 1 }}>
-          {settings.title ? <Text style={styles.title}>{settings.title}</Text> : null}
-          {settings.subtitle ? <Text style={styles.subtitle}>{settings.subtitle}</Text> : null}
+          {settings.title ? <Text style={styles.title} numberOfLines={1}>{settings.title}</Text> : null}
+          {settings.subtitle ? <Text style={styles.subtitle} numberOfLines={1}>{settings.subtitle}</Text> : null}
         </View>
         {settings.seeAllLabel ? (
           <Pressable onPress={() => go({ url: settings.seeAllUrl, handle: settings.seeAllHandle, productId: settings.seeAllProductId, screen: settings.seeAllScreen })}>
-            <Text style={styles.seeAll}>{settings.seeAllLabel}</Text>
+            <Text style={styles.seeAll}>{settings.seeAllLabel + " \\u203a"}</Text>
           </Pressable>
         ) : null}
       </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.rail} contentContainerStyle={styles.row}>
         {items.map((i) => (
           <Pressable
             key={i.id}
@@ -4784,22 +5416,22 @@ export function PaymentPlans({
 }
 
 const styles = StyleSheet.create({
-  head: { flexDirection: "row", alignItems: "flex-end", gap: spacing.sm },
-  title: { fontSize: 16, fontWeight: "700", color: colors.ink, fontFamily: theme.titleFont },
-  subtitle: { fontSize: 11, color: colors.inkSoft },
-  seeAll: { fontSize: 12, fontWeight: "600", color: colors.accent },
-  row: { gap: gap.item, paddingVertical: spacing.sm },
+  head: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", gap: spacing.sm },
+  title: { fontSize: 16, lineHeight: 24, fontWeight: "700", color: colors.ink, fontFamily: theme.titleFont, letterSpacing: theme.titleFont ? -0.16 : -0.4 },
+  subtitle: { fontSize: 11, lineHeight: 16, color: "#64748b" },
+  seeAll: { fontSize: 12, lineHeight: 16, fontWeight: "600", color: colors.accent },
+  rail: { marginHorizontal: -spacing.lg, marginTop: spacing.sm },
+  row: { gap: gap.item, paddingHorizontal: spacing.lg, paddingBottom: 4 },
   card: { width: 152, padding: 12 },
-  name: { fontSize: 11, fontWeight: "600", color: "rgba(255,255,255,0.8)" },
-  headline: { marginTop: 4, fontSize: 15, fontWeight: "700", color: "#fff" },
+  name: { fontSize: 11, lineHeight: 16, fontWeight: "600", color: "rgba(255,255,255,0.8)" },
+  headline: { marginTop: 4, fontSize: 15, lineHeight: 19, fontWeight: "700", color: "#fff" },
   note: { marginTop: 4, fontSize: 10, lineHeight: 14, color: "rgba(255,255,255,0.75)" },
 });
 `,
 
     price_slider: `import React, { useState } from "react";
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
-import { colors, gap, spacing } from "../theme";
-import { SectionHeading } from "./Pieces";
+import { Image, Pressable, StyleSheet, Text, View, type DimensionValue } from "react-native";
+import { colors, gap, spacing, theme } from "../theme";
 
 export type InstalmentPlan = {
   id: string;
@@ -4836,14 +5468,11 @@ const nf = (n: number) => {
 
 export function PriceSlider({ settings }: { settings: PriceSliderSettings }) {
   const items = (settings.items ?? []).filter((i) => i.name && i.months);
-  const min = settings.minPrice && settings.minPrice > 0 ? settings.minPrice : 2999;
-  const max = Math.max(min + 1, settings.maxPrice && settings.maxPrice > 0 ? settings.maxPrice : 16000);
-  const start = Math.min(max, Math.max(min, settings.startPrice && settings.startPrice > 0 ? settings.startPrice : 7750));
+  const min = settings.minPrice && settings.minPrice > 0 ? Math.trunc(settings.minPrice) : 2999;
+  const max = Math.max(min + 1, settings.maxPrice && settings.maxPrice > 0 ? Math.trunc(settings.maxPrice) : 16000);
+  const start = Math.min(max, Math.max(min, settings.startPrice && settings.startPrice > 0 ? Math.trunc(settings.startPrice) : 7750));
   const [price, setPrice] = useState(start);
   const [width, setWidth] = useState(0);
-  if (!items.length) return null;
-
-  const cur = settings.currency || "EGP";
   /**
    * Which plan is being read, and the rest as marks under it.
    *
@@ -4854,11 +5483,23 @@ export function PriceSlider({ settings }: { settings: PriceSliderSettings }) {
    * the one above.
    */
   const [pick, setPick] = useState(0);
+  if (!items.length) return null;
+
+  const cur = settings.currency || "EGP";
   const at = Math.min(pick, Math.max(0, items.length - 1));
   const lead = items[at];
   const rest = items.filter((_, n) => n !== at);
   const r = settings.radius && settings.radius > 0 ? settings.radius : 14;
-  const pct = ((price - min) / (max - min)) * 100;
+  const pct = Math.max(0, Math.min(100, ((price - min) / (max - min)) * 100));
+  const pctWidth = (pct + "%") as DimensionValue;
+  const perMonth = (i: InstalmentPlan) => Math.round(price / Math.max(1, parseInt(i.months ?? "", 10) || 1));
+
+  // Four to a row is the ceiling, not the target: two laid out in four columns
+  // sit in the left half of the card looking like two more are missing. A
+  // short last row keeps its columns, as the preview's grid does.
+  const cols = Math.min(4, Math.max(1, rest.length));
+  const markRows: InstalmentPlan[][] = [];
+  for (let n = 0; n < rest.length; n += cols) markRows.push(rest.slice(n, n + cols));
 
   // Core React Native has no slider, and pulling one in would be a dependency
   // the merchant's app has not declared. The track is its own responder, so
@@ -4871,7 +5512,7 @@ export function PriceSlider({ settings }: { settings: PriceSliderSettings }) {
 
   return (
     <>
-      {settings.title ? <SectionHeading title={settings.title} /> : null}
+      {settings.title ? <Text style={styles.heading} numberOfLines={1}>{settings.title}</Text> : null}
       {settings.subtitle ? <Text style={styles.subtitle}>{settings.subtitle}</Text> : null}
       <View style={[styles.card, { backgroundColor: settings.cardBg || colors.surface, borderRadius: r }]}>
         {settings.priceLabel ? <Text style={styles.priceLabel}>{settings.priceLabel}</Text> : null}
@@ -4882,20 +5523,23 @@ export function PriceSlider({ settings }: { settings: PriceSliderSettings }) {
           onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
           onStartShouldSetResponder={() => true}
           onMoveShouldSetResponder={() => true}
+          onResponderTerminationRequest={() => false}
           onResponderGrant={(e) => setFromX(e.nativeEvent.locationX)}
           onResponderMove={(e) => setFromX(e.nativeEvent.locationX)}
         >
-          <View style={[styles.fill, { width: pct + "%" }]} />
-          <View style={[styles.knob, { left: pct + "%" }]} />
+          <View style={styles.rail} pointerEvents="none" />
+          <View style={[styles.fill, { width: pctWidth }]} pointerEvents="none" />
+          <View style={[styles.knob, { left: pctWidth }]} pointerEvents="none" />
         </View>
         <View style={styles.ends}>
           <Text style={styles.end}>{cur + " " + nf(min)}</Text>
           <Text style={styles.end}>{cur + " " + nf(max)}</Text>
         </View>
 
-        <View style={{ marginTop: spacing.sm, gap: spacing.sm }}>
+        <View style={styles.list}>
           {[lead].filter(Boolean).map((i) => {
             const months = Math.max(1, parseInt(i.months ?? "", 10) || 1);
+            const tone = i.color || colors.accent;
             return (
               <View key={i.id} style={styles.row}>
                 <View style={styles.provider}>
@@ -4906,7 +5550,10 @@ export function PriceSlider({ settings }: { settings: PriceSliderSettings }) {
                   )}
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.monthly}>{cur + " " + nf(price / months) + " / month"}</Text>
+                  <Text style={styles.monthly} numberOfLines={1}>
+                    {cur + " " + nf(Math.round(price / months))}
+                    <Text style={styles.perMonth}>{" / month"}</Text>
+                  </Text>
                   <Text style={styles.months}>{months + " months"}</Text>
                   {i.perks ? (
                     <View style={styles.perks}>
@@ -4915,46 +5562,49 @@ export function PriceSlider({ settings }: { settings: PriceSliderSettings }) {
                         .map((p) => p.trim())
                         .filter(Boolean)
                         .map((p) => (
-                          <View key={p} style={[styles.perk, { backgroundColor: (i.color || colors.accent) + "14" }]}>
-                            <Text style={[styles.perkText, { color: i.color || colors.accent }]}>{p}</Text>
+                          <View key={p} style={[styles.perk, { backgroundColor: tone + "14" }]}>
+                            <Text style={[styles.perkText, { color: tone }]}>{p}</Text>
                           </View>
                         ))}
                     </View>
                   ) : null}
                 </View>
                 {i.badge ? (
-                  <View style={[styles.badge, { backgroundColor: (i.color || colors.accent) + "1f" }]}>
-                    <Text style={[styles.badgeText, { color: i.color || colors.accent }]}>{i.badge}</Text>
+                  <View style={[styles.badge, { backgroundColor: tone + "1f" }]}>
+                    <Text style={[styles.badgeText, { color: tone }]}>{i.badge}</Text>
                   </View>
                 ) : null}
               </View>
             );
           })}
 
-          {/* The others, as their own marks. Four to a row is the ceiling, not
-              the target: two laid out in four columns sit in the left half of
-              the card looking like two more are missing. */}
-          {rest.length > 0 ? (
-            <View style={styles.marks}>
-              {rest.map((i) => (
+          {markRows.map((line, n) => (
+            <View key={n} style={styles.marks}>
+              {line.map((i) => (
                 <Pressable
                   key={i.id}
                   style={styles.mark}
                   onPress={() => setPick(items.indexOf(i))}
                   accessibilityLabel={i.name}
                 >
-                  {i.logo ? (
-                    <Image source={{ uri: i.logo }} style={styles.markLogo} resizeMode="contain" />
-                  ) : (
-                    <Text style={styles.markName} numberOfLines={1}>{i.name}</Text>
-                  )}
+                  <View style={styles.markHead}>
+                    {i.logo ? (
+                      <Image source={{ uri: i.logo }} style={styles.markLogo} resizeMode="contain" />
+                    ) : (
+                      <Text style={styles.markName} numberOfLines={1}>{i.name}</Text>
+                    )}
+                  </View>
                   <Text style={styles.markPrice} numberOfLines={1}>
-                    {nf(price / Math.max(1, parseInt(i.months ?? "", 10) || 1)) + "/mo"}
+                    {nf(perMonth(i))}
+                    <Text style={styles.markUnit}>{"/mo"}</Text>
                   </Text>
                 </Pressable>
               ))}
+              {Array.from({ length: cols - line.length }).map((_, k) => (
+                <View key={"gap" + k} style={styles.markSpare} />
+              ))}
             </View>
-          ) : null}
+          ))}
         </View>
       </View>
     </>
@@ -4962,31 +5612,40 @@ export function PriceSlider({ settings }: { settings: PriceSliderSettings }) {
 }
 
 const styles = StyleSheet.create({
-  subtitle: { fontSize: 11, color: colors.inkSoft },
-  card: { marginTop: spacing.sm, borderWidth: 1, borderColor: colors.line, padding: spacing.md },
-  priceLabel: { fontSize: 11, color: colors.inkSoft },
-  price: { fontSize: 20, fontWeight: "700", color: colors.accent },
-  track: { marginTop: spacing.sm, height: 24, justifyContent: "center" },
-  fill: { position: "absolute", height: 6, borderRadius: 3, backgroundColor: colors.accent },
+  heading: { fontSize: 16, lineHeight: 24, fontWeight: "700", color: colors.ink, fontFamily: theme.titleFont, letterSpacing: theme.titleFont ? -0.16 : -0.4 },
+  subtitle: { fontSize: 11, lineHeight: 16, color: "#64748b" },
+  card: { marginTop: spacing.sm, borderWidth: 1, borderColor: colors.line, padding: 10 },
+  priceLabel: { fontSize: 11, lineHeight: 16, color: "#64748b" },
+  price: { fontSize: 20, lineHeight: 30, fontWeight: "700", color: colors.accent },
+  // The browser's range: a thin track, the part behind the handle in the
+  // brand colour, a round handle. Taller than it looks, so a thumb can find it.
+  track: { marginTop: 4, marginBottom: -4, height: 24, justifyContent: "center" },
+  rail: { position: "absolute", left: 0, right: 0, height: 4, borderRadius: 2, backgroundColor: "#e5e7eb" },
+  fill: { position: "absolute", left: 0, height: 4, borderRadius: 2, backgroundColor: colors.accent },
   knob: { position: "absolute", width: 16, height: 16, borderRadius: 8, marginLeft: -8, backgroundColor: colors.accent },
   ends: { flexDirection: "row", justifyContent: "space-between" },
-  end: { fontSize: 10, color: colors.inkSoft },
-  row: { flexDirection: "row", alignItems: "center", gap: gap.item, borderWidth: 1, borderColor: colors.line, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 },
+  end: { fontSize: 10, lineHeight: 15, color: "#64748b" },
+  list: { marginTop: 10, gap: gap.itemTight },
+  row: { flexDirection: "row", alignItems: "center", gap: 12, borderWidth: 1, borderColor: colors.line, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 },
   marks: { flexDirection: "row", gap: 6 },
-  mark: { flex: 1, alignItems: "center", justifyContent: "center", gap: 2, borderWidth: 1, borderColor: colors.line, borderRadius: 10, paddingHorizontal: 4, paddingVertical: 6, backgroundColor: colors.surface },
+  mark: { flex: 1, alignItems: "center", justifyContent: "center", gap: 2, borderWidth: 1, borderColor: colors.line, borderRadius: 8, paddingHorizontal: 4, paddingVertical: 6, backgroundColor: colors.surface },
+  markSpare: { flex: 1 },
+  markHead: { height: 16, width: "100%", alignItems: "center", justifyContent: "center" },
   markLogo: { width: "100%", height: 16 },
-  markName: { fontSize: 9, fontWeight: "700", color: colors.inkMuted },
-  markPrice: { fontSize: 9, fontWeight: "600", color: colors.inkSoft },
+  markName: { fontSize: 9, lineHeight: 13, fontWeight: "700", color: "#334155", textAlign: "center" },
+  markPrice: { fontSize: 9, lineHeight: 13, fontWeight: "600", color: "#64748b", textAlign: "center", fontVariant: ["tabular-nums"] },
+  markUnit: { fontWeight: "500" },
   provider: { width: 56, height: 36, justifyContent: "center", alignItems: "center" },
-  providerName: { width: 56, fontSize: 11, fontWeight: "600", color: colors.inkMuted },
+  providerName: { width: 56, fontSize: 11, fontWeight: "600", color: "#334155" },
   logo: { width: 56, height: 36 },
   perks: { flexDirection: "row", flexWrap: "wrap", gap: 4, marginTop: 4 },
   perk: { borderRadius: 999, paddingHorizontal: 6, paddingVertical: 1 },
-  perkText: { fontSize: 9, fontWeight: "600" },
-  monthly: { fontSize: 13, fontWeight: "700", color: colors.accent },
-  months: { fontSize: 10, color: colors.inkSoft },
+  perkText: { fontSize: 9, lineHeight: 13, fontWeight: "600" },
+  monthly: { fontSize: 13, lineHeight: 19, fontWeight: "700", color: colors.accent },
+  perMonth: { fontSize: 10, fontWeight: "500", color: "#64748b" },
+  months: { fontSize: 10, lineHeight: 15, color: "#64748b" },
   badge: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
-  badgeText: { fontSize: 9, fontWeight: "600" },
+  badgeText: { fontSize: 9, lineHeight: 13, fontWeight: "600" },
 });
 `,
 
@@ -5025,7 +5684,7 @@ export function OfferCards({
     <>
       {settings.title ? <SectionHeading title={settings.title} /> : null}
       {settings.subtitle ? <Text style={styles.subtitle}>{settings.subtitle}</Text> : null}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.scroller} contentContainerStyle={styles.row}>
         {items.map((i) => {
           const colour = i.color || colors.accent;
           return (
@@ -5047,14 +5706,17 @@ export function OfferCards({
 }
 
 const styles = StyleSheet.create({
-  subtitle: { fontSize: 11, color: colors.inkSoft },
-  row: { gap: gap.item, paddingVertical: spacing.sm },
+  subtitle: { fontSize: 11, lineHeight: 16.5, color: "#64748b" },
+  // Bleeds to the screen edge like the editor's row, so a card can scroll
+  // past the page padding instead of being cut at it.
+  scroller: { marginTop: spacing.sm, marginHorizontal: -spacing.lg },
+  row: { gap: gap.item, paddingHorizontal: spacing.lg, paddingBottom: spacing.xs },
   card: { width: 152, borderWidth: 1, borderStyle: "dashed", padding: 12, gap: 4 },
-  badge: { fontSize: 20, fontWeight: "700" },
-  title: { fontSize: 11, fontWeight: "700", color: colors.ink },
-  detail: { fontSize: 10, lineHeight: 14, color: colors.inkSoft },
+  badge: { fontSize: 20, lineHeight: 20, fontWeight: "700" },
+  title: { fontSize: 11, lineHeight: 16.5, fontWeight: "700", color: colors.ink },
+  detail: { fontSize: 10, lineHeight: 13.75, color: "#64748b" },
   cta: { marginTop: 4, borderRadius: 8, paddingVertical: 6, alignItems: "center" },
-  ctaText: { fontSize: 11, fontWeight: "600", color: "#fff" },
+  ctaText: { fontSize: 11, lineHeight: 16.5, fontWeight: "600", color: "#fff" },
 });
 `,
 
@@ -5195,9 +5857,10 @@ import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-nati
 import Svg, { Circle as SvgCircle, Path } from "react-native-svg";
 import { colors, gap, spacing, theme } from "../theme";
 import { inherit, openLink, type LinkTo } from "./Pieces";
+import { Fade } from "./Fade";
 import { SITE_ORIGIN, type HomePayload } from "../api";
 
-export type Circle = { id: string; imageUrl?: string; label?: string; note?: string; handle?: string; url?: string };
+export type Circle ={ id: string; imageUrl?: string; label?: string; note?: string; handle?: string; url?: string };
 
 /**
  * The mark for a department, chosen by what it is called.
@@ -5211,7 +5874,8 @@ function DeptMark({ name, size }: { name: string; size: number }) {
   const has = (...w: string[]) => w.some((x) => n.includes(x));
   const box = { width: size, height: size, viewBox: "0 0 24 24", fill: "none" as const };
   const line = {
-    stroke: colors.ink,
+    // The editor's slate-800 at 85%.
+    stroke: "rgba(30,41,59,0.85)",
     strokeWidth: 1.15,
     strokeLinecap: "round" as const,
     strokeLinejoin: "round" as const,
@@ -5294,7 +5958,7 @@ function DeptMark({ name, size }: { name: string; size: number }) {
   return (
     <Svg {...box}>
       <Path {...line} d="M3.6 12.4 12.4 3.6h7v7l-8.8 8.8z" />
-      <SvgCircle cx="15.8" cy="8.2" r="1.3" fill={colors.ink} />
+      <SvgCircle cx="15.8" cy="8.2" r="1.3" fill="rgba(30,41,59,0.85)" />
     </Svg>
   );
 }
@@ -5333,15 +5997,24 @@ function StandPhoto({ uri, height }: { uri: string; height: number }) {
   );
 }
 
-/** A rail that scrolls, or a row that wraps. */
+/**
+ * A rail that scrolls, or a row that wraps.
+ *
+ * The rail runs to the screen's edges and gives the gutter back inside, as the
+ * editor's does, so the last tile slides off the edge rather than stopping
+ * short of it.
+ */
 function Rail({ grid, children }: { grid: boolean; children: React.ReactNode }) {
   if (grid) return <View style={styles.grid}>{children}</View>;
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.bleed} contentContainerStyle={styles.row}>
       {children}
     </ScrollView>
   );
 }
+
+/** 1234 as "1,234", the way the editor writes a count. */
+const thousands = (n: number) => String(n).replace(/\\B(?=(\\d{3})+(?!\\d))/g, ",");
 export type CircleRowSettings = {
   perRow?: number;
   /** "tinted" grounds the tile; "cover" makes the picture the card. */
@@ -5413,7 +6086,18 @@ export function CircleRow({
   const labelSize = settings.labelSize && settings.labelSize > 0 ? settings.labelSize : 10;
   // A path like /departments/bags.webp is relative to the shop; a phone needs
   // the whole address. Anything already absolute is left alone.
-  const full = (u: string) => (u.indexOf("//") >= 0 ? u : SITE_ORIGIN + u);
+  const full = (u: string) => (u.indexOf("//") >= 0 || u.indexOf("data:") === 0 ? u : SITE_ORIGIN + u);
+  // The editor's heading: bold, drawn a little tight, in the title face, at
+  // the line height a web page gives it.
+  const titleStyle = {
+    fontSize: titleSize,
+    lineHeight: Math.round(titleSize * 1.5),
+    letterSpacing: titleSize * (theme.titleFont ? -0.01 : -0.025),
+  };
+  // A grid shares the width out in equal columns with the item gap between
+  // them; each tile then takes the whole of its column.
+  const half = gap.item / 2;
+  const column = { width: (100 / Math.max(1, perRow) + "%") as import("react-native").DimensionValue, paddingHorizontal: half };
   // The card, and the room kept above it for the overflow.
   const cardH = Math.round(size * 1.34);
   const standPad = Math.round(size * 0.36);
@@ -5433,13 +6117,13 @@ export function CircleRow({
       }
     >
       <View style={styles.head}>
-        <View style={{ flex: 1 }}>
-          {settings.title ? <Text style={[styles.title, { fontSize: titleSize }]}>{settings.title}</Text> : null}
-          {settings.subtitle ? <Text style={styles.subtitle}>{settings.subtitle}</Text> : null}
+        <View style={{ flex: 1, minWidth: 0 }}>
+          {settings.title ? <Text style={[styles.title, titleStyle]} numberOfLines={1}>{settings.title}</Text> : null}
+          {settings.subtitle ? <Text style={styles.subtitle} numberOfLines={1}>{settings.subtitle}</Text> : null}
         </View>
         {settings.seeAllLabel ? (
           <Pressable onPress={() => go({ url: settings.seeAllUrl, handle: settings.seeAllHandle, productId: settings.seeAllProductId, screen: settings.seeAllScreen })}>
-            <Text style={[styles.seeAll, { fontSize: linkSize }, settings.linkColor ? { color: settings.linkColor } : null]}>
+            <Text style={[styles.seeAll, { fontSize: linkSize, lineHeight: Math.round(linkSize * 1.5) }, settings.linkColor ? { color: settings.linkColor } : null]}>
               {settings.seeAllLabel + " \u203A"}
             </Text>
           </Pressable>
@@ -5448,19 +6132,23 @@ export function CircleRow({
       <Rail grid={grid}>
         {items.map((i, at) => {
           const borrowed = inherit(i, collections);
-          const photo = i.imageUrl || borrowed.image;
-          const round = grid
-            ? { width: "100%" as const, aspectRatio: 1, borderRadius: tileRadius }
-            : { width: size, height: size, borderRadius: tileRadius };
-          const ground = tinted
-            ? { backgroundColor: colors.accent + TINTS[at % TINTS.length], borderRadius: tileRadius }
-            : null;
+          const own = i.imageUrl || borrowed.image;
+          const photo = own ? full(own) : null;
+          // A grid tile takes the whole of its column; a rail tile its size.
+          const inColumn = (node: React.ReactElement) =>
+            grid ? (
+              <View key={i.id} style={column}>
+                {node}
+              </View>
+            ) : (
+              node
+            );
           if (standout) {
             const found = collections.find((c) => c.handle === i.handle);
             const count = found?.productCount ?? 0;
             const under =
-              i.note || settings.coverNote || (count > 0 ? count + (count === 1 ? " piece" : " pieces") : "");
-            return (
+              i.note || settings.coverNote || (count > 0 ? thousands(count) + (count === 1 ? " piece" : " pieces") : "");
+            return inColumn(
               <Pressable
                 key={i.id}
                 style={[styles.standCell, { width: grid ? "100%" : size, paddingTop: standPad }]}
@@ -5491,7 +6179,7 @@ export function CircleRow({
                     <DeptMark name={i.label || borrowed.title} size={Math.round(cardH * 0.46)} />
                   </View>
                 )}
-              </Pressable>
+              </Pressable>,
             );
           }
 
@@ -5500,47 +6188,59 @@ export function CircleRow({
             const found = collections.find((c) => c.handle === i.handle);
             const count = found?.productCount ?? 0;
             const under =
-              i.note || settings.coverNote || (count > 0 ? count + (count === 1 ? " piece" : " pieces") : "");
-            return (
+              i.note || settings.coverNote || (count > 0 ? thousands(count) + (count === 1 ? " piece" : " pieces") : "");
+            return inColumn(
               <Pressable
                 key={i.id}
                 style={[styles.cover, { width: grid ? "100%" : coverW, borderRadius: tileRadius }]}
                 onPress={() => go(i)}
               >
-                {photo ? <Image source={{ uri: photo }} style={styles.coverPhoto} /> : null}
-                <View style={styles.coverScrim} />
+                {photo ? <Image source={{ uri: photo }} style={styles.coverPhoto} resizeMode="cover" /> : null}
+                {/* Dark where the words are, clear where the picture is. */}
+                <Fade
+                  angle={180}
+                  colors={["rgba(10,8,7,0.06)", "rgba(10,8,7,0.34)", "rgba(10,8,7,0.76)"]}
+                  locations={[0, 0.48, 1]}
+                  style={styles.coverScrim}
+                />
                 <View style={styles.coverPlate}>
                   {settings.showLabel !== false ? (
                     <Text style={styles.coverName} numberOfLines={1}>{i.label || borrowed.title}</Text>
                   ) : null}
                   {under ? <Text style={styles.coverNote} numberOfLines={1}>{under}</Text> : null}
                 </View>
-              </Pressable>
+              </Pressable>,
             );
           }
-          return (
+
+          // The tile itself: a set size on a rail, the column's width in a grid.
+          const round = grid
+            ? { width: "100%" as const, aspectRatio: tinted ? 5 / 4 : 1, borderRadius: tileRadius }
+            : { width: size, height: size, borderRadius: tileRadius };
+          const ring = shape === "circle" ? styles.ring : null;
+          return inColumn(
             <Pressable
               key={i.id}
-              style={[styles.cell, grid ? { width: (100 / perRow + "%") as import("react-native").DimensionValue, paddingHorizontal: 4 } : { width: cell }]}
+              style={[styles.cell, tinted ? styles.cellStart : null, grid ? { width: "100%" } : { width: cell }]}
               onPress={() => go(i)}
             >
               {tinted ? (
-                <View style={[round, ground]}>
+                <View style={[round, styles.tintBox, { backgroundColor: colors.accent + TINTS[at % TINTS.length] }]}>
+                  {/* Whole, not cropped: a department is a kind of thing,
+                      and half a shoe is a worse picture of "shoes" than a shoe. */}
                   {photo ? (
-                    <Image
-                      source={{ uri: photo }}
-                      style={{ width: "100%", height: "100%" }}
-                      resizeMode="contain"
-                    />
+                    <View style={grid ? styles.tintPad : styles.tintFill}>
+                      <Image source={{ uri: photo }} style={{ width: "100%", height: "100%" }} resizeMode="contain" />
+                    </View>
                   ) : null}
                   {settings.showLabel !== false ? (
                     <Text style={styles.inside} numberOfLines={1}>{i.label || borrowed.title}</Text>
                   ) : null}
                 </View>
               ) : photo ? (
-                <Image source={{ uri: photo }} style={round} />
+                <Image source={{ uri: photo }} style={[round, ring, styles.photoGround]} resizeMode="cover" />
               ) : (
-                <View style={[round, { backgroundColor: colors.page }]} />
+                <View style={[round, ring, styles.photoGround]} />
               )}
               {settings.showNote !== false && i.note ? (
                 <Text style={styles.note} numberOfLines={1}>{i.note}</Text>
@@ -5549,7 +6249,7 @@ export function CircleRow({
                 <Text
                   style={[
                     styles.label,
-                    { fontSize: labelSize, marginTop: 6 },
+                    { fontSize: labelSize, lineHeight: Math.round(labelSize * 1.5) },
                     settings.labelBold ? { fontWeight: "600" } : null,
                     settings.labelColor ? { color: settings.labelColor } : null,
                   ]}
@@ -5558,7 +6258,7 @@ export function CircleRow({
                   {i.label || borrowed.title}
                 </Text>
               ) : null}
-            </Pressable>
+            </Pressable>,
           );
         })}
       </Rail>
@@ -5568,34 +6268,41 @@ export function CircleRow({
 
 const styles = StyleSheet.create({
   head: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  title: { fontSize: 16, fontWeight: "700", color: colors.ink, fontFamily: theme.titleFont },
-  subtitle: { fontSize: 11, color: colors.inkSoft },
-  seeAll: { fontSize: 12, fontWeight: "600", color: colors.accent },
-  row: { gap: gap.item, paddingVertical: spacing.sm },
+  title: { fontWeight: "700", color: colors.ink, fontFamily: theme.titleFont },
+  subtitle: { fontSize: 11, lineHeight: 16, color: "#64748b" },
+  seeAll: { fontSize: 12, fontWeight: "700", color: colors.accent },
+  bleed: { marginTop: 8, marginHorizontal: -16 },
+  row: { gap: gap.item, paddingHorizontal: 16, paddingBottom: 4 },
   cell: { alignItems: "center" },
-  grid: { flexDirection: "row", flexWrap: "wrap", marginHorizontal: -4, rowGap: gap.item },
+  cellStart: { alignItems: "stretch" },
+  grid: { marginTop: 8, flexDirection: "row", flexWrap: "wrap", marginHorizontal: -gap.item / 2, rowGap: gap.item },
+  ring: { borderWidth: 1, borderColor: "#e2e8f0" },
+  photoGround: { backgroundColor: "#f1f5f9" },
+  tintBox: { overflow: "hidden" },
+  tintFill: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0 },
+  tintPad: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, paddingTop: "14%", paddingBottom: "26%", paddingHorizontal: "14%" },
   inside: { position: "absolute", left: 6, right: 6, bottom: 6, textAlign: "center", fontSize: 10, fontWeight: "700", color: colors.ink },
   standCell: { position: "relative" },
   stand: { width: "100%", overflow: "hidden" },
   standMark: { position: "absolute", left: 0, right: 0, alignItems: "center", justifyContent: "flex-end" },
   standArt: { position: "absolute", left: "4%", right: "4%", alignItems: "center" },
   standPlate: { position: "absolute", left: 8, right: 8, bottom: 8 },
-  standName: { fontSize: 11, fontWeight: "700", color: colors.ink },
-  standNote: { marginTop: 1, fontSize: 9, color: colors.inkSoft },
-  cover: { aspectRatio: 4 / 5, overflow: "hidden", backgroundColor: "#0a0807" },
+  standName: { fontSize: 11, lineHeight: 14, fontWeight: "700", color: colors.ink },
+  standNote: { marginTop: 1, fontSize: 9, lineHeight: 9, color: "#64748b" },
+  cover: { aspectRatio: 4 / 5, overflow: "hidden", backgroundColor: "#f1f5f9" },
   coverPhoto: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, width: "100%", height: "100%" },
-  coverScrim: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(10,8,7,0.42)" },
-  coverPlate: { position: "absolute", left: 0, right: 0, bottom: 0, paddingHorizontal: 10, paddingBottom: 10 },
-  coverName: { fontSize: 13, fontWeight: "700", color: "#fff" },
-  coverNote: { marginTop: 2, fontSize: 10, color: "rgba(255,255,255,0.75)" },
-  note: { marginTop: 6, fontSize: 11, fontWeight: "700", color: colors.accent, textAlign: "center" },
-  label: { fontSize: 10, color: colors.inkSoft, textAlign: "center" },
+  coverScrim: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0 },
+  coverPlate: { position: "absolute", left: 0, right: 0, bottom: 0, paddingHorizontal: 10, paddingBottom: 10, paddingTop: 28 },
+  coverName: { fontSize: 13, lineHeight: 16, fontWeight: "700", color: "#fff" },
+  coverNote: { marginTop: 2, fontSize: 10, lineHeight: 10, color: "rgba(255,255,255,0.75)" },
+  note: { marginTop: 6, width: "100%", fontSize: 11, lineHeight: 16, fontWeight: "700", color: colors.accent, textAlign: "center" },
+  label: { marginTop: 6, width: "100%", fontSize: 10, color: "#64748b", textAlign: "center" },
 });
 `,
 
     pick_colour: `import React from "react";
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { colors, gap, spacing, theme } from "../theme";
+import { Image, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { colors, gap, spacing } from "../theme";
 import { SectionHeading, openLink, type LinkTo } from "./Pieces";
 
 export type Swatch = {
@@ -5659,7 +6366,7 @@ export function PickColour({
     <>
       {settings.title ? <SectionHeading title={settings.title} /> : null}
       {settings.subtitle ? <Text style={styles.subtitle}>{settings.subtitle}</Text> : null}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.bleed} contentContainerStyle={styles.row}>
         {items.map((i) => (
           <Pressable key={i.id} style={[styles.cell, { width: size + 16 }]} onPress={() => go(i)}>
             <View
@@ -5682,16 +6389,21 @@ export function PickColour({
 
 const num = (v: number | undefined, fallback: number) => (typeof v === "number" && v > 0 ? v : fallback);
 
+/** The palette is always set in a serif, whatever the app's own titles use - as on the website. */
+const SERIF = Platform.OS === "ios" ? "Georgia" : "serif";
+
 /** Shop by palette: the website's section - photo cards with a swatch on their edge. */
 function Palette({ settings, items, go }: { settings: PickColourSettings; items: Swatch[]; go: (to: LinkTo) => void }) {
   const ink = settings.inkColor || "#211a15";
   const muted = settings.mutedColor || "#74685e";
   const caramel = settings.accentColor || "#9d6540";
   const line = settings.lineColor || "#e0d4c4";
-  const r = typeof settings.radius === "number" && settings.radius >= 0 ? settings.radius : 12;
+  const r = num(settings.radius, 12);
   const h = num(settings.imageHeight, 104);
   const w = num(settings.cardWidth, 0);
   const sw = num(settings.swatchSize, 22);
+  const half = Math.round(sw / 2);
+  const titleSize = num(settings.titleSize, 28);
   const link = settings.linkLabel || "Shop now";
   const pill = {
     handle: settings.pillHandle,
@@ -5706,16 +6418,23 @@ function Palette({ settings, items, go }: { settings: PickColourSettings; items:
       onPress={() => go(i)}
       style={[styles.card, w ? { width: w } : { flex: 1 }, { borderRadius: r, backgroundColor: settings.cardBg || "#fffdfa", borderColor: line }]}
     >
-      {i.imageUrl ? (
-        <Image source={{ uri: i.imageUrl }} style={{ width: "100%", height: h }} resizeMode="cover" />
-      ) : (
-        <View style={{ width: "100%", height: h, backgroundColor: i.color }} />
-      )}
-      <View style={[styles.swatch, { width: sw, height: sw, borderRadius: sw / 2, marginTop: -sw / 2, backgroundColor: i.color }]} />
+      <View style={[styles.cardClip, { borderTopLeftRadius: r - 1, borderTopRightRadius: r - 1 }]}>
+        {i.imageUrl ? (
+          <Image source={{ uri: i.imageUrl }} style={{ width: "100%", height: h }} resizeMode="cover" />
+        ) : (
+          <View style={{ width: "100%", height: h, backgroundColor: i.color || line }} />
+        )}
+      </View>
+      {/* The swatch sits half on the photo, ringed in the card's cream; the
+          ring is outside the swatch, so the colour keeps its full size. */}
+      <View style={[styles.swatchRing, { width: sw + 4, height: sw + 4, borderRadius: (sw + 4) / 2, marginTop: -half - 2, marginBottom: -2 }]}>
+        <View style={{ width: sw, height: sw, borderRadius: sw / 2, backgroundColor: i.color || line }} />
+      </View>
       <View style={styles.cardBody}>
         {i.label ? <Text style={[styles.cardTitle, { color: ink }]}>{i.label.toUpperCase()}</Text> : null}
-        {i.line1 ? <Text style={[styles.cardLines, { color: muted }]}>{i.line1}</Text> : null}
-        {i.line2 ? <Text style={[styles.cardLines, styles.cardLine2, { color: muted }]}>{i.line2}</Text> : null}
+        {i.line1 || i.line2 ? (
+          <Text style={[styles.cardLines, { color: muted }]}>{[i.line1, i.line2].filter(Boolean).join("\\n")}</Text>
+        ) : null}
         <Text style={[styles.cardLink, { color: ink }]}>{link.toUpperCase()}</Text>
       </View>
     </Pressable>
@@ -5725,11 +6444,18 @@ function Palette({ settings, items, go }: { settings: PickColourSettings; items:
     <View style={[styles.panel, { backgroundColor: settings.bg || "#f6f0e8" }]}>
       {settings.eyebrow ? <Text style={[styles.eyebrow, { color: caramel }]}>{settings.eyebrow.toUpperCase()}</Text> : null}
       {settings.title ? (
-        <Text style={[styles.paletteTitle, { color: ink, fontSize: num(settings.titleSize, 28) }]}>{settings.title}</Text>
+        <Text
+          style={[
+            styles.paletteTitle,
+            { color: ink, fontSize: titleSize, lineHeight: titleSize * 1.25, letterSpacing: -0.01 * titleSize },
+          ]}
+        >
+          {settings.title}
+        </Text>
       ) : null}
       {settings.subtitle ? <Text style={[styles.paletteSub, { color: muted }]}>{settings.subtitle}</Text> : null}
       {w ? (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cardsScroll}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.cardsScrollWrap} contentContainerStyle={styles.cardsScroll}>
           {cards}
         </ScrollView>
       ) : (
@@ -5751,27 +6477,53 @@ function Palette({ settings, items, go }: { settings: PickColourSettings; items:
 }
 
 const styles = StyleSheet.create({
-  subtitle: { fontSize: 11, color: colors.inkSoft },
-  row: { gap: gap.item, paddingVertical: spacing.sm },
+  subtitle: { fontSize: 11, lineHeight: 16.5, color: "#64748b" },
+  bleed: { marginTop: spacing.sm, marginHorizontal: -spacing.lg },
+  row: { gap: gap.item, paddingHorizontal: spacing.lg, paddingBottom: spacing.xs },
   cell: { alignItems: "center", gap: 4 },
-  label: { fontSize: 10, color: colors.inkMuted, textAlign: "center" },
+  label: { width: "100%", fontSize: 10, lineHeight: 15, color: colors.inkMuted, textAlign: "center" },
 
   panel: { marginHorizontal: -spacing.lg, paddingHorizontal: spacing.sm, paddingVertical: 20 },
-  eyebrow: { fontSize: 10, fontWeight: "600", letterSpacing: 2.2, textAlign: "center" },
-  paletteTitle: { marginTop: 6, textAlign: "center", fontFamily: theme.titleFont },
-  paletteSub: { marginTop: 8, fontSize: 12, lineHeight: 18, textAlign: "center", paddingHorizontal: spacing.lg },
+  eyebrow: { paddingHorizontal: spacing.sm, fontSize: 10, lineHeight: 15, fontWeight: "600", letterSpacing: 2.2, textAlign: "center" },
+  paletteTitle: { marginTop: 6, paddingHorizontal: spacing.sm, textAlign: "center", fontWeight: "400", fontFamily: SERIF },
+  paletteSub: { marginTop: 8, alignSelf: "center", maxWidth: 300, fontSize: 12, lineHeight: 19.5, textAlign: "center" },
   cardsRow: { flexDirection: "row", gap: 5, marginTop: 16 },
-  cardsScroll: { gap: 6, marginTop: 16 },
-  card: { overflow: "hidden", borderWidth: 1 },
-  swatch: { alignSelf: "center", borderWidth: 2, borderColor: "#fffdfa" },
+  cardsScrollWrap: { marginTop: 16, marginHorizontal: -spacing.sm },
+  cardsScroll: { gap: 6, paddingHorizontal: spacing.sm, paddingBottom: spacing.xs },
+  card: {
+    borderWidth: 1,
+    shadowColor: "#211a15",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+  },
+  cardClip: { overflow: "hidden" },
+  swatchRing: {
+    alignSelf: "center",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#fffdfa",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 3,
+    elevation: 2,
+  },
   cardBody: { alignItems: "center", paddingHorizontal: 4, paddingTop: 6, paddingBottom: 8, flex: 1 },
-  cardTitle: { fontSize: 8.5, letterSpacing: 0.7, textAlign: "center", fontFamily: theme.titleFont },
-  cardLines: { marginTop: 4, fontSize: 7.5, lineHeight: 10, textAlign: "center" },
-  cardLine2: { marginTop: 0 },
-  cardLink: { marginTop: 6, fontSize: 7, fontWeight: "700", letterSpacing: 0.6, textDecorationLine: "underline" },
+  cardTitle: { fontSize: 8.5, lineHeight: 10.6, fontWeight: "400", letterSpacing: 0.68, textAlign: "center", fontFamily: SERIF },
+  cardLines: { marginTop: 4, fontSize: 7.5, lineHeight: 10.3, textAlign: "center" },
+  cardLink: {
+    marginTop: "auto",
+    paddingTop: 6,
+    fontSize: 7,
+    lineHeight: 10.5,
+    fontWeight: "700",
+    letterSpacing: 0.56,
+    textDecorationLine: "underline",
+  },
   pill: { marginTop: 20, marginHorizontal: spacing.sm, borderWidth: 1, borderRadius: 999, paddingVertical: 10, paddingHorizontal: 16, alignItems: "center", gap: 4 },
-  pillText: { fontSize: 11 },
-  pillCta: { fontSize: 11, fontWeight: "600", letterSpacing: 1.5 },
+  pillText: { fontSize: 11, lineHeight: 16.5, textAlign: "center" },
+  pillCta: { fontSize: 11, lineHeight: 16.5, fontWeight: "600", letterSpacing: 1.54, textAlign: "center" },
 });
 `,
 
@@ -5847,7 +6599,7 @@ const styles = StyleSheet.create({
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Fade } from "./Fade";
 import { colors, spacing, theme } from "../theme";
-import { SectionHeading, openLink, type LinkTo } from "./Pieces";
+import { openLink, type LinkTo } from "./Pieces";
 
 export type Tag = { id: string; label?: string; color?: string; handle?: string; url?: string };
 export type StyleProfileSettings = {
@@ -5911,41 +6663,66 @@ export function StyleProfile({
   const opens = Boolean(settings.handle || settings.url || settings.productId || settings.screen);
   const kicker = settings.kicker || "Your society";
   const glyph = settings.glyph || "✦";
+  // The faint gold wash in the corner. The preview blurs one circle; a phone
+  // has no blur, so it is drawn as rings that fade outwards round the same
+  // centre - 24 in from the right edge, 16 down from the top.
+  const wash = [176, 152, 128, 104, 80];
 
   return (
     <>
-      {settings.title ? <SectionHeading title={settings.title} /> : null}
+      {settings.title ? <Text style={styles.heading} numberOfLines={1}>{settings.title}</Text> : null}
       {settings.subtitle ? <Text style={styles.subtitle}>{settings.subtitle}</Text> : null}
       <View
         style={[
           styles.card,
           society
-            ? { backgroundColor: deep, borderColor: gold + "3d", borderRadius: r }
-            : { backgroundColor: settings.cardBg || colors.surface, borderColor: colors.line, borderRadius: r },
+            ? { backgroundColor: deep, borderColor: gold + "3d", borderRadius: r, padding: 16 }
+            : { backgroundColor: settings.cardBg || colors.surface, borderColor: colors.line, borderRadius: r, padding: 12 },
         ]}
       >
         {society ? (
           <Fade angle={135} colors={[deep, deep, deepTo]} locations={[0, 0.45, 1]} style={[StyleSheet.absoluteFill, { borderRadius: r }]} />
         ) : null}
-        {society && kicker ? (
-          <Text style={[styles.kicker, { color: gold }]}>{(glyph ? glyph + " " : "") + kicker.toUpperCase()}</Text>
-        ) : null}
-        {cardTitle ? (
-          <Pressable disabled={!opens} onPress={() => go(settings)}>
-            <Text
-              style={[
-                styles.cardTitle,
-                society ? { color: onDeep, fontSize: 17, fontFamily: theme.titleFont } : null,
-              ]}
-            >
-              {cardTitle}
-            </Text>
+        {society
+          ? wash.map((d) => (
+              <View
+                key={d}
+                pointerEvents="none"
+                style={{
+                  position: "absolute",
+                  width: d,
+                  height: d,
+                  borderRadius: d / 2,
+                  right: 24 - d / 2,
+                  top: 16 - d / 2,
+                  backgroundColor: gold,
+                  opacity: 0.04,
+                }}
+              />
+            ))
+          : null}
+
+        {society ? (
+          <Pressable disabled={!opens} onPress={() => go(settings)} style={styles.head}>
+            <View style={{ flex: 1 }}>
+              {kicker ? (
+                <Text style={[styles.kicker, { color: gold }]}>{(glyph ? glyph + " " : "") + kicker.toUpperCase()}</Text>
+              ) : null}
+              {cardTitle ? <Text style={[styles.deepTitle, { color: onDeep }]}>{cardTitle}</Text> : null}
+              {settings.cardSubtitle ? (
+                <Text style={[styles.deepSubtitle, { color: onDeepSoft }]}>{settings.cardSubtitle}</Text>
+              ) : null}
+            </View>
+            {opens ? <Text style={[styles.arrow, { color: gold }]}>{"→"}</Text> : null}
           </Pressable>
-        ) : null}
-        {settings.cardSubtitle ? (
-          <Text style={[styles.cardSubtitle, society ? { color: onDeepSoft } : null]}>{settings.cardSubtitle}</Text>
-        ) : null}
-        <View style={styles.tags}>
+        ) : (
+          <>
+            {cardTitle ? <Text style={styles.cardTitle}>{cardTitle}</Text> : null}
+            {settings.cardSubtitle ? <Text style={styles.cardSubtitle}>{settings.cardSubtitle}</Text> : null}
+          </>
+        )}
+
+        <View style={[styles.tags, { marginTop: society ? 12 : 8 }]}>
           {items.map((i) => (
             <Pressable
               key={i.id}
@@ -5953,7 +6730,7 @@ export function StyleProfile({
                 styles.tag,
                 society
                   ? { borderColor: i.color ? i.color + "aa" : gold + "59", backgroundColor: i.color ? i.color + "1f" : gold + "14" }
-                  : { borderColor: i.color || colors.line },
+                  : { borderColor: i.color || colors.line, backgroundColor: i.color ? i.color + "0f" : colors.surface },
               ]}
               onPress={() => go(i)}
             >
@@ -5962,7 +6739,7 @@ export function StyleProfile({
           ))}
         </View>
         {settings.footNote ? (
-          <Text style={[styles.foot, society ? { color: onDeepSoft } : null]}>{settings.footNote}</Text>
+          <Text style={society ? [styles.deepFoot, { color: onDeepSoft }] : styles.foot}>{settings.footNote}</Text>
         ) : null}
       </View>
     </>
@@ -5970,21 +6747,27 @@ export function StyleProfile({
 }
 
 const styles = StyleSheet.create({
-  subtitle: { fontSize: 11, color: colors.inkSoft },
-  card: { marginTop: spacing.sm, borderWidth: 1, padding: 16, overflow: "hidden" },
-  wash: { position: "absolute", right: -40, bottom: -60, height: 170, width: 170, borderRadius: 85, opacity: 0.55 },
-  kicker: { fontSize: 9, fontWeight: "700", letterSpacing: 1.8 },
-  cardTitle: { marginTop: 4, fontSize: 12, fontWeight: "700", color: colors.ink },
-  cardSubtitle: { fontSize: 11, color: colors.inkSoft },
-  tags: { marginTop: spacing.sm, flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  heading: { fontSize: 16, lineHeight: 24, fontWeight: "700", color: colors.ink, fontFamily: theme.titleFont, letterSpacing: theme.titleFont ? -0.16 : -0.4 },
+  subtitle: { fontSize: 11, lineHeight: 16, color: "#64748b" },
+  card: { marginTop: spacing.sm, borderWidth: 1, overflow: "hidden" },
+  head: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  kicker: { fontSize: 9, lineHeight: 13, fontWeight: "700", letterSpacing: 1.8 },
+  deepTitle: { marginTop: 4, fontSize: 17, lineHeight: 21, fontWeight: "700", fontFamily: theme.titleFont, letterSpacing: theme.titleFont ? -0.17 : 0 },
+  deepSubtitle: { marginTop: 2, fontSize: 11, lineHeight: 16 },
+  arrow: { fontSize: 13, lineHeight: 19 },
+  cardTitle: { fontSize: 12, lineHeight: 18, fontWeight: "700", color: colors.ink },
+  cardSubtitle: { fontSize: 11, lineHeight: 16, color: "#64748b" },
+  tags: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   tag: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
-  tagText: { fontSize: 11, fontWeight: "500" },
-  foot: { marginTop: spacing.sm, fontSize: 11, color: colors.inkSoft },
+  tagText: { fontSize: 11, lineHeight: 16, fontWeight: "500" },
+  foot: { marginTop: 8, fontSize: 11, lineHeight: 16, color: "#64748b" },
+  deepFoot: { marginTop: 12, fontSize: 10, lineHeight: 15 },
 });
 `,
 
     promo_card: `import React, { useEffect, useRef } from "react";
 import { Animated, Easing, Image, Pressable, StyleSheet, Text, View } from "react-native";
+import Svg, { Circle, Defs, Path, Pattern, RadialGradient, Rect, Stop } from "react-native-svg";
 import { Fade } from "./Fade";
 import { colors, spacing } from "../theme";
 import { openLink } from "./Pieces";
@@ -6046,6 +6829,118 @@ export function PromoCard({
   );
 }
 
+/**
+ * A soft patch of light, drawn the way a CSS blur draws a filled shape: solid
+ * in the middle, half strength at the shape's own edge and gone two blur
+ * widths past it. React Native has no blur, so the falloff is a radial
+ * gradient with the same profile. The box given is the shape's, before the
+ * blur spreads it.
+ */
+function Glow({
+  id,
+  w,
+  h,
+  blur,
+  color,
+  opacity,
+  left,
+  top,
+  right,
+  bottom,
+}: {
+  id: string;
+  w: number;
+  h: number;
+  blur: number;
+  color: string;
+  opacity: number;
+  left?: number;
+  top?: number;
+  right?: number;
+  bottom?: number;
+}) {
+  const spread = blur * 2;
+  const R = (w + h) / 4;
+  const out = R + spread;
+  const at = (d: number) => Math.max(0, Math.min(1, d / out));
+  return (
+    <Svg
+      width={w + spread * 2}
+      height={h + spread * 2}
+      style={{
+        position: "absolute",
+        left: left === undefined ? undefined : left - spread,
+        top: top === undefined ? undefined : top - spread,
+        right: right === undefined ? undefined : right - spread,
+        bottom: bottom === undefined ? undefined : bottom - spread,
+      }}
+    >
+      <Defs>
+        <RadialGradient id={id} cx="50%" cy="50%" r="50%">
+          <Stop offset={at(Math.max(0, R - blur * 2))} stopColor={color} stopOpacity={opacity * 0.98} />
+          <Stop offset={at(Math.max(0, R - blur))} stopColor={color} stopOpacity={opacity * 0.84} />
+          <Stop offset={at(R)} stopColor={color} stopOpacity={opacity * 0.5} />
+          <Stop offset={at(R + blur)} stopColor={color} stopOpacity={opacity * 0.16} />
+          <Stop offset={1} stopColor={color} stopOpacity={0} />
+        </RadialGradient>
+      </Defs>
+      <Rect x={0} y={0} width={w + spread * 2} height={h + spread * 2} fill={"url(#" + id + ")"} />
+    </Svg>
+  );
+}
+
+/** One wedge of a circle, clockwise from twelve o'clock, as fractions of a turn. */
+function wedge(c: number, r: number, from: number, to: number) {
+  const pt = (f: number) => {
+    const a = f * Math.PI * 2;
+    return (c + r * Math.sin(a)).toFixed(2) + " " + (c - r * Math.cos(a)).toFixed(2);
+  };
+  return "M" + c + " " + c + " L" + pt(from) + " A" + r + " " + r + " 0 0 1 " + pt(to) + " Z";
+}
+
+/** The four little stars around the box, each twinkling on its own beat. */
+const SPARKS = [
+  { top: 10.56, left: 12.4, size: 14, delay: 0 },
+  { top: 29.04, left: 101.68, size: 10, delay: 600 },
+  { top: 81.84, left: 4.96, size: 9, delay: 1100 },
+  { top: 5.28, left: 71.92, size: 8, delay: 1600 },
+];
+
+function Spark({ top, left, size, delay, color }: { top: number; left: number; size: number; delay: number; color: string }) {
+  const v = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(v, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(v, { toValue: 0, duration: 900, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ]),
+    );
+    const t = setTimeout(() => loop.start(), delay);
+    return () => {
+      clearTimeout(t);
+      loop.stop();
+    };
+  }, [v, delay]);
+  return (
+    <Animated.Text
+      style={[
+        styles.spark,
+        {
+          top,
+          left,
+          fontSize: size,
+          lineHeight: size * 1.5,
+          color,
+          opacity: v.interpolate({ inputRange: [0, 1], outputRange: [0.25, 1] }),
+          transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1.1] }) }],
+        },
+      ]}
+    >
+      ✦
+    </Animated.Text>
+  );
+}
+
 /** The mystery box as a banner: a night gradient and a glowing gift box. */
 function MysteryBanner({ settings, onOpen }: { settings: PromoCardSettings; onOpen: () => void }) {
   const bg = settings.bg || "#2b1b10";
@@ -6054,9 +6949,12 @@ function MysteryBanner({ settings, onOpen }: { settings: PromoCardSettings; onOp
   const ink = settings.textColor || "#ffffff";
   const r = settings.radius && settings.radius > 0 ? settings.radius : 20;
   const h = settings.height && settings.height > 0 ? settings.height : 196;
+  // The arrow follows the label's own script, not the app's.
+  const arrow = /[\\u0600-\\u06FF]/.test(settings.buttonLabel ?? "") ? "←" : "→";
 
-  // The lid and the question mark bob gently, as if something inside is waking.
+  // The question mark floats, the lid lifts and tips, the light turns.
   const bob = useRef(new Animated.Value(0)).current;
+  const spin = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
@@ -6064,16 +6962,35 @@ function MysteryBanner({ settings, onOpen }: { settings: PromoCardSettings; onOp
         Animated.timing(bob, { toValue: 0, duration: 1300, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
       ]),
     );
+    const turn = Animated.loop(
+      Animated.timing(spin, { toValue: 1, duration: 14000, easing: Easing.linear, useNativeDriver: true }),
+    );
     loop.start();
-    return () => loop.stop();
-  }, [bob]);
-  const lift = bob.interpolate({ inputRange: [0, 1], outputRange: [0, -5] });
+    turn.start();
+    return () => {
+      loop.stop();
+      turn.stop();
+    };
+  }, [bob, spin]);
+  const float = bob.interpolate({ inputRange: [0, 1], outputRange: [0, -5] });
+  const lidLift = bob.interpolate({ inputRange: [0, 1], outputRange: [0, -4] });
+  const lidTip = bob.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "-3deg"] });
+  const rays = spin.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
 
   return (
     <Pressable onPress={onOpen} style={[styles.banner, { minHeight: h, borderRadius: r, backgroundColor: bg }]}>
       <Fade angle={135} colors={[bg, bg, bg2]} locations={[0, 0.4, 1]} style={[StyleSheet.absoluteFill, { borderRadius: r }]} />
-      <View style={[styles.glowBig, { backgroundColor: bg2 }]} />
-      <View style={[styles.glowSmall, { backgroundColor: glow }]} />
+      {/* Starlight: a faint dot every fourteen points. */}
+      <Svg width="100%" height="100%" style={StyleSheet.absoluteFill}>
+        <Defs>
+          <Pattern id="mysteryDots" x={0} y={0} width={14} height={14} patternUnits="userSpaceOnUse">
+            <Circle cx={7} cy={7} r={1} fill="#ffffff" fillOpacity={0.084} />
+          </Pattern>
+        </Defs>
+        <Rect x={0} y={0} width="100%" height="100%" fill="url(#mysteryDots)" />
+      </Svg>
+      <Glow id="mysteryGlowEnd" w={224} h={224} blur={40} color={glow} opacity={0.22} right={-40} bottom={-64} />
+      <Glow id="mysteryGlowStart" w={160} h={160} blur={40} color={bg2} opacity={0.5} left={-48} top={-64} />
 
       <View style={styles.copy}>
         {settings.kicker ? (
@@ -6096,8 +7013,8 @@ function MysteryBanner({ settings, onOpen }: { settings: PromoCardSettings; onOp
         {settings.buttonLabel || settings.stockNote ? (
           <View style={styles.ctaRow}>
             {settings.buttonLabel ? (
-              <View style={[styles.bannerCta, { backgroundColor: glow }]}>
-                <Text style={[styles.bannerCtaText, { color: bg }]}>{settings.buttonLabel + " →"}</Text>
+              <View style={[styles.bannerCta, { backgroundColor: glow, shadowColor: glow }]}>
+                <Text style={[styles.bannerCtaText, { color: bg }]}>{settings.buttonLabel + " " + arrow}</Text>
               </View>
             ) : null}
             {settings.stockNote ? <Text style={[styles.stock, { color: ink }]}>{settings.stockNote}</Text> : null}
@@ -6107,20 +7024,51 @@ function MysteryBanner({ settings, onOpen }: { settings: PromoCardSettings; onOp
 
       <View style={styles.art}>
         {settings.imageUrl ? (
-          <Image source={{ uri: settings.imageUrl }} style={styles.artImage} resizeMode="contain" />
+          <Image source={{ uri: settings.imageUrl }} style={[styles.artImage, { shadowColor: glow }]} resizeMode="contain" />
         ) : (
           <View style={styles.stage}>
-            <View style={[styles.halo, { backgroundColor: glow }]} />
-            <Text style={[styles.spark, { top: 6, left: 8, fontSize: 14, color: glow }]}>✦</Text>
-            <Text style={[styles.spark, { top: 26, right: 6, fontSize: 10, color: glow }]}>✦</Text>
-            <Text style={[styles.spark, { bottom: 40, left: 2, fontSize: 9, color: glow }]}>✦</Text>
-            <Animated.Text style={[styles.question, { textShadowColor: glow, transform: [{ translateY: lift }] }]}>?</Animated.Text>
-            <Animated.View style={[styles.lid, { backgroundColor: glow, transform: [{ translateY: lift }, { rotate: "-9deg" }] }]}>
-              <View style={[styles.ribbon, { backgroundColor: bg2 }]} />
+            <Glow id="mysteryHalo" w={100} h={108} blur={24} color={glow} opacity={0.45} left={12} top={12} />
+            {/* Light escaping the box, turning slowly. */}
+            <Animated.View pointerEvents="none" style={[styles.rays, { transform: [{ rotate: rays }] }]}>
+              <Svg width={104} height={104}>
+                <Defs>
+                  <RadialGradient id="mysteryRays" cx={52} cy={52} r={73.5} gradientUnits="userSpaceOnUse">
+                    <Stop offset={0} stopColor={glow} stopOpacity={0.4} />
+                    <Stop offset={0.2} stopColor={glow} stopOpacity={0.4} />
+                    <Stop offset={0.7} stopColor={glow} stopOpacity={0} />
+                  </RadialGradient>
+                </Defs>
+                {[
+                  [0.1, 0.13],
+                  [0.35, 0.38],
+                  [0.6, 0.63],
+                  [0.85, 0.88],
+                ].map(([a, b]) => (
+                  <Path key={a} d={wedge(52, 52, a, b)} fill="url(#mysteryRays)" />
+                ))}
+              </Svg>
             </Animated.View>
+            {SPARKS.map((p) => (
+              <Spark key={p.delay} top={p.top} left={p.left} size={p.size} delay={p.delay} color={glow} />
+            ))}
+            {/* The question mark rising out of the box. */}
+            <Animated.Text style={[styles.question, { textShadowColor: glow, transform: [{ translateY: float }] }]}>?</Animated.Text>
+            {/* The lid, lifted and tilted. */}
+            <Animated.View style={[styles.lid, { transform: [{ translateY: lidLift }, { rotate: lidTip }] }]}>
+              <View style={[styles.lidFace, { backgroundColor: glow }]}>
+                <Fade colors={["rgba(255,255,255,0.35)", "rgba(0,0,0,0.18)"]} style={[StyleSheet.absoluteFill, { borderRadius: 6 }]} />
+                <View style={[styles.ribbon, { backgroundColor: bg2 }]} />
+                <View style={[styles.bow, { borderColor: bg2 }]} />
+              </View>
+            </Animated.View>
+            {/* The box. */}
             <View style={[styles.box, { backgroundColor: glow }]}>
-              <View style={styles.boxShade} />
-              <View style={[styles.ribbon, { backgroundColor: bg2 }]} />
+              <View style={styles.boxInner}>
+                <Fade angle={160} colors={["rgba(255,255,255,0.3)", "rgba(0,0,0,0.28)"]} style={StyleSheet.absoluteFill} />
+                <View style={styles.boxFoot} />
+                <View style={[styles.ribbon, { backgroundColor: bg2 }]} />
+                <View style={styles.boxRim} />
+              </View>
             </View>
           </View>
         )}
@@ -6132,41 +7080,107 @@ function MysteryBanner({ settings, onOpen }: { settings: PromoCardSettings; onOp
 const styles = StyleSheet.create({
   photo: { width: "100%", height: 112, backgroundColor: colors.page },
   body: { padding: spacing.lg },
-  title: { fontSize: 15, fontWeight: "700", lineHeight: 20 },
-  text: { marginTop: 4, fontSize: 11, lineHeight: 16, opacity: 0.8 },
+  title: { fontSize: 15, fontWeight: "700", lineHeight: 20.6 },
+  text: { marginTop: 4, fontSize: 11, lineHeight: 17.9, opacity: 0.8 },
   cta: { marginTop: spacing.md, alignSelf: "flex-start", borderRadius: 12, paddingHorizontal: 16, paddingVertical: 8 },
-  ctaText: { fontSize: 12, fontWeight: "700" },
+  ctaText: { fontSize: 12, lineHeight: 18, fontWeight: "700" },
 
   banner: { flexDirection: "row", overflow: "hidden" },
-  glowBig: { position: "absolute", width: 220, height: 220, borderRadius: 110, right: -70, bottom: -90, opacity: 0.7 },
-  glowSmall: { position: "absolute", width: 160, height: 160, borderRadius: 80, right: -20, bottom: -60, opacity: 0.18 },
   copy: { flex: 1, justifyContent: "center", paddingVertical: spacing.lg, paddingLeft: spacing.lg, paddingRight: spacing.sm, gap: 6 },
   kicker: { alignSelf: "flex-start", borderWidth: 1, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
-  kickerText: { fontSize: 9, fontWeight: "700", letterSpacing: 1.2 },
-  bannerTitle: { fontSize: 22, fontWeight: "800", lineHeight: 26 },
-  bannerBody: { fontSize: 11, lineHeight: 16, opacity: 0.78 },
-  priceRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "baseline", gap: 8 },
-  price: { fontSize: 15, fontWeight: "800" },
-  worth: { fontSize: 10, opacity: 0.72 },
+  kickerText: { fontSize: 9, lineHeight: 13.5, fontWeight: "700", letterSpacing: 1.26 },
+  bannerTitle: { fontSize: 22, fontWeight: "800", lineHeight: 27.5 },
+  bannerBody: { fontSize: 11, lineHeight: 17.9, opacity: 0.78 },
+  priceRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "baseline", columnGap: 8 },
+  price: { fontSize: 15, lineHeight: 22.5, fontWeight: "800" },
+  worth: { fontSize: 10, lineHeight: 15, opacity: 0.72 },
   ctaRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 4 },
-  bannerCta: { borderRadius: 999, paddingHorizontal: 14, paddingVertical: 6 },
-  bannerCtaText: { fontSize: 12, fontWeight: "700" },
-  stock: { fontSize: 10, fontWeight: "600", opacity: 0.8 },
-  art: { width: "44%", alignItems: "center", justifyContent: "center", paddingVertical: spacing.md },
-  artImage: { width: "100%", height: 150 },
+  bannerCta: {
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.33,
+    shadowRadius: 9,
+  },
+  bannerCtaText: { fontSize: 12, lineHeight: 18, fontWeight: "700" },
+  stock: { fontSize: 10, lineHeight: 15, fontWeight: "600", opacity: 0.8 },
+  art: { width: "44%", alignItems: "center", justifyContent: "center", paddingVertical: spacing.md, paddingRight: 4 },
+  artImage: { width: "100%", height: 150, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.4, shadowRadius: 11 },
   stage: { width: 124, height: 132 },
-  halo: { position: "absolute", top: 16, left: 16, width: 92, height: 92, borderRadius: 46, opacity: 0.35 },
+  rays: { position: "absolute", top: 4, left: 10, width: 104, height: 104, borderRadius: 52, overflow: "hidden" },
   spark: { position: "absolute" },
-  question: { position: "absolute", top: 12, left: 50, width: 24, textAlign: "center", fontSize: 36, fontWeight: "900", color: "#ffffff", textShadowRadius: 12 },
-  lid: { position: "absolute", bottom: 62, left: 14, width: 96, height: 18, borderRadius: 6 },
-  box: { position: "absolute", bottom: 8, left: 20, width: 84, height: 56, borderBottomLeftRadius: 8, borderBottomRightRadius: 8, overflow: "hidden" },
-  boxShade: { position: "absolute", left: 0, right: 0, bottom: 0, height: 22, backgroundColor: "rgba(0,0,0,0.18)" },
+  question: {
+    position: "absolute",
+    top: 14,
+    left: 50,
+    width: 24,
+    textAlign: "center",
+    fontSize: 36,
+    lineHeight: 36,
+    fontWeight: "900",
+    color: "#ffffff",
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 14,
+  },
+  lid: { position: "absolute", bottom: 62, left: 14, width: 96, height: 18 },
+  lidFace: {
+    width: 96,
+    height: 18,
+    borderRadius: 6,
+    transform: [{ rotate: "-9deg" }],
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+  },
+  bow: {
+    position: "absolute",
+    top: -10,
+    left: 34,
+    width: 28,
+    height: 12,
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
+    borderWidth: 4,
+    borderBottomWidth: 0,
+  },
+  box: {
+    position: "absolute",
+    bottom: 8,
+    left: 20,
+    width: 84,
+    height: 56,
+    borderTopLeftRadius: 2,
+    borderTopRightRadius: 2,
+    borderBottomLeftRadius: 8,
+    borderBottomRightRadius: 8,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+  },
+  boxInner: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    overflow: "hidden",
+    borderTopLeftRadius: 2,
+    borderTopRightRadius: 2,
+    borderBottomLeftRadius: 8,
+    borderBottomRightRadius: 8,
+  },
+  boxFoot: { position: "absolute", left: 0, right: 0, bottom: 0, height: 8, backgroundColor: "rgba(0,0,0,0.12)" },
+  boxRim: { position: "absolute", left: 0, right: 0, top: 0, height: 6, backgroundColor: "rgba(0,0,0,0.25)" },
   ribbon: { position: "absolute", top: 0, bottom: 0, left: "50%", marginLeft: -7, width: 14 },
 });
 `,
 
     review_summary: `import React, { useEffect, useRef } from "react";
-import { Animated, Easing, Pressable, StyleSheet, Text, View } from "react-native";
+import { Animated, Easing, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import Svg, { Path } from "react-native-svg";
 import { Fade } from "./Fade";
 import { theme } from "../theme";
 import { openLink } from "./Pieces";
@@ -6220,7 +7234,7 @@ export function ReviewSummary({
   const grow = useRef(new Animated.Value(settings.animate === false ? 1 : 0)).current;
   useEffect(() => {
     if (settings.animate === false) return;
-    Animated.timing(grow, { toValue: 1, duration: 1100, delay: 150, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+    Animated.timing(grow, { toValue: 1, duration: 1000, delay: 150, easing: Easing.bezier(0.19, 1, 0.22, 1), useNativeDriver: false }).start();
   }, [grow, settings.animate]);
 
   if (!settings.average && !settings.heading && !settings.headingItalic) return null;
@@ -6235,6 +7249,9 @@ export function ReviewSummary({
   const pcts: Record<number, number | undefined> = { 5: settings.pct5, 4: settings.pct4, 3: settings.pct3, 2: settings.pct2, 1: settings.pct1 };
   const pct = (n: number) => Math.max(0, Math.min(100, Number(pcts[n]) || 0));
   const count = [settings.reviewCount, settings.reviewsWord].filter(Boolean).join(" ");
+  const r = settings.radius && settings.radius > 0 ? settings.radius : 18;
+  const avgSize = settings.avgSize && settings.avgSize > 0 ? settings.avgSize : 58;
+
 
   return (
     <View style={settings.bg ? [styles.band, { backgroundColor: settings.bg }] : null}>
@@ -6257,7 +7274,7 @@ export function ReviewSummary({
         style={[
           styles.card,
           {
-            borderRadius: settings.radius || 18,
+            borderRadius: r,
             backgroundColor: settings.panelFrom || "#fdf9f3",
           },
         ]}
@@ -6265,27 +7282,34 @@ export function ReviewSummary({
         <Fade
           angle={160}
           colors={[settings.panelFrom || "#fdf9f3", settings.panelTo || "#f3e9db"]}
-          style={[StyleSheet.absoluteFill, { borderRadius: settings.radius || 18 }]}
+          style={[StyleSheet.absoluteFill, { borderRadius: r }]}
         />
         <View style={styles.score}>
           {settings.average ? (
-            <Text style={[styles.average, { color: ink, fontSize: settings.avgSize && settings.avgSize > 0 ? settings.avgSize : 58 }]}>
+            <Text style={[styles.average, { color: ink, fontSize: avgSize, lineHeight: avgSize, letterSpacing: -avgSize * 0.01 }]}>
               {settings.average}
             </Text>
           ) : null}
           <View style={styles.stars}>
             {[0, 1, 2, 3, 4].map((i) => (
-              <Text key={i} style={[styles.star, { color: i < filled ? star : track }]}>★</Text>
+              <StarMark key={i} size={16} color={i < filled ? star : track} />
             ))}
           </View>
           {count ? <Text style={[styles.count, { color: muted }]}>{count}</Text> : null}
-          {settings.trustNote ? <Text style={[styles.trust, { color: caramel }]}>{"✓  " + settings.trustNote.toUpperCase()}</Text> : null}
+          {settings.trustNote ? (
+            <View style={styles.trustRow}>
+              <Svg width={11} height={11} viewBox="0 0 24 24" fill="none">
+                <Path d="M4 12l5 5L20 6" stroke={caramel} strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" />
+              </Svg>
+              <Text style={[styles.trust, { color: caramel }]}>{settings.trustNote.toUpperCase()}</Text>
+            </View>
+          ) : null}
         </View>
         <View style={styles.bars}>
           {[5, 4, 3, 2, 1].map((n) => (
             <View key={n} style={styles.barRow}>
               <Text style={[styles.barN, { color: ink }]}>{n}</Text>
-              <Text style={[styles.barStar, { color: star }]}>★</Text>
+              <StarMark size={12} color={star} />
               <View style={[styles.track, { backgroundColor: track }]}>
                 <Animated.View
                   style={[
@@ -6307,45 +7331,58 @@ export function ReviewSummary({
 
       {settings.buttonLabel ? (
         <Pressable onPress={go} style={[styles.cta, { backgroundColor: brown }]}>
-          <Text style={styles.ctaText}>{settings.buttonLabel.toUpperCase() + "  →"}</Text>
+          <Text style={styles.ctaText}>{settings.buttonLabel.toUpperCase()}</Text>
+          <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
+            <Path d="M5 12h14M13 6l6 6-6 6" stroke="#ffffff" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+          </Svg>
         </Pressable>
       ) : null}
     </View>
   );
 }
 
+/** The star the preview draws, as a shape rather than a glyph, so it is the same size on every phone. */
+function StarMark({ size, color }: { size: number; color: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path d="M12 2l2.9 6.26 6.85.72-5.1 4.6 1.44 6.72L12 16.9l-6.09 3.4 1.44-6.72-5.1-4.6 6.85-.72z" fill={color} />
+    </Svg>
+  );
+}
+
+/** The heading and the big number are always in the serif, as on the website. */
+const serif = Platform.OS === "ios" ? "Georgia" : "serif";
+
 const styles = StyleSheet.create({
   band: { marginHorizontal: -16, paddingHorizontal: 16, paddingVertical: 20 },
   eyebrowRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12 },
   rule: { width: 34, height: 1, opacity: 0.5 },
-  eyebrow: { fontSize: 10.5, fontWeight: "600", letterSpacing: 2.5 },
-  heading: { marginTop: 12, fontSize: 28, fontWeight: "600", textAlign: "center", fontFamily: theme.titleFont },
+  eyebrow: { fontSize: 10.5, lineHeight: 16, fontWeight: "600", letterSpacing: 2.52 },
+  heading: { marginTop: 12, fontSize: 28, lineHeight: 35, fontWeight: "600", letterSpacing: -0.28, textAlign: "center", fontFamily: serif },
   italic: { fontStyle: "italic", fontWeight: "500" },
   card: { marginTop: 20, borderWidth: 1, borderColor: "rgba(69,46,31,0.13)", paddingHorizontal: 18, paddingVertical: 22, overflow: "hidden" },
-  cardLower: { position: "absolute", left: 0, right: 0, bottom: 0, height: "55%", opacity: 0.6 },
   score: { alignItems: "center", paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: "rgba(69,46,31,0.13)" },
-  average: { fontWeight: "600", fontFamily: theme.titleFont },
+  average: { fontWeight: "600", fontFamily: serif, textAlign: "center" },
   stars: { flexDirection: "row", gap: 3, marginTop: 8 },
-  star: { fontSize: 16 },
-  count: { marginTop: 8, fontSize: 11.5 },
-  trust: { marginTop: 10, fontSize: 9.5, fontWeight: "600", letterSpacing: 1.1 },
+  count: { marginTop: 8, fontSize: 11.5, lineHeight: 17 },
+  trustRow: { marginTop: 10, flexDirection: "row", alignItems: "center", gap: 6 },
+  trust: { fontSize: 9.5, lineHeight: 14, fontWeight: "600", letterSpacing: 1.14 },
   bars: { marginTop: 16, gap: 7 },
   barRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 6, paddingVertical: 4 },
-  barN: { width: 10, fontSize: 11.5, fontWeight: "600" },
-  barStar: { fontSize: 12 },
+  barN: { width: 10, fontSize: 11.5, lineHeight: 17, fontWeight: "600" },
   track: { flex: 1, height: 7, borderRadius: 20, overflow: "hidden" },
   fill: { height: "100%", borderRadius: 20, overflow: "hidden" },
-  fillStart: { position: "absolute", left: 0, top: 0, bottom: 0, width: "50%", opacity: 0.85 },
-  pct: { width: 32, textAlign: "right", fontSize: 11 },
-  cta: { marginTop: 20, alignSelf: "center", borderRadius: 100, paddingHorizontal: 26, paddingVertical: 13 },
-  ctaText: { color: "#ffffff", fontSize: 10.5, fontWeight: "700", letterSpacing: 1.9 },
+  pct: { width: 32, textAlign: "right", fontSize: 11, lineHeight: 16 },
+  cta: { marginTop: 20, alignSelf: "center", flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 100, paddingHorizontal: 26, paddingVertical: 13 },
+  ctaText: { color: "#ffffff", fontSize: 10.5, lineHeight: 16, fontWeight: "700", letterSpacing: 1.89 },
 });
 `,
 
-    brand_timeline: `import React, { useEffect, useRef, useState } from "react";
-import { Animated, Easing, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+    brand_timeline: `import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Animated, Easing, PanResponder, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import Svg, { Path } from "react-native-svg";
 import { Fade } from "./Fade";
-import { theme } from "../theme";
+import { FocalImage } from "./Moments";
 import { openLink, type LinkTo } from "./Pieces";
 
 export type Brand = {
@@ -6378,6 +7415,54 @@ export type BrandTimelineSettings = {
   items?: Brand[];
 };
 
+/** The section is set in a serif whatever the app's own titles use, as on the website. */
+const SERIF = Platform.OS === "ios" ? "Georgia" : "serif";
+
+/** One round mark on the line: it swells a little when its brand is showing. */
+function Mark({
+  brand,
+  active,
+  caramel,
+  brown,
+  ink,
+  line,
+  onPress,
+}: {
+  brand: Brand;
+  active: boolean;
+  caramel: string;
+  brown: string;
+  ink: string;
+  line: string;
+  onPress: () => void;
+}) {
+  const grow = useRef(new Animated.Value(active ? 1 : 0)).current;
+  useEffect(() => {
+    Animated.timing(grow, { toValue: active ? 1 : 0, duration: 500, easing: Easing.inOut(Easing.ease), useNativeDriver: true }).start();
+  }, [active, grow]);
+  return (
+    <Pressable style={styles.mark} onPress={onPress}>
+      <Animated.View
+        style={[
+          styles.circle,
+          {
+            backgroundColor: active ? caramel : "#fffdfa",
+            borderColor: active ? caramel : line,
+            transform: [{ scale: grow.interpolate({ inputRange: [0, 1], outputRange: [1, 1.06] }) }],
+          },
+        ]}
+      >
+        <Text style={[styles.logo, { color: active ? "#ffffff" : brown }]} numberOfLines={2}>
+          {brand.logoText ?? ""}
+        </Text>
+      </Animated.View>
+      <Text style={[styles.markLabel, { color: active ? brown : ink }]}>
+        {(brand.label || brand.title || "").toUpperCase()}
+      </Text>
+    </Pressable>
+  );
+}
+
 /**
  * Shop by brand: round logo marks over one wide photo card at a time. The
  * cards slide on their own with a bar filling underneath; a swipe or a tap on
@@ -6399,34 +7484,73 @@ export function BrandTimeline({
   // Once the shopper takes hold, the cards stop moving on their own.
   const [held, setHeld] = useState(false);
   const [width, setWidth] = useState(0);
-  // Only scrollTo is needed, so only scrollTo is promised.
-  const scroller = useRef<{ scrollTo: (to: { x: number; animated?: boolean }) => void } | null>(null);
   const bar = useRef(new Animated.Value(0)).current;
-  const seconds = typeof settings.autoplay === "number" ? settings.autoplay : 3;
+  // Where the row of cards sits: minus one card width per card already passed.
+  const slide = useRef(new Animated.Value(0)).current;
+  // The finger's pull while a swipe is under way, added on top of the slide.
+  const pull = useRef(new Animated.Value(0)).current;
+  const seconds = typeof settings.autoplay === "number" && Number.isFinite(settings.autoplay) ? settings.autoplay : 3;
+  const count = items.length;
+  const current = Math.min(on, Math.max(0, count - 1));
 
-  // Show the current card, run its bar, then move on.
+  // The latest values for the swipe handler, which is made once.
+  const live = useRef({ count, current });
+  live.current = { count, current };
+
+  // Slide to the card that is showing the way the website does: half a
+  // second, fast at first and settling softly.
   useEffect(() => {
-    if (width) scroller.current?.scrollTo({ x: on * width, animated: true });
-    if (!(seconds > 0) || items.length < 2 || held) return;
+    Animated.timing(slide, {
+      toValue: -current * width,
+      duration: 500,
+      easing: Easing.bezier(0.19, 1, 0.22, 1),
+      useNativeDriver: true,
+    }).start();
+  }, [current, width, slide]);
+
+  // Run the current card's bar, then move on.
+  useEffect(() => {
+    if (!(seconds > 0) || count < 2 || held) return;
     bar.setValue(0);
-    const run = Animated.timing(bar, { toValue: 1, duration: seconds * 1000, easing: Easing.linear, useNativeDriver: false });
+    const run = Animated.timing(bar, { toValue: 1, duration: seconds * 1000, easing: Easing.linear, useNativeDriver: true });
     run.start();
-    const t = setTimeout(() => setOn((i) => (i + 1) % items.length), seconds * 1000);
+    const t = setTimeout(() => setOn((i) => (i + 1) % count), seconds * 1000);
     return () => {
       run.stop();
       clearTimeout(t);
     };
-  }, [on, width, seconds, items.length, bar, held]);
+  }, [current, seconds, count, bar, held]);
 
-  if (!items.length) return null;
+  const swipe = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dx) > 8 && Math.abs(g.dx) > Math.abs(g.dy),
+        onPanResponderTerminationRequest: () => false,
+        onPanResponderGrant: () => setHeld(true),
+        onPanResponderMove: (_e, g) => pull.setValue(g.dx),
+        onPanResponderRelease: (_e, g) => {
+          const { count: n } = live.current;
+          if (Math.abs(g.dx) > 40 && n > 0) setOn((i) => (i + (g.dx < 0 ? 1 : -1) + n) % n);
+          Animated.timing(pull, { toValue: 0, duration: 500, easing: Easing.bezier(0.19, 1, 0.22, 1), useNativeDriver: true }).start();
+        },
+        onPanResponderTerminate: () => {
+          Animated.timing(pull, { toValue: 0, duration: 300, useNativeDriver: true }).start();
+        },
+      }),
+    [pull],
+  );
+
+  const offset = useMemo(() => Animated.add(slide, pull), [slide, pull]);
+
+  if (!count) return null;
   const go = (to: LinkTo) => openLink(to, { onOpenCollection, onOpenProduct, onOpenScreen });
   const caramel = settings.accentColor || "#9d6540";
   const brown = settings.brownColor || "#684329";
   const ink = settings.inkColor || "#211a15";
   const line = settings.lineColor || "rgba(69,46,31,0.16)";
-  const r = typeof settings.radius === "number" && settings.radius >= 0 ? settings.radius : 20;
+  const r = settings.radius && settings.radius > 0 ? settings.radius : 20;
   const h = settings.cardHeight && settings.cardHeight > 0 ? settings.cardHeight : 150;
-  const shade = (typeof settings.overlay === "number" ? settings.overlay : 72) / 100;
+  const shade = Math.max(0, Math.min(100, typeof settings.overlay === "number" ? settings.overlay : 72)) / 100;
 
   return (
     <View style={settings.bg ? [styles.band, { backgroundColor: settings.bg }] : null}>
@@ -6441,70 +7565,73 @@ export function BrandTimeline({
 
       <View style={styles.marks}>
         <View style={[styles.hairline, { backgroundColor: line }]} />
-        {items.map((b, i) => {
-          const active = i === on;
-          return (
-            <Pressable key={b.id} style={styles.mark} onPress={() => { setHeld(true); setOn(i); }}>
-              <View
-                style={[
-                  styles.circle,
-                  { backgroundColor: active ? caramel : "#fffdfa", borderColor: active ? caramel : line },
-                  active ? styles.circleOn : null,
-                ]}
-              >
-                <Text style={[styles.logo, { color: active ? "#ffffff" : brown }]} numberOfLines={2}>
-                  {b.logoText ?? ""}
-                </Text>
-              </View>
-              <Text style={[styles.markLabel, { color: active ? brown : ink }]} numberOfLines={2}>
-                {(b.label || b.title || "").toUpperCase()}
-              </Text>
-            </Pressable>
-          );
-        })}
+        {items.map((b, i) => (
+          <Mark
+            key={b.id}
+            brand={b}
+            active={i === current}
+            caramel={caramel}
+            brown={brown}
+            ink={ink}
+            line={line}
+            onPress={() => {
+              setHeld(true);
+              setOn(i);
+            }}
+          />
+        ))}
       </View>
 
-      <View style={[styles.cards, { borderRadius: r }]} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
-        <ScrollView
-          ref={(node) => {
-            scroller.current = node as unknown as { scrollTo: (to: { x: number; animated?: boolean }) => void } | null;
-          }}
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          onScrollBeginDrag={() => setHeld(true)}
-          onMomentumScrollEnd={(e) => {
-            if (width) setOn(Math.round(e.nativeEvent.contentOffset.x / width));
-          }}
-        >
+      <View
+        style={[styles.cards, { height: h, borderRadius: r }]}
+        onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
+        {...swipe.panHandlers}
+      >
+        <Animated.View style={[styles.track, { width: (width || 1) * count, transform: [{ translateX: offset }] }]}>
           {items.map((b) => (
-            <Pressable key={b.id} onPress={() => go(b)} style={{ width: width || 1, height: h }}>
-              {b.imageUrl ? <Image source={{ uri: b.imageUrl }} style={styles.fill} resizeMode="cover" /> : null}
+            <Pressable
+              key={b.id}
+              onPress={() => go(b)}
+              style={[styles.card, { width: width || 1, height: h, borderRadius: r }]}
+            >
+              {b.imageUrl ? <FocalImage uri={b.imageUrl} focal={b.focal} fallback="50% 50%" /> : null}
               <Fade
                 angle={90}
                 colors={["rgba(28,18,12," + shade + ")", "rgba(28,18,12," + shade * 0.47 + ")", "rgba(28,18,12,0.02)"]}
                 locations={[0, 0.46, 0.74]}
-                style={StyleSheet.absoluteFill}
+                style={styles.fill}
               />
               <View style={styles.copy}>
                 <Text style={styles.cardTitle}>{b.title || b.label}</Text>
                 {b.description ? <Text style={styles.cardDesc}>{b.description}</Text> : null}
                 {settings.linkLabel ? (
                   <View style={styles.cta}>
-                    <Text style={styles.ctaText}>{settings.linkLabel.toUpperCase() + "  →"}</Text>
+                    <Text style={styles.ctaText}>{settings.linkLabel.toUpperCase()}</Text>
+                    <Svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#ffffff" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+                      <Path d="M5 12h14M13 6l6 6-6 6" />
+                    </Svg>
                     <View style={styles.ctaRule} />
                   </View>
                 ) : null}
               </View>
             </Pressable>
           ))}
-        </ScrollView>
-        {seconds > 0 && items.length > 1 && !held ? (
+        </Animated.View>
+        {seconds > 0 && count > 1 && !held && width ? (
           <View style={styles.progress}>
             <Animated.View
+              key={current}
               style={[
                 styles.progressFill,
-                { backgroundColor: caramel, width: bar.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }) },
+                {
+                  backgroundColor: caramel,
+                  width,
+                  // Grows from the left edge, like the website's scaleX bar.
+                  transform: [
+                    { translateX: bar.interpolate({ inputRange: [0, 1], outputRange: [-width / 2, 0] }) },
+                    { scaleX: bar.interpolate({ inputRange: [0, 1], outputRange: [0.001, 1] }) },
+                  ],
+                },
               ]}
             />
           </View>
@@ -6518,37 +7645,35 @@ const styles = StyleSheet.create({
   band: { marginHorizontal: -16, paddingHorizontal: 12, paddingVertical: 20 },
   eyebrowRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 12 },
   eyebrowRule: { width: 40, height: 1 },
-  eyebrow: { fontSize: 11, fontWeight: "600", letterSpacing: 2.6 },
-  heading: { marginTop: 8, fontSize: 24, fontWeight: "600", textAlign: "center", fontFamily: theme.titleFont },
-  intro: { marginTop: 8, fontSize: 11.5, lineHeight: 17, color: "#74685e", textAlign: "center" },
-  marks: { flexDirection: "row", marginTop: 16, alignItems: "flex-start" },
+  eyebrow: { fontSize: 11, lineHeight: 16.5, fontWeight: "600", letterSpacing: 2.64 },
+  heading: { marginTop: 8, fontSize: 24, lineHeight: 24, fontWeight: "600", textAlign: "center", fontFamily: SERIF },
+  intro: { marginTop: 8, alignSelf: "center", maxWidth: 300, fontSize: 11.5, lineHeight: 18.7, color: "#64748b", textAlign: "center" },
+  marks: { flexDirection: "row", marginTop: 16, alignItems: "flex-start", justifyContent: "space-between" },
   hairline: { position: "absolute", left: "10%", right: "10%", top: 20, height: 1 },
   mark: { flex: 1, alignItems: "center", gap: 6 },
   circle: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, alignItems: "center", justifyContent: "center" },
-  circleOn: { transform: [{ scale: 1.06 }] },
-  logo: { fontSize: 12, fontWeight: "600", textAlign: "center", paddingHorizontal: 2, fontFamily: theme.titleFont },
-  markLabel: { fontSize: 8, fontWeight: "600", letterSpacing: 1, textAlign: "center" },
-  cards: { marginTop: 16, overflow: "hidden", backgroundColor: "#b89d82" },
+  logo: { fontSize: 12, lineHeight: 12, fontWeight: "600", textAlign: "center", paddingHorizontal: 4, fontFamily: SERIF },
+  markLabel: { paddingHorizontal: 2, fontSize: 8, lineHeight: 10, fontWeight: "600", letterSpacing: 0.96, textAlign: "center" },
+  cards: { marginTop: 16, overflow: "hidden" },
+  track: { flexDirection: "row", height: "100%" },
+  card: { overflow: "hidden", backgroundColor: "#b89d82" },
   // Written out: newer React Native no longer declares absoluteFill in its types.
-  fill: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, width: "100%", height: "100%" },
-  shadeFull: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "#1c120c" },
-  shadeHalf: { position: "absolute", left: 0, top: 0, bottom: 0, width: "60%", backgroundColor: "#1c120c" },
-  shadeEdge: { position: "absolute", left: 0, top: 0, bottom: 0, width: "32%", backgroundColor: "#1c120c" },
+  fill: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0 },
   copy: { position: "absolute", left: 20, top: 0, bottom: 0, maxWidth: "78%", justifyContent: "center", alignItems: "flex-start" },
-  cardTitle: { color: "#ffffff", fontSize: 22, fontWeight: "600", fontFamily: theme.titleFont },
-  cardDesc: { marginTop: 6, color: "#ffffff", fontSize: 11.5, lineHeight: 16, opacity: 0.95 },
-  cta: { marginTop: 8, paddingBottom: 4 },
-  ctaText: { color: "#ffffff", fontSize: 11.5, fontWeight: "600", letterSpacing: 1.6 },
+  cardTitle: { color: "#ffffff", fontSize: 22, lineHeight: 22, fontWeight: "600", fontFamily: SERIF },
+  cardDesc: { marginTop: 6, color: "#ffffff", fontSize: 11.5, lineHeight: 15.8, opacity: 0.95 },
+  cta: { marginTop: 8, paddingBottom: 4, flexDirection: "row", alignItems: "center", gap: 8 },
+  ctaText: { color: "#ffffff", fontSize: 11.5, lineHeight: 17.25, fontWeight: "600", letterSpacing: 1.61 },
   ctaRule: { position: "absolute", left: 0, bottom: 0, width: 40, height: 1, backgroundColor: "rgba(255,255,255,0.65)" },
-  progress: { position: "absolute", left: 0, right: 0, bottom: 0, height: 3, backgroundColor: "rgba(0,0,0,0.15)" },
+  progress: { position: "absolute", left: 0, right: 0, bottom: 0, height: 3, overflow: "hidden", backgroundColor: "rgba(0,0,0,0.15)" },
   progressFill: { height: "100%" },
 });
 `,
 
     complete_look: `import React from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
-import { colors, gap, spacing } from "../theme";
-import { ProductTile, SectionHeading } from "./Pieces";
+import { colors, gap, spacing, theme } from "../theme";
+import { ProductTile } from "./Pieces";
 import type { Recommendations } from "../api";
 
 export type CompleteLookSettings = {
@@ -6587,25 +7712,28 @@ export function CompleteLook({
 
   return (
     <View>
-      <SectionHeading title={title} />
-      {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
-        {recs.products.map((p) => <ProductTile key={p.id} card={p} onPress={onOpenProduct} />)}
+      {title ? <Text style={styles.heading} numberOfLines={1}>{title}</Text> : null}
+      {subtitle ? <Text style={styles.subtitle} numberOfLines={1}>{subtitle}</Text> : null}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.rail} contentContainerStyle={styles.row}>
+        {/* 148 wide, the width the preview gives a card in a sideways row. */}
+        {recs.products.map((p) => <ProductTile key={p.id} card={p} width={148} onPress={onOpenProduct} />)}
       </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  subtitle: { marginTop: 2, fontSize: 12, color: colors.inkSoft },
-  row: { gap: gap.item, paddingVertical: spacing.sm },
+  heading: { fontSize: 16, lineHeight: 24, fontWeight: "700", color: colors.ink, fontFamily: theme.titleFont, letterSpacing: theme.titleFont ? -0.16 : -0.4 },
+  subtitle: { fontSize: 11, lineHeight: 16, color: "#64748b" },
+  rail: { marginHorizontal: -spacing.lg, marginTop: spacing.sm },
+  row: { gap: gap.item, paddingHorizontal: spacing.lg, paddingBottom: 4 },
 });
 `,
 
     showcase: `import React from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { Fade } from "./Fade";
-import { colors, spacing } from "../theme";
+import { colors, spacing, theme } from "../theme";
 import { openLink } from "./Pieces";
 import type { HomePayload } from "../api";
 
@@ -6639,10 +7767,10 @@ export function Showcase({
 }) {
   const target = collections.find((c) => c.handle === settings.handle);
   const image = settings.imageUrl || (target ? target.image : "");
-  if (!image && !settings.heading) return null;
+  if (!settings.imageUrl && !settings.heading && !settings.handle) return null;
 
   const height = settings.height && settings.height > 0 ? settings.height : 360;
-  const overlay = typeof settings.overlay === "number" ? Math.max(0, Math.min(100, settings.overlay)) : 45;
+  const overlay = settings.overlay && settings.overlay > 0 ? Math.min(100, settings.overlay) : 45;
   const ink = settings.textColor || "#ffffff";
   const centred = settings.align === "center";
   const go = () => openLink(settings, { onOpenCollection, onOpenProduct, onOpenScreen });
@@ -6650,9 +7778,9 @@ export function Showcase({
   return (
     <View style={[styles.wrap, { height, marginHorizontal: -spacing.lg }]}>
       {image ? (
-        <Image source={{ uri: image }} style={styles.image} />
+        <Image source={{ uri: image }} style={styles.image} resizeMode="cover" />
       ) : (
-        <View style={[styles.image, { backgroundColor: colors.page }]} />
+        <View style={[styles.image, { backgroundColor: "#e2e8f0" }]} />
       )}
       <Fade
         angle={0}
@@ -6685,10 +7813,17 @@ const styles = StyleSheet.create({
   bottom: { justifyContent: "flex-end" },
   centred: { alignItems: "center", justifyContent: "center" },
   middle: { textAlign: "center" },
-  heading: { fontSize: 26, fontWeight: "700", lineHeight: 30 },
-  sub: { marginTop: 4, fontSize: 12, lineHeight: 18, opacity: 0.85 },
-  cta: { marginTop: 12, alignSelf: "flex-start", borderRadius: 999, paddingHorizontal: 16, paddingVertical: 9 },
-  ctaText: { fontSize: 12, fontWeight: "700", color: "#191614" },
+  // The display face when the app uses one, with its slightly closer spacing.
+  heading: {
+    fontSize: 26,
+    fontWeight: "700",
+    lineHeight: 32.5,
+    fontFamily: theme.titleFont,
+    letterSpacing: theme.titleFont ? -0.26 : 0,
+  },
+  sub: { marginTop: 4, fontSize: 12, lineHeight: 19.5, opacity: 0.85 },
+  cta: { marginTop: 12, alignSelf: "flex-start", borderRadius: 999, paddingHorizontal: 16, paddingVertical: 8 },
+  ctaText: { fontSize: 12, lineHeight: 18, fontWeight: "700", color: "#191614" },
 });
 `,
 
@@ -6941,7 +8076,7 @@ function blockCase(type: BlockType): string {
     pay_strip: ["payments={data.payments ?? []}"],
     brand_wall: ["collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     bundle_save: ["rows={data.rows}", "newArrivals={data.newArrivals}", "onOpenProduct={onOpenProduct}", "onAdd={onAdd}"],
-    collection_tabs: ["rows={data.rows}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}"],
+    collection_tabs: ["rows={data.rows}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onAdd={onAdd}"],
     cards: ["collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     sale_seal: ["onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     free_shipping: ["onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
@@ -6951,7 +8086,7 @@ function blockCase(type: BlockType): string {
     trust_badges: [],
     live_now: ["lives={data.lives}", "collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     coming_up_live: ["lives={data.lives}", "collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
-    countdown_deals: ["collections={data.collections}", "rows={data.rows}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}", "onAdd={onAdd}"],
+    countdown_deals: ["collections={data.collections}", "rows={data.rows}", "newArrivals={data.newArrivals}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}", "onAdd={onAdd}"],
     info_rows: ["onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     shipping_goal: [],
     payment_plans: ["onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
@@ -6969,10 +8104,10 @@ function blockCase(type: BlockType): string {
     review_summary: ["onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     banner: ["collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     categories: ["collections={data.collections}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
-    new_arrivals: ["products={data.newArrivals}", "onOpenProduct={onOpenProduct}"],
+    new_arrivals: ["products={data.newArrivals}", "onOpenProduct={onOpenProduct}", "onAdd={onAdd}"],
     collection_row: ["collections={data.collections}", "rows={data.rows}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}"],
     collection_grid: ["collections={data.collections}", "rows={data.rows}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}"],
-    reviews: ["reviews={data.reviews}"],
+    reviews: ["reviews={data.reviews}", "onOpenCollection={onOpenCollection}", "onOpenProduct={onOpenProduct}", "onOpenScreen={onOpenScreen}"],
     text: [],
   };
   const props = ["settings={settings}", ...extras[type]].join(" ");
@@ -7018,12 +8153,16 @@ const SIZE_KEYS = new Set([
   "size",
   "height",
   "overlay",
+  "width",
+  "autoplaySeconds",
 ]);
 
 /** A block's settings as plain data, keeping only what it uses. */
 function settingsObject(block: Block): Record<string, unknown> {
   const keep: Record<BlockType, string[]> = {
-    hero: [],
+    // How long a slide is held, how tall the banner stands and how much of the
+    // width it takes: the editor draws all three, so the app has to be told.
+    hero: ["autoplaySeconds", "height", "width"],
     pay_strip: ["every", "title"],
     brand_wall: ["title", "subtitle", "seeAllLabel", "seeAllHandle", "seeAllUrl", "perRow", "rows", "showCount", "titleSize", "linkColor"],
     bundle_save: [
@@ -7076,6 +8215,12 @@ function settingsObject(block: Block): Record<string, unknown> {
     ],
     free_shipping: [
       "style",
+      // The bold card and the ticket price the delivery: the word, the line
+      // under it, and what it would have cost, struck through.
+      "bigWord",
+      "smallWord",
+      "wasLabel",
+      "wasPrice",
       "imageUrl",
       "focal",
       "kicker",
@@ -8466,7 +9611,7 @@ export function TabIcon({
   );
 }
 
-export type HeaderIconName = "search" | "heart" | "bag" | "back";
+export type HeaderIconName = "search" | "heart" | "bag" | "back" | "menu" | "plus" | "close";
 
 export function HeaderIcon({ name, color, size = 18 }: { name: HeaderIconName; color: string; size?: number }) {
   return (
@@ -8493,6 +9638,12 @@ export function HeaderIcon({ name, color, size = 18 }: { name: HeaderIconName; c
           <Path d="M6 8h12l-1 12H7L6 8Z" />
           <Path d="M9 8a3 3 0 0 1 6 0" />
         </>
+      ) : name === "menu" ? (
+        <Path d="M4 7h16M4 12h16M4 17h16" />
+      ) : name === "plus" ? (
+        <Path d="M12 5v14M5 12h14" />
+      ) : name === "close" ? (
+        <Path d="M6 6l12 12M18 6 6 18" />
       ) : (
         <Path d="M15 5l-7 7 7 7" />
       )}
@@ -8578,12 +9729,121 @@ function chromeFile(): GeneratedFile {
  * App → App theme.
  */
 import React, { useEffect, useRef, useState } from "react";
-import { Animated, Easing, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Animated, Easing, Image, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { colors, theme } from "../theme";
+import { api } from "../api";
 import { HeaderIcon } from "./Icons";
 import { openLink } from "./Pieces";
 
-const LOGO_HEIGHT = 20;
+const LOGO_HEIGHT = 22;
+
+/** Where a menu item goes, as the shop's /menus answers it. */
+type MenuTarget =
+  | { type: "home" }
+  | { type: "collection"; handle: string }
+  | { type: "product"; handle: string }
+  | { type: "search" }
+  | { type: "cart" }
+  | { type: "page"; handle: string }
+  | { type: "url"; url: string };
+type MenuItem = { title: string; target: MenuTarget; children: MenuItem[] };
+type Menu = { handle: string; title: string; items: MenuItem[] };
+
+/**
+ * The shop's menu, as the editor's header opens it: a sheet from the bottom,
+ * one level per screen, a plus to walk into an item that has children and the
+ * item's own name still a link in its own right.
+ */
+function MenuSheet({
+  open,
+  onClose,
+  onPick,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onPick: (target: MenuTarget) => void;
+}) {
+  const [menu, setMenu] = useState<Menu | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [trail, setTrail] = useState<MenuItem[]>([]);
+
+  useEffect(() => {
+    if (!open) return;
+    setTrail([]);
+    if (menu) return;
+    let alive = true;
+    setFailed(false);
+    api<{ menus: Menu[] }>("/menus")
+      .then((r) => {
+        if (!alive) return;
+        const all = (r && r.menus) || [];
+        setMenu(all.find((m) => m.handle === theme.menuHandle) || all[0] || { handle: "", title: "", items: [] });
+      })
+      .catch(() => {
+        if (alive) setFailed(true);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [open]);
+
+  const parent = trail.length ? trail[trail.length - 1] : null;
+  const items = parent ? parent.children : menu ? menu.items : [];
+  const title = parent ? parent.title : menu ? menu.title : "";
+  const under = trail.length > 1 ? trail[trail.length - 2].title : menu ? menu.title : "";
+
+  return (
+    <Modal visible={open} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
+      <View style={styles.sheetWrap}>
+        <Pressable style={styles.sheetShade} onPress={onClose} />
+        <View style={styles.sheet}>
+          <View style={styles.sheetHead}>
+            <Text style={styles.sheetTitle} numberOfLines={1}>{title}</Text>
+            <Pressable style={styles.sheetClose} onPress={onClose} hitSlop={6}>
+              <HeaderIcon name="close" color="#94a3b8" size={16} />
+            </Pressable>
+          </View>
+          <ScrollView contentContainerStyle={styles.sheetBody}>
+            {!menu ? (
+              <Text style={styles.sheetEmpty}>{failed ? "The menu could not be loaded." : "Loading..."}</Text>
+            ) : !items.length ? (
+              <Text style={styles.sheetEmpty}>This menu is empty</Text>
+            ) : (
+              <View>
+                {parent ? (
+                  <Pressable style={styles.menuBack} onPress={() => setTrail((t) => t.slice(0, -1))}>
+                    <HeaderIcon name="back" color="#64748b" size={14} />
+                    <Text style={styles.menuBackText} numberOfLines={1}>{under.toUpperCase()}</Text>
+                  </Pressable>
+                ) : null}
+                <View style={styles.menuList}>
+                  {parent && parent.target.type !== "home" ? (
+                    <Pressable style={styles.menuRow} onPress={() => onPick(parent.target)}>
+                      <Text style={styles.menuAll} numberOfLines={1}>{"All " + parent.title}</Text>
+                    </Pressable>
+                  ) : null}
+                  {items.map((item, i) => (
+                    <View key={item.title + "-" + i} style={[styles.menuRow, i === 0 && !(parent && parent.target.type !== "home") ? null : styles.menuRowLine]}>
+                      <Pressable style={styles.menuPick} onPress={() => onPick(item.target)}>
+                        <Text style={styles.menuText} numberOfLines={1}>{item.title}</Text>
+                        {item.target.type === "url" ? <Text style={styles.menuExternal}>external link</Text> : null}
+                      </Pressable>
+                      {item.children.length ? (
+                        <Pressable style={styles.menuInto} onPress={() => setTrail((t) => [...t, item])}>
+                          <HeaderIcon name="plus" color="#475569" size={16} />
+                        </Pressable>
+                      ) : null}
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
 
 export function AppChrome({
   query,
@@ -8611,6 +9871,30 @@ export function AppChrome({
 }) {
   const ink = theme.header.ink || "#191614";
   const bg = theme.header.bg || "#ffffff";
+
+  // The shop's menu, opened from the round button beside the search.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const pick = (target: MenuTarget) => {
+    setMenuOpen(false);
+    switch (target.type) {
+      case "collection":
+        return onOpenCollection && onOpenCollection(target.handle);
+      case "product":
+        return onOpenProduct && onOpenProduct(target.handle);
+      case "page":
+        return onOpenScreen && onOpenScreen(target.handle);
+      case "url":
+        Linking.openURL(target.url).catch(() => {});
+        return;
+      default:
+        return onOpenScreen && onOpenScreen(target.type);
+    }
+  };
+  const menuButton = (
+    <Pressable style={styles.menuButton} onPress={() => setMenuOpen(true)} hitSlop={4} accessibilityLabel="Menu">
+      <HeaderIcon name="menu" color={ink} size={18} />
+    </Pressable>
+  );
 
   /**
    * What the box offers while it is empty.
@@ -8723,12 +10007,12 @@ export function AppChrome({
 
         {theme.header.showWishlist ? (
           <Pressable style={styles.iconButton} onPress={onWishlist} hitSlop={4}>
-            <HeaderIcon name="heart" color={ink} />
+            <HeaderIcon name="heart" color={ink} size={19} />
           </Pressable>
         ) : null}
         {theme.header.showBag ? (
           <Pressable style={styles.iconButton} onPress={onBag} hitSlop={4}>
-            <HeaderIcon name="bag" color={ink} />
+            <HeaderIcon name="bag" color={ink} size={19} />
             {cartCount > 0 ? (
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>{cartCount > 99 ? "99+" : cartCount}</Text>
@@ -8736,27 +10020,38 @@ export function AppChrome({
             ) : null}
           </Pressable>
         ) : null}
+        {/* With no search there is no second row, so the menu stays up here. */}
+        {!theme.showSearch ? (
+          <Pressable style={[styles.iconButton, { marginRight: -4 }]} onPress={() => setMenuOpen(true)} hitSlop={4} accessibilityLabel="Menu">
+            <HeaderIcon name="menu" color={ink} size={18} />
+          </Pressable>
+        ) : null}
         </View>
 
         {/* The whole of the second line, which is the only way a placeholder
-            gets to say anything longer than two words. */}
+            gets to say anything longer than two words. Searching and browsing
+            the menu are the two ways of finding something, so they share it. */}
         {theme.showSearch ? (
           <View style={styles.searchRow}>
-            <View style={styles.searchIcon} pointerEvents="none">
-              <HeaderIcon name="search" color={ink + "80"} size={15} />
+            <View style={styles.searchField}>
+              <View style={styles.searchIcon} pointerEvents="none">
+                <HeaderIcon name="search" color={ink + "80"} size={16} />
+              </View>
+              <TextInput
+                style={[styles.search, { color: ink }]}
+                value={query}
+                onChangeText={onQuery}
+                placeholder={hint}
+                placeholderTextColor={ink + "70"}
+                returnKeyType="search"
+                clearButtonMode="while-editing"
+              />
             </View>
-            <TextInput
-              style={[styles.search, { color: ink }]}
-              value={query}
-              onChangeText={onQuery}
-              placeholder={hint}
-              placeholderTextColor="#94a3b8"
-              returnKeyType="search"
-              clearButtonMode="while-editing"
-            />
+            {menuButton}
           </View>
         ) : null}
       </View>
+      <MenuSheet open={menuOpen} onClose={() => setMenuOpen(false)} onPick={pick} />
 
       {theme.strip.enabled && theme.strip.items.length ? (
         <ScrollView
@@ -8804,11 +10099,31 @@ const styles = StyleSheet.create({
   announcementText: { color: "#ffffff", fontSize: 11, fontWeight: "500", textAlign: "center" },
   header: { paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: "#e2e8f0" },
   topRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  searchRow: { marginTop: 8, justifyContent: "center" },
+  searchRow: { marginTop: 8, flexDirection: "row", alignItems: "center", gap: 8 },
+  searchField: { flex: 1, minWidth: 0, justifyContent: "center" },
   home: { flex: 1, minWidth: 0, justifyContent: "center" },
-  wordmark: { fontSize: 13, fontWeight: "800", letterSpacing: -0.3 },
-  searchIcon: { position: "absolute", left: 10, zIndex: 1 },
+  wordmark: { fontSize: 15, fontWeight: "800", letterSpacing: -0.4 },
+  searchIcon: { position: "absolute", left: 12, zIndex: 1 },
   search: { height: 36, borderRadius: 12, borderWidth: 1, borderColor: "#e2e8f0", backgroundColor: "#f8fafc", paddingLeft: 36, paddingRight: 12, paddingVertical: 0, fontSize: 12 },
+  menuButton: { width: 36, height: 36, borderRadius: 12, borderWidth: 1, borderColor: "#e2e8f0", backgroundColor: "#f8fafc", alignItems: "center", justifyContent: "center" },
+  sheetWrap: { flex: 1, justifyContent: "flex-end" },
+  sheetShade: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(15,23,42,0.4)" },
+  sheet: { maxHeight: "85%", backgroundColor: "#ffffff", borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: "hidden" },
+  sheetHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: "#e2e8f0" },
+  sheetTitle: { flex: 1, fontSize: 14, fontWeight: "700", color: "#0f172a" },
+  sheetClose: { width: 32, height: 32, borderRadius: 999, alignItems: "center", justifyContent: "center" },
+  sheetBody: { padding: 16, paddingBottom: 32 },
+  sheetEmpty: { paddingVertical: 48, textAlign: "center", fontSize: 14, color: "#94a3b8" },
+  menuBack: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 },
+  menuBackText: { flex: 1, fontSize: 11, fontWeight: "700", letterSpacing: 1.3, color: "#64748b" },
+  menuList: { marginHorizontal: -16, paddingHorizontal: 16, borderTopWidth: 1, borderBottomWidth: 1, borderColor: "#e2e8f0" },
+  menuRow: { flexDirection: "row", alignItems: "center", gap: 8, minHeight: 48 },
+  menuRowLine: { borderTopWidth: 1, borderTopColor: "#e2e8f0" },
+  menuPick: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 14 },
+  menuText: { flexShrink: 1, fontSize: 13, color: "#1e293b" },
+  menuAll: { paddingVertical: 14, fontSize: 13, fontWeight: "600", color: "#0f172a" },
+  menuExternal: { fontSize: 10, fontWeight: "500", color: "#94a3b8" },
+  menuInto: { width: 36, height: 36, marginVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: "#e2e8f0", backgroundColor: "#f8fafc", alignItems: "center", justifyContent: "center" },
   iconButton: { width: 32, height: 32, alignItems: "center", justifyContent: "center" },
   badge: { position: "absolute", top: -4, right: -4, minWidth: 16, height: 16, borderRadius: 999, paddingHorizontal: 4, alignItems: "center", justifyContent: "center", backgroundColor: colors.accent },
   badgeText: { color: "#ffffff", fontSize: 9, fontWeight: "700" },
