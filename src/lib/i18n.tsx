@@ -50,6 +50,7 @@ const dict = {
   requests_subtitle: { ar: "نموذج طلبات واستفسارات العملاء — مدمج", en: "Customer request & inquiry form — embedded" },
   nav_lives: { ar: "البث المباشر", en: "Lives" },
   nav_app_reels: { ar: "الريلز", en: "Reels" },
+  nav_app_notifications: { ar: "الإشعارات", en: "Notifications" },
   nav_returns: { ar: "الاسترجاع والاستبدال", en: "Returns" },
   nav_settings: { ar: "الإعدادات", en: "Settings" },
   nav_more: { ar: "المزيد", en: "More" },

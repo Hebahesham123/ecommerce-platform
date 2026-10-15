@@ -114,6 +114,7 @@ const groups: Group[] = [
       { href: "/app", key: "nav_app_home", icon: IcMobile },
       { href: "/app/theme", key: "nav_app_theme", icon: IcTheme },
       { href: "/app/reels", key: "nav_app_reels", icon: IcVideo },
+      { href: "/app/notifications", key: "nav_app_notifications", icon: IcBell },
       { href: "/lives", key: "nav_lives", icon: IcVideo },
       { href: "/app/orders", key: "nav_app_orders", icon: IcOrders },
       // Returns, exchanges and enquiries are one entry: on the storefront the

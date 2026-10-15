@@ -85,3 +85,24 @@ because Liquid needs them; the conversion happens once, in `lib/api/catalog.ts`.
 | POST | `/returns` | Open a return or exchange |
 | GET | `/returns` | The shopper's own requests |
 | POST | `/requests` | A general enquiry (multipart, with attachments) |
+
+### Notifications
+
+Messages written in the dashboard under **App → Notifications** reach an
+install twice: in the bell inside the app, and as a pop-up on the phone if the
+phone allowed them. An install is its visitor id (the `x-visitor` header), so a
+guest has a bell too; signing in ties the install to the customer, which is how
+"customers who ordered" or a list of phone numbers can be reached. Pop-ups go
+out through Expo's push service; set `EXPO_ACCESS_TOKEN` only if "enhanced push
+security" is turned on for the Expo project.
+
+A pop-up's `data` carries `{ notificationId, link }`, where `link` is the same
+shape the app's tiles use (`productId` | `handle` | `url` | `screen`, or empty
+for the bell). Tapping one should post `/notifications/{id}/open`.
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| POST | `/notifications/device` | This install is here — on every launch, after sign-in, and when pop-ups are allowed or refused. `{ pushToken?, pushEnabled, platform }`; the phone comes from the bearer token |
+| GET | `/notifications` | The bell: `{ items: [{ id, title, body, imageUrl, link, sentAt, read }], unread }`, newest first; `?limit=` up to 100 |
+| POST | `/notifications/read` | `{ ids: [...] }` marks those read, `{}` marks everything (opening the bell); answers `{ unread }` |
+| POST | `/notifications/{id}/open` | A notification was tapped; counted once per install |
