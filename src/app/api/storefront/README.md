@@ -92,13 +92,19 @@ Messages written in the dashboard under **App → Notifications** reach an
 install twice: in the bell inside the app, and as a pop-up on the phone if the
 phone allowed them. An install is its visitor id (the `x-visitor` header), so a
 guest has a bell too; signing in ties the install to the customer, which is how
-"customers who ordered" or a list of phone numbers can be reached. Pop-ups go
-out through Expo's push service; set `EXPO_ACCESS_TOKEN` only if "enhanced push
-security" is turned on for the Expo project.
+"customers who ordered" or a list of phone numbers can be reached.
 
-A pop-up's `data` carries `{ notificationId, link }`, where `link` is the same
-shape the app's tiles use (`productId` | `handle` | `url` | `screen`, or empty
-for the bell). Tapping one should post `/notifications/{id}/open`.
+Pop-ups go out through **Firebase Cloud Messaging** to a phone that registered a
+Firebase token, using the service-account key in `FIREBASE_SERVICE_ACCOUNT`
+(Firebase → Project settings → Service accounts → Generate new private key;
+the JSON as it is, or base64'd). A phone that registered an Expo token
+(`ExponentPushToken[…]`) goes through Expo's push service instead; set
+`EXPO_ACCESS_TOKEN` only if "enhanced push security" is on for that project.
+
+A pop-up's `data` carries `notificationId` and `link` — the same shape the
+app's tiles use (`productId` | `handle` | `url` | `screen`, or empty for the
+bell). Through Firebase, data values are strings, so `link` arrives as JSON
+text. Tapping one should post `/notifications/{id}/open`.
 
 | Method | Path | Purpose |
 | --- | --- | --- |

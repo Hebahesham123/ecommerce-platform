@@ -1,6 +1,7 @@
 import "server-only";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
 import { isPhoneComplete, normalizePhone } from "@/lib/phone";
+import { sendFcm } from "@/lib/fcm";
 
 /**
  * App notifications: a message written in the dashboard reaches every install
@@ -11,7 +12,8 @@ import { isPhoneComplete, normalizePhone } from "@/lib/phone";
  * same id the shopper tracking uses), registered here each time the app opens;
  * signing in adds the phone it belongs to. Delivery is written down per install
  * when a message is sent — that list is the bell — and the pop-ups go out
- * through Expo's push service, which hands them to Apple and Google.
+ * through Firebase (lib/fcm.ts) to a phone that registered a Firebase token,
+ * or through Expo's push service to one that registered an Expo token.
  *
  * Tables: supabase/migrations/0056_app_notifications.sql.
  */
@@ -109,6 +111,8 @@ async function allRows<T>(page: (from: number, to: number) => PromiseLike<{ data
 /* ------------------------------------------------------------------ */
 
 const EXPO_TOKEN = /^(ExponentPushToken|ExpoPushToken)\[[A-Za-z0-9_-]+\]$/;
+/** A Firebase registration token: long; letters, digits and _ - : only. */
+const FCM_TOKEN = /^[A-Za-z0-9_:-]{100,4096}$/;
 
 /**
  * An install says it is here: on every launch, and again on signing in (so
@@ -125,7 +129,7 @@ export async function registerDevice(input: {
   if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
   const visitor = input.visitor.trim().slice(0, 64);
   if (!visitor) return { ok: false, error: "no_visitor" };
-  const token = input.pushToken && EXPO_TOKEN.test(input.pushToken) ? input.pushToken : null;
+  const token = input.pushToken && (EXPO_TOKEN.test(input.pushToken) || FCM_TOKEN.test(input.pushToken)) ? input.pushToken : null;
   const sb = getServerSupabase();
 
   if (token) {
@@ -354,25 +358,46 @@ export async function sendNotification(input: {
 }
 
 /* ------------------------------------------------------------------ */
-/* Pop-ups, through Expo's push service                               */
+/* Pop-ups: Firebase, or Expo's push service                          */
 /* ------------------------------------------------------------------ */
 
 const EXPO_PUSH = "https://exp.host/--/api/v2/push/send";
 
 type Ticket = { status: "ok" | "error"; id?: string; message?: string; details?: { error?: string } };
+type Sent = { ok: number; failed: number; dead: string[]; error: string | null };
 
 /**
- * Hand the pop-ups to Expo, a hundred at a time (its limit per request).
- * A phone the push service says is gone (the app was removed) is switched off,
- * so it is not tried again.
+ * Each phone through the service its token belongs to — a Firebase token
+ * through Firebase, an Expo token through Expo. A phone the service says is
+ * gone (the app was removed) is switched off, so it is not tried again.
  */
 async function pushToPhones(
   tokens: string[],
   n: { id: string; title: string; body: string; imageUrl: string | null; link: NotificationLink },
 ): Promise<{ ok: number; failed: number; error: string | null }> {
+  const expo = tokens.filter((t) => EXPO_TOKEN.test(t));
+  const firebase = tokens.filter((t) => !EXPO_TOKEN.test(t));
+  const [a, b] = await Promise.all([
+    viaExpo(expo, n),
+    // Firebase data values are strings only: the link travels as JSON.
+    sendFcm(firebase, { title: n.title, body: n.body, imageUrl: n.imageUrl, data: { notificationId: n.id, link: JSON.stringify(n.link) } }),
+  ]);
+
+  const dead = [...a.dead, ...b.dead];
+  if (dead.length) {
+    await getServerSupabase()
+      .from("app_devices")
+      .update({ push_enabled: false, push_failed_at: new Date().toISOString() })
+      .in("push_token", dead);
+  }
+  return { ok: a.ok + b.ok, failed: a.failed + b.failed, error: b.error ?? a.error };
+}
+
+/** Expo takes a hundred phones per request. */
+async function viaExpo(tokens: string[], n: { id: string; title: string; body: string; imageUrl: string | null; link: NotificationLink }): Promise<Sent> {
   let ok = 0;
   let failed = 0;
-  let lastError: string | null = null;
+  let error: string | null = null;
   const dead: string[] = [];
   const headers: Record<string, string> = { Accept: "application/json", "Content-Type": "application/json" };
   // Only needed once "enhanced push security" is turned on for the Expo project.
@@ -395,28 +420,21 @@ async function pushToPhones(
       const json = (await res.json().catch(() => null)) as { data?: Ticket[]; errors?: { message?: string }[] } | null;
       if (!res.ok || !Array.isArray(json?.data)) {
         failed += batch.length;
-        lastError = json?.errors?.[0]?.message ?? `expo_${res.status}`;
+        error = json?.errors?.[0]?.message ?? `expo_${res.status}`;
         continue;
       }
       json.data.forEach((t, k) => {
         if (t.status === "ok") ok++;
         else {
           failed++;
-          lastError = t.message ?? t.details?.error ?? "push_error";
+          error = t.message ?? t.details?.error ?? "push_error";
           if (t.details?.error === "DeviceNotRegistered") dead.push(batch[k]);
         }
       });
     } catch (e) {
       failed += batch.length;
-      lastError = e instanceof Error ? e.message : "expo_unreachable";
+      error = e instanceof Error ? e.message : "expo_unreachable";
     }
   }
-
-  if (dead.length) {
-    await getServerSupabase()
-      .from("app_devices")
-      .update({ push_enabled: false, push_failed_at: new Date().toISOString() })
-      .in("push_token", dead);
-  }
-  return { ok, failed, error: failed ? lastError : null };
+  return { ok, failed, dead, error: failed ? error : null };
 }

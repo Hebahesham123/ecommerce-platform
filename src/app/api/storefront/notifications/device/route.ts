@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
  * This install is here: sent on every launch, after signing in, and whenever
  * pop-ups are allowed or refused.
  *
- * Body: { pushToken?: "ExponentPushToken[…]", pushEnabled: boolean, platform: "ios" | "android" }
+ * Body: { pushToken?: a Firebase token or "ExponentPushToken[…]", pushEnabled: boolean, platform: "ios" | "android" }
  * The phone it belongs to is taken from the sign-in token, never the body.
  */
 export async function POST(req: Request) {
@@ -20,7 +20,7 @@ export async function POST(req: Request) {
     visitor,
     phone: viewerOf(req),
     platform: str(body.platform, 16),
-    pushToken: str(body.pushToken, 200) || null,
+    pushToken: str(body.pushToken, 4096) || null,
     pushEnabled: body.pushEnabled === true,
   });
   if (!res.ok) return fail(res.error, res.error === "migration_missing" || res.error === "not_configured" ? 503 : 400);
