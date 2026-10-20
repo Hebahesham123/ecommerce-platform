@@ -27,6 +27,8 @@ export const SHOPPER_EVENT_TYPES = [
   "order",
   "offer_shown",
   "offer_claimed",
+  // A button or link pressed: its words in meta.label, meta.important for the ones that matter.
+  "click",
 ] as const;
 export type ShopperEventType = (typeof SHOPPER_EVENT_TYPES)[number];
 
@@ -112,7 +114,7 @@ export async function trackShopper(input: {
         meta: e.meta ?? {},
       });
       // The same step on her visit, for the Analytics funnel.
-      if (e.type === "product_view" || e.type === "add_to_cart" || e.type === "checkout_start") {
+      if (e.type === "product_view" || e.type === "add_to_cart" || e.type === "checkout_start" || e.type === "search" || e.type === "click") {
         await recordSessionStep(input.visitorId, e.type);
       }
     }

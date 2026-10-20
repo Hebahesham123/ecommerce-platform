@@ -77,6 +77,10 @@ export type TrackData = {
   value?: number | null;
   quantity?: number | null;
   term?: string;
+  /** A press: the button's words, whether it is one that matters, where it leads. */
+  label?: string;
+  important?: boolean;
+  target?: string | null;
 };
 
 export function track(type: string, data: TrackData = {}) {

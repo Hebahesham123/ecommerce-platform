@@ -1,4 +1,4 @@
-import { recordSessionHit, recordSiteEvent, sourceOf, type Channel, type Platform } from "@/lib/analytics";
+import { recordPageLeave, recordSessionHit, recordSiteEvent, sourceOf, type Channel, type Platform } from "@/lib/analytics";
 import { attribute, deviceOf, geoOf, TRACKED_PARAMS } from "@/lib/analytics-attribution";
 
 export const runtime = "nodejs";
@@ -29,6 +29,13 @@ export async function POST(request: Request) {
   try {
     const body = (await request.json()) as Record<string, unknown>;
     const str = (v: unknown, max = 200) => (typeof v === "string" ? v.slice(0, max) : "");
+
+    // A page being left: only how long it was on screen and how far it was scrolled.
+    if (body.kind === "leave") {
+      const id = str(body.pageviewId, 64);
+      if (id) await recordPageLeave(id, Number(body.seconds) || 0, Number(body.scroll) || 0);
+      return ok();
+    }
 
     const visitorId = str(body.visitorId, 64);
     const sessionId = str(body.sessionId, 64);
@@ -91,6 +98,8 @@ export async function POST(request: Request) {
         clickId: where.clickId,
         ...dev,
         ...geo,
+        pageviewId: str(body.pageviewId, 64) || null,
+        title: str(body.title, 200) || null,
       }),
     ]);
   } catch {

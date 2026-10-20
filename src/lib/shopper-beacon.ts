@@ -80,6 +80,13 @@ export async function handleBeacon(req: Request, fallbackChannel: ShopperChannel
     };
     const term = str(body.term, 100);
     if (term) event.meta = { term };
+    // A button press: its words, where it leads (a path, never a query), and
+    // whether it is one that matters. Nothing typed into a field is ever sent.
+    if (type === "click") {
+      const label = str(body.label, 80).replace(/s+/g, " ").trim();
+      if (!label) return;
+      event.meta = { label, important: body.important === true, target: str(body.target, 200).split("?")[0] || null };
+    }
     const handle = str(body.handle, 120);
     if (handle) event.meta = { ...event.meta, handle };
 

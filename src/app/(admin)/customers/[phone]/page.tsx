@@ -23,6 +23,9 @@ import {
 } from "@/components/icons";
 import { getCustomerProfile, type CustomerProfile, type TimelineItem } from "../tracking-actions";
 import { ExclusiveOffers } from "./exclusive-offers";
+import { JourneyView } from "@/components/journey-view";
+import type { Journey } from "@/lib/analytics-reports";
+import { customerJourneyAction } from "../../analytics/report-actions";
 
 /**
  * One customer: who she is, what she looks at, what she left in her basket.
@@ -75,6 +78,14 @@ function describe(e: TimelineItem, ar: boolean): { icon: React.ReactNode; tone: 
       return { icon: <IcProducts className="h-4 w-4" />, tone: "bg-slate-500/10 text-slate-600", text: (ar ? "تصفحت " : "Browsed ") + (what || String(e.meta.handle ?? "")) };
     case "offer_shown":
       return { icon: <IcDiscount className="h-4 w-4" />, tone: "bg-pink-500/10 text-pink-600", text: ar ? "ظهر لها عرض" : "Was shown an offer" };
+    case "click": {
+      const important = e.meta.important === true;
+      return {
+        icon: <IcStar className="h-4 w-4" />,
+        tone: important ? "bg-amber-500/15 text-amber-700" : "bg-slate-500/5 text-ink-soft",
+        text: (ar ? "ضغطت " : "Pressed ") + `“${String(e.meta.label ?? "")}”` + (important ? (ar ? " (مهم)" : " (important)") : ""),
+      };
+    }
     case "offer_claimed":
       return { icon: <IcStar className="h-4 w-4" />, tone: "bg-pink-500/10 text-pink-600", text: ar ? "أخذت العرض" : "Claimed an offer" };
     default:
@@ -100,12 +111,27 @@ export default function CustomerPage({ params }: { params: Promise<{ phone: stri
   const [error, setError] = useState<string | null>(null);
   const [showPages, setShowPages] = useState(false);
 
+  const [journey, setJourney] = useState<Journey | null>(null);
+  const [journeyError, setJourneyError] = useState<string | null>(null);
+
   useEffect(() => {
     getCustomerProfile(phone).then((res) => (res.ok ? setData(res.data) : setError(res.error)));
+    customerJourneyAction(phone).then((r) =>
+      r.ok
+        ? setJourney(r.data)
+        : setJourneyError(
+            r.error === "migration_missing"
+              ? "Run 0058_analytics_sessions.sql and 0059_visitor_journey.sql in Supabase to see her journey."
+              : r.error,
+          ),
+    );
   }, [phone]);
 
   const timeline = useMemo(
-    () => (data ? data.timeline.filter((e) => showPages || e.kind !== "page") : []),
+    () =>
+      data
+        ? data.timeline.filter((e) => showPages || (e.kind !== "page" && (e.kind !== "click" || e.meta.important === true)))
+        : [],
     [data, showPages],
   );
 
@@ -307,6 +333,16 @@ export default function CustomerPage({ params }: { params: Promise<{ phone: stri
             )}
           </div>
         </Card>
+      </div>
+
+      {/* Her journey across every browser and phone: first landing page, sources, pages and time, searches, presses. */}
+      <div className="mt-6">
+        <h2 className="section-title mb-3">{ar ? "رحلتها على الموقع والتطبيق" : "Her journey on the website and app"}</h2>
+        {journey ? (
+          <JourneyView journey={journey} showCustomerLink={false} />
+        ) : (
+          <div className="card p-6 text-center text-sm text-ink-soft">{journeyError ?? (ar ? "جارٍ التحميل…" : "Loading…")}</div>
+        )}
       </div>
     </>
   );

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useI18n, egp, num } from "@/lib/i18n";
 import { listStoreProducts, type StoreProduct } from "./actions";
 import { IcSearch } from "@/components/icons";
+import { track } from "@/lib/shopper-client";
 
 export default function StorePage() {
   const { lang } = useI18n();
@@ -36,6 +37,14 @@ export default function StorePage() {
       return true;
     });
   }, [products, q, cat]);
+
+  // What she searched for, once she has stopped typing, and how much it found.
+  useEffect(() => {
+    const term = q.trim();
+    if (term.length < 2 || loading) return;
+    const t = setTimeout(() => track("search", { term: term.slice(0, 100), quantity: shown.length }), 1200);
+    return () => clearTimeout(t);
+  }, [q, shown.length, loading]);
 
   return (
     <>

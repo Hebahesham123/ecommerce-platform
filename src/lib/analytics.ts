@@ -93,6 +93,9 @@ export async function recordSessionHit(input: {
   country: string | null;
   region: string | null;
   city: string | null;
+  /** The page's own id, made by the browser, so its time on screen can be added when it is left. */
+  pageviewId?: string | null;
+  title?: string | null;
 }): Promise<void> {
   if (!isSupabaseConfigured()) return;
   const cut = (v: string | null | undefined, n = 120) => (v ? v.slice(0, n) : null);
@@ -118,14 +121,30 @@ export async function recordSessionHit(input: {
       p_country: cut(input.country, 8),
       p_region: cut(input.region, 80),
       p_city: cut(input.city, 80),
+      p_pageview: cut(input.pageviewId, 64),
+      p_title: cut(input.title, 200),
     });
   } catch {
     /* counting never fails a page */
   }
 }
 
-/** A step towards buying on the visitor's current visit: product, bag, checkout. */
-export async function recordSessionStep(visitorId: string, step: "product_view" | "add_to_cart" | "checkout_start"): Promise<void> {
+/** A page left (or hidden): how long it was on screen and how far it was scrolled. */
+export async function recordPageLeave(pageviewId: string, seconds: number, scroll: number): Promise<void> {
+  if (!isSupabaseConfigured() || !pageviewId) return;
+  try {
+    await getServerSupabase().rpc("analytics_page_leave", {
+      p_pageview: pageviewId.slice(0, 64),
+      p_seconds: Math.max(0, Math.min(3600, Math.round(seconds) || 0)),
+      p_scroll: Math.max(0, Math.min(100, Math.round(scroll) || 0)),
+    });
+  } catch {
+    /* counting never fails a page */
+  }
+}
+
+/** A step on the visitor's current visit (product, bag, checkout), or a search or button press on her record. */
+export async function recordSessionStep(visitorId: string, step: "product_view" | "add_to_cart" | "checkout_start" | "search" | "click"): Promise<void> {
   if (!isSupabaseConfigured() || !visitorId) return;
   try {
     await getServerSupabase().rpc("analytics_step", { p_visitor: visitorId.slice(0, 64), p_step: step });

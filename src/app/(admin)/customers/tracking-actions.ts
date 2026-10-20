@@ -90,6 +90,8 @@ export async function getCustomerProfile(phoneIn: string): Promise<ActionResult<
         .from("shopper_events")
         .select("*")
         .in("phone", variants)
+        // Ordinary presses are many and are in the journey below; the ones that matter belong here.
+        .or("type.neq.click,meta->>important.eq.true")
         .order("created_at", { ascending: false })
         .limit(300),
       supabase

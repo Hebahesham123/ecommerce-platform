@@ -454,7 +454,7 @@ function apiFile(baseUrl: string): GeneratedFile {
  * dashboard, and which Meta dataset its purchase reports to. It is a label,
  * not a permission.
  */
-import { Dimensions, PixelRatio, Platform } from "react-native";
+import { AppState, Dimensions, PixelRatio, Platform } from "react-native";
 
 export const API_BASE = ${q(baseUrl)};
 // The website itself, for the screens that are simply the real site shown in
@@ -563,7 +563,7 @@ export const fetchHome = () => api<HomePayload>("/home");
  */
 export function track(
   type: string,
-  data: { productId?: string; productName?: string; imageUrl?: string | null; value?: number | null; quantity?: number; term?: string; handle?: string } = {},
+  data: { productId?: string; productName?: string; imageUrl?: string | null; value?: number | null; quantity?: number; term?: string; handle?: string; label?: string; important?: boolean; target?: string | null } = {},
 ) {
   if (!visitor) return;
   api("/track", { method: "POST", body: JSON.stringify({ type, channel: "app", platform: Platform.OS, visitorId: visitor, ...data }) }).catch(() => {});
@@ -576,16 +576,50 @@ export function track(
  */
 let session = "";
 let sessionAt = 0;
-export function screenView(path: string) {
-  if (!visitor) return;
-  const now = Date.now();
-  if (!session || now - sessionAt > 30 * 60 * 1000) session = "s-" + Math.random().toString(36).slice(2) + now.toString(36);
-  sessionAt = now;
+/** The screen on view now: its id, and how long it has been on view while the app was open. */
+let screen: { id: string; shownMs: number; since: number | null } | null = null;
+
+function collect(body: Record<string, unknown>) {
   fetch(SITE_ORIGIN + "/api/analytics/collect", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ kind: "pageview", channel: "app", platform: Platform.OS, path, visitorId: visitor, sessionId: session, appVersion: device.appVersion }),
+    body: JSON.stringify(body),
   }).catch(() => {});
+}
+
+/** The time the screen on view was looked at, added to it. */
+function leaveScreen() {
+  if (!screen) return;
+  const ms = screen.shownMs + (screen.since !== null ? Date.now() - screen.since : 0);
+  collect({ kind: "leave", pageviewId: screen.id, seconds: Math.round(ms / 1000), scroll: 0 });
+}
+
+export function screenView(path: string, title?: string) {
+  if (!visitor) return;
+  leaveScreen();
+  const now = Date.now();
+  if (!session || now - sessionAt > 30 * 60 * 1000) session = "s-" + Math.random().toString(36).slice(2) + now.toString(36);
+  sessionAt = now;
+  const id = "p-" + Math.random().toString(36).slice(2) + now.toString(36);
+  screen = { id, shownMs: 0, since: now };
+  collect({ kind: "pageview", channel: "app", platform: Platform.OS, path, title: title ?? path, visitorId: visitor, sessionId: session, pageviewId: id, appVersion: device.appVersion });
+}
+
+// The app put away: the screen's time stops (and is reported); brought back, it starts again.
+AppState.addEventListener("change", (state) => {
+  if (!screen) return;
+  if (state === "active") {
+    screen.since = Date.now();
+  } else if (screen.since !== null) {
+    screen.shownMs += Date.now() - screen.since;
+    screen.since = null;
+    leaveScreen();
+  }
+});
+
+/** A tap that matters (placing the order, a coupon, signing in), for the shop's records. */
+export function tap(label: string, target?: string) {
+  track("click", { label, important: true, target: target ?? null });
 }
 
 /** One product held up in a reel. */
@@ -11777,7 +11811,7 @@ function signInScreenFile(): GeneratedFile {
 import React, { useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { colors, radius, spacing } from "../theme";
-import { checkPhone, loginVerified, requestCode, verifyCode } from "../api";
+import { checkPhone, loginVerified, requestCode, tap, verifyCode } from "../api";
 
 type Stage = "phone" | "choose" | "code";
 
@@ -11803,6 +11837,7 @@ export function SignInScreen({ onSignedIn }: { onSignedIn: (token: string, phone
 
   const check = () =>
     run(async () => {
+      tap("Sign in");
       const res = await checkPhone(phone);
       setPhone(res.phone);
       if (res.status === "already_verified") {
@@ -11815,12 +11850,14 @@ export function SignInScreen({ onSignedIn }: { onSignedIn: (token: string, phone
 
   const send = (channel: "sms" | "whatsapp") =>
     run(async () => {
+      tap(channel === "whatsapp" ? "Send code by WhatsApp" : "Send code by SMS");
       await requestCode(phone, channel);
       setStage("code");
     });
 
   const verify = () =>
     run(async () => {
+      tap("Verify sign-in code");
       const t = await verifyCode(phone, code, name || undefined);
       onSignedIn(t.token, t.phone);
     });
@@ -11956,6 +11993,7 @@ import {
   redeemReward,
   screenView,
   setToken,
+  tap,
   track,
   trackCart,
   type OfferContext,
@@ -12013,6 +12051,14 @@ export default function App() {
   const [query, setQuery] = useState("");
 
   const top = stack[stack.length - 1];
+
+  // What she searched for in the header, once she has stopped typing.
+  useEffect(() => {
+    const term = query.trim();
+    if (term.length < 2) return;
+    const t = setTimeout(() => track("search", { term: term.slice(0, 100) }), 1200);
+    return () => clearTimeout(t);
+  }, [query]);
 
   // Each screen she opens, for the shop's Analytics page.
   useEffect(() => {
@@ -12112,6 +12158,7 @@ export default function App() {
     async (code: string) => {
       if (!code) return setCoupon(null);
       try {
+        tap("Apply coupon");
         const res = await previewDiscount(code, lines);
         if (res.ok) {
           setCoupon({ code: res.code, amount: res.amount });
@@ -12209,6 +12256,7 @@ export default function App() {
   const place = async (address: Address) => {
     if (!phone) return;
     setBusy(true);
+    tap("Place order");
     try {
       const res = await placeOrder({
         ...address,

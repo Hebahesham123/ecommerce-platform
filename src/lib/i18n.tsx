@@ -52,6 +52,7 @@ const dict = {
   nav_app_reels: { ar: "الريلز", en: "Reels" },
   nav_app_notifications: { ar: "الإشعارات", en: "Notifications" },
   nav_analytics_overview: { ar: "نظرة عامة", en: "Overview" },
+  nav_analytics_visitors: { ar: "الزوار", en: "Visitors" },
   nav_returns: { ar: "الاسترجاع والاستبدال", en: "Returns" },
   nav_settings: { ar: "الإعدادات", en: "Settings" },
   nav_more: { ar: "المزيد", en: "More" },

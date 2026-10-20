@@ -6,8 +6,9 @@ import { useI18n, num, egp } from "@/lib/i18n";
 import { PageHeader } from "@/components/page-header";
 import { KpiCard, Panel, ChartFrame, chartAxis } from "@/components/analytics-ui";
 import { CHART, useIsDark } from "@/lib/chart-theme";
-import type { Breakdowns, Live, Overview, ProductRow, Slice } from "@/lib/analytics-reports";
-import { breakdownsAction, liveAction, overviewAction, productsAction } from "./report-actions";
+import type { Breakdowns, ClickRow, Live, Overview, PageTimeRow, ProductRow, SearchRow, Slice } from "@/lib/analytics-reports";
+import { breakdownsAction, clicksAction, liveAction, overviewAction, pageTimeAction, productsAction, searchesAction } from "./report-actions";
+import { duration } from "@/components/journey-view";
 
 /**
  * Analytics: the shop's figures the way a shop owner reads them — what sold,
@@ -189,6 +190,9 @@ export default function AnalyticsOverviewPage() {
   const [parts, setParts] = useState<Breakdowns | null>(null);
   const [products, setProducts] = useState<ProductRow[] | null>(null);
   const [live, setLive] = useState<Live | null>(null);
+  const [searches, setSearches] = useState<SearchRow[] | null>(null);
+  const [clicks, setClicks] = useState<ClickRow[] | null>(null);
+  const [pageTime, setPageTime] = useState<PageTimeRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -208,6 +212,11 @@ export default function AnalyticsOverviewPage() {
     setData(o.data);
     setParts(b.ok ? b.data : null);
     setProducts(p.ok ? p.data : []);
+    // Searches, presses and time on page (0059); empty until that file has been run.
+    const [sr, cl, pt] = await Promise.all([searchesAction(from, to, channel), clicksAction(from, to, channel, true), pageTimeAction(from, to, channel)]);
+    setSearches(sr.ok ? sr.data : []);
+    setClicks(cl.ok ? cl.data : []);
+    setPageTime(pt.ok ? pt.data : []);
   }, [range, channel]);
 
   useEffect(() => {
@@ -529,6 +538,53 @@ export default function AnalyticsOverviewPage() {
               count(p.adds),
               count(p.units),
               money(p.sales),
+            ])}
+          />
+        </Panel>
+      </div>
+
+      {/* ---- what they looked for, pressed and read ---- */}
+      <div className="mb-4 grid gap-4 lg:grid-cols-3">
+        <Panel title={ar ? "أكثر ما بحثوا عنه" : "Top searches"}>
+          <Table
+            empty={ar ? "لا توجد عمليات بحث في هذه الفترة." : "No searches in this period."}
+            head={[
+              { label: ar ? "الكلمات" : "Search" },
+              { label: ar ? "مرات" : "Times", end: true },
+              { label: ar ? "بدون نتائج" : "No results", end: true },
+            ]}
+            rows={(searches ?? []).map((r) => [
+              <span key="t" className="text-ink" dir="auto">{r.term}</span>,
+              count(r.searches),
+              r.empty ? <span key="e" className="text-rose-600">{count(r.empty)}</span> : "—",
+            ])}
+          />
+        </Panel>
+        <Panel title={ar ? "الأزرار المهمة الأكثر ضغطاً" : "Important buttons pressed"}>
+          <Table
+            empty={ar ? "لا توجد ضغطات مهمة في هذه الفترة." : "No important presses in this period."}
+            head={[
+              { label: ar ? "الزر" : "Button" },
+              { label: ar ? "ضغطات" : "Presses", end: true },
+              { label: ar ? "زوار" : "Visitors", end: true },
+            ]}
+            rows={(clicks ?? []).map((r) => [<span key="l" className="text-ink" dir="auto">{r.label}</span>, count(r.clicks), count(r.visitors)])}
+          />
+        </Panel>
+        <Panel title={ar ? "الوقت على الصفحات" : "Time on page"}>
+          <Table
+            empty={noData}
+            head={[
+              { label: ar ? "الصفحة" : "Page" },
+              { label: ar ? "مشاهدات" : "Views", end: true },
+              { label: ar ? "متوسط الوقت" : "Avg. time", end: true },
+              { label: ar ? "تمرير" : "Scroll", end: true },
+            ]}
+            rows={(pageTime ?? []).map((r) => [
+              <span key="p" className="block max-w-[160px] truncate font-mono text-xs text-ink" dir="ltr">{r.path || "/"}</span>,
+              count(r.views),
+              r.avg_seconds ? duration(r.avg_seconds, ar) : "—",
+              r.avg_scroll ? pctText(r.avg_scroll, lang) : "—",
             ])}
           />
         </Panel>
