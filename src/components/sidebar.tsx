@@ -131,6 +131,7 @@ const groups: Group[] = [
     id: "analytics",
     label: "group_analytics",
     items: [
+      { href: "/analytics", key: "nav_analytics_overview", icon: IcChart },
       { href: "/analytics/website", key: "nav_web_analytics", icon: IcChart },
       { href: "/analytics/app", key: "nav_app_analytics", icon: IcChart },
     ],

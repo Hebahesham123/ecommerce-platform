@@ -28,7 +28,8 @@ var last=Number(sessionStorage.getItem(A))||0,s=sessionStorage.getItem(S);
 if(!s||Date.now()-last>HALF){s=id();sessionStorage.setItem(S,s)}
 sessionStorage.setItem(A,String(Date.now()));
 function post(url,o){var b=JSON.stringify(o);if(navigator.sendBeacon){navigator.sendBeacon(url,new Blob([b],{type:"application/json"}))}else{fetch(url,{method:"POST",body:b,keepalive:true,headers:{"content-type":"application/json"}})}}
-post(${JSON.stringify(collect)},{kind:"pageview",channel:"web",platform:"web",path:location.pathname,referrer:document.referrer,visitorId:v,sessionId:s});
+var P={},Q=new URLSearchParams(location.search);["utm_source","utm_medium","utm_campaign","utm_content","utm_term","fbclid","gclid","gbraid","wbraid","ttclid","sccid","ScCid","msclkid","twclid","li_fat_id","epik"].forEach(function(k){var x=Q.get(k);if(x)P[k]=x.slice(0,200)});
+post(${JSON.stringify(collect)},{kind:"pageview",channel:"web",platform:"web",path:location.pathname,referrer:document.referrer,params:P,visitorId:v,sessionId:s});
 var m=location.pathname.match(/\\/products\\/([^\\/?#]+)/);
 if(m)post(${JSON.stringify(track)},{channel:"shop",platform:"web",visitorId:v,type:"product_view",path:location.pathname,handle:decodeURIComponent(m[1])});
 var raw=ck("sf_cart"),lines=[];

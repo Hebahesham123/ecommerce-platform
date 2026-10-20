@@ -569,6 +569,25 @@ export function track(
   api("/track", { method: "POST", body: JSON.stringify({ type, channel: "app", platform: Platform.OS, visitorId: visitor, ...data }) }).catch(() => {});
 }
 
+/**
+ * Visits, for the shop's Analytics page: a visit opens with the first screen
+ * seen and a new one starts after half an hour in the background; every
+ * screen she opens is a page of it. Fire and forget, like track().
+ */
+let session = "";
+let sessionAt = 0;
+export function screenView(path: string) {
+  if (!visitor) return;
+  const now = Date.now();
+  if (!session || now - sessionAt > 30 * 60 * 1000) session = "s-" + Math.random().toString(36).slice(2) + now.toString(36);
+  sessionAt = now;
+  fetch(SITE_ORIGIN + "/api/analytics/collect", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ kind: "pageview", channel: "app", platform: Platform.OS, path, visitorId: visitor, sessionId: session, appVersion: device.appVersion }),
+  }).catch(() => {});
+}
+
 /** One product held up in a reel. */
 export type ReelProduct = {
   id: string;
@@ -11935,6 +11954,7 @@ import {
   previewDiscount,
   priceCart,
   redeemReward,
+  screenView,
   setToken,
   track,
   trackCart,
@@ -11993,6 +12013,18 @@ export default function App() {
   const [query, setQuery] = useState("");
 
   const top = stack[stack.length - 1];
+
+  // Each screen she opens, for the shop's Analytics page.
+  useEffect(() => {
+    const path = top
+      ? top.kind === "product"
+        ? "/product/" + top.id
+        : top.kind === "collection" || top.kind === "page"
+          ? "/" + top.kind + "/" + top.handle
+          : "/" + top.kind
+      : "/" + tab;
+    screenView(path);
+  }, [tab, top]);
 
   /** A note says its piece and goes; one that lingers is in the way. */
   useEffect(() => {

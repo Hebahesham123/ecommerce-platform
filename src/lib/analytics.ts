@@ -72,6 +72,78 @@ export async function recordSiteEvent(event: SiteEvent): Promise<{ ok: boolean; 
   }
 }
 
+/**
+ * The visit this page belongs to, in analytics_sessions: opened by its first
+ * page with where it came from and what it is on, moved along by the rest.
+ */
+export async function recordSessionHit(input: {
+  sessionId: string;
+  visitorId: string;
+  channel: Channel;
+  platform: Platform | null;
+  path: string;
+  referrerHost: string | null;
+  source: string;
+  network: string | null;
+  utm: Record<string, string>;
+  clickId: string | null;
+  device: string | null;
+  browser: string | null;
+  os: string | null;
+  country: string | null;
+  region: string | null;
+  city: string | null;
+}): Promise<void> {
+  if (!isSupabaseConfigured()) return;
+  const cut = (v: string | null | undefined, n = 120) => (v ? v.slice(0, n) : null);
+  try {
+    await getServerSupabase().rpc("analytics_touch", {
+      p_session: input.sessionId.slice(0, 64),
+      p_visitor: input.visitorId.slice(0, 64),
+      p_channel: input.channel,
+      p_platform: input.platform,
+      p_path: cut(input.path, 300),
+      p_referrer_host: cut(input.referrerHost),
+      p_source: input.source,
+      p_network: cut(input.network, 40),
+      p_utm_source: cut(input.utm.utm_source),
+      p_utm_medium: cut(input.utm.utm_medium),
+      p_utm_campaign: cut(input.utm.utm_campaign, 200),
+      p_utm_content: cut(input.utm.utm_content, 200),
+      p_utm_term: cut(input.utm.utm_term, 200),
+      p_click_id: cut(input.clickId, 20),
+      p_device: input.device,
+      p_browser: cut(input.browser, 40),
+      p_os: cut(input.os, 40),
+      p_country: cut(input.country, 8),
+      p_region: cut(input.region, 80),
+      p_city: cut(input.city, 80),
+    });
+  } catch {
+    /* counting never fails a page */
+  }
+}
+
+/** A step towards buying on the visitor's current visit: product, bag, checkout. */
+export async function recordSessionStep(visitorId: string, step: "product_view" | "add_to_cart" | "checkout_start"): Promise<void> {
+  if (!isSupabaseConfigured() || !visitorId) return;
+  try {
+    await getServerSupabase().rpc("analytics_step", { p_visitor: visitorId.slice(0, 64), p_step: step });
+  } catch {
+    /* counting never fails a page */
+  }
+}
+
+/** An order: its visit is marked as bought, and the order learns where it came from. */
+export async function recordSessionOrder(visitorId: string, orderNumber: string, revenue: number): Promise<void> {
+  if (!isSupabaseConfigured() || !visitorId) return;
+  try {
+    await getServerSupabase().rpc("analytics_order", { p_visitor: visitorId.slice(0, 64), p_order_number: orderNumber, p_revenue: revenue });
+  } catch {
+    /* attribution is never worth failing an order over */
+  }
+}
+
 type Row = {
   created_at: string;
   kind: string;

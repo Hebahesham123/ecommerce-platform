@@ -1,6 +1,7 @@
 import "server-only";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
 import { normalizePhone } from "@/lib/phone";
+import { recordSessionStep } from "@/lib/analytics";
 
 /**
  * What each shopper does, tied to her once she is known.
@@ -110,6 +111,10 @@ export async function trackShopper(input: {
         quantity: e.quantity != null && Number.isFinite(e.quantity) ? Math.trunc(e.quantity) : null,
         meta: e.meta ?? {},
       });
+      // The same step on her visit, for the Analytics funnel.
+      if (e.type === "product_view" || e.type === "add_to_cart" || e.type === "checkout_start") {
+        await recordSessionStep(input.visitorId, e.type);
+      }
     }
 
     if (input.cart) {

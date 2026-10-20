@@ -18,6 +18,23 @@ const SESSION = "bb_session";
 const SESSION_AT = "bb_session_at";
 const HALF_HOUR = 30 * 60 * 1000;
 
+/** The only parts of an address that are kept: campaign tags and ad click ids. */
+const PARAMS = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term", "fbclid", "gclid", "gbraid", "wbraid", "ttclid", "sccid", "ScCid", "msclkid", "twclid", "li_fat_id", "epik"];
+
+function campaignParams(): Record<string, string> {
+  const out: Record<string, string> = {};
+  try {
+    const q = new URLSearchParams(window.location.search);
+    for (const k of PARAMS) {
+      const v = q.get(k);
+      if (v) out[k] = v.slice(0, 200);
+    }
+  } catch {
+    /* no address to read */
+  }
+  return out;
+}
+
 const makeId = () =>
   "v-" + Math.random().toString(36).slice(2) + Date.now().toString(36).slice(-4);
 
@@ -71,6 +88,7 @@ export function AnalyticsBeacon({
       platform: platform ?? "web",
       path: pathname,
       referrer: document.referrer,
+      params: campaignParams(),
       visitorId: who.visitorId,
       sessionId: who.sessionId,
     });

@@ -10,6 +10,7 @@ import {
 } from "@/lib/discount-engine";
 import { recordNudgeConversion } from "@/lib/nudge-service";
 import { recordShopperOrder } from "@/lib/shopper-tracking";
+import { recordSessionOrder } from "@/lib/analytics";
 import { getPaymentMethods } from "@/lib/payments-server";
 import { orderLine } from "@/lib/payments";
 import { awardOrderSignatures } from "@/lib/loyalty/earn";
@@ -414,6 +415,8 @@ export async function placeOrderCore(
       total,
       itemCount: payload.items.reduce((n, i) => n + i.quantity, 0),
     });
+    // Analytics: the visit that bought, and where the order came from.
+    if (shopperVisitor) await recordSessionOrder(shopperVisitor, orderNumber, total);
 
     await fireOrderRelay(supabase, orderNumber, payload, ph, relayEmail, total, opts.channel);
 
