@@ -25,6 +25,7 @@ import {
   type SearchRow,
   type VisitorRow,
 } from "@/lib/analytics-reports";
+import { getCohorts, getSellThrough, type CohortRow, type SellThroughRow } from "@/lib/analytics-reports";
 import { phoneVariants } from "@/lib/phone";
 
 /** The Analytics overview page's reads. Periods arrive as ISO times; channel as all/web/app. */
@@ -95,4 +96,12 @@ export async function clicksAction(from: string, to: string, channel: string, im
 
 export async function pageTimeAction(from: string, to: string, channel: string): Promise<Result<PageTimeRow[]>> {
   return getPageTime(isoOf(from), isoOf(to), channelOf(channel));
+}
+
+export async function cohortsAction(): Promise<Result<CohortRow[]>> {
+  return getCohorts(8);
+}
+
+export async function sellThroughAction(from: string, to: string, channel: string): Promise<Result<SellThroughRow[]>> {
+  return getSellThrough(isoOf(from), isoOf(to), channelOf(channel));
 }

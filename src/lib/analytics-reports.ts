@@ -25,8 +25,17 @@ export type Overview = {
   sales: number;
   customers: number;
   returningOrders: number;
-  series: { day: string; sessions: number; orders: number; sales: number }[];
+  /** Orders shipped or delivered (0060). */
+  fulfilled?: number;
+  cancelledOrders?: number;
+  refundCount?: number;
+  /** Shopify's sales breakdown (0060): gross − discounts − reversals = net; + shipping = total. */
+  breakdown?: { gross: number; discounts: number; reversals: number; cancelled: number; refunded: number; net: number; shipping: number; total: number };
+  series: { day: string; sessions: number; converted?: number; orders: number; sales: number }[];
 };
+
+export type CohortRow = { cohort: string; customers: number; months: { k: number; customers: number }[] };
+export type SellThroughRow = { name: string; image: string | null; units: number; on_hand: number; rate: number | null };
 
 /** A row of a breakdown: sessions (and how many of them got to the bag and bought), or orders. */
 export type Slice = { key: string; sessions?: number; carts?: number; orders: number; sales: number };
@@ -45,7 +54,7 @@ export type Live = {
 
 export type Breakdowns = {
   sessionsBy: Record<"source" | "network" | "campaign" | "landing" | "device" | "browser" | "os" | "city" | "country" | "referrer", Slice[]>;
-  salesBy: Record<"source" | "network" | "campaign" | "city" | "channel", Slice[]>;
+  salesBy: Record<"source" | "network" | "campaign" | "city" | "channel" | "referrer" | "governorate", Slice[]>;
 };
 
 const missing = (msg: string) => /analytics_(overview|breakdown|sales_by|products|live)|analytics_sessions|attr_source/.test(msg);
@@ -85,11 +94,24 @@ export async function getOverview(from: string, to: string, channel: ReportChann
     ]);
     const shape = (o: Record<string, unknown>): Overview => {
       const n = numbers(o) as Record<string, unknown>;
+      const b = o.breakdown ? (numbers(o.breakdown as Record<string, unknown>) as Record<string, number>) : null;
       return {
         ...(n as unknown as Overview),
+        breakdown: b
+          ? {
+              gross: Number(b.gross) || 0,
+              discounts: Number(b.discounts) || 0,
+              reversals: Number(b.reversals) || 0,
+              cancelled: Number(b.cancelled) || 0,
+              refunded: Number(b.refunded) || 0,
+              net: Number(b.net) || 0,
+              shipping: Number(b.shipping) || 0,
+              total: Number(b.total) || 0,
+            }
+          : undefined,
         series: (Array.isArray(o.series) ? o.series : []).map((d) => {
           const x = numbers(d as Record<string, unknown>) as Record<string, unknown>;
-          return { day: String(x.day), sessions: Number(x.sessions) || 0, orders: Number(x.orders) || 0, sales: Number(x.sales) || 0 };
+          return { day: String(x.day), sessions: Number(x.sessions) || 0, converted: Number(x.converted) || 0, orders: Number(x.orders) || 0, sales: Number(x.sales) || 0 };
         }),
       };
     };
@@ -102,7 +124,7 @@ export async function getOverview(from: string, to: string, channel: ReportChann
 export async function getBreakdowns(from: string, to: string, channel: ReportChannel): Promise<Result<Breakdowns>> {
   if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
   const sessionDims = ["source", "network", "campaign", "landing", "device", "browser", "os", "city", "country", "referrer"] as const;
-  const salesDims = ["source", "network", "campaign", "city", "channel"] as const;
+  const salesDims = ["source", "network", "campaign", "city", "channel", "referrer", "governorate"] as const;
   try {
     const [sessions, sales] = await Promise.all([
       Promise.all(sessionDims.map((d) => rpc<unknown>("analytics_breakdown", { p_dim: d, p_from: from, p_to: to, p_channel: channel, p_limit: 25 }))),
@@ -333,5 +355,49 @@ export async function getPageTime(from: string, to: string, channel: ReportChann
     return { ok: true, data: deep<PageTimeRow[]>(r).map((x, i) => ({ ...x, path: String(r[i].path ?? "") })) };
   } catch (e) {
     return failJourney(e instanceof Error ? e.message : "failed");
+  }
+}
+
+/* ---- Cohorts and sell-through (0060) ---- */
+
+export async function getCohorts(months = 8): Promise<Result<CohortRow[]>> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  try {
+    const r = await rpc<unknown>("analytics_cohorts", { p_months: months });
+    return {
+      ok: true,
+      data: (Array.isArray(r) ? r : []).map((c) => {
+        const x = c as { cohort: string; customers: unknown; months?: { k: unknown; customers: unknown }[] };
+        return {
+          cohort: String(x.cohort),
+          customers: Number(x.customers) || 0,
+          months: (x.months ?? []).map((m) => ({ k: Number(m.k) || 0, customers: Number(m.customers) || 0 })),
+        };
+      }),
+    };
+  } catch (e) {
+    return fail(e instanceof Error ? e.message : "failed");
+  }
+}
+
+export async function getSellThrough(from: string, to: string, channel: ReportChannel): Promise<Result<SellThroughRow[]>> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  try {
+    const r = await rpc<unknown>("analytics_sell_through", { p_from: from, p_to: to, p_channel: channel, p_limit: 20 });
+    return {
+      ok: true,
+      data: (Array.isArray(r) ? r : []).map((row) => {
+        const x = row as Record<string, unknown>;
+        return {
+          name: String(x.name ?? ""),
+          image: (x.image as string | null) ?? null,
+          units: Number(x.units) || 0,
+          on_hand: Number(x.on_hand) || 0,
+          rate: x.rate === null || x.rate === undefined ? null : Number(x.rate),
+        };
+      }),
+    };
+  } catch (e) {
+    return fail(e instanceof Error ? e.message : "failed");
   }
 }

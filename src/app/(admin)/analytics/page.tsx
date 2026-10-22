@@ -6,8 +6,8 @@ import { useI18n, num, egp } from "@/lib/i18n";
 import { PageHeader } from "@/components/page-header";
 import { KpiCard, Panel, ChartFrame, chartAxis } from "@/components/analytics-ui";
 import { CHART, useIsDark } from "@/lib/chart-theme";
-import type { Breakdowns, ClickRow, Live, Overview, PageTimeRow, ProductRow, SearchRow, Slice } from "@/lib/analytics-reports";
-import { breakdownsAction, clicksAction, liveAction, overviewAction, pageTimeAction, productsAction, searchesAction } from "./report-actions";
+import type { Breakdowns, ClickRow, CohortRow, Live, Overview, PageTimeRow, ProductRow, SearchRow, SellThroughRow, Slice } from "@/lib/analytics-reports";
+import { breakdownsAction, clicksAction, cohortsAction, liveAction, overviewAction, pageTimeAction, productsAction, searchesAction, sellThroughAction } from "./report-actions";
 import { duration } from "@/components/journey-view";
 
 /**
@@ -193,6 +193,8 @@ export default function AnalyticsOverviewPage() {
   const [searches, setSearches] = useState<SearchRow[] | null>(null);
   const [clicks, setClicks] = useState<ClickRow[] | null>(null);
   const [pageTime, setPageTime] = useState<PageTimeRow[] | null>(null);
+  const [cohorts, setCohorts] = useState<CohortRow[] | null>(null);
+  const [sellThrough, setSellThrough] = useState<SellThroughRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -217,6 +219,10 @@ export default function AnalyticsOverviewPage() {
     setSearches(sr.ok ? sr.data : []);
     setClicks(cl.ok ? cl.data : []);
     setPageTime(pt.ok ? pt.data : []);
+    // Cohorts and sell-through (0060).
+    const [co, st] = await Promise.all([cohortsAction(), sellThroughAction(from, to, channel)]);
+    setCohorts(co.ok ? co.data : []);
+    setSellThrough(st.ok ? st.data : []);
   }, [range, channel]);
 
   useEffect(() => {
@@ -246,12 +252,55 @@ export default function AnalyticsOverviewPage() {
   const retRate = now ? pct(now.returningOrders, now.orders) : 0;
   const retBefore = before ? pct(before.returningOrders, before.orders) : 0;
 
-  const series = (now?.series ?? []).map((d) => ({
-    label: new Date(d.day + "T00:00:00").toLocaleDateString(ar ? "ar-EG" : "en-GB", { day: "numeric", month: "short" }),
-    sales: d.sales,
-    sessions: d.sessions,
-    orders: d.orders,
-  }));
+  // Each day beside the same day of the period before (dashed), as Shopify draws it.
+  const series = (now?.series ?? []).map((d, i) => {
+    const p = before?.series[i];
+    return {
+      label: new Date(d.day + "T00:00:00").toLocaleDateString(ar ? "ar-EG" : "en-GB", { day: "numeric", month: "short" }),
+      sales: d.sales,
+      sessions: d.sessions,
+      orders: d.orders,
+      aov: d.orders ? d.sales / d.orders : 0,
+      conv: d.sessions ? ((d.converted ?? 0) / d.sessions) * 100 : 0,
+      prevSales: p?.sales ?? 0,
+      prevSessions: p?.sessions ?? 0,
+      prevAov: p && p.orders ? p.sales / p.orders : 0,
+      prevConv: p && p.sessions ? ((p.converted ?? 0) / p.sessions) * 100 : 0,
+    };
+  });
+  const bd = now?.breakdown;
+  const bdBefore = before?.breakdown;
+  const totalSales = bd ? bd.total : now?.sales ?? 0;
+  const totalBefore = bdBefore ? bdBefore.total : before?.sales ?? 0;
+  const prevLabel = ar ? "الفترة السابقة" : "Previous period";
+
+  /** A day-by-day line with the previous period dashed behind it. */
+  const timeChart = (keyNow: string, keyPrev: string, color: string, fmt: (n: number) => string, empty: boolean) => (
+    <ChartFrame empty={empty} emptyText={noData}>
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={series} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+          <CartesianGrid vertical={false} stroke="rgba(148,148,168,0.16)" />
+          <XAxis dataKey="label" {...chartAxis} interval="preserveStartEnd" minTickGap={24} />
+          <YAxis {...chartAxis} width={56} tickFormatter={(v) => fmt(Number(v))} />
+          <Tooltip
+            content={({ active, payload, label: l }) =>
+              active && payload?.length ? (
+                <div className="rounded-xl border border-line bg-surface px-3 py-2 text-xs">
+                  <div className="font-semibold text-ink">{String(l)}</div>
+                  <div className="mt-0.5 text-ink">{fmt(Number(payload.find((p) => p.dataKey === keyNow)?.value ?? 0))}</div>
+                  <div className="text-ink-soft">
+                    {prevLabel}: {fmt(Number(payload.find((p) => p.dataKey === keyPrev)?.value ?? 0))}
+                  </div>
+                </div>
+              ) : null
+            }
+          />
+          <Area type="monotone" dataKey={keyPrev} stroke={color} strokeOpacity={0.45} strokeDasharray="4 4" strokeWidth={1.5} fill="none" />
+          <Area type="monotone" dataKey={keyNow} stroke={color} strokeWidth={2} fill={color} fillOpacity={0.1} />
+        </AreaChart>
+      </ResponsiveContainer>
+    </ChartFrame>
+  );
   const violet = CHART.violet[dark ? "dark" : "light"];
   const blue = CHART.blue[dark ? "dark" : "light"];
 
@@ -355,42 +404,58 @@ export default function AnalyticsOverviewPage() {
       </section>
 
       {/* ---- the headline numbers ---- */}
-      <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-6">
-        <KpiCard loading={loading && !now} label={ar ? "إجمالي المبيعات" : "Total sales"} value={money(now?.sales ?? 0)} delta={now && before ? delta(now.sales, before.sales) : undefined} />
+      <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <KpiCard loading={loading && !now} label={ar ? "إجمالي المبيعات قبل الخصومات" : "Gross sales"} value={money(bd?.gross ?? 0)} delta={bd && bdBefore ? delta(bd.gross, bdBefore.gross) : undefined} />
+        <KpiCard loading={loading && !now} label={ar ? "صافي إجمالي المبيعات" : "Total sales"} value={money(totalSales)} delta={now && before ? delta(totalSales, totalBefore) : undefined} />
         <KpiCard loading={loading && !now} label={ar ? "الطلبات" : "Orders"} value={count(now?.orders ?? 0)} delta={now && before ? delta(now.orders, before.orders) : undefined} />
+        <KpiCard loading={loading && !now} label={ar ? "طلبات تم شحنها" : "Orders fulfilled"} value={count(now?.fulfilled ?? 0)} delta={now && before ? delta(now.fulfilled ?? 0, before.fulfilled ?? 0) : undefined} />
         <KpiCard loading={loading && !now} label={ar ? "الزيارات" : "Sessions"} value={count(now?.sessions ?? 0)} delta={now && before ? delta(now.sessions, before.sessions) : undefined} />
         <KpiCard loading={loading && !now} label={ar ? "معدل التحويل" : "Conversion rate"} value={pctText(conv, lang)} delta={now && before ? delta(conv, convBefore) : undefined} />
         <KpiCard loading={loading && !now} label={ar ? "متوسط قيمة الطلب" : "Average order value"} value={money(aov)} delta={now && before ? delta(aov, aovBefore) : undefined} />
         <KpiCard loading={loading && !now} label={ar ? "عملاء عائدون" : "Returning customer rate"} value={pctText(retRate, lang)} delta={now && before ? delta(retRate, retBefore) : undefined} />
       </div>
 
-      {/* ---- over time ---- */}
-      <div className="mb-4 grid gap-4 lg:grid-cols-2">
-        <Panel title={ar ? "المبيعات عبر الوقت" : "Sales over time"}>
-          <ChartFrame empty={!now?.sales} emptyText={noData}>
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={series} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                <CartesianGrid vertical={false} stroke="rgba(148,148,168,0.16)" />
-                <XAxis dataKey="label" {...chartAxis} interval="preserveStartEnd" minTickGap={24} />
-                <YAxis {...chartAxis} width={56} />
-                <Tooltip content={chartTooltip(money)} />
-                <Area type="monotone" dataKey="sales" stroke={violet} strokeWidth={2} fill={violet} fillOpacity={0.1} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </ChartFrame>
+      {/* ---- sales over time, and how they add up ---- */}
+      <div className="mb-4 grid gap-4 lg:grid-cols-3">
+        <Panel title={ar ? "إجمالي المبيعات عبر الوقت" : "Total sales over time"} className="lg:col-span-2">
+          {timeChart("sales", "prevSales", violet, money, !now?.sales && !before?.sales)}
         </Panel>
-        <Panel title={ar ? "الزيارات عبر الوقت" : "Sessions over time"}>
-          <ChartFrame empty={!now?.sessions} emptyText={noData}>
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={series} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                <CartesianGrid vertical={false} stroke="rgba(148,148,168,0.16)" />
-                <XAxis dataKey="label" {...chartAxis} interval="preserveStartEnd" minTickGap={24} />
-                <YAxis {...chartAxis} width={44} allowDecimals={false} />
-                <Tooltip content={chartTooltip(count)} />
-                <Area type="monotone" dataKey="sessions" stroke={blue} strokeWidth={2} fill={blue} fillOpacity={0.1} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </ChartFrame>
+        <Panel title={ar ? "تفصيل المبيعات" : "Total sales breakdown"}>
+          <div className="space-y-0.5 px-4 pb-4 text-sm">
+            {(
+              [
+                [ar ? "إجمالي المبيعات" : "Gross sales", bd?.gross ?? 0, ""],
+                [ar ? "الخصومات" : "Discounts", -(bd?.discounts ?? 0), ""],
+                [
+                  ar ? "مرتجعات وإلغاءات" : "Sales reversals",
+                  -(bd?.reversals ?? 0),
+                  bd ? (ar ? "إلغاء " + money(bd.cancelled) + " · استرداد " + money(bd.refunded) : "cancelled " + money(bd.cancelled) + " · refunded " + money(bd.refunded)) : "",
+                ],
+                [ar ? "صافي المبيعات" : "Net sales", bd?.net ?? 0, "strong"],
+                [ar ? "رسوم الشحن" : "Shipping charges", bd?.shipping ?? 0, ""],
+                [ar ? "رسوم المرتجعات" : "Return fees", null, ""],
+                [ar ? "الضرائب" : "Taxes", null, ""],
+                [ar ? "إجمالي المبيعات" : "Total sales", bd?.total ?? 0, "strong"],
+              ] as [string, number | null, string][]
+            ).map(([k, v, note]) => (
+              <div key={k} className={"flex items-center justify-between rounded-lg px-2 py-1.5 " + (note === "strong" ? "bg-surface-hover font-semibold" : "")}>
+                <span className="text-ink-muted">
+                  {k}
+                  {note && note !== "strong" && <span className="block text-[11px] text-ink-soft">{note}</span>}
+                </span>
+                <span className="tabular-nums text-ink">{v === null ? <span className="text-xs text-ink-soft">{ar ? "غير مسجلة" : "not tracked"}</span> : money(v)}</span>
+              </div>
+            ))}
+          </div>
+        </Panel>
+      </div>
+
+      {/* ---- sessions, order value and conversion over time ---- */}
+      <div className="mb-4 grid gap-4 lg:grid-cols-3">
+        <Panel title={ar ? "الزيارات عبر الوقت" : "Sessions over time"}>{timeChart("sessions", "prevSessions", blue, count, !now?.sessions && !before?.sessions)}</Panel>
+        <Panel title={ar ? "متوسط قيمة الطلب عبر الوقت" : "Average order value over time"}>{timeChart("aov", "prevAov", violet, money, !now?.orders && !before?.orders)}</Panel>
+        <Panel title={ar ? "معدل التحويل عبر الوقت" : "Conversion rate over time"}>
+          {timeChart("conv", "prevConv", blue, (n) => pctText(n, lang), !now?.sessions && !before?.sessions)}
         </Panel>
       </div>
 
@@ -620,6 +685,98 @@ export default function AnalyticsOverviewPage() {
         </Panel>
         <Panel title={ar ? "مواقع أرسلت زيارات" : "Referring sites"}>
           <BarList empty={noData} format={count} rows={(parts?.sessionsBy.referrer ?? []).filter((r) => r.key).slice(0, 10).map((r) => ({ label: <span dir="ltr">{r.key}</span>, value: r.sessions ?? 0 }))} />
+        </Panel>
+      </div>
+
+      <div className="mb-4 grid gap-4 lg:grid-cols-2">
+        <Panel title={ar ? "المبيعات حسب الموقع المُحيل" : "Total sales by referrer"}>
+          <BarList
+            empty={noData}
+            format={money}
+            rows={(parts?.salesBy.referrer ?? []).map((r) => ({
+              label: r.key ? <span dir="ltr">{r.key}</span> : ar ? "بدون موقع مُحيل (مباشر أو تطبيق)" : "No referrer (direct or app)",
+              value: r.sales,
+              note: count(r.orders) + " " + (ar ? "طلب" : "orders"),
+            }))}
+          />
+        </Panel>
+        <Panel title={ar ? "المبيعات حسب المحافظة" : "Total sales by governorate"}>
+          <BarList
+            empty={noData}
+            format={money}
+            rows={(parts?.salesBy.governorate ?? []).slice(0, 12).map((r) => ({ label: r.key || (ar ? "غير معروف" : "Unknown"), value: r.sales, note: count(r.orders) + " " + (ar ? "طلب" : "orders") }))}
+          />
+        </Panel>
+      </div>
+
+      <div className="mb-4 grid gap-4 lg:grid-cols-2">
+        <Panel title={ar ? "المنتجات حسب معدل البيع من المتاح" : "Products by sell-through rate"}>
+          <Table
+            empty={noData}
+            head={[
+              { label: ar ? "المنتج" : "Product" },
+              { label: ar ? "بيع" : "Sold", end: true },
+              { label: ar ? "متبقٍ" : "On hand", end: true },
+              { label: ar ? "معدل البيع" : "Sell-through", end: true },
+            ]}
+            rows={(sellThrough ?? []).map((p) => [
+              <span key="n" className="block max-w-[220px] truncate text-ink">{p.name}</span>,
+              count(p.units),
+              count(p.on_hand),
+              p.rate === null ? "—" : pctText(p.rate, lang),
+            ])}
+          />
+          <p className="px-4 pb-3 text-[11px] text-ink-soft">
+            {ar ? "ما بيع في الفترة ÷ (ما بيع + المتاح في المخزون الآن)." : "Sold in the period ÷ (sold + on hand now)."}
+          </p>
+        </Panel>
+        <Panel title={ar ? "تحليل مجموعات العملاء" : "Customer cohort analysis"}>
+          {!cohorts?.length ? (
+            <p className="px-4 pb-4 text-sm text-ink-soft">{noData}</p>
+          ) : (
+            <div className="overflow-x-auto px-4 pb-4">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-ink-soft">
+                    <th className="py-1 text-start font-semibold">{ar ? "المجموعة" : "Cohort"}</th>
+                    <th className="py-1 text-end font-semibold">{ar ? "عملاء" : "Customers"}</th>
+                    {Array.from({ length: Math.max(...cohorts.map((c) => c.months.length)) }, (_, k) => (
+                      <th key={k} className="px-1 py-1 text-center font-semibold">
+                        {(ar ? "شهر " : "M") + k}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {cohorts.map((c) => (
+                    <tr key={c.cohort}>
+                      <td className="whitespace-nowrap py-1 text-ink">
+                        {new Date(c.cohort + "T00:00:00").toLocaleDateString(ar ? "ar-EG" : "en-GB", { month: "short", year: "numeric" })}
+                      </td>
+                      <td className="py-1 text-end tabular-nums text-ink">{count(c.customers)}</td>
+                      {c.months.map((m) => {
+                        const share = pct(m.customers, c.customers);
+                        return (
+                          <td key={m.k} className="px-0.5 py-0.5">
+                            <div
+                              className="rounded px-1 py-1 text-center tabular-nums"
+                              style={{ background: "rgba(124,58,237," + Math.min(0.85, share / 40 + (share ? 0.06 : 0)) + ")", color: share > 20 ? "#fff" : undefined }}
+                              title={count(m.customers) + " " + (ar ? "عميل" : "customers")}
+                            >
+                              {pctText(share, lang)}
+                            </div>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p className="mt-2 text-[11px] text-ink-soft">
+                {ar ? "العملاء حسب شهر أول طلب، ونسبة من طلب مرة أخرى في كل شهر بعده." : "Customers by the month of their first order, and the share who ordered again in each month after."}
+              </p>
+            </div>
+          )}
         </Panel>
       </div>
 
