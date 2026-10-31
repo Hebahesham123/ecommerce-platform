@@ -458,6 +458,7 @@ export function Preview({
             <AppStrip
               items={brand.strip}
               accent={accent}
+              ink={brand.headerInk}
               activeIndex={stripIndex}
               onOpen={(item) => {
                 // The same order of precedence the sections use, so a chip

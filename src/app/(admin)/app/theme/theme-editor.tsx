@@ -1583,6 +1583,7 @@ export function ThemeEditor() {
                 <AppStrip
                   items={draft.settings.strip}
                   accent={draft.settings.accent}
+                  ink={draft.settings.headerInk}
                   activeIndex={stripIndex}
                   onOpen={(item) => {
                     if (item.url) {

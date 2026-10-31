@@ -31,11 +31,14 @@ import type { StripItem } from "@/lib/app-theme";
 export function AppStrip({
   items,
   accent,
+  ink = "#191614",
   activeIndex = 0,
   onOpen,
 }: {
   items: StripItem[];
   accent: string;
+  /** The header's ink, so the shortcut you are on is filled in the same dark. */
+  ink?: string;
   activeIndex?: number;
   onOpen?: (item: StripItem) => void;
 }) {
@@ -121,13 +124,20 @@ export function AppStrip({
     chip?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
   }, [activeIndex, held]);
 
+  // A default argument only covers undefined, and this arrives as an empty
+  // string when the merchant has not set a header ink - which left the
+  // shortcut you are on with no fill at all.
+  const dark = ink || "#191614";
+
   if (!items.length) return null;
   return (
     <div
       ref={rail}
       onPointerDown={() => setHeld(true)}
       onWheel={() => setHeld(true)}
-      className="app-surface flex gap-4 overflow-x-auto border-b border-slate-200 bg-white px-4"
+      // The same card as the header above it, so the top of the screen is
+      // one set of floating things rather than two cards and a bar.
+      className="app-surface mx-3 mb-2.5 flex gap-1 overflow-x-auto rounded-[22px] border border-white/70 bg-white/60 p-1.5 shadow-[0_8px_22px_-14px_rgba(20,16,12,0.55)] backdrop-blur-sm [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
     >
       {(looping ? [...items, ...items] : items).map((item, i) => {
         const on = i % items.length === activeIndex;
@@ -140,10 +150,10 @@ export function AppStrip({
             onClick={() => onOpen?.(item)}
             aria-hidden={echo}
             tabIndex={echo ? -1 : undefined}
-            className="shrink-0 whitespace-nowrap border-b-2 py-2 text-[12px] font-semibold transition-colors"
+            className="shrink-0 whitespace-nowrap rounded-full px-3.5 py-1.5 text-[12px] font-semibold transition-colors"
             style={{
-              color: on ? accent : "#64748b",
-              borderColor: on ? accent : "transparent",
+              color: on ? "#ffffff" : "#6b7280",
+              background: on ? dark : "transparent",
             }}
           >
             {item.label}
