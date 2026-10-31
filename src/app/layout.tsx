@@ -1,35 +1,55 @@
 import type { Metadata } from "next";
-import { Tajawal, Playfair_Display } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { cookies } from "next/headers";
 import { LangProvider, type Lang } from "@/lib/i18n";
 import { getPixelSnippet } from "@/lib/meta-pixel";
 import { getGa4Snippet, getGscMeta } from "@/lib/ga4";
 
-// Self-hosted Tajawal (bundled with the app) so an ad/privacy blocker or a
-// flaky network can never stop the font from loading — which used to break the
-// whole UI's type and spacing. Exposes the family as the --font-app CSS
-// variable. Weights are those Tajawal actually ships (no 600).
-const tajawal = Tajawal({
-  subsets: ["arabic", "latin"],
-  weight: ["400", "500", "700", "800"],
+// Tajawal, from files in this repository rather than from Google.
+//
+// It used to be loaded with next/font/google, which downloads the face while
+// the app is being built. That is a network call inside the build, and when
+// Vercel's builder could not complete it the whole deploy failed — not with
+// a missing font, but with a crash in the font loader. Loading from disk
+// removes the only reason the build needed the internet.
+//
+// Two files per weight because Google cuts arabic and latin separately; the
+// browser takes each character from the first face that has it. Weights are
+// those Tajawal actually ships (no 600).
+const tajawal = localFont({
+  src: [
+    { path: "./fonts/tajawal-400-latin.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/tajawal-400-arabic.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/tajawal-500-latin.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/tajawal-500-arabic.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/tajawal-700-latin.woff2", weight: "700", style: "normal" },
+    { path: "./fonts/tajawal-700-arabic.woff2", weight: "700", style: "normal" },
+    { path: "./fonts/tajawal-800-latin.woff2", weight: "800", style: "normal" },
+    { path: "./fonts/tajawal-800-arabic.woff2", weight: "800", style: "normal" },
+  ],
   variable: "--font-app",
   display: "swap",
+  fallback: ["system-ui", "Segoe UI", "sans-serif"],
 });
 
 /**
  * The display face for app section titles.
  *
  * The published website is already set in Playfair, and that is most of why
- * the site reads as more expensive than the app. Loaded here so the editor's
- * phone and the preview show the real thing; if Google is unreachable at build
- * time Next falls back and nothing breaks.
+ * the site reads as more expensive than the app. From the repository for the
+ * same reason as Tajawal above: the old comment here claimed Next would fall
+ * back if Google were unreachable at build time, and that turned out to be
+ * wrong — it brought the build down instead.
  */
-const playfair = Playfair_Display({
-  subsets: ["latin"],
-  weight: ["600", "700"],
+const playfair = localFont({
+  src: [
+    { path: "./fonts/playfair-600-latin.woff2", weight: "600", style: "normal" },
+    { path: "./fonts/playfair-700-latin.woff2", weight: "700", style: "normal" },
+  ],
   variable: "--font-display",
   display: "swap",
+  fallback: ["Georgia", "Times New Roman", "serif"],
 });
 
 export const metadata: Metadata = {
