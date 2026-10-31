@@ -9782,6 +9782,7 @@ function chromeFile(): GeneratedFile {
  * App → App theme.
  */
 import React, { useEffect, useRef, useState } from "react";
+import { LinearGradient } from "expo-linear-gradient";
 import { Animated, Easing, Image, Linking, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { colors, theme } from "../theme";
 import { api } from "../api";
@@ -9944,7 +9945,7 @@ export function AppChrome({
     }
   };
   const menuButton = (
-    <Pressable style={styles.menuButton} onPress={() => setMenuOpen(true)} hitSlop={4} accessibilityLabel="Menu">
+    <Pressable style={[styles.menuButton, styles.card]} onPress={() => setMenuOpen(true)} hitSlop={4} accessibilityLabel="Menu">
       <HeaderIcon name="menu" color={ink} size={18} />
     </Pressable>
   );
@@ -10039,8 +10040,14 @@ export function AppChrome({
         </View>
       ) : null}
 
-      <View style={[styles.header, { backgroundColor: bg }]}>
-        <View style={styles.topRow}>
+      <LinearGradient
+        colors={[colors.accent + "2b", bg, bg]}
+        locations={[0, 0.55, 1]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.header}
+      >
+        <View style={[styles.topRow, styles.card]}>
         <Pressable onPress={onHome} disabled={!onHome} hitSlop={6} style={styles.home}>
           {theme.logoUrl ? (
             <Image
@@ -10059,13 +10066,15 @@ export function AppChrome({
         </Pressable>
 
         {theme.header.showWishlist ? (
-          <Pressable style={styles.iconButton} onPress={onWishlist} hitSlop={4}>
-            <HeaderIcon name="heart" color={ink} size={19} />
+          <Pressable style={styles.roundButton} onPress={onWishlist} hitSlop={4}>
+            <HeaderIcon name="heart" color={ink} size={18} />
           </Pressable>
         ) : null}
         {theme.header.showBag ? (
-          <Pressable style={styles.iconButton} onPress={onBag} hitSlop={4}>
-            <HeaderIcon name="bag" color={ink} size={19} />
+          // Filled rather than drawn: it is the one thing up here that is the
+          // end of a journey rather than the start of one.
+          <Pressable style={[styles.roundButton, { backgroundColor: ink }]} onPress={onBag} hitSlop={4}>
+            <HeaderIcon name="bag" color="#ffffff" size={18} />
             {cartCount > 0 ? (
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>{cartCount > 99 ? "99+" : cartCount}</Text>
@@ -10075,7 +10084,7 @@ export function AppChrome({
         ) : null}
         {/* With no search there is no second row, so the menu stays up here. */}
         {!theme.showSearch ? (
-          <Pressable style={[styles.iconButton, { marginRight: -4 }]} onPress={() => setMenuOpen(true)} hitSlop={4} accessibilityLabel="Menu">
+          <Pressable style={[styles.roundButton, { marginRight: -4 }]} onPress={() => setMenuOpen(true)} hitSlop={4} accessibilityLabel="Menu">
             <HeaderIcon name="menu" color={ink} size={18} />
           </Pressable>
         ) : null}
@@ -10086,7 +10095,7 @@ export function AppChrome({
             the menu are the two ways of finding something, so they share it. */}
         {theme.showSearch ? (
           <View style={styles.searchRow}>
-            <View style={styles.searchField}>
+            <View style={[styles.searchField, styles.card]}>
               <View style={styles.searchIcon} pointerEvents="none">
                 <HeaderIcon name="search" color={ink + "80"} size={16} />
               </View>
@@ -10143,6 +10152,7 @@ export function AppChrome({
           </Animated.View>
         </ScrollView>
       ) : null}
+      </LinearGradient>
     </View>
   );
 }
@@ -10150,15 +10160,28 @@ export function AppChrome({
 const styles = StyleSheet.create({
   announcement: { backgroundColor: colors.accent, paddingVertical: 6, paddingHorizontal: 12 },
   announcementText: { color: "#ffffff", fontSize: 11, fontWeight: "500", textAlign: "center" },
-  header: { paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: "#e2e8f0" },
-  topRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  header: { paddingHorizontal: 12, paddingTop: 10, paddingBottom: 10 },
+  // One shape for everything that floats here, so the cards read as a set.
+  card: {
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.7)",
+    backgroundColor: "rgba(255,255,255,0.88)",
+    shadowColor: "#140f0a",
+    shadowOpacity: 0.16,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
+  },
+  topRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 8 },
   searchRow: { marginTop: 8, flexDirection: "row", alignItems: "center", gap: 8 },
-  searchField: { flex: 1, minWidth: 0, justifyContent: "center" },
+  searchField: { flex: 1, minWidth: 0, justifyContent: "center", height: 44 },
   home: { flex: 1, minWidth: 0, justifyContent: "center" },
-  wordmark: { fontSize: 15, fontWeight: "800", letterSpacing: -0.4 },
-  searchIcon: { position: "absolute", left: 12, zIndex: 1 },
-  search: { height: 36, borderRadius: 12, borderWidth: 1, borderColor: "#e2e8f0", backgroundColor: "#f8fafc", paddingLeft: 36, paddingRight: 12, paddingVertical: 0, fontSize: 12 },
-  menuButton: { width: 36, height: 36, borderRadius: 12, borderWidth: 1, borderColor: "#e2e8f0", backgroundColor: "#f8fafc", alignItems: "center", justifyContent: "center" },
+  wordmark: { fontSize: 15, fontWeight: "800", letterSpacing: 0.9, textTransform: "uppercase" },
+  searchIcon: { position: "absolute", left: 16, zIndex: 1 },
+  search: { height: 44, borderRadius: 22, backgroundColor: "transparent", paddingLeft: 44, paddingRight: 16, paddingVertical: 0, fontSize: 12.5 },
+  roundButton: { width: 36, height: 36, borderRadius: 18, backgroundColor: "#ffffff", alignItems: "center", justifyContent: "center" },
+  menuButton: { width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center" },
   sheetWrap: { flex: 1, justifyContent: "flex-end" },
   sheetShade: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(15,23,42,0.4)" },
   sheet: { maxHeight: "85%", backgroundColor: "#ffffff", borderTopLeftRadius: 24, borderTopRightRadius: 24, overflow: "hidden" },
