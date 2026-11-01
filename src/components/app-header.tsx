@@ -125,7 +125,7 @@ export function AppHeader({
    * out before halfway, so the cards sit on light and the page below carries
    * on uninterrupted.
    */
-  const ground = `radial-gradient(125% 85% at 0% 0%, ${accent}2b 0%, transparent 58%), radial-gradient(115% 95% at 100% 5%, ${accent}1a 0%, transparent 62%), ${bg}`;
+  const ground = `radial-gradient(125% 85% at 0% 0%, ${accent}42 0%, transparent 60%), radial-gradient(115% 95% at 100% 5%, ${accent}2b 0%, transparent 62%), ${bg}`;
 
   // One shape for everything that floats here, so the row of cards reads as a
   // set rather than as three things that happen to be rounded.

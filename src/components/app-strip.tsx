@@ -127,7 +127,12 @@ export function AppStrip({
   // A default argument only covers undefined, and this arrives as an empty
   // string when the merchant has not set a header ink - which left the
   // shortcut you are on with no fill at all.
-  const dark = ink || "#191614";
+  //
+  // It falls back to the shop colour rather than to a neutral dark. A marker
+  // saying which of several you are standing on is a brand element, and with
+  // no ink set the whole chrome was white and black with nothing of hers in
+  // it. An ink she sets by hand still wins.
+  const dark = ink || accent;
 
   if (!items.length) return null;
   return (
