@@ -22,7 +22,7 @@ import { AppSplash } from "@/components/app-splash";
 import { payName, payNote, type PaymentMethod } from "@/lib/payments";
 import { checkoutRewards, nextReward, type CheckoutReward } from "@/lib/loyalty/checkout";
 import type { LoyaltySummary } from "@/lib/loyalty/types";
-import { AppHeader } from "@/components/app-header";
+import { AppHeader, chromeGround } from "@/components/app-header";
 import { TabIcon } from "@/components/app-tab-icons";
 import { AppLive } from "@/components/app-live";
 import { liveSessionsOf, liveSessionsFromLives } from "@/lib/app-theme";
@@ -459,6 +459,7 @@ export function Preview({
               items={brand.strip}
               accent={accent}
               ink={brand.headerInk}
+              ground={chromeGround(brand)}
               activeIndex={stripIndex}
               onOpen={(item) => {
                 // The same order of precedence the sections use, so a chip

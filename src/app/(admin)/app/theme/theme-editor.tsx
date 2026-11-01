@@ -25,7 +25,7 @@ import { AppStrip } from "@/components/app-strip";
 import { AppPageView } from "@/components/app-page";
 import { AppSplash } from "@/components/app-splash";
 import { AppLive } from "@/components/app-live";
-import { AppHeader } from "@/components/app-header";
+import { AppHeader, chromeGround } from "@/components/app-header";
 import { ColorPicker, ImageUpload, LinkPicker } from "@/components/pickers";
 import {
   BLOCK_META,
@@ -1584,6 +1584,7 @@ export function ThemeEditor() {
                   items={draft.settings.strip}
                   accent={draft.settings.accent}
                   ink={draft.settings.headerInk}
+                  ground={chromeGround(draft.settings)}
                   activeIndex={stripIndex}
                   onOpen={(item) => {
                     if (item.url) {

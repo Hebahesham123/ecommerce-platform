@@ -31,7 +31,8 @@ import type { StripItem } from "@/lib/app-theme";
 export function AppStrip({
   items,
   accent,
-  ink = "#191614",
+  ink = "",
+  ground,
   activeIndex = 0,
   onOpen,
 }: {
@@ -39,6 +40,8 @@ export function AppStrip({
   accent: string;
   /** The header's ink, so the shortcut you are on is filled in the same dark. */
   ink?: string;
+  /** The header's ground, continued behind this row so the two join. */
+  ground?: string;
   activeIndex?: number;
   onOpen?: (item: StripItem) => void;
 }) {
@@ -128,14 +131,16 @@ export function AppStrip({
   // string when the merchant has not set a header ink - which left the
   // shortcut you are on with no fill at all.
   //
-  // It falls back to the shop colour rather than to a neutral dark. A marker
-  // saying which of several you are standing on is a brand element, and with
-  // no ink set the whole chrome was white and black with nothing of hers in
-  // it. An ink she sets by hand still wins.
-  const dark = ink || accent;
+  // Near-black, because that is what the reference does: its ground carries
+  // the colour and the pill sits dark on it. Filling the pill with the shop's
+  // accent instead was my attempt to put her colour somewhere, and it was the
+  // wrong somewhere — the colour belongs in the ground. An ink she sets by
+  // hand still wins.
+  const dark = ink || "#191614";
 
   if (!items.length) return null;
   return (
+    <div style={ground ? { background: ground } : undefined}>
     <div
       ref={rail}
       onPointerDown={() => setHeld(true)}
@@ -165,6 +170,7 @@ export function AppStrip({
           </button>
         );
       })}
+    </div>
     </div>
   );
 }

@@ -65,6 +65,23 @@ function SearchHint({ hints, ink }: { hints: string[]; ink: string }) {
   );
 }
 
+/**
+ * The ground the chrome floats on.
+ *
+ * Sampled from the reference rather than described: warm tan on the left
+ * running to pale sage on the right. Horizontal, so the header and the
+ * shortcut row below it paint the same thing and the join between the two
+ * elements cannot be seen.
+ *
+ * A header colour she sets by hand replaces it entirely — a merchant who has
+ * chosen a flat colour has said what she wants there.
+ */
+export function chromeGround(settings: AppSettings): string {
+  const own = String(settings.headerBg ?? "").trim();
+  if (own) return own;
+  return "linear-gradient(90deg, #f0ddc5 0%, #ece3d0 52%, #d4d8c3 100%)";
+}
+
 export function AppHeader({
   settings,
   accent,
@@ -111,21 +128,11 @@ export function AppHeader({
   ].slice(0, 8);
 
   const ink = settings.headerInk || "#191614";
-  const bg = settings.headerBg || "#ffffff";
   // An uploaded logo wins over the wordmark; a store that has neither still
   // gets its name rather than an empty corner.
   const wordmark = settings.logoText || settings.storeName;
 
-  /**
-   * The ground the cards float on.
-   *
-   * Two soft washes of the shop's own colour over her header colour, rather
-   * than the green the reference happens to use: a green wash under a brown
-   * wordmark is somebody else's brand showing through hers. Both washes fade
-   * out before halfway, so the cards sit on light and the page below carries
-   * on uninterrupted.
-   */
-  const ground = `radial-gradient(125% 85% at 0% 0%, ${accent}42 0%, transparent 60%), radial-gradient(115% 95% at 100% 5%, ${accent}2b 0%, transparent 62%), ${bg}`;
+  const ground = chromeGround(settings);
 
   // One shape for everything that floats here, so the row of cards reads as a
   // set rather than as three things that happen to be rounded.
