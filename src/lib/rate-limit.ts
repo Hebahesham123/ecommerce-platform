@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import { getServerSupabase } from "@/lib/supabase/server";
 
 /**
- * Simple fixed-window rate limits, stored in Postgres (migration 0053_rate_limits.sql).
+ * Simple fixed-window rate limits, stored in Postgres (migration 0061_rate_limits.sql).
  *
  * Fails OPEN: if the database call fails (for example the migration isn't applied yet), the request
  * is allowed. A broken limiter must never stop real customers from logging in or checking out.
@@ -24,7 +24,7 @@ export async function hit(key: string, max: number, windowSeconds: number): Prom
   } catch (e) {
     if (!warned) {
       warned = true;
-      console.warn("[rate-limit] not enforced (is migration 0053 applied?):", (e as Error).message);
+      console.warn("[rate-limit] not enforced (is migration 0061 applied?):", (e as Error).message);
     }
     return true;
   }

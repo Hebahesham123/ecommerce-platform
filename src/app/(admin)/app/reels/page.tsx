@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useI18n, num } from "@/lib/i18n";
-import { getBrowserSupabase } from "@/lib/supabase/client";
 import { PageHeader } from "@/components/page-header";
 import { Card, Badge } from "@/components/ui";
 import { KpiRow, StatTile } from "@/components/dashboard-ui";
@@ -133,10 +132,14 @@ export default function ReelsAdminPage() {
       if (!slot.ok) throw new Error(slot.error);
       // Straight from this browser to storage: a video is far bigger than a
       // request to our own server may be.
-      const { error: upErr } = await getBrowserSupabase()
-        .storage.from(slot.data.bucket)
-        .uploadToSignedUrl(slot.data.path, slot.data.token, file, { contentType: file.type || "video/mp4", cacheControl: "31536000" });
-      if (upErr) throw upErr;
+      // A plain PUT to a one-time signed address works for both Supabase and
+      // R2. The server chose the headers (content type, a year of caching).
+      const put = await fetch(slot.data.uploadUrl, {
+        method: "PUT",
+        headers: { ...slot.data.uploadHeaders, "content-type": file.type || slot.data.uploadHeaders["content-type"] || "video/mp4" },
+        body: file,
+      });
+      if (!put.ok) throw new Error(`${put.status} ${(await put.text()).slice(0, 200)}`);
       const attached = await attachReelVideoAction(made.data.id, slot.data.publicUrl);
       if (!attached.ok) throw new Error(attached.error);
       setStage("done");

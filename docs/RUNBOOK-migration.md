@@ -227,7 +227,7 @@ Each change can go live before the switch: it stays off until its setting is fil
 
 - [x] **D1. OTP limits.** Done. Per phone: 3 codes per 10 min. Per IP: 20 codes per hour. Store-wide: 500 codes per hour
       (`OTP_GLOBAL_HOURLY_LIMIT`). Guesses: 5 per code (then the code is cancelled) and 20 per phone per day.
-      Phone-only login: 30 per IP per hour. **👤 Apply `supabase/migrations/0053_rate_limits.sql` in the Supabase SQL editor.**
+      Phone-only login: 30 per IP per hour. **👤 Apply `supabase/migrations/0061_rate_limits.sql` in the Supabase SQL editor.**
       Until then the limits are skipped and nothing breaks.
 - [ ] **D2. Storage helper** `src/lib/storage.ts` with a `STORAGE_DRIVER=supabase|r2` setting. The 11 files switch to it.
       `themes`, `entity-images` and `files` go to `store-media`; `courier-proofs` and `live-recordings` go to `store-private`.
