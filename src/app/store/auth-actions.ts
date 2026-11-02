@@ -5,6 +5,7 @@ import { normalizePhone, phoneVariants } from "@/lib/phone";
 import { setSession, getSessionPhone, clearSession } from "@/lib/store-session";
 import { sendOtp, verifyOtp, type ActionResult } from "./actions";
 import { accountFor, type Account } from "@/lib/account-service";
+import { clientIp, hit, LIMITS } from "@/lib/rate-limit";
 
 export type { AccountOrder, Account } from "@/lib/account-service";
 
@@ -128,6 +129,12 @@ export async function loginWithPhone(
   if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
   const ph = normalizePhone(phone);
   if (ph.replace(/\D/g, "").length < 12) return { ok: false, error: "invalid_phone" };
+
+  // Slows down anyone checking many numbers to find out which are customers.
+  const ip = await clientIp();
+  if (ip && !(await hit(`phone-login:ip:${ip}`, LIMITS.phoneLoginPerIp.max, LIMITS.phoneLoginPerIp.windowSeconds))) {
+    return { ok: false, error: "too_many_requests" };
+  }
 
   try {
     if (!(await isKnownCustomer(ph))) return { ok: false, error: "not_registered" };

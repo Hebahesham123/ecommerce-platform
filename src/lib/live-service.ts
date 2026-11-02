@@ -1,5 +1,6 @@
 import "server-only";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
+import * as storage from "@/lib/storage";
 import { mapLiveMessage, mapLiveStream, type LiveMessage, type LiveStream } from "@/lib/live";
 import { matchesRule, type CollectionRuleType } from "@/lib/collections";
 
@@ -912,33 +913,37 @@ const RECORDING_BUCKET_FALLBACK = "files";
 export async function createRecordingUpload(
   liveId: string,
   extension: string,
-): Promise<Result<{ bucket: string; path: string; token: string; publicUrl: string }>> {
+): Promise<
+  Result<{ bucket: string; path: string; uploadUrl: string; uploadHeaders: Record<string, string>; publicUrl: string }>
+> {
   if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
   try {
-    const supabase = getServerSupabase();
     const safe = extension.replace(/[^a-z0-9]/gi, "").slice(0, 5) || "webm";
     const path = `lives/${liveId}/${Date.now()}.${safe}`;
+    const contentType = safe === "mp4" ? "video/mp4" : "video/webm";
+    // A recording never changes, so it may be cached for as long as the CDN will keep it.
+    const opts = { contentType, cacheControl: "31536000" };
 
     // The proper bucket, or the old one if the migration has not been run yet.
     // A missing bucket should cost the host a smaller replay, not the replay.
     let bucket = RECORDING_BUCKET;
-    let signed = await supabase.storage.from(bucket).createSignedUploadUrl(path);
-    if (signed.error && /not found|does not exist/i.test(signed.error.message)) {
+    let signed = await storage.createSignedUpload(bucket, path, opts);
+    if (signed.error && /not found|does not exist/i.test(signed.error)) {
       bucket = RECORDING_BUCKET_FALLBACK;
-      signed = await supabase.storage.from(bucket).createSignedUploadUrl(path);
+      signed = await storage.createSignedUpload(bucket, path, opts);
     }
     if (signed.error || !signed.data) {
-      return { ok: false, error: signed.error?.message ?? "no_signed_url" };
+      return { ok: false, error: signed.error ?? "no_signed_url" };
     }
 
-    const { data: pub } = supabase.storage.from(bucket).getPublicUrl(path);
     return {
       ok: true,
       data: {
         bucket,
         path,
-        token: signed.data.token,
-        publicUrl: pub.publicUrl,
+        uploadUrl: signed.data.url,
+        uploadHeaders: signed.data.headers,
+        publicUrl: storage.publicUrl(bucket, path),
       },
     };
   } catch (e) {
@@ -965,10 +970,10 @@ export async function deleteRecording(liveId: string): Promise<Result<LiveStream
 
     if (url) {
       // One we made in the browser and put in our own bucket.
-      const ours = url.match(/\/storage\/v1\/object\/public\/([^/]+)\/(.+)$/);
+      // Works for both Supabase and R2 addresses.
+      const ours = storage.locateUrl(url);
       if (ours) {
-        const [, bucket, path] = ours;
-        await supabase.storage.from(bucket).remove([decodeURIComponent(path)]);
+        await storage.remove(ours.bucket, [ours.path]);
       } else {
         // One the provider made. Removing it stops us paying to store it.
         const cf = url.match(/cloudflarestream\.com\/([^/]+)\//);

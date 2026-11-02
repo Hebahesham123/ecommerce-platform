@@ -58,7 +58,9 @@ function SignupForm({ copy }: { copy: Copy }) {
       setErr(
         res.error === "invalid_phone"
           ? (ar ? "رقم هاتف غير صحيح" : "Invalid phone number")
-          : (ar ? "تعذّر إرسال الكود، حاولي مرة أخرى" : "Couldn't send the code, please try again"),
+          : res.error === "too_many_requests"
+            ? (ar ? "طلبتِ أكواد كثيرة، انتظري ١٠ دقائق وحاولي مرة أخرى" : "Too many codes requested. Please wait 10 minutes and try again.")
+            : (ar ? "تعذّر إرسال الكود، حاولي مرة أخرى" : "Couldn't send the code, please try again"),
       );
       return;
     }
@@ -81,6 +83,7 @@ function SignupForm({ copy }: { copy: Copy }) {
         res.error === "wrong_code" ? (ar ? "الكود غير صحيح" : "Wrong code")
           : res.error === "expired" ? (ar ? "انتهت صلاحية الكود" : "Code expired")
           : res.error === "no_code" ? (ar ? "لم يُرسل كود بعد" : "No code was sent yet")
+          : res.error === "too_many_attempts" ? (ar ? "محاولات خاطئة كثيرة، اطلبي كوداً جديداً" : "Too many wrong tries. Please request a new code.")
           : (ar ? "تعذّر إنشاء الحساب" : "Could not create the account"),
       );
       return;

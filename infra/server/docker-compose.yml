@@ -1,0 +1,128 @@
+# Store database server: PostgreSQL + PostgREST + Caddy + Cloudflare Tunnel (+ Garnet cache).
+# Lives in /opt/store on the dedicated server. Secrets come from /opt/store/.env (see .env.example).
+#
+#   docker compose up -d                    # database stack
+#   docker compose --profile cache up -d    # same, plus the Garnet cache
+#
+# Postgres is reachable on 127.0.0.1 only (for admin over SSH). PostgREST is reachable only through
+# Caddy: directly on 80/443 (no own domain yet) or through the Cloudflare Tunnel (with a domain).
+# Garnet publishes 6380 when its profile is on.
+
+services:
+  postgres:
+    image: postgres:17.2
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: app
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
+    shm_size: 1g
+    # Hard ceiling so Postgres can never starve the rest of the server.
+    mem_limit: 11g
+    # Sized for Hostinger KVM 4 (4 vCPU, 16 GB RAM), leaving room for Garnet and the other services.
+    #   KVM 8 (32 GB):     shared_buffers=8GB,  effective_cache_size=22GB, maintenance_work_mem=2GB
+    #   Dedicated (64 GB): shared_buffers=16GB, effective_cache_size=44GB, maintenance_work_mem=2GB
+    command:
+      - postgres
+      - -c
+      - shared_buffers=4GB
+      - -c
+      - effective_cache_size=10GB
+      - -c
+      - work_mem=16MB
+      - -c
+      - maintenance_work_mem=1GB
+      - -c
+      - max_connections=100
+      - -c
+      - max_worker_processes=4
+      - -c
+      - max_parallel_workers_per_gather=2
+      - -c
+      - random_page_cost=1.1
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - log_min_duration_statement=500
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d app"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgrest:
+    image: postgrest/postgrest:v12.2.8
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGRST_DB_URI: postgres://authenticator:${AUTHENTICATOR_PASSWORD}@postgres:5432/app
+      PGRST_DB_SCHEMAS: public
+      PGRST_DB_EXTRA_SEARCH_PATH: public,extensions
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: ${JWT_SECRET}
+      PGRST_DB_POOL: 30
+      # Supabase caps every API response at 1000 rows. Keep the same cap so the app behaves the same.
+      PGRST_DB_MAX_ROWS: 1000
+      # Don't publish a description of the database to anyone who asks. supabase-js doesn't need it.
+      PGRST_OPENAPI_MODE: disabled
+
+  caddy:
+    image: caddy:2.8.4
+    restart: unless-stopped
+    depends_on: [postgrest]
+    environment:
+      DB_API_HOST: ${DB_API_HOST:-}
+    # Published only in direct mode (no own domain yet). In tunnel mode these can be removed.
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+  cloudflared:
+    # Only used once the store has a domain on Cloudflare:  docker compose --profile tunnel up -d
+    profiles: ["tunnel"]
+    image: cloudflare/cloudflared:2024.12.2
+    restart: unless-stopped
+    depends_on: [caddy]
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+
+  garnet:
+    profiles: ["cache"]
+    image: ghcr.io/microsoft/garnet:latest
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    volumes:
+      - ./certs:/certs:ro
+    # Confirm flag names on first run with:  docker run --rm ghcr.io/microsoft/garnet --help
+    command:
+      - --port
+      - "6379"
+      - --auth
+      - Password
+      - --password
+      - ${GARNET_PASSWORD}
+      - --tls
+      - --cert-file-name
+      - /certs/garnet.pfx
+      - --cert-password
+      - ${GARNET_CERT_PASSWORD}
+      # 2 GB is plenty for a store's cache on a 16 GB server. Raise it on a bigger server.
+      - --memory
+      - 2g
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

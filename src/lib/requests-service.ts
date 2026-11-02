@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
+import * as storage from "@/lib/storage";
 import { normalizePhone } from "@/lib/phone";
 import type { ActionResult } from "@/lib/orders";
 import { normalizeChannel, type Channel } from "@/lib/channel";
@@ -86,17 +87,15 @@ export async function submitGeneralRequestFor(
       if (file.size > MAX_FILE_BYTES) continue;
 
       const path = `requests/${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${sanitize(file.name)}`;
-      const { error: upErr } = await supabase.storage
-        .from(BUCKET)
-        .upload(path, new Uint8Array(await file.arrayBuffer()), {
-          contentType: file.type || "application/octet-stream",
-          upsert: false,
-        });
+      const { error: upErr } = await storage.upload(BUCKET, path, new Uint8Array(await file.arrayBuffer()), {
+        contentType: file.type || "application/octet-stream",
+        upsert: false,
+      });
       // A failed upload must not lose the request itself — the words matter
       // more than the photo.
       if (upErr) continue;
       attachments.push({
-        url: supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl,
+        url: storage.publicUrl(BUCKET, path),
         kind: isImage ? "image" : "video",
         name: file.name.slice(0, 120),
       });

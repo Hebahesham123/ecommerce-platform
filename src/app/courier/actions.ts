@@ -1,6 +1,7 @@
 "use server";
 
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
+import * as storage from "@/lib/storage";
 import { phoneVariants } from "@/lib/phone";
 import {
   setCourierSession,
@@ -299,11 +300,9 @@ export async function uploadCourierProof(dataUrl: string, filename: string): Pro
     const ext = contentType.split("/")[1]?.replace(/[^a-z0-9]/gi, "") || "jpg";
     const safe = (filename || "proof").replace(/[^\w.-]+/g, "_").slice(0, 40);
     const path = `${courierId}/${Date.now()}-${safe}.${ext}`;
-    const sb = getServerSupabase();
-    const { error: upErr } = await sb.storage.from("courier-proofs").upload(path, bytes, { contentType, upsert: true });
-    if (upErr) return { ok: false, error: upErr.message };
-    const { data } = sb.storage.from("courier-proofs").getPublicUrl(path);
-    return { ok: true, data: { url: data.publicUrl } };
+    const { error: upErr } = await storage.upload("courier-proofs", path, bytes, { contentType, upsert: true });
+    if (upErr) return { ok: false, error: upErr };
+    return { ok: true, data: { url: storage.publicUrl("courier-proofs", path) } };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }

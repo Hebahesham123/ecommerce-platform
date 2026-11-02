@@ -2,6 +2,7 @@
 
 import { randomUUID } from "node:crypto";
 import { getServerSupabase } from "@/lib/supabase/server";
+import * as storage from "@/lib/storage";
 import type {
   Account,
   AccountType,
@@ -200,14 +201,12 @@ export async function uploadEntityImage(dataUrl: string, filename: string): Prom
     const bytes = Buffer.from(m[2], "base64");
     const safeName = (filename || "logo").replace(/[^\w.-]+/g, "_");
     const path = `logos/${randomUUID()}-${safeName}`;
-    const sb = getServerSupabase();
-    const { error: upErr } = await sb.storage.from("entity-images").upload(path, bytes, {
+    const { error: upErr } = await storage.upload("entity-images", path, bytes, {
       contentType,
       upsert: true,
     });
-    if (upErr) return fail(upErr as PgLikeError, "فشل رفع الصورة");
-    const { data } = sb.storage.from("entity-images").getPublicUrl(path);
-    return { ok: true, data: data.publicUrl };
+    if (upErr) return fail({ message: upErr } as PgLikeError, "فشل رفع الصورة");
+    return { ok: true, data: storage.publicUrl("entity-images", path) };
   } catch (e) {
     return caught(e);
   }

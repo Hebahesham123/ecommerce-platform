@@ -1,5 +1,6 @@
 import "server-only";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
+import * as storage from "@/lib/storage";
 import {
   DEFAULT_SCREENS,
   DEFAULT_SETTINGS,
@@ -297,7 +298,7 @@ export async function seedFromWebsite(shopName?: string): Promise<AppTheme | nul
     const live = themes.find((t: Raw) => t.is_current) ?? themes[0];
     const prefix = str((live as Raw).storage_path, 200) || String((live as Raw).id);
 
-    const file = await supabase.storage.from("themes").download(`${prefix}/templates/index.json`);
+    const file = await storage.download("themes", `${prefix}/templates/index.json`);
     if (file.error || !file.data) return null;
 
     const parsed = JSON.parse(stripComments(await file.data.text())) as {

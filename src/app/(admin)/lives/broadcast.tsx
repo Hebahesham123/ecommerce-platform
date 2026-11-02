@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { IcX, IcAlert } from "@/components/icons";
 import type { LiveChat } from "@/lib/live-chat";
 import { LiveComments } from "@/components/live-comments";
-import { getBrowserSupabase } from "@/lib/supabase/client";
 import { attachRecordingAction, createRecordingUploadAction } from "./actions";
 
 /**
@@ -400,16 +399,14 @@ export function Broadcast({
       // a serverless request is capped in single digits.
       const slot = await createRecordingUploadAction(liveId, extension);
       if (!slot.ok) throw new Error(slot.error);
-      const { error: upErr } = await getBrowserSupabase()
-        .storage.from(slot.data.bucket)
-        .uploadToSignedUrl(slot.data.path, slot.data.token, blob, {
-          contentType: blob.type,
-          // A recording never changes, so it may be cached for as long as the
-          // CDN will keep it. The hour it defaults to means the first customer
-          // after every lull waits for the origin all over again.
-          cacheControl: "31536000",
-        });
-      if (upErr) throw upErr;
+      // A plain PUT to a one-time signed address works for both Supabase and
+      // R2. The server chose the headers (content type, a year of caching).
+      const put = await fetch(slot.data.uploadUrl, {
+        method: "PUT",
+        headers: { ...slot.data.uploadHeaders, "content-type": blob.type || slot.data.uploadHeaders["content-type"] || "video/webm" },
+        body: blob,
+      });
+      if (!put.ok) throw new Error(`${put.status} ${(await put.text()).slice(0, 200)}`);
       const attached = await attachRecordingAction(liveId, slot.data.publicUrl);
       if (!attached.ok) throw new Error(attached.error);
       setRecording("saved");

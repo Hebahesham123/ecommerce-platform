@@ -4,6 +4,7 @@ import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
 import { validateDiscount, type DiscountLine } from "@/lib/discount-engine";
 import { normalizePhone, phoneVariants } from "@/lib/phone";
 import { getSessionPhone, setSession } from "@/lib/store-session";
+import { clientIp, hit, LIMITS, reset } from "@/lib/rate-limit";
 import { normalizeChannel, type Channel } from "@/lib/channel";
 import { withDeliveryNote } from "@/lib/offers";
 import {
@@ -183,6 +184,15 @@ export async function sendOtp(
       .maybeSingle();
     if (known) return { ok: true, data: { sent: true } };
 
+    // Limits before anything is sent: per phone (stops flooding one person), per IP (stops one
+    // script), and store-wide (caps the SMS/WhatsApp bill if many numbers are used at once).
+    const ip = await clientIp();
+    const allowed =
+      (await hit(`otp-send:phone:${ph}`, LIMITS.otpSendPerPhone.max, LIMITS.otpSendPerPhone.windowSeconds)) &&
+      (!ip || (await hit(`otp-send:ip:${ip}`, LIMITS.otpSendPerIp.max, LIMITS.otpSendPerIp.windowSeconds))) &&
+      (await hit("otp-send:global", LIMITS.otpSendGlobal.max, LIMITS.otpSendGlobal.windowSeconds));
+    if (!allowed) return { ok: false, error: "too_many_requests" };
+
     // n8n owns OTP generation + delivery + storage (in otp_codes). We only
     // trigger it; verifyOtp then checks the code n8n stored. `channel` tells
     // n8n which route to deliver on (WhatsApp or SMS) per the customer's pick.
@@ -213,6 +223,19 @@ export async function verifyOtp(
   try {
     const supabase = getServerSupabase();
     const ph = normalizePhone(phone);
+
+    // Without a limit a short code can be guessed by trying every number. Every attempt counts;
+    // past the limit the current code is cancelled, so the customer must ask for a new one
+    // (and sending is limited too).
+    const codeKey = `otp-verify:phone:${ph}`;
+    const dayKey = `otp-verify-day:phone:${ph}`;
+    const withinCode = await hit(codeKey, LIMITS.otpVerifyPerCode.max, LIMITS.otpVerifyPerCode.windowSeconds);
+    const withinDay = await hit(dayKey, LIMITS.otpVerifyPerPhoneDaily.max, LIMITS.otpVerifyPerPhoneDaily.windowSeconds);
+    if (!withinCode || !withinDay) {
+      await supabase.from("otp_codes").delete().eq("phone", ph);
+      return { ok: false, error: "too_many_attempts" };
+    }
+
     const { data } = await supabase.from("otp_codes").select("*").eq("phone", ph).maybeSingle();
     if (!data) return { ok: false, error: "no_code" };
     if (String(data.code) !== code.trim()) return { ok: false, error: "wrong_code" };
@@ -222,6 +245,7 @@ export async function verifyOtp(
       .from("verified_phones")
       .upsert({ phone: ph, name: name ?? null, verified_at: new Date().toISOString() }, { onConflict: "phone" });
     await supabase.from("otp_codes").delete().eq("phone", ph);
+    await reset(codeKey);
     // Proving ownership of the number IS signing in here — the phone is the
     // account. Without this, a shopper who verified at checkout comes back a
     // stranger and gets asked to verify all over again.

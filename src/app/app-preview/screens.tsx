@@ -125,6 +125,10 @@ export function SignIn({ ar, onDone }: { ar: boolean; onDone: (phone: string) =>
         : "There's no code waiting for this number. Ask for a new one.";
     if (e === "wrong_code") return ar ? "الكود غير صحيح." : "That code isn't right.";
     if (e === "expired") return ar ? "انتهت صلاحية الكود." : "That code has expired.";
+    if (e === "too_many_requests")
+      return ar ? "طلبات كثيرة. انتظري قليلاً وحاولي مرة أخرى." : "Too many requests. Wait a little and try again.";
+    if (e === "too_many_attempts")
+      return ar ? "محاولات خاطئة كثيرة. اطلبي كوداً جديداً." : "Too many wrong tries. Ask for a new code.";
     return null;
   };
 

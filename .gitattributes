@@ -3,3 +3,6 @@
 # the real diff. Without this, 82 files showed as fully modified while their
 # content was byte-identical apart from carriage returns.
 * text=auto
+# Server files run on Linux: always LF line endings, even when checked out on Windows.
+infra/** text eol=lf
+*.sh text eol=lf

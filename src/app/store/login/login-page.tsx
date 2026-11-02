@@ -58,7 +58,9 @@ function LoginForm({ copy }: { copy: Copy }) {
     setErr(
       res.error === "invalid_phone"
         ? (ar ? "رقم هاتف غير صحيح" : "Invalid phone number")
-        : (ar ? "تعذّر تسجيل الدخول" : "Could not sign in"),
+        : res.error === "too_many_requests"
+          ? (ar ? "محاولات كثيرة، حاولي بعد قليل" : "Too many tries. Please wait a little and try again.")
+          : (ar ? "تعذّر تسجيل الدخول" : "Could not sign in"),
     );
   }
 

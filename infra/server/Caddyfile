@@ -1,0 +1,23 @@
+# Two ways to run, chosen by DB_API_HOST in .env:
+#
+#   DB_API_HOST=srv2120209.hstgr.cloud   Direct: Caddy gets a free HTTPS certificate for that address
+#                                        and serves it on ports 80/443. (No own domain yet.)
+#   DB_API_HOST unset                    Tunnel: plain port 80 inside Docker; Cloudflare Tunnel
+#                                        handles HTTPS. (Once the store has a domain on Cloudflare.)
+{$DB_API_HOST::80} {
+	# supabase-js calls <url>/rest/v1/<table>; PostgREST expects /<table>.
+	handle_path /rest/v1/* {
+		reverse_proxy postgrest:3000
+	}
+
+	# For uptime monitoring.
+	handle /health {
+		respond "ok" 200
+	}
+
+	handle {
+		respond "not found" 404
+	}
+
+	header -Server
+}

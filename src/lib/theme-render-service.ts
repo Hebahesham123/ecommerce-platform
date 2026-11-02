@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import "server-only";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
+import * as storage from "@/lib/storage";
 import { renderThemePage, type FileMap, type RenderRoute } from "@/lib/liquid-render";
 import {
   getCatalog,
@@ -103,7 +104,7 @@ export function invalidateThemeBundle(id?: string): void {
 export async function purgeThemeBundle(id: string): Promise<void> {
   invalidateThemeBundle(id);
   try {
-    await getServerSupabase().storage.from(BUCKET).remove([bundleBlobPath(id)]);
+    await storage.remove(BUCKET, [bundleBlobPath(id)]);
   } catch {
     /* nothing cached yet */
   }
@@ -111,8 +112,7 @@ export async function purgeThemeBundle(id: string): Promise<void> {
 
 async function readBundleBlob(id: string): Promise<Bundle | null> {
   try {
-    const supabase = getServerSupabase();
-    const { data, error } = await supabase.storage.from(BUCKET).download(bundleBlobPath(id));
+    const { data, error } = await storage.download(BUCKET, bundleBlobPath(id));
     if (error || !data) return null;
     const parsed = JSON.parse(await data.text()) as Bundle;
     // A blob written before `version` existed carries none, and an empty token
@@ -128,43 +128,22 @@ async function readBundleBlob(id: string): Promise<Bundle | null> {
 
 async function writeBundleBlob(id: string, bundle: Bundle): Promise<void> {
   try {
-    const supabase = getServerSupabase();
-    await supabase.storage
-      .from(BUCKET)
-      .upload(bundleBlobPath(id), new TextEncoder().encode(JSON.stringify(bundle)), {
-        contentType: "application/json; charset=utf-8",
-        upsert: true,
-      });
+    await storage.upload(BUCKET, bundleBlobPath(id), new TextEncoder().encode(JSON.stringify(bundle)), {
+      contentType: "application/json; charset=utf-8",
+      upsert: true,
+    });
   } catch {
     /* caching is best-effort — a failure just means the slow path next time */
   }
 }
 
 async function listAll(prefix: string): Promise<StoredFile[]> {
-  const supabase = getServerSupabase();
-  type Item = {
-    name: string;
-    id: string | null;
-    updated_at?: string;
-    metadata?: { lastModified?: string } | null;
-  };
-  async function walk(dir: string): Promise<StoredFile[]> {
-    const { data } = await supabase.storage.from(BUCKET).list(dir, { limit: 1000 });
-    if (!data) return [];
-    const out: StoredFile[] = [];
-    for (const item of data as Item[]) {
-      const full = dir ? `${dir}/${item.name}` : item.name;
-      if (item.id === null) out.push(...(await walk(full)));
-      else
-        out.push({
-          path: full.slice(prefix.length + 1),
-          url: supabase.storage.from(BUCKET).getPublicUrl(full).data.publicUrl,
-          mtime: item.updated_at ?? item.metadata?.lastModified ?? undefined,
-        });
-    }
-    return out;
-  }
-  return walk(prefix);
+  const files = await storage.listAll(BUCKET, prefix);
+  return files.map((f) => ({
+    path: f.path.slice(prefix.length + 1),
+    url: storage.publicUrl(BUCKET, f.path),
+    mtime: f.updatedAt,
+  }));
 }
 
 /** A short cache-busting token for a theme's assets: the newest file mtime.
@@ -236,8 +215,7 @@ async function loadBundle(
       stripLen,
     };
   } else {
-    let assetBase = supabase.storage.from(BUCKET).getPublicUrl(`${rootStorage}/`).data
-      .publicUrl;
+    let assetBase = storage.publicUrl(BUCKET, `${rootStorage}/`);
     if (!assetBase.endsWith("/")) assetBase += "/";
 
     const textFiles = all.filter((f) => /\.(liquid|json)$/i.test(f.path));

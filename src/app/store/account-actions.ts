@@ -2,6 +2,7 @@
 
 import { getSessionPhone } from "@/lib/store-session";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
+import * as storage from "@/lib/storage";
 import { phoneVariants } from "@/lib/phone";
 
 /**
@@ -166,13 +167,14 @@ export async function saveMyAvatar(dataUrl: string): Promise<ActionResult<string
     const extension = match[1] === "jpeg" ? "jpg" : match[1];
     const path = `avatars/${crypto.randomUUID()}.${extension}`;
 
-    const { error: upErr } = await supabase.storage
-      .from(AVATAR_BUCKET)
-      .upload(path, bytes, { contentType: `image/${match[1]}`, cacheControl: "31536000", upsert: false });
-    if (upErr) return { ok: false, error: upErr.message };
+    const { error: upErr } = await storage.upload(AVATAR_BUCKET, path, bytes, {
+      contentType: `image/${match[1]}`,
+      cacheControl: "31536000",
+      upsert: false,
+    });
+    if (upErr) return { ok: false, error: upErr };
 
-    const { data: pub } = supabase.storage.from(AVATAR_BUCKET).getPublicUrl(path);
-    const url = pub.publicUrl;
+    const url = storage.publicUrl(AVATAR_BUCKET, path);
 
     // What she had before, so it can be cleared once the new one is safely in.
     const { data: before } = await supabase
@@ -186,14 +188,14 @@ export async function saveMyAvatar(dataUrl: string): Promise<ActionResult<string
       .upsert({ phone, avatar_url: url, updated_at: new Date().toISOString() }, { onConflict: "phone" });
     if (error) {
       // Do not leave an orphan behind a failed save.
-      await supabase.storage.from(AVATAR_BUCKET).remove([path]);
+      await storage.remove(AVATAR_BUCKET, [path]);
       return { ok: false, error: error.message };
     }
 
-    const old = s(before?.avatar_url);
-    const oldPath = old.match(/\/object\/public\/[^/]+\/(.+)$/)?.[1];
-    if (oldPath && oldPath !== path) {
-      await supabase.storage.from(AVATAR_BUCKET).remove([decodeURIComponent(oldPath)]);
+    // Works for both Supabase and R2 addresses.
+    const old = storage.locateUrl(s(before?.avatar_url));
+    if (old && old.bucket === AVATAR_BUCKET && old.path !== path) {
+      await storage.remove(AVATAR_BUCKET, [old.path]);
     }
 
     return { ok: true, data: url };
@@ -219,8 +221,8 @@ export async function removeMyAvatar(): Promise<ActionResult> {
       .update({ avatar_url: null, updated_at: new Date().toISOString() })
       .eq("phone", phone);
     if (error) return { ok: false, error: error.message };
-    const oldPath = s(before?.avatar_url).match(/\/object\/public\/[^/]+\/(.+)$/)?.[1];
-    if (oldPath) await supabase.storage.from(AVATAR_BUCKET).remove([decodeURIComponent(oldPath)]);
+    const old = storage.locateUrl(s(before?.avatar_url));
+    if (old && old.bucket === AVATAR_BUCKET) await storage.remove(AVATAR_BUCKET, [old.path]);
     return { ok: true, data: undefined };
   } catch (e) {
     return { ok: false, error: (e as Error).message };

@@ -517,7 +517,11 @@ export default function CheckoutClient({
     const res = await sendOtp(phone, ch);
     if (!res.ok || !res.data.sent) {
       setStep("channel");
-      setErr(ar ? "تعذّر إرسال الكود، حاولي مرة أخرى" : "Couldn't send the code, please try again");
+      setErr(
+        !res.ok && res.error === "too_many_requests"
+          ? (ar ? "طلبتِ أكواد كثيرة، انتظري ١٠ دقائق وحاولي مرة أخرى" : "Too many codes requested. Please wait 10 minutes and try again.")
+          : (ar ? "تعذّر إرسال الكود، حاولي مرة أخرى" : "Couldn't send the code, please try again"),
+      );
       return;
     }
     setStep("code_sent");
@@ -529,7 +533,12 @@ export default function CheckoutClient({
     setErr(null);
     const res = await verifyOtp(phone, code, `${firstName} ${lastName}`.trim());
     if (!res.ok) {
-      setErr(res.error === "wrong_code" ? (ar ? "الكود غير صحيح" : "Wrong code") : res.error === "expired" ? (ar ? "انتهت صلاحية الكود" : "Code expired") : (ar ? "تعذّر التحقق" : "Verification failed"));
+      setErr(
+        res.error === "wrong_code" ? (ar ? "الكود غير صحيح" : "Wrong code")
+          : res.error === "expired" ? (ar ? "انتهت صلاحية الكود" : "Code expired")
+          : res.error === "too_many_attempts" ? (ar ? "محاولات خاطئة كثيرة، اطلبي كوداً جديداً" : "Too many wrong tries. Please request a new code.")
+          : (ar ? "تعذّر التحقق" : "Verification failed"),
+      );
       return;
     }
     setStep("verified");

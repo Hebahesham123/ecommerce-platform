@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
+import * as storage from "@/lib/storage";
 import { purgeThemeBundle } from "@/lib/theme-render-service";
 import { mimeForPath, isEditablePath } from "@/lib/themes";
 
@@ -48,8 +49,8 @@ export async function readThemeFile(
   try {
     const supabase = getServerSupabase();
     const prefix = await themePrefix(themeId);
-    const { data, error } = await supabase.storage.from(BUCKET).download(`${prefix}/${path}`);
-    if (error || !data) return { ok: false, error: error?.message ?? "not_found" };
+    const { data, error } = await storage.download(BUCKET, `${prefix}/${path}`);
+    if (error || !data) return { ok: false, error: error ?? "not_found" };
     if (data.size > MAX_EDITABLE_BYTES)
       return { ok: true, data: { path, content: "", editable: false, modified: false } };
 
@@ -122,7 +123,7 @@ export async function saveThemeFile(
         .eq("path", path)
         .maybeSingle();
       if (!existing) {
-        const { data: current } = await supabase.storage.from(BUCKET).download(full);
+        const { data: current } = await storage.download(BUCKET, full);
         const originalContent = current ? await current.text() : "";
         await supabase
           .from("theme_file_edits")
@@ -133,14 +134,12 @@ export async function saveThemeFile(
       modified = false;
     }
 
-    const { error } = await supabase.storage
-      .from(BUCKET)
-      .upload(full, new TextEncoder().encode(content), {
-        contentType: mimeForPath(path),
-        upsert: true,
-        cacheControl: "31536000",
-      });
-    if (error) return { ok: false, error: error.message };
+    const { error } = await storage.upload(BUCKET, full, new TextEncoder().encode(content), {
+      contentType: mimeForPath(path),
+      upsert: true,
+      cacheControl: "31536000",
+    });
+    if (error) return { ok: false, error };
 
     await purgeThemeBundle(themeId);
     revalidatePath(`/online-store/themes/${themeId}/code`);
@@ -169,14 +168,12 @@ export async function revertThemeFile(
 
     const original = String(row.original_content ?? "");
     const prefix = await themePrefix(themeId);
-    const { error: upErr } = await supabase.storage
-      .from(BUCKET)
-      .upload(`${prefix}/${path}`, new TextEncoder().encode(original), {
-        contentType: mimeForPath(path),
-        upsert: true,
-        cacheControl: "31536000",
-      });
-    if (upErr) return { ok: false, error: upErr.message };
+    const { error: upErr } = await storage.upload(BUCKET, `${prefix}/${path}`, new TextEncoder().encode(original), {
+      contentType: mimeForPath(path),
+      upsert: true,
+      cacheControl: "31536000",
+    });
+    if (upErr) return { ok: false, error: upErr };
 
     await supabase
       .from("theme_file_edits")

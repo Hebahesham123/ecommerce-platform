@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
+import * as storage from "@/lib/storage";
 import {
   kindFromMime,
   type FileAsset,
@@ -83,15 +84,13 @@ export async function uploadFile(form: FormData): Promise<FileResult<FileAsset>>
     const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safe}`;
     const bytes = new Uint8Array(await file.arrayBuffer());
 
-    const { error: upErr } = await supabase.storage
-      .from(BUCKET)
-      .upload(path, bytes, {
-        contentType: file.type || "application/octet-stream",
-        upsert: false,
-      });
-    if (upErr) return { ok: false, error: upErr.message };
+    const { error: upErr } = await storage.upload(BUCKET, path, bytes, {
+      contentType: file.type || "application/octet-stream",
+      upsert: false,
+    });
+    if (upErr) return { ok: false, error: upErr };
 
-    const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(path);
+    const pub = { publicUrl: storage.publicUrl(BUCKET, path) };
 
     const insert = {
       name: file.name,
@@ -110,7 +109,7 @@ export async function uploadFile(form: FormData): Promise<FileResult<FileAsset>>
       .select("*")
       .single();
     if (error) {
-      await supabase.storage.from(BUCKET).remove([path]);
+      await storage.remove(BUCKET, [path]);
       return { ok: false, error: error.message };
     }
     revalidatePath("/content/files");
@@ -144,11 +143,12 @@ export async function addFromUrl(
       const buf = new Uint8Array(await res.arrayBuffer());
       const safe = sanitize(guessName.includes(".") ? guessName : `${guessName}`);
       const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safe}`;
-      const { error: upErr } = await supabase.storage
-        .from(BUCKET)
-        .upload(path, buf, { contentType: mime || "application/octet-stream", upsert: false });
+      const { error: upErr } = await storage.upload(BUCKET, path, buf, {
+        contentType: mime || "application/octet-stream",
+        upsert: false,
+      });
       if (!upErr) {
-        const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(path);
+        const pub = { publicUrl: storage.publicUrl(BUCKET, path) };
         const { data, error } = await supabase
           .from("content_files")
           .insert({
@@ -166,7 +166,7 @@ export async function addFromUrl(
           revalidatePath("/content/files");
           return { ok: true, data: rowToFile(data) };
         }
-        await supabase.storage.from(BUCKET).remove([path]);
+        await storage.remove(BUCKET, [path]);
       }
     }
   } catch {
@@ -225,7 +225,7 @@ export async function deleteFile(id: string): Promise<FileResult> {
       .eq("id", id)
       .single();
     const path = row?.storage_path as string | null | undefined;
-    if (path) await supabase.storage.from(BUCKET).remove([path]);
+    if (path) await storage.remove(BUCKET, [path]);
     const { error } = await supabase.from("content_files").delete().eq("id", id);
     if (error) return { ok: false, error: error.message };
     revalidatePath("/content/files");

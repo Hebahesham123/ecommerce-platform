@@ -46,6 +46,8 @@ const STATUS: Record<string, number> = {
   window_expired: 409,
   nothing_returnable: 409,
   migration_missing: 503,
+  too_many_requests: 429,
+  too_many_attempts: 429,
 };
 
 /** Turn a shared ActionResult into a response, mapping the usual refusals. */

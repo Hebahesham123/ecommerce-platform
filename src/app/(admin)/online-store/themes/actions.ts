@@ -3,6 +3,7 @@
 import JSZip from "jszip";
 import { revalidatePath } from "next/cache";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
+import * as storage from "@/lib/storage";
 import { mimeForPath, pickEntry, type Theme, type ThemeStatus } from "@/lib/themes";
 import { purgeThemeBundle, invalidatePublishedTheme } from "@/lib/theme-render-service";
 
@@ -93,16 +94,14 @@ export async function uploadTheme(form: FormData): Promise<ThemeResult<Theme>> {
         const rel = cleanEntryPath(entry.name);
         if (!rel) continue;
         const bytes = await entry.async("uint8array");
-        const { error: upErr } = await supabase.storage
-          .from(BUCKET)
-          .upload(`${themeId}/${rel}`, bytes, {
-            contentType: mimeForPath(rel),
-            upsert: true,
-            // Theme assets are immutable per URL (edits bust via the ?v= token
-            // the renderer appends), so let browsers/CDN keep them for a year.
-            cacheControl: "31536000",
-          });
-        if (upErr) return { ok: false, error: upErr.message };
+        const { error: upErr } = await storage.upload(BUCKET, `${themeId}/${rel}`, bytes, {
+          contentType: mimeForPath(rel),
+          upsert: true,
+          // Theme assets are immutable per URL (edits bust via the ?v= token
+          // the renderer appends), so let browsers/CDN keep them for a year.
+          cacheControl: "31536000",
+        });
+        if (upErr) return { ok: false, error: upErr };
         paths.push(rel);
       }
       fileCount = paths.length;
@@ -110,14 +109,12 @@ export async function uploadTheme(form: FormData): Promise<ThemeResult<Theme>> {
     } else if (/\.html?$/i.test(file.name) || file.type.includes("html")) {
       const rel = "index.html";
       const bytes = new Uint8Array(await file.arrayBuffer());
-      const { error: upErr } = await supabase.storage
-        .from(BUCKET)
-        .upload(`${themeId}/${rel}`, bytes, {
-          contentType: "text/html; charset=utf-8",
-          upsert: true,
-          cacheControl: "31536000",
-        });
-      if (upErr) return { ok: false, error: upErr.message };
+      const { error: upErr } = await storage.upload(BUCKET, `${themeId}/${rel}`, bytes, {
+        contentType: "text/html; charset=utf-8",
+        upsert: true,
+        cacheControl: "31536000",
+      });
+      if (upErr) return { ok: false, error: upErr };
       entryPath = rel;
       fileCount = 1;
     } else {
@@ -125,7 +122,7 @@ export async function uploadTheme(form: FormData): Promise<ThemeResult<Theme>> {
     }
 
     const previewUrl = entryPath
-      ? supabase.storage.from(BUCKET).getPublicUrl(`${themeId}/${entryPath}`).data.publicUrl
+      ? storage.publicUrl(BUCKET, `${themeId}/${entryPath}`)
       : null;
 
     const { data, error } = await supabase
@@ -212,30 +209,11 @@ export async function listThemeFiles(
       .single();
     const prefix = (row?.storage_path as string) || id;
 
-    type Item = { name: string; id: string | null; metadata?: { size?: number } };
-    async function walk(dir: string): Promise<ThemeFile[]> {
-      const { data } = await supabase.storage
-        .from(BUCKET)
-        .list(dir, { limit: 1000, sortBy: { column: "name", order: "asc" } });
-      if (!data) return [];
-      const out: ThemeFile[] = [];
-      for (const item of data as Item[]) {
-        const full = dir ? `${dir}/${item.name}` : item.name;
-        if (item.id === null) {
-          out.push(...(await walk(full)));
-        } else {
-          const url = supabase.storage.from(BUCKET).getPublicUrl(full).data.publicUrl;
-          out.push({
-            path: full.slice(prefix.length + 1),
-            url,
-            size: item.metadata?.size ?? 0,
-          });
-        }
-      }
-      return out;
-    }
-
-    const files = await walk(prefix);
+    const files: ThemeFile[] = (await storage.listAll(BUCKET, prefix)).map((f) => ({
+      path: f.path.slice(prefix.length + 1),
+      url: storage.publicUrl(BUCKET, f.path),
+      size: f.size,
+    }));
     return { ok: true, data: { files } };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
@@ -244,21 +222,8 @@ export async function listThemeFiles(
 
 // ---- Delete (storage folder + row) -----------------------------------------
 async function removeFolder(prefix: string) {
-  const supabase = getServerSupabase();
-  async function walk(dir: string): Promise<string[]> {
-    const { data } = await supabase.storage.from(BUCKET).list(dir, { limit: 1000 });
-    if (!data) return [];
-    const out: string[] = [];
-    for (const item of data) {
-      const full = dir ? `${dir}/${item.name}` : item.name;
-      // Folders have null id/metadata in Supabase storage listings.
-      if (item.id === null) out.push(...(await walk(full)));
-      else out.push(full);
-    }
-    return out;
-  }
-  const paths = await walk(prefix);
-  if (paths.length) await supabase.storage.from(BUCKET).remove(paths);
+  const paths = (await storage.listAll(BUCKET, prefix)).map((f) => f.path);
+  if (paths.length) await storage.remove(BUCKET, paths);
 }
 
 export async function deleteTheme(id: string): Promise<ThemeResult> {
