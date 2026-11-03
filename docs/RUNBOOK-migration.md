@@ -47,11 +47,16 @@ Files used below:
   The queries were confirmed arriving at the new server. Supplier relay and OTP webhooks were pointed at a dead address for the test.
   - The local preview needs `node --use-system-ca` (launch config `dev-system-ca`), because this PC's network
     filter breaks Node's HTTPS (Google Fonts too, not just the server).
-- ⏳ **Part F on Vercel (Preview environment only):** set
-  `NEXT_PUBLIC_SUPABASE_URL=https://srv2120209.hstgr.cloud`, plus `SUPABASE_SERVICE_ROLE_KEY` and
-  `NEXT_PUBLIC_SUPABASE_ANON_KEY` from `/opt/store/vercel-keys.txt`. Also set `STORAGE_SUPABASE_URL`,
-  `STORAGE_SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_REALTIME_SUPABASE_URL` and `NEXT_PUBLIC_REALTIME_SUPABASE_ANON_KEY`
-  to the CURRENT Supabase values.
+- **How the switch works (simplified 2026-11-03):** the database has its OWN setting names,
+  `DATABASE_API_URL` + `DATABASE_API_KEY` (`src/lib/supabase/server.ts`). Every existing Supabase setting stays as it is:
+  files, live-chat realtime and the signing of sign-ins keep using them, so nobody is signed out and no
+  STORAGE_* / REALTIME_* / STORE_SESSION_SECRET settings are needed. (Vercel cannot import a branch-only override of an
+  existing name, which is why the first attempt failed.)
+- ⏳ **Part F on Vercel, Preview only:** import 3 settings: `DATABASE_API_URL=https://srv2120209.hstgr.cloud`,
+  `DATABASE_API_KEY` = the service key from `/opt/store/vercel-keys.txt`, and `ORDER_RELAY_WEBHOOK_URL` = a dead address
+  so preview orders never reach the supplier.
+- ⏳ **Part G switch-over in Vercel:** add `DATABASE_API_URL` and `DATABASE_API_KEY` to **Production** (no relay override),
+  then redeploy. To undo: delete those two and redeploy.
 - ⏳ D3, D5–D7, E, G. This copy is a **test copy**: Supabase is still live, so it goes stale. Re-copy on switch-over day (Part G).
 - **Later, with a domain:** do A3 → set `DB_API_HOST=` (empty), add the tunnel token, run
   `docker compose --profile tunnel up -d`, remove the 80/443 ports, and switch Vercel to `https://db-api.<domain>`.

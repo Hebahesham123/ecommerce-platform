@@ -4,10 +4,10 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 /**
  * Browser Supabase client, used for live-stream chat realtime (broadcast + presence).
  *
- * Realtime needs a Supabase project, not the database itself, so it has its own settings:
+ * Realtime needs a Supabase project, not the database itself. Optional overrides:
  *   NEXT_PUBLIC_REALTIME_SUPABASE_URL / NEXT_PUBLIC_REALTIME_SUPABASE_ANON_KEY
- * Once the database moves to the self-hosted server (NEXT_PUBLIC_SUPABASE_URL points there, and
- * it has no realtime), set these to a Supabase project. Default: the main Supabase settings.
+ * Default: NEXT_PUBLIC_SUPABASE_URL / _ANON_KEY, which stay on Supabase even when the database
+ * moves (that uses DATABASE_API_URL, see supabase/server.ts).
  */
 let cached: SupabaseClient | null = null;
 

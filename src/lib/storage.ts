@@ -7,9 +7,9 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
  * by changing one setting.
  *
  *   STORAGE_DRIVER=supabase   (default) Supabase Storage, exactly as before.
- *     STORAGE_SUPABASE_URL / STORAGE_SUPABASE_SERVICE_ROLE_KEY: the Supabase project that holds the
- *     files. Needed once the DATABASE moves off Supabase (NEXT_PUBLIC_SUPABASE_URL then points at the
- *     self-hosted server, which has no file storage). Default: the main Supabase settings.
+ *     STORAGE_SUPABASE_URL / STORAGE_SUPABASE_SERVICE_ROLE_KEY (optional): the Supabase project that
+ *     holds the files. Default: NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY, which stay on
+ *     Supabase even when the database moves (that uses DATABASE_API_URL, see supabase/server.ts).
  *   STORAGE_DRIVER=r2         Cloudflare R2. Needs:
  *     R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY
  *     R2_BUCKET        the one R2 bucket (default "store-media")
