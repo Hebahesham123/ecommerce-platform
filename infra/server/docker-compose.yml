@@ -69,8 +69,9 @@ services:
       PGRST_DB_POOL: 30
       # Supabase caps every API response at 1000 rows. Keep the same cap so the app behaves the same.
       PGRST_DB_MAX_ROWS: 1000
-      # Don't publish a description of the database to anyone who asks. supabase-js doesn't need it.
-      PGRST_OPENAPI_MODE: disabled
+      # The table list is shown only to callers whose key can read the tables (the service key).
+      # The public key sees an empty list. n8n's Supabase box needs this list to pick a table.
+      PGRST_OPENAPI_MODE: follow-privileges
 
   caddy:
     image: caddy:2.8.4
