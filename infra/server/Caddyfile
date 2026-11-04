@@ -10,6 +10,16 @@
 		reverse_proxy postgrest:3000
 	}
 
+	# Public files (product images, theme assets, avatars, videos): read-only.
+	# /media/<folder>/<file>  →  file store bucket "store-media"/<folder>/<file>
+	handle_path /media/* {
+		@notread not method GET HEAD
+		respond @notread "read only" 405
+		rewrite * /store-media{path}
+		reverse_proxy files:8333
+		header ?Cache-Control "public, max-age=86400"
+	}
+
 	# For uptime monitoring.
 	handle /health {
 		respond "ok" 200
@@ -19,5 +29,27 @@
 		respond "not found" 404
 	}
 
+	header -Server
+}
+
+# File uploads (S3 API, needs the secret key). Same certificate, port 9443.
+# Caddy passes the Host header through unchanged, which S3 signatures depend on.
+{$DB_API_HOST}:9443 {
+	# Browsers upload big videos straight here with a one-time signed address, so allow
+	# cross-site requests. The signature, not the origin, is what grants access.
+	@preflight method OPTIONS
+	handle @preflight {
+		header Access-Control-Allow-Origin "*"
+		header Access-Control-Allow-Methods "GET, PUT, HEAD, DELETE, OPTIONS"
+		header Access-Control-Allow-Headers "*"
+		header Access-Control-Max-Age "86400"
+		respond 204
+	}
+	handle {
+		reverse_proxy files:8333 {
+			header_down Access-Control-Allow-Origin "*"
+			header_down Access-Control-Expose-Headers "ETag"
+		}
+	}
 	header -Server
 }

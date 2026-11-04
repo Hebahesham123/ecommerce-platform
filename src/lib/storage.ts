@@ -10,6 +10,12 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
  *     STORAGE_SUPABASE_URL / STORAGE_SUPABASE_SERVICE_ROLE_KEY (optional): the Supabase project that
  *     holds the files. Default: NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY, which stay on
  *     Supabase even when the database moves (that uses DATABASE_API_URL, see supabase/server.ts).
+ *   STORAGE_DRIVER=s3         Any S3 store, e.g. MinIO on our own server. Needs:
+ *     S3_ENDPOINT      e.g. https://srv2120209.hstgr.cloud:9443  (path-style: <endpoint>/<bucket>/<key>)
+ *     S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY
+ *     S3_BUCKET        default "store-media"
+ *     S3_PUBLIC_URL    where files are served publicly, e.g. https://srv2120209.hstgr.cloud/media
+ *     S3_REGION        default "us-east-1"
  *   STORAGE_DRIVER=r2         Cloudflare R2. Needs:
  *     R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY
  *     R2_BUCKET        the one R2 bucket (default "store-media")
@@ -34,8 +40,14 @@ export type UploadOptions = {
 export type StoredObject = { path: string; size: number; updatedAt?: string };
 export type SignedUpload = { url: string; headers: Record<string, string> };
 
-export function storageDriver(): "supabase" | "r2" {
-  return process.env.STORAGE_DRIVER === "r2" ? "r2" : "supabase";
+export function storageDriver(): "supabase" | "r2" | "s3" {
+  const d = process.env.STORAGE_DRIVER;
+  return d === "r2" || d === "s3" ? d : "supabase";
+}
+
+/** True when files live in an S3 store (R2 or our own MinIO) rather than Supabase Storage. */
+function objectStore(): boolean {
+  return storageDriver() !== "supabase";
 }
 
 let storageClient: SupabaseClient | null = null;
@@ -59,7 +71,7 @@ export async function upload(
   body: UploadBody,
   opts: UploadOptions = {},
 ): Promise<{ error: string | null }> {
-  if (storageDriver() === "r2") return r2Upload(bucket, path, body, opts);
+  if (objectStore()) return r2Upload(bucket, path, body, opts);
   const { error } = await filesSupabase()
     .storage.from(bucket)
     .upload(path, body, {
@@ -72,7 +84,7 @@ export async function upload(
 
 /** The public address of a file. A path ending in "/" gives a folder address (for asset bases). */
 export function publicUrl(bucket: string, path: string): string {
-  if (storageDriver() === "r2") return `${r2Config().publicUrl}/${encodePath(`${bucket}/${path}`)}`;
+  if (objectStore()) return `${r2Config().publicUrl}/${encodePath(`${bucket}/${path}`)}`;
   return filesSupabase().storage.from(bucket).getPublicUrl(path).data.publicUrl;
 }
 
@@ -80,7 +92,7 @@ export async function download(
   bucket: string,
   path: string,
 ): Promise<{ data: Blob | null; error: string | null }> {
-  if (storageDriver() === "r2") {
+  if (objectStore()) {
     const res = await r2Fetch(objectUrl(bucket, path), { method: "GET" });
     if (!res.ok) return { data: null, error: res.status === 404 ? "not_found" : `r2_${res.status}` };
     return { data: await res.blob(), error: null };
@@ -91,7 +103,7 @@ export async function download(
 
 export async function remove(bucket: string, paths: string[]): Promise<void> {
   if (!paths.length) return;
-  if (storageDriver() === "r2") {
+  if (objectStore()) {
     // One delete per file, 20 at a time. Missing files are fine.
     for (let i = 0; i < paths.length; i += 20) {
       await Promise.all(
@@ -109,7 +121,7 @@ export async function remove(bucket: string, paths: string[]): Promise<void> {
 /** Every file under `prefix` (all sub-folders included), sorted by path. Paths are bucket-relative. */
 export async function listAll(bucket: string, prefix: string): Promise<StoredObject[]> {
   const clean = prefix.replace(/\/+$/, "");
-  const out = storageDriver() === "r2" ? await r2List(bucket, clean) : await supabaseList(bucket, clean);
+  const out = objectStore() ? await r2List(bucket, clean) : await supabaseList(bucket, clean);
   return out.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
 }
 
@@ -126,7 +138,7 @@ export async function createSignedUpload(
   if (opts.contentType) headers["content-type"] = opts.contentType;
   if (opts.cacheControl !== undefined) headers["cache-control"] = `max-age=${opts.cacheControl}`;
 
-  if (storageDriver() === "r2") {
+  if (objectStore()) {
     const url = new URL(objectUrl(bucket, path));
     url.searchParams.set("X-Amz-Expires", String(opts.expiresInSeconds ?? 3600));
     // Only cache-control is signed (content-type never is), so the browser must send it unchanged.
@@ -152,7 +164,7 @@ export function locateUrl(url: string | null | undefined): { bucket: string; pat
   if (!url) return null;
   const supa = url.match(/\/storage\/v1\/object\/public\/([^/?#]+)\/([^?#]+)/);
   if (supa) return { bucket: supa[1], path: decodeURIComponent(supa[2]) };
-  const base = (process.env.R2_PUBLIC_URL || "").replace(/\/+$/, "");
+  const base = (process.env.S3_PUBLIC_URL || process.env.R2_PUBLIC_URL || "").replace(/\/+$/, "");
   if (base && url.startsWith(`${base}/`)) {
     const rest = url.slice(base.length + 1).split(/[?#]/)[0];
     const slash = rest.indexOf("/");
@@ -201,17 +213,30 @@ async function supabaseList(bucket: string, prefix: string): Promise<StoredObjec
 // ---------------------------------------------------------------------------
 
 function r2Config() {
+  const trim = (v: string | undefined) => (v || "").replace(/\/+$/, "");
+  if (storageDriver() === "s3") {
+    const endpointBase = trim(process.env.S3_ENDPOINT);
+    const accessKeyId = process.env.S3_ACCESS_KEY_ID;
+    const secretAccessKey = process.env.S3_SECRET_ACCESS_KEY;
+    const publicUrl = trim(process.env.S3_PUBLIC_URL);
+    if (!endpointBase || !accessKeyId || !secretAccessKey || !publicUrl) {
+      throw new Error("STORAGE_DRIVER=s3 needs S3_ENDPOINT, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY and S3_PUBLIC_URL");
+    }
+    const bucket = process.env.S3_BUCKET || "store-media";
+    return { endpointBase, accessKeyId, secretAccessKey, publicUrl, bucket, region: process.env.S3_REGION || "us-east-1" };
+  }
   const accountId = process.env.R2_ACCOUNT_ID;
   const accessKeyId = process.env.R2_ACCESS_KEY_ID;
   const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
-  const publicUrl = (process.env.R2_PUBLIC_URL || "").replace(/\/+$/, "");
+  const publicUrl = trim(process.env.R2_PUBLIC_URL);
   const bucket = process.env.R2_BUCKET || "store-media";
   if (!accountId || !accessKeyId || !secretAccessKey || !publicUrl) {
     throw new Error(
       "STORAGE_DRIVER=r2 needs R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY and R2_PUBLIC_URL",
     );
   }
-  return { accountId, accessKeyId, secretAccessKey, publicUrl, bucket };
+  const endpointBase = `https://${accountId}.r2.cloudflarestorage.com`;
+  return { endpointBase, accessKeyId, secretAccessKey, publicUrl, bucket, region: "auto" };
 }
 
 let client: AwsClient | null = null;
@@ -222,7 +247,7 @@ function r2Client(): AwsClient {
     accessKeyId: c.accessKeyId,
     secretAccessKey: c.secretAccessKey,
     service: "s3",
-    region: "auto",
+    region: c.region,
   });
   return client;
 }
@@ -233,7 +258,7 @@ function encodePath(p: string): string {
 
 function endpoint(): string {
   const c = r2Config();
-  return `https://${c.accountId}.r2.cloudflarestorage.com/${c.bucket}`;
+  return `${c.endpointBase}/${c.bucket}`;
 }
 
 function objectUrl(bucket: string, path: string): string {

@@ -9,6 +9,8 @@ const nextConfig = {
     remotePatterns: [
       { protocol: "https", hostname: "jvjnpfaoqfeodzujsngf.supabase.co" },
       { protocol: "https", hostname: "*.supabase.co" },
+      // Files served from our own server (MinIO behind Caddy).
+      { protocol: "https", hostname: "srv2120209.hstgr.cloud", pathname: "/media/**" },
     ],
   },
   experimental: {

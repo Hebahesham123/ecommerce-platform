@@ -83,10 +83,24 @@ services:
     ports:
       - "80:80"
       - "443:443"
+      # File uploads (S3 API) for the store's images and videos.
+      - "9443:9443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+
+  # File store for product images, theme files, avatars, reels and recordings (S3-compatible).
+  # SeaweedFS (Apache-2.0, maintained). MinIO no longer publishes free images.
+  # Reached only through Caddy: /media/* (public, read-only) and :9443 (uploads, secret key).
+  # Who may do what is in seaweedfs-s3.json (created on the server, holds the upload key).
+  files:
+    image: chrislusf/seaweedfs:3.80
+    restart: unless-stopped
+    command: server -dir=/data -ip.bind=0.0.0.0 -master.volumeSizeLimitMB=1024 -s3 -s3.port=8333 -s3.config=/etc/seaweedfs/s3.json
+    volumes:
+      - files_data:/data
+      - ./seaweedfs-s3.json:/etc/seaweedfs/s3.json:ro
 
   cloudflared:
     # Only used once the store has a domain on Cloudflare:  docker compose --profile tunnel up -d
@@ -127,3 +141,4 @@ volumes:
   pgdata:
   caddy_data:
   caddy_config:
+  files_data:
