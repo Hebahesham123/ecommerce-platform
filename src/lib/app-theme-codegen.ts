@@ -10112,7 +10112,6 @@ export function AppChrome({
             {menuButton}
           </View>
         ) : null}
-      </View>
       <MenuSheet open={menuOpen} onClose={() => setMenuOpen(false)} onPick={pick} />
 
       {theme.strip.enabled && theme.strip.items.length ? (
