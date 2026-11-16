@@ -58,7 +58,7 @@
 # the database API and files as before).
 {$DB_API_HOST}:8443 {
 	encode zstd gzip
-	reverse_proxy web:3000
+	reverse_proxy cache:80
 	header -Server
 }
 

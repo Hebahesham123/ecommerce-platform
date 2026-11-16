@@ -118,6 +118,17 @@ services:
     env_file: ./web.env
     depends_on: [postgrest]
 
+  # Page cache in front of the website (see default.vcl).
+  cache:
+    image: varnish:7.6
+    restart: unless-stopped
+    depends_on: [web]
+    command: ["varnishd", "-F", "-f", "/etc/varnish/default.vcl", "-a", "http=:80,HTTP", "-s", "malloc,256m"]
+    volumes:
+      - ./default.vcl:/etc/varnish/default.vcl:ro
+    tmpfs:
+      - /var/lib/varnish:exec,mode=1777
+
   cloudflared:
     # Only used once the store has a domain on Cloudflare:  docker compose --profile tunnel up -d
     profiles: ["tunnel"]
