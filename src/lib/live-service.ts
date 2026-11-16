@@ -1,6 +1,7 @@
 import "server-only";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
 import * as storage from "@/lib/storage";
+import { publishComment } from "@/lib/live-hub";
 import { mapLiveMessage, mapLiveStream, type LiveMessage, type LiveStream } from "@/lib/live";
 import { matchesRule, type CollectionRuleType } from "@/lib/collections";
 
@@ -1355,7 +1356,10 @@ export async function postMessage(input: {
       .select("*")
       .single();
     if (error) return { ok: false, error: error.message };
-    return { ok: true, data: mapLiveMessage(data) };
+    const message = mapLiveMessage(data);
+    // Push it to everyone watching, straight away (live-hub).
+    publishComment(input.liveId, message);
+    return { ok: true, data: message };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }

@@ -1,7 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { getBrowserSupabase } from "@/lib/supabase/client";
+import { useCallback, useEffect, useState } from "react";
 import type { LiveMessage } from "@/lib/live";
 
 /**
@@ -9,13 +8,10 @@ import type { LiveMessage } from "@/lib/live";
  * viewer over the video. One implementation, because the two must agree about
  * what was said and when.
  *
- * Messages travel by Realtime *broadcast*, not by watching the table. Watching
- * the table means every insert is re-checked against the row policy for every
- * subscriber before it is delivered, and that policy asks whether the stream is
- * still on air — a join, per message, per phone. At 500 viewers that is where
- * the delay came from. A broadcast is a message on a channel: no database round
- * trip, no per-row check, and it arrives in the time it takes to cross the
- * network.
+ * Messages travel over one open connection per phone to our own server
+ * (/api/storefront/lives/[id]/stream, server-sent events; see lib/live-hub).
+ * When a comment is saved the server pushes it to every open connection at
+ * once: no database round trip per message, no third-party realtime service.
  *
  * The database is still written first, by the server, because a comment has to
  * survive for moderation and for the replay. The broadcast is how it travels,
@@ -56,7 +52,6 @@ export function useLiveChat(
   const [messages, setMessages] = useState<LiveMessage[]>([]);
   const [viewers, setViewers] = useState(0);
   const [connected, setConnected] = useState(false);
-  const channelRef = useRef<ReturnType<ReturnType<typeof getBrowserSupabase>["channel"]> | null>(null);
 
   const merge = useCallback(
     (incoming: LiveMessage[]) => {
@@ -86,42 +81,29 @@ export function useLiveChat(
   }, [liveId, merge]);
 
   useEffect(() => {
-    if (!enabled) return;
-    let channel: ReturnType<ReturnType<typeof getBrowserSupabase>["channel"]> | null = null;
-    try {
-      channel = getBrowserSupabase().channel(`live:${liveId}`, {
-        config: { broadcast: { self: true }, presence: { key: crypto.randomUUID() } },
-      });
-      channelRef.current = channel;
-      channel
-        .on("broadcast", { event: "comment" }, ({ payload }) => {
-          const m = payload as LiveMessage;
-          if (m?.id) merge([m]);
-        })
-        .on("presence", { event: "sync" }, () => {
-          const state = channel?.presenceState() ?? {};
-          // Count the room, not the people running it.
-          const watching = Object.values(state).filter((metas) => {
-            const meta = (metas as { role?: string }[])[0];
-            return meta?.role !== "host";
-          }).length;
-          setViewers(watching);
-        })
-        .subscribe((status) => {
-          if (status === "SUBSCRIBED") {
-            setConnected(true);
-            channel?.track({ at: Date.now(), role });
-          } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
-            setConnected(false);
-          }
-        });
-    } catch {
-      setConnected(false);
-    }
-    return () => {
-      channel?.unsubscribe();
-      channelRef.current = null;
-    };
+    if (!enabled || typeof EventSource === "undefined") return;
+    // The browser reconnects by itself if the connection drops.
+    const source = new EventSource(`/api/storefront/lives/${liveId}/stream${role === "host" ? "?role=host" : ""}`);
+    source.onopen = () => setConnected(true);
+    source.onerror = () => setConnected(false);
+    source.addEventListener("comment", (e) => {
+      try {
+        const m = JSON.parse((e as MessageEvent).data) as LiveMessage;
+        if (m?.id) merge([m]);
+      } catch {
+        /* ignore a malformed event */
+      }
+    });
+    // The host is not counted (?role=host), so this is the audience.
+    source.addEventListener("viewers", (e) => {
+      try {
+        const v = JSON.parse((e as MessageEvent).data) as { viewers?: number };
+        if (typeof v.viewers === "number") setViewers(v.viewers);
+      } catch {
+        /* ignore */
+      }
+    });
+    return () => source.close();
   }, [liveId, enabled, merge, role]);
 
   // A broadcast is not guaranteed to arrive, and a phone that slept missed
@@ -155,10 +137,8 @@ export function useLiveChat(
             .catch(() => null);
       if (!written) return false;
 
-      // Show it here at once, and push it to everyone else without waiting for
-      // the database to tell them about it.
+      // Show it here at once; the server has already pushed it to everyone else.
       merge([written]);
-      channelRef.current?.send({ type: "broadcast", event: "comment", payload: written });
       return true;
     },
     [liveId, merge, postVia],

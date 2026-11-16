@@ -97,10 +97,14 @@ export async function createPaymobIntention(
         billing_data: billing,
         special_reference: input.specialReference,
         extras: { order_number: input.orderNumber },
-        // On our own server, Paymob reports the payment back to this server directly (the
-        // dashboard default may still point at the old address). Unset elsewhere = dashboard default.
+        // On our own server, Paymob reports the payment to this server and sends the customer back
+        // to their order page here (the dashboard defaults may still point at the old address).
+        // Unset elsewhere = dashboard defaults.
         ...(process.env.NEXT_PUBLIC_SITE_URL?.startsWith("https://")
-          ? { notification_url: `${process.env.NEXT_PUBLIC_SITE_URL.replace(/\/+$/, "")}/api/paymob/webhook` }
+          ? {
+              notification_url: `${process.env.NEXT_PUBLIC_SITE_URL.replace(/\/+$/, "")}/api/paymob/webhook`,
+              redirection_url: `${process.env.NEXT_PUBLIC_SITE_URL.replace(/\/+$/, "")}/store/order/${encodeURIComponent(input.orderNumber)}`,
+            }
           : {}),
       }),
     });

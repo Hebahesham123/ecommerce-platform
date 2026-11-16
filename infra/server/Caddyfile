@@ -25,6 +25,14 @@
 		respond "ok" 200
 	}
 
+	# Live-stream chat stays open and streams: straight to the website, no cache, no compression.
+	@livestream path_regexp livestream ^/api/storefront/lives/[^/]+/stream$
+	handle @livestream {
+		reverse_proxy web:3000 {
+			flush_interval -1
+		}
+	}
+
 	# Everything else is the store website (through the page cache).
 	handle {
 		encode zstd gzip
@@ -59,8 +67,18 @@
 # The website on this server, on a test port while it is being checked (port 443 keeps serving
 # the database API and files as before).
 {$DB_API_HOST}:8443 {
-	encode zstd gzip
-	reverse_proxy cache:80
+	# Live-stream chat stays open and streams: straight to the website, no cache, no compression.
+	@livestream path_regexp livestream ^/api/storefront/lives/[^/]+/stream$
+	handle @livestream {
+		reverse_proxy web:3000 {
+			flush_interval -1
+		}
+	}
+
+	handle {
+		encode zstd gzip
+		reverse_proxy cache:80
+	}
 	header -Server
 }
 
