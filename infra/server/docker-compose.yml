@@ -91,6 +91,12 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+    # Inside the server, the public address means this proxy. Containers cannot reach the
+    # server's own public IP ("hairpin"), and the website loads its theme and files through it.
+    networks:
+      default:
+        aliases:
+          - srv2120209.hstgr.cloud
 
   # File store for product images, theme files, avatars, reels and recordings (S3-compatible).
   # SeaweedFS (Apache-2.0, maintained). MinIO no longer publishes free images.
