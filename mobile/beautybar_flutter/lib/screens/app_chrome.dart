@@ -493,11 +493,11 @@ class _AppChromeState extends State<AppChrome> with SingleTickerProviderStateMix
           openLink(item, links);
         },
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
             border: Border(bottom: BorderSide(color: on ? colors.accent : const Color(0x00000000), width: 2)),
           ),
-          child: Text(item.s('label'), style: ts(12, w: 600, c: on ? colors.accent : const Color(0xFF64748B))),
+          child: Text(item.s('label'), style: ts(13, w: 600, c: on ? colors.accent : const Color(0xFF475569))),
         ),
       ));
     }
@@ -505,23 +505,36 @@ class _AppChromeState extends State<AppChrome> with SingleTickerProviderStateMix
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _measure();
     });
-    return Listener(
-      onPointerDown: (_) => _hold(),
-      child: Container(
-        decoration: const BoxDecoration(
-          color: Color(0xFFFFFFFF),
-          border: Border(bottom: BorderSide(color: _line)),
-        ),
-        child: SingleChildScrollView(
-          controller: _strip,
-          scrollDirection: Axis.horizontal,
-          child: Padding(
-            key: _stripContent,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: AnimatedBuilder(
-              animation: _drift,
-              builder: (context, child) => Transform.translate(offset: Offset(-_far * _drift.value, 0), child: child),
-              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: children),
+    // The strip is one of the header's cards: same shape, its own space under
+    // the search, and the words drifting past fade out at the two ends rather
+    // than being chopped off mid-letter.
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Listener(
+        onPointerDown: (_) => _hold(),
+        child: Container(
+          decoration: _card,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(22),
+            child: ShaderMask(
+              blendMode: BlendMode.dstIn,
+              shaderCallback: (rect) => const LinearGradient(
+                colors: [Color(0x00000000), Color(0xFF000000), Color(0xFF000000), Color(0x00000000)],
+                stops: [0, 0.07, 0.93, 1],
+              ).createShader(rect),
+              child: SingleChildScrollView(
+                controller: _strip,
+                scrollDirection: Axis.horizontal,
+                child: Padding(
+                  key: _stripContent,
+                  padding: const EdgeInsets.symmetric(horizontal: 18),
+                  child: AnimatedBuilder(
+                    animation: _drift,
+                    builder: (context, child) => Transform.translate(offset: Offset(-_far * _drift.value, 0), child: child),
+                    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: children),
+                  ),
+                ),
+              ),
             ),
           ),
         ),
@@ -638,7 +651,7 @@ class _AppChromeState extends State<AppChrome> with SingleTickerProviderStateMix
                 left: 16,
                 top: 0,
                 bottom: 0,
-                child: IgnorePointer(child: Center(child: HeaderIcon(name: 'search', color: hexA(ink, '80'), size: 16))),
+                child: IgnorePointer(child: Center(child: HeaderIcon(name: 'search', color: hexA(ink, 'b3'), size: 18))),
               ),
               Padding(
                 padding: EdgeInsets.only(left: 44, right: showClear ? 4 : 16),
@@ -652,11 +665,11 @@ class _AppChromeState extends State<AppChrome> with SingleTickerProviderStateMix
                         setState(() {});
                       },
                       textInputAction: TextInputAction.search,
-                      style: ts(12.5, c: ink),
+                      style: ts(14, c: ink),
                       maxLines: 1,
                       decoration: InputDecoration.collapsed(
                         hintText: hint,
-                        hintStyle: ts(12.5, c: hexA(ink, '70')),
+                        hintStyle: ts(14, c: hexA(ink, '99')),
                       ),
                     ),
                   ),

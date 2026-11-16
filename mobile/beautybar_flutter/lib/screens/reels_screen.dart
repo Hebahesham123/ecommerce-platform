@@ -848,11 +848,15 @@ class _ReelItemState extends State<_ReelItem> {
     }
     reviewed ??= ordered.isNotEmpty ? ordered.first : null;
 
-    return Container(
+    // ClipRect, not Container(clipBehavior:): a Container clips through its
+    // decoration, and a plain colour is not one — in a release build that is a
+    // null error, and the reel never appeared.
+    return ClipRect(
+      child: SizedBox(
       height: widget.height,
       width: double.infinity,
+      child: ColoredBox(
       color: const Color(0xFF000000),
-      clipBehavior: Clip.hardEdge,
       child: Stack(children: [
         Positioned.fill(
           child: Tap(
@@ -976,6 +980,8 @@ class _ReelItemState extends State<_ReelItem> {
           ),
         ),
       ]),
+      ),
+      ),
     );
   }
 }

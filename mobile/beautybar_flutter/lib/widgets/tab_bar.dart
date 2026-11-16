@@ -33,10 +33,12 @@ class TabBar0 extends StatelessWidget {
                 onTap: () => onSelect(t.s('key')),
                 child: LayoutBuilder(builder: (context, box) {
                   final on = t.s('key') == active;
-                  return Stack(clipBehavior: Clip.none, children: [
+                  // A Stack puts its children top-left unless told otherwise;
+                  // each tab must sit in the middle of its share of the bar.
+                  return Stack(alignment: Alignment.topCenter, clipBehavior: Clip.none, children: [
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 10),
-                      child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.center, children: [
                         TabIcon(tab: t.s('key'), on: on, color: on ? colors.accent : colors.inkMuted),
                         const SizedBox(height: 2),
                         Text(t.s('label'), style: ts(11, w: 600, c: on ? colors.accent : colors.inkMuted)),
