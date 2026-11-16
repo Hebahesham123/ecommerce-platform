@@ -7,3 +7,4 @@ infra/server/*.json
 infra/server/.env
 docs
 *.zip
+mobile

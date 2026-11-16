@@ -1,0 +1,1572 @@
+{
+ "format": 1,
+ "theme": {
+  "storeName": "Store",
+  "titleFont": "serif",
+  "logoUrl": null,
+  "accent": "#9d6540",
+  "background": "#f3ede5",
+  "menuHandle": "main-menu",
+  "pages": [
+   {
+    "id": "p-for-her",
+    "handle": "for-her",
+    "kicker": "SUMMER PICKS",
+    "line1": "shop",
+    "line2": "WOMEN COLLECTION",
+    "layout": "circles",
+    "items": [
+     {
+      "id": "t-7zol2cb",
+      "imageUrl": "https://beauty-bareg.net/cdn/shop/files/Valentino_Garavani_Viva_Superstar_Shoulder_Bag_1_2.png?v=1771727001",
+      "label": "BAGS",
+      "handle": "bags",
+      "url": "",
+      "productId": "",
+      "screen": ""
+     },
+     {
+      "id": "t-d8dbpyb",
+      "imageUrl": "https://beauty-bareg.net/cdn/shop/files/19950271_50060234_2048_3d9f8084-1cd8-48e7-9907-4a3fc54de69e.webp?v=1771727006",
+      "label": "SNEAKERS",
+      "handle": "sneakers-for-women",
+      "url": "",
+      "productId": "",
+      "screen": ""
+     },
+     {
+      "id": "t-ixdukop",
+      "imageUrl": "https://beauty-bareg.net/cdn/shop/files/burberry-black-perfum-90ml-6034302.jpg?v=1773020838",
+      "label": "PERFUMES",
+      "handle": "perfume-for-women",
+      "url": "",
+      "productId": "",
+      "screen": ""
+     },
+     {
+      "id": "t-59tuvl5",
+      "imageUrl": "https://beauty-bareg.net/cdn/shop/files/sunglass.webp?v=1786997290",
+      "label": "SUNGLASSES",
+      "handle": "sunglasses",
+      "url": "",
+      "productId": "",
+      "screen": ""
+     },
+     {
+      "id": "t-lsob85y",
+      "imageUrl": "https://beauty-bareg.net/cdn/shop/files/loro-piana-summer-charms-slipper-halite-4813253_2.jpg?v=1771727000",
+      "label": "SLIPPERS",
+      "handle": "slippers-for-women",
+      "url": "",
+      "productId": "",
+      "screen": ""
+     },
+     {
+      "id": "t-b05ugy1",
+      "imageUrl": "https://beauty-bareg.net/cdn/shop/files/miu-miu-tyre-technical-fabric-and-suede-ballerinas-3077328_1800x1800_f91085f7-e82e-4883-9c9e-79a19a2754be.webp?v=1771727000",
+      "label": "BALLERINA",
+      "handle": "ballerina-for-women",
+      "url": "",
+      "productId": "",
+      "screen": ""
+     },
+     {
+      "id": "t-4cugtou",
+      "imageUrl": "https://beauty-bareg.net/cdn/shop/files/louis-vuitton-monogram-pallas-compact-wallet-small-wallets-701226.png?v=1741908569",
+      "label": "WALLETS",
+      "handle": "wallets",
+      "url": "",
+      "productId": "",
+      "screen": ""
+     },
+     {
+      "id": "t-1d498py",
+      "imageUrl": "https://beauty-bareg.net/cdn/shop/files/louis-vuitton-aspen-platform-clogs-2719783_2.png?v=1771727004",
+      "label": "CLOGS",
+      "handle": "clogs-for-women",
+      "url": "",
+      "productId": "",
+      "screen": ""
+     },
+     {
+      "id": "t-c7wci0q",
+      "imageUrl": "https://beauty-bareg.net/cdn/shop/files/HermesTechno-SandalInAnatomicalRubberSoleAndAdjustableStrap.ASleekDesignForAComfortableAndCasualLook_7_39d852dd-ae3c-4bc5-b1a7-75fd482716af.jpg?v=1771727004",
+      "label": "SANDALS",
+      "handle": "slippers-for-women",
+      "url": "",
+      "productId": "",
+      "screen": ""
+     },
+     {
+      "id": "t-k3mrx1z",
+      "imageUrl": "https://beauty-bareg.net/cdn/shop/files/miu-miu-city-logo-leather-belt-3904509.jpg?v=1767220626",
+      "label": "BELTS",
+      "handle": "belts",
+      "url": "",
+      "productId": "",
+      "screen": ""
+     }
+    ]
+   },
+   {
+    "id": "p-for-him",
+    "handle": "for-him",
+    "kicker": "SUMMER PICKS",
+    "line1": "SHOP",
+    "line2": "MEN COLLECTION",
+    "layout": "circles",
+    "items": [
+     {
+      "id": "t-n2kkkeh",
+      "imageUrl": "https://beauty-bareg.net/cdn/shop/files/louis-vuitton-takeoff-pouch-4135009.png?v=1775013188",
+      "label": "BAGS",
+      "handle": "men-bags",
+      "url": "",
+      "productId": "",
+      "screen": ""
+     },
+     {
+      "id": "t-xlwcann",
+      "imageUrl": "https://beauty-bareg.net/cdn/shop/files/03ME30040106.webp?v=1770726020",
+      "label": "SNEAKERS",
+      "handle": "sneakers-for-men",
+      "url": "",
+      "productId": "",
+      "screen": ""
+     },
+     {
+      "id": "t-l4cosuj",
+      "imageUrl": "https://beauty-bareg.net/cdn/shop/files/Screenshot2026-02-07163725_2.jpg?v=1771727003",
+      "label": "LOAFERS",
+      "handle": "loafers-for-men",
+      "url": "",
+      "productId": "",
+      "screen": ""
+     },
+     {
+      "id": "t-wv58cmm",
+      "imageUrl": "https://beauty-bareg.net/cdn/shop/files/dior-sauvage-elixir-vaporisateur-spray-100ml-8893506.webp?v=1773103692",
+      "label": "PERFUMES",
+      "handle": "perfume-for-men",
+      "url": "",
+      "productId": "",
+      "screen": ""
+     },
+     {
+      "id": "t-2ymm57j",
+      "imageUrl": "https://beauty-bareg.net/cdn/shop/files/hermes-chypre-sandal-noir-black-slipper-934850.webp?v=1741825843",
+      "label": "SLIPPERS",
+      "handle": "slippers-for-women",
+      "url": "",
+      "productId": "",
+      "screen": ""
+     }
+    ]
+   }
+  ],
+  "splash": {
+   "enabled": true,
+   "imageUrl": "https://srv2120209.hstgr.cloud/media/files/1789208673754-jtv5gu-chatgpt_image_jul_23_2026_02_33_07_pm.png",
+   "bg": "#2b1b10",
+   "seconds": 2.5,
+   "exit": "curtain",
+   "fit": "cover",
+   "show": "session",
+   "skipLabel": "Skip",
+   "handle": "all",
+   "url": "",
+   "productId": "",
+   "screen": ""
+  },
+  "showSearch": true,
+  "announcement": {
+   "enabled": false,
+   "text": ""
+  },
+  "header": {
+   "logoText": "BEAUTY",
+   "logoAccentText": "BAR",
+   "searchPlaceholder": "Sahel sandals",
+   "showWishlist": true,
+   "showBag": true,
+   "bg": "",
+   "ink": ""
+  },
+  "live": [
+   {
+    "id": "i-mtvewjng-q3em",
+    "name": "Nour",
+    "detail": "1.3k",
+    "imageUrl": "https://srv2120209.hstgr.cloud/media/files/1790766597462-y44rc1-whatsapp-image-2026-08-29-at-5.30.05-pm.jpeg",
+    "url": "https://ecommerce-platform-rpcx.vercel.app/store/live/e82667cc-0b0f-4f8d-a1e5-b18db557cdf4",
+    "handle": "",
+    "productId": "",
+    "screen": "",
+    "live": true
+   },
+   {
+    "id": "i-mty8uv9f-f9fb",
+    "name": "test",
+    "detail": "1.5k",
+    "imageUrl": "https://srv2120209.hstgr.cloud/media/files/1790766953878-hq0tsj-1789649189792-c3bh97-palette-elegance.jpg",
+    "url": "",
+    "handle": "",
+    "productId": "",
+    "screen": "live",
+    "live": true
+   },
+   {
+    "id": "i-mtvg41ho-wp5f",
+    "name": "New drop, members first",
+    "detail": "Thu 8pm · with Gana",
+    "imageUrl": "",
+    "url": "",
+    "handle": "prada",
+    "productId": "",
+    "screen": "",
+    "live": false
+   },
+   {
+    "id": "i-mty7iup0-i52y",
+    "name": "Chanel restock — 40 bags",
+    "detail": "Tonight 9pm · with Nour",
+    "imageUrl": "",
+    "url": "",
+    "handle": "bags",
+    "productId": "",
+    "screen": "",
+    "live": false
+   }
+  ],
+  "card": {
+   "nameWords": 3,
+   "photoBg": "#ece8e3",
+   "stars": true,
+   "stock": true,
+   "add": true,
+   "addLabel": "",
+   "ticker": true,
+   "tickerText": "",
+   "look": "market",
+   "radius": 22,
+   "rating": "4.9",
+   "reviews": "1,627",
+   "lowAt": 5
+  },
+  "strip": {
+   "enabled": true,
+   "items": [
+    {
+     "id": "i-mtvdghom-3nyh",
+     "label": "For Her",
+     "handle": "",
+     "url": "",
+     "productId": "",
+     "screen": "for-her"
+    },
+    {
+     "id": "s-forhim",
+     "label": "For Him",
+     "handle": "",
+     "url": "",
+     "productId": "",
+     "screen": "for-him"
+    },
+    {
+     "id": "i-mtvdh52d-b5az",
+     "label": "New Arrivals",
+     "handle": "for-women",
+     "url": "",
+     "productId": "",
+     "screen": ""
+    },
+    {
+     "id": "i-mtvdiork-fu44",
+     "label": "70% Off",
+     "handle": "summer-sale",
+     "url": "",
+     "productId": "",
+     "screen": ""
+    },
+    {
+     "id": "i-mtvdk1sq-128h",
+     "label": "Bags",
+     "handle": "bags",
+     "url": "",
+     "productId": "",
+     "screen": ""
+    },
+    {
+     "id": "i-mtvdkhzx-bk86",
+     "label": "Footwear",
+     "handle": "footwear",
+     "url": "",
+     "productId": "",
+     "screen": ""
+    },
+    {
+     "id": "i-mubbz0r7-qmyq",
+     "label": "Perfume",
+     "handle": "perfume",
+     "url": "",
+     "productId": "",
+     "screen": ""
+    },
+    {
+     "id": "i-mubbzrl2-g9ni",
+     "label": "Swimwear",
+     "handle": "swimmwear",
+     "url": "",
+     "productId": "",
+     "screen": ""
+    }
+   ]
+  }
+ },
+ "gap": {
+  "section": 6,
+  "item": 12,
+  "itemTight": 8
+ },
+ "screens": {
+  "collection": {
+   "columns": 2,
+   "showSort": true,
+   "sortDefault": "manual",
+   "showHero": true,
+   "heroKicker": "Summer 2026 · New arrivals",
+   "heroSubtitle": "",
+   "heroFrom": "#1c1410",
+   "heroTo": "#3d2619",
+   "heroAccent": "#d08159",
+   "showBrandChips": true,
+   "showFilters": true,
+   "showLayoutToggle": true,
+   "showBadge": true,
+   "showWishlist": true,
+   "showVendor": true,
+   "showRating": true,
+   "ratingText": "5",
+   "showQuickAdd": true,
+   "nameLines": 2,
+   "pageSize": 24,
+   "pageBg": "#f8f5f0",
+   "cardBg": "#f3ece4",
+   "priceColor": "#b0603e",
+   "inkColor": "#211a15",
+   "lineColor": "#eadfd2"
+  },
+  "product": {
+   "showDescription": true,
+   "showVariants": true,
+   "showStock": true,
+   "addLabel": "",
+   "soldOutLabel": "",
+   "showThumbs": true,
+   "showBadge": true,
+   "showWishlist": true,
+   "showBreadcrumb": true,
+   "showRating": true,
+   "ratingValue": "4.9",
+   "reviewCount": "1,627",
+   "reviewsWord": "reviews",
+   "verifiedLabel": "Verified",
+   "showSave": true,
+   "saveLabel": "",
+   "showInstalments": true,
+   "instalmentsTitle": "",
+   "instalmentMonths": 6,
+   "instalmentProviders": "TRU · valU · Sympl",
+   "showQuantity": true,
+   "showBuyNow": true,
+   "buyNowLabel": "",
+   "showViewers": true,
+   "viewersMin": 18,
+   "viewersMax": 45,
+   "viewersText": "",
+   "lowStockAt": 5,
+   "lowStockText": "",
+   "showPerks": true,
+   "perk1": "Express delivery · Cairo & Giza tomorrow",
+   "perk2": "Free returns within 14 days",
+   "perk3": "100% authentic · box & dust bag",
+   "descriptionTitle": "",
+   "shippingTitle": "",
+   "shippingText": "Express delivery tomorrow in Cairo and Giza when you order before 6pm, 2–4 days everywhere else. Returns are free within 14 days — we collect from your door.",
+   "showReviewsCard": true,
+   "reviewsKicker": "Customer reviews",
+   "reviewsHeading": "What They're",
+   "reviewsItalic": "Saying",
+   "reviewsButton": "Read all reviews",
+   "showRelated": true,
+   "relatedKicker": "You may also like",
+   "relatedTitle": "Complete the look",
+   "pageBg": "#f8f5f0",
+   "accentColor": "#9d6540",
+   "inkColor": "#211a15",
+   "mutedColor": "#74685e",
+   "darkColor": "#211a15"
+  },
+  "cart": {
+   "emptyText": "",
+   "showCoupon": true,
+   "couponLabel": "",
+   "checkoutLabel": "",
+   "totalLabel": ""
+  },
+  "checkout": {
+   "title": "",
+   "note": "",
+   "placeLabel": "",
+   "askEmail": false,
+   "askNote": true
+  },
+  "account": {
+   "signedOutText": "",
+   "showReturns": true,
+   "showRequests": true,
+   "showReviews": true,
+   "returnsLabel": "",
+   "requestsLabel": "",
+   "reviewsLabel": ""
+  }
+ },
+ "tabs": [
+  {
+   "key": "shop",
+   "label": "Shop"
+  },
+  {
+   "key": "cart",
+   "label": "Cart"
+  },
+  {
+   "key": "orders",
+   "label": "Orders"
+  },
+  {
+   "key": "account",
+   "label": "Account"
+  },
+  {
+   "key": "reels",
+   "label": "Reels"
+  }
+ ],
+ "home": [
+  {
+   "id": "b-mtvewjng-pm0e",
+   "type": "live_now",
+   "settings": {
+    "liveLabel": "LIVE",
+    "replayBadge": "Replay",
+    "showReplays": false,
+    "replaysLabel": "Replays",
+    "replaysHandle": "summer-sale",
+    "offerEnabled": true,
+    "autoplayReplays": true,
+    "offerMinutes": 10,
+    "offerUrl": "https://ecommerce-platform-rpcx.vercel.app/store/live/e82667cc-0b0f-4f8d-a1e5-b18db557cdf4",
+    "avatarShape": "square",
+    "avatarSize": 32,
+    "ringWidth": 0,
+    "badgeTextColor": "#ffffff",
+    "nameSize": 10,
+    "viewersSize": 10,
+    "bannerRadius": 0,
+    "offerGap": 0,
+    "offerTextColor": "#ffffff",
+    "offerTitleSize": 10,
+    "offerTextSize": 10,
+    "timerTextColor": "#ffffff",
+    "items": [
+     {
+      "id": "i-mtvewjng-q3em",
+      "imageUrl": "https://srv2120209.hstgr.cloud/media/files/1790766597462-y44rc1-whatsapp-image-2026-08-29-at-5.30.05-pm.jpeg",
+      "name": "Nour",
+      "viewers": "1.3k",
+      "videoUrl": "https://ecommerce-platform-rpcx.vercel.app/store/live/e82667cc-0b0f-4f8d-a1e5-b18db557cdf4",
+      "url": "https://ecommerce-platform-rpcx.vercel.app/store/live/e82667cc-0b0f-4f8d-a1e5-b18db557cdf4"
+     },
+     {
+      "id": "i-mty8uv9f-f9fb",
+      "imageUrl": "https://srv2120209.hstgr.cloud/media/files/1790766953878-hq0tsj-1789649189792-c3bh97-palette-elegance.jpg",
+      "name": "test",
+      "viewers": "1.5k",
+      "videoUrl": "https://ecommerce-platform-rpcx.vercel.app/store/live/e82667cc-0b0f-4f8d-a1e5-b18db557cdf4",
+      "screen": "live"
+     },
+     {
+      "id": "i-mujv6xew-687u",
+      "videoUrl": "https://ecommerce-platform-rpcx.vercel.app/store/live/0953eb83-7b76-4b7a-9b78-6bb383631f2f",
+      "url": "https://ecommerce-platform-rpcx.vercel.app/store/live/0953eb83-7b76-4b7a-9b78-6bb383631f2f"
+     }
+    ]
+   },
+   "kicker": "",
+   "band": ""
+  },
+  {
+   "id": "pay-strip-onfp2yu",
+   "type": "pay_strip",
+   "settings": {},
+   "kicker": "",
+   "band": ""
+  },
+  {
+   "id": "b-tug56x",
+   "type": "hero",
+   "settings": {
+    "autoplaySeconds": 3,
+    "height": 265,
+    "width": 60,
+    "items": [
+     {
+      "id": "i-mtr4zh48-z4fr",
+      "imageUrl": "https://srv2120209.hstgr.cloud/media/files/1792007553791-qo9hm3-elegant-70-off-designer-handbag-sale.png",
+      "handle": "summer-sale"
+     },
+     {
+      "id": "i-mtr4zh49-3lth",
+      "imageUrl": "https://srv2120209.hstgr.cloud/media/files/1792007700993-bouzyo-luxury-footwear-beauty-bar-sale.png",
+      "handle": "footwear"
+     },
+     {
+      "id": "i-muyfcc5d-4meg",
+      "imageUrl": "https://srv2120209.hstgr.cloud/media/files/1792007942339-35igmy-iconic-fragrances-on-lavender.png",
+      "handle": "perfume"
+     },
+     {
+      "id": "i-muyfcepf-scme",
+      "imageUrl": "https://srv2120209.hstgr.cloud/media/files/1792010494567-0do679-luxe-accessories-edit-banner.png"
+     }
+    ]
+   },
+   "kicker": "",
+   "band": ""
+  },
+  {
+   "id": "b-mty6wc69-vhly",
+   "type": "circle_row",
+   "settings": {
+    "title": "Shop by department",
+    "seeAllLabel": "see all",
+    "size": 72,
+    "showLabel": true,
+    "showNote": false,
+    "seeAllScreen": "collections",
+    "shape": "rounded",
+    "radius": 16,
+    "labelSize": 10,
+    "labelBold": true,
+    "tileStyle": "standout",
+    "items": [
+     {
+      "id": "i-mty6wc6a-ehig",
+      "imageUrl": "/departments/bags.webp",
+      "label": "Bags",
+      "handle": "bags"
+     },
+     {
+      "id": "i-mty6ywsw-v7py",
+      "imageUrl": "/departments/heels-for-women.webp",
+      "label": "Heels",
+      "handle": "heels-for-women"
+     },
+     {
+      "id": "i-mty6zzsa-z6nr",
+      "imageUrl": "/departments/sneakers-for-women.webp",
+      "label": "Sneakers",
+      "handle": "sneakers-for-women"
+     },
+     {
+      "id": "i-mty71cnt-jcdo",
+      "imageUrl": "/departments/sunglasses.webp",
+      "label": "Sunglasses",
+      "handle": "sunglasses"
+     },
+     {
+      "id": "i-mty722gq-n1gy",
+      "imageUrl": "/departments/sandals-for-women.webp",
+      "label": "Sandals",
+      "handle": "sandals-for-women"
+     },
+     {
+      "id": "i-mty747u9-7i8z",
+      "imageUrl": "/departments/perfume.webp",
+      "label": "Perfume",
+      "handle": "perfume"
+     },
+     {
+      "id": "i-mty754p6-z7ax",
+      "imageUrl": "/departments/swimmwear.webp",
+      "label": "Swimmware",
+      "handle": "swimmwear"
+     }
+    ]
+   },
+   "kicker": "BROWSE",
+   "band": ""
+  },
+  {
+   "id": "b-ship-pupa",
+   "type": "free_shipping",
+   "settings": {
+    "style": "bold",
+    "bigWord": "FREE",
+    "smallWord": "Delivery",
+    "wasLabel": "was",
+    "wasPrice": "EGP 60",
+    "imageUrl": "https://srv2120209.hstgr.cloud/media/files/1789208673754-jtv5gu-chatgpt_image_jul_23_2026_02_33_07_pm.png",
+    "focal": "50% 35%",
+    "kicker": "Delivered on us",
+    "title": "Free shipping over EGP 2,000",
+    "subtitle": "on orders over EGP 2,000",
+    "note": "Anywhere we ship · no code needed",
+    "buttonLabel": "Shop now",
+    "stampTop": "EGP",
+    "stampBig": "2,000",
+    "stampBottom": "and over",
+    "radius": 18,
+    "height": 0,
+    "handle": "all"
+   },
+   "kicker": "",
+   "band": ""
+  },
+  {
+   "id": "b-new-h266ls",
+   "type": "new_arrivals",
+   "settings": {
+    "title": "New in",
+    "limit": 12
+   },
+   "kicker": "",
+   "band": ""
+  },
+  {
+   "id": "brand-wall-1m3ox7",
+   "type": "brand_wall",
+   "settings": {
+    "title": "Shop by brand",
+    "items": [
+     {
+      "id": "bw-louis-vuitton",
+      "handle": "louis-vuitton",
+      "label": "LOUIS VUITTON"
+     },
+     {
+      "id": "bw-hermes",
+      "handle": "hermes",
+      "label": "HERMES"
+     },
+     {
+      "id": "bw-christian-dior",
+      "handle": "christian-dior",
+      "label": "CHRISTIAN DIOR"
+     },
+     {
+      "id": "bw-gucci",
+      "handle": "gucci",
+      "label": "GUCCI"
+     },
+     {
+      "id": "bw-yves-saint-laurent",
+      "handle": "yves-saint-laurent",
+      "label": "YVES SAINT LAURENT"
+     },
+     {
+      "id": "bw-valentino",
+      "handle": "valentino",
+      "label": "VALENTINO"
+     },
+     {
+      "id": "bw-chanel",
+      "handle": "chanel",
+      "label": "CHANEL"
+     },
+     {
+      "id": "bw-prada",
+      "handle": "prada",
+      "label": "PRADA"
+     },
+     {
+      "id": "bw-fendi",
+      "handle": "fendi",
+      "label": "FENDI"
+     },
+     {
+      "id": "bw-nike",
+      "handle": "nike",
+      "label": "NIKE"
+     },
+     {
+      "id": "bw-new-balance",
+      "handle": "new-balance",
+      "label": "New Balance"
+     },
+     {
+      "id": "bw-golden-goose",
+      "handle": "golden-goose",
+      "label": "GOLDEN GOOSE"
+     },
+     {
+      "id": "bw-adidas",
+      "handle": "adidas",
+      "label": "ADIDAS"
+     },
+     {
+      "id": "bw-longchamp",
+      "handle": "longchamp",
+      "label": "Longchamp"
+     },
+     {
+      "id": "bw-balenciaga",
+      "handle": "balenciaga",
+      "label": "BALENCIAGA"
+     }
+    ]
+   },
+   "kicker": "",
+   "band": ""
+  },
+  {
+   "id": "b-mtvfhszk-9i2s",
+   "type": "countdown_deals",
+   "settings": {
+    "featureFirst": true,
+    "title": "Deals of the day",
+    "endsInMinutes": 135,
+    "showTimer": true,
+    "showClaimed": true,
+    "radius": 14,
+    "items": [
+     {
+      "id": "i-mtvfhszk-uk2r",
+      "badge": "−50%",
+      "price": "EGP 5,999",
+      "comparePrice": "EGP 14,000",
+      "claimed": "40% claimed",
+      "handle": "bags"
+     },
+     {
+      "id": "i-mtvfoi82-ydsy",
+      "badge": "−54%",
+      "price": "EGP 5,000",
+      "comparePrice": "EGP 12,000",
+      "claimed": "62% claimed",
+      "handle": "shoulder-bags"
+     },
+     {
+      "id": "i-mtvfqlba-tbas",
+      "badge": "−52%",
+      "price": "EGP 5,750",
+      "comparePrice": "EGP 13,000",
+      "claimed": "55% claimed",
+      "handle": "for-men"
+     }
+    ]
+   },
+   "kicker": "TODAY ONLY",
+   "band": "tint"
+  },
+  {
+   "id": "b-seal-ex6k",
+   "type": "sale_seal",
+   "settings": {
+    "layout": "split",
+    "ringText": "Shop now · Summer sale · Luxury for less",
+    "bigText": "70%",
+    "smallText": "off",
+    "tagline": "Luxury you love, now for less.",
+    "buttonLabel": "Shop now",
+    "imageUrl": "https://srv2120209.hstgr.cloud/media/files/1787234777487-wxbpiv-chatgpt_image_22_2026_03_25_26.png",
+    "focal": "50% 40%",
+    "badge": "-46%",
+    "badgeBg": "#2b1b10",
+    "badgeColor": "#ffffff",
+    "bg": "#7a4b27",
+    "inkColor": "#ffffff",
+    "ringColor": "#ffffff",
+    "height": 230,
+    "radius": 18,
+    "handle": "70-off"
+   },
+   "kicker": "",
+   "band": ""
+  },
+  {
+   "id": "b-mtvi9prr-misj",
+   "type": "offer_cards",
+   "settings": {
+    "title": "Offers for you",
+    "subtitle": "three unlocked, one expires tonight",
+    "claimLabel": "Claim",
+    "radius": 14,
+    "items": [
+     {
+      "id": "i-mtvigydw-xm18",
+      "badge": "10%",
+      "title": "First order",
+      "subtitle": "Extra 10% on your first bag",
+      "handle": "bags"
+     },
+     {
+      "id": "i-mtvi9prr-quxh",
+      "badge": "−400",
+      "title": "EGP 400 off",
+      "subtitle": "On any order over 5,000",
+      "color": "#c06e2a",
+      "handle": "all?minPrice=5000"
+     },
+     {
+      "id": "i-mtvii6yi-hep7",
+      "badge": "Free",
+      "title": "Free gift",
+      "subtitle": "On any order over EGP 20,000",
+      "handle": "all?minPrice=9999"
+     }
+    ]
+   },
+   "kicker": "UNLOCKED",
+   "band": "tint"
+  },
+  {
+   "id": "b-mty76d1e-quqp",
+   "type": "promo_card",
+   "settings": {
+    "style": "banner",
+    "kicker": "Surprise drop",
+    "title": "Mystery box",
+    "body": "We pick, you unbox. Sealed until it reaches your door, and always worth more than you paid.",
+    "height": 196,
+    "buttonLabel": "Unbox yours",
+    "handle": "bags",
+    "textColor": "#ffffff",
+    "radius": 20
+   },
+   "kicker": "",
+   "band": ""
+  },
+  {
+   "id": "b-rail-bags-o63g",
+   "type": "collection_tabs",
+   "settings": {
+    "title": "Bags & Clutches",
+    "limit": 12,
+    "align": "left",
+    "stretchTabs": true,
+    "showLink": true,
+    "imageShape": "wide",
+    "imageFit": "contain",
+    "items": [
+     {
+      "id": "b-rail-t1-hkj1",
+      "handle": "bags",
+      "label": "Bags",
+      "emoji": "👜"
+     },
+     {
+      "id": "b-rail-t2-639o",
+      "handle": "clutches",
+      "label": "Clutches"
+     },
+     {
+      "id": "b-rail-t3-8a01",
+      "handle": "crossbody-bags",
+      "label": "Cross"
+     }
+    ]
+   },
+   "kicker": "Carried in style",
+   "band": "tint"
+  },
+  {
+   "id": "b-rail-shoes-bb18",
+   "type": "collection_tabs",
+   "settings": {
+    "title": "Sneakers & Trainers",
+    "limit": 12,
+    "align": "left",
+    "stretchTabs": true,
+    "showLink": true,
+    "imageShape": "wide",
+    "imageFit": "cover",
+    "items": [
+     {
+      "id": "b-rail-t4-gbwz",
+      "handle": "sneakers-for-women",
+      "label": "Women",
+      "emoji": "👟"
+     },
+     {
+      "id": "b-rail-t5-oke9",
+      "handle": "sneakers-for-men",
+      "label": "Men",
+      "emoji": "👞"
+     },
+     {
+      "id": "b-rail-t6-r9ls",
+      "handle": "footwear",
+      "label": "All"
+     }
+    ]
+   },
+   "kicker": "Comfort picks",
+   "band": "tint"
+  },
+  {
+   "id": "b-mtvj71ie-2bui",
+   "type": "pick_colour",
+   "settings": {
+    "style": "palette",
+    "title": "Shop By Palette",
+    "subtitle": "Explore colour-forward edits, styled to match your mood and every moment.",
+    "size": 44,
+    "eyebrow": "Curated Aesthetics",
+    "linkLabel": "Shop now",
+    "pillText": "Not sure where to start?",
+    "pillCta": "Explore all collections",
+    "pillHandle": "for-women",
+    "titleSize": 30,
+    "imageHeight": 104,
+    "cardWidth": 0,
+    "swatchSize": 22,
+    "bg": "#f6f0e8",
+    "cardBg": "#fffdfa",
+    "inkColor": "#211a15",
+    "mutedColor": "#74685e",
+    "accentColor": "#9d6540",
+    "lineColor": "#e0d4c4",
+    "pillBg": "#f1e7d9",
+    "items": [
+     {
+      "id": "i-mu5j11gs-udov",
+      "color": "#800b14",
+      "label": "Elegance Edit",
+      "imageUrl": "https://srv2120209.hstgr.cloud/media/files/1789649189792-c3bh97-palette-elegance.jpg",
+      "line1": "Soft. Timeless.",
+      "line2": "Effortlessly elegant.",
+      "handle": "bags"
+     },
+     {
+      "id": "i-mu5j11gs-d89z",
+      "color": "#8a5a37",
+      "label": "Mocha Edit",
+      "imageUrl": "https://srv2120209.hstgr.cloud/media/files/1789649192026-azymf1-palette-mocha.jpg",
+      "line1": "Warm. Rich.",
+      "line2": "Naturally sophisticated.",
+      "handle": "hand-bags"
+     },
+     {
+      "id": "i-mu5j11gs-gt1h",
+      "color": "#211a15",
+      "label": "Midnight Edit",
+      "imageUrl": "https://srv2120209.hstgr.cloud/media/files/1789649193853-38nrc2-palette-midnight.jpg",
+      "line1": "Bold. Modern.",
+      "line2": "Always in style.",
+      "handle": "shoulder-bags"
+     },
+     {
+      "id": "i-mu5j11gs-7px5",
+      "color": "#c7a888",
+      "label": "Nude Edit",
+      "imageUrl": "https://srv2120209.hstgr.cloud/media/files/1789649196070-xxgfrp-palette-nude.jpg",
+      "line1": "Neutral. Clean.",
+      "line2": "Understated beauty.",
+      "handle": "crossbody-bags"
+     },
+     {
+      "id": "i-mu5j11gs-1m1p",
+      "color": "#aea6a2",
+      "label": "Silver Edit",
+      "imageUrl": "https://srv2120209.hstgr.cloud/media/files/1789649197844-w5kigd-palette-silver.jpg",
+      "line1": "Radiant. Glamorous.",
+      "line2": "Made to shine.",
+      "handle": "clutches"
+     }
+    ]
+   },
+   "kicker": "",
+   "band": ""
+  },
+  {
+   "id": "b-shop-her-nasy4",
+   "type": "circle_row",
+   "settings": {
+    "title": "Shop Her",
+    "seeAllLabel": "Shop Now",
+    "size": 104,
+    "showLabel": true,
+    "showNote": false,
+    "seeAllScreen": "for-her",
+    "shape": "rounded",
+    "radius": 22,
+    "titleSize": 20,
+    "labelSize": 13,
+    "labelBold": true,
+    "labelColor": "#1f2937",
+    "linkColor": "#b97040",
+    "bg": "#f3ede5",
+    "items": [
+     {
+      "id": "b-t-5j30h",
+      "imageUrl": "https://srv2120209.hstgr.cloud/media/files/1790598403057-p1cy8o-yves-saint-laurent-icarion-in-quilted-nappa-4516468.webp",
+      "label": "Bags",
+      "handle": "bags"
+     },
+     {
+      "id": "b-t-734q2",
+      "label": "Sneakers",
+      "handle": "sneakers-for-women"
+     },
+     {
+      "id": "b-t-64w6x",
+      "label": "Perfumes",
+      "handle": "perfume-for-women"
+     },
+     {
+      "id": "b-t-4l0gu",
+      "label": "Sunglasses",
+      "handle": "sunglasses"
+     },
+     {
+      "id": "b-t-86dj4",
+      "label": "Slippers",
+      "handle": "slippers-for-women"
+     },
+     {
+      "id": "b-t-3huzk",
+      "label": "Ballerina",
+      "handle": "ballerina-for-women"
+     },
+     {
+      "id": "b-t-8m515",
+      "label": "Wallets",
+      "handle": "wallets"
+     },
+     {
+      "id": "b-t-x7qt0",
+      "label": "Swimwear",
+      "handle": "swimmwear"
+     },
+     {
+      "id": "b-t-6emkb",
+      "label": "Clogs",
+      "handle": "clogs-for-women"
+     },
+     {
+      "id": "b-t-91lt1",
+      "label": "Sandals",
+      "handle": "sandals-for-women"
+     },
+     {
+      "id": "b-t-ch9ac",
+      "label": "Belts",
+      "handle": "belts"
+     }
+    ]
+   },
+   "kicker": "",
+   "band": ""
+  },
+  {
+   "id": "b-moments-jkzw",
+   "type": "moments",
+   "settings": {
+    "title": "Every step tells a different story.",
+    "subtitle": "A curated edit of timeless footwear for every destination and every moment.",
+    "cardWidth": 150,
+    "cardHeight": 210,
+    "radius": 14,
+    "labelColor": "#ffffff",
+    "items": [
+     {
+      "id": "i-ml18wjjn",
+      "imageUrl": "https://srv2120209.hstgr.cloud/media/files/1787234431289-7b8vtq-chatgpt_image_22_2026_03_06_44.png",
+      "label": "Weekend",
+      "focal": "50% 25%",
+      "handle": "sneakers-for-women"
+     },
+     {
+      "id": "i-mrvmci8o",
+      "imageUrl": "https://srv2120209.hstgr.cloud/media/files/1787234698462-cjtviw-chatgpt_image_22_2026_03_19_43.png",
+      "label": "Easy day",
+      "focal": "50% 25%",
+      "handle": "slippers-for-women"
+     },
+     {
+      "id": "i-oru8ysua",
+      "imageUrl": "https://srv2120209.hstgr.cloud/media/files/1787234777487-wxbpiv-chatgpt_image_22_2026_03_25_26.png",
+      "label": "Sunset",
+      "focal": "50% 25%",
+      "handle": "slippers-for-women"
+     },
+     {
+      "id": "i-jwin9yp1",
+      "imageUrl": "https://srv2120209.hstgr.cloud/media/files/1787234847769-ayd6p0-chatgpt_image_jul_22_2026_03_36_55_pm.png",
+      "label": "Elegance",
+      "focal": "50% 25%",
+      "handle": "heels-for-women"
+     },
+     {
+      "id": "i-hmondy46",
+      "imageUrl": "https://srv2120209.hstgr.cloud/media/files/1787234899710-7p3e2o-chatgpt_image_15_2026_12_48_28.png",
+      "label": "Gift",
+      "focal": "50% 25%",
+      "handle": "all"
+     }
+    ]
+   },
+   "kicker": "CURATED FOOTWEAR",
+   "band": ""
+  },
+  {
+   "id": "b-shop-him-wd93h",
+   "type": "circle_row",
+   "settings": {
+    "title": "Shop Him",
+    "seeAllLabel": "View all",
+    "size": 104,
+    "showLabel": true,
+    "showNote": false,
+    "seeAllScreen": "for-him",
+    "shape": "rounded",
+    "radius": 22,
+    "titleSize": 20,
+    "labelSize": 13,
+    "labelBold": true,
+    "labelColor": "#1f2937",
+    "linkColor": "#9d6540",
+    "bg": "#f3ede5",
+    "items": [
+     {
+      "id": "b-t-e7rc0",
+      "label": "Bags",
+      "handle": "men-bags"
+     },
+     {
+      "id": "b-t-4gzff",
+      "label": "Sneakers",
+      "handle": "sneakers-for-men"
+     },
+     {
+      "id": "b-t-sjadr",
+      "label": "Loafers",
+      "handle": "loafers-for-men"
+     },
+     {
+      "id": "b-t-qnh8v",
+      "label": "Perfumes"
+     },
+     {
+      "id": "i-mu5em075-iywj",
+      "label": "slipers",
+      "handle": "slliper-for-men"
+     }
+    ]
+   },
+   "kicker": "",
+   "band": ""
+  },
+  {
+   "id": "b-brands-mu5k1skq",
+   "type": "brand_timeline",
+   "settings": {
+    "eyebrow": "Shop by brand",
+    "linkLabel": "Shop Now",
+    "autoplay": 3,
+    "cardHeight": 150,
+    "radius": 20,
+    "overlay": 72,
+    "accentColor": "#9d6540",
+    "brownColor": "#684329",
+    "inkColor": "#211a15",
+    "items": [
+     {
+      "id": "i-mu5k1skq-2ot0",
+      "logoText": "LV",
+      "label": "Louis Vuitton",
+      "title": "Louis Vuitton",
+      "imageUrl": "https://srv2120209.hstgr.cloud/media/files/1789650873148-0x055g-brand-lv.jpg",
+      "focal": "44% 30%",
+      "handle": "louis-vuitton"
+     },
+     {
+      "id": "i-mu5k1skq-wy2c",
+      "logoText": "Dior",
+      "label": "Christian Dior",
+      "title": "Christian Dior",
+      "imageUrl": "https://srv2120209.hstgr.cloud/media/files/1789650874879-d4uqa8-brand-dior.jpg",
+      "focal": "70% 30%",
+      "handle": "christian-dior"
+     },
+     {
+      "id": "i-mu5k1skq-w0t3",
+      "logoText": "GG",
+      "label": "Gucci",
+      "title": "Gucci",
+      "imageUrl": "https://srv2120209.hstgr.cloud/media/files/1789650876293-qy1hbc-brand-gucci.jpg",
+      "focal": "70% 30%",
+      "handle": "gucci"
+     },
+     {
+      "id": "i-mu5k1skq-ysep",
+      "logoText": "Miu Miu",
+      "label": "Miu Miu",
+      "title": "Miu Miu",
+      "description": "Warm tones for golden hour.",
+      "imageUrl": "https://srv2120209.hstgr.cloud/media/files/1789650877815-aepcg4-brand-miumiu.jpg",
+      "focal": "70% 30%",
+      "screen": "search:miu miu"
+     },
+     {
+      "id": "i-mu5k1skq-2zaa",
+      "logoText": "CC",
+      "label": "Chanel",
+      "title": "Chanel",
+      "imageUrl": "https://srv2120209.hstgr.cloud/media/files/1789650879137-v6h5l4-brand-chanel.jpg",
+      "focal": "70% 30%",
+      "handle": "chanel"
+     }
+    ]
+   },
+   "kicker": "",
+   "band": ""
+  },
+  {
+   "id": "b-mtzktn1l-sh",
+   "type": "showcase",
+   "settings": {
+    "heading": "The Sahel edit",
+    "subheading": "Everything from the collection, in one place",
+    "buttonLabel": "Shop the edit",
+    "handle": "summer-sale",
+    "height": 380,
+    "overlay": 50,
+    "textColor": "#ffffff",
+    "align": "bottom"
+   },
+   "kicker": "",
+   "band": ""
+  },
+  {
+   "id": "b-look-mu5hs6kb",
+   "type": "complete_look",
+   "settings": {
+    "title": "Complete your look",
+    "subtitle": "To go with your {product}",
+    "fallbackTitle": "Recommended for you",
+    "fallbackSubtitle": "Picked from what you shop",
+    "limit": 8
+   },
+   "kicker": "",
+   "band": ""
+  },
+  {
+   "id": "b-bundle-u4m919",
+   "type": "bundle_save",
+   "settings": {
+    "eyebrow": "Bundle & save",
+    "title": "Complete the bundle",
+    "limit": 12,
+    "addLabel": "Add bundle to cart",
+    "note": "Use the code at checkout",
+    "radius": 16
+   },
+   "kicker": "",
+   "band": ""
+  },
+  {
+   "id": "b-96v749",
+   "type": "tiers",
+   "settings": {
+    "title": "Every Budget.",
+    "items": [
+     {
+      "id": "i-mtr4zh49-hppm",
+      "prefix": "From",
+      "amount": "EGP 2,999",
+      "label": "Entry Luxury",
+      "handle": "all?minPrice=2999&maxPrice=4998"
+     },
+     {
+      "id": "i-mtr4zh49-6ezh",
+      "prefix": "From",
+      "amount": "EGP 4,999",
+      "label": "Premium",
+      "handle": "all?minPrice=4999&maxPrice=5998"
+     },
+     {
+      "id": "i-mtr4zh49-8ilp",
+      "prefix": "From",
+      "amount": "EGP 5,999",
+      "label": "Signature",
+      "handle": "all?minPrice=5999&maxPrice=9998"
+     },
+     {
+      "id": "i-mtr4zh49-3oog",
+      "prefix": "From",
+      "amount": "EGP 9,999",
+      "label": "Prestige",
+      "handle": "all?minPrice=9999"
+     }
+    ]
+   },
+   "kicker": "PRICE TIERS",
+   "band": ""
+  },
+  {
+   "id": "b-mty7iup1-sp",
+   "type": "style_profile",
+   "settings": {
+    "title": "Your style profile",
+    "subtitle": "Tap to change what we show you",
+    "cardTitle": "{name}'s profile",
+    "cardSubtitle": "Built from what you save and buy",
+    "radius": 14,
+    "items": [
+     {
+      "id": "i-mty7iup1-dpll",
+      "label": "Warm neutrals",
+      "screen": "search:beige"
+     },
+     {
+      "id": "i-mty7iup1-1gnv",
+      "label": "Bags",
+      "handle": "bags"
+     },
+     {
+      "id": "i-mty7iup1-jxbn",
+      "label": "Size 38",
+      "handle": "footwear"
+     },
+     {
+      "id": "i-mty7iup1-gti7",
+      "label": "Under 9,000",
+      "handle": "all?maxPrice=9000"
+     },
+     {
+      "id": "i-mty7iup1-c9ge",
+      "label": "Raffia",
+      "screen": "search:raffia"
+     },
+     {
+      "id": "i-mty7iup1-xbzc",
+      "label": "Gold hardware",
+      "screen": "search:gold"
+     },
+     {
+      "id": "i-mty7iup1-ik4h",
+      "label": "Sneakers",
+      "handle": "sneakers-for-women"
+     },
+     {
+      "id": "i-mty7iup1-zofx",
+      "label": "Perfume",
+      "handle": "perfume"
+     }
+    ]
+   },
+   "kicker": "",
+   "band": ""
+  },
+  {
+   "id": "b-mtvg41ho-3iyf",
+   "type": "coming_up_live",
+   "settings": {
+    "title": "Coming up live",
+    "remindLabel": "Remind me",
+    "radius": 16,
+    "items": [
+     {
+      "id": "i-mtvg41ho-wp5f",
+      "title": "New drop, members first",
+      "when": "Thu 8pm · with Gana",
+      "handle": "prada"
+     },
+     {
+      "id": "i-mty7iup0-i52y",
+      "title": "Chanel restock — 40 bags",
+      "when": "Tonight 9pm · with Nour",
+      "handle": "bags"
+     }
+    ]
+   },
+   "kicker": "SAVE THE DATE",
+   "band": ""
+  },
+  {
+   "id": "b-rating-mu5kl30i",
+   "type": "review_summary",
+   "settings": {
+    "eyebrow": "Customer reviews",
+    "heading": "What They're",
+    "headingItalic": "Saying",
+    "average": "4.9",
+    "reviewCount": "1,627",
+    "reviewsWord": "reviews",
+    "trustNote": "Verified buyers",
+    "pct5": 88,
+    "pct4": 8,
+    "pct3": 3,
+    "pct2": 1,
+    "pct1": 0,
+    "buttonLabel": "Read all reviews",
+    "screen": "happy-customers",
+    "animate": true,
+    "avgSize": 58,
+    "radius": 18,
+    "bg": "#f6f0e8",
+    "panelFrom": "#fdf9f3",
+    "panelTo": "#f3e9db",
+    "starColor": "#c9a227",
+    "barTrack": "#e5dbcd",
+    "barFrom": "#c9a227",
+    "barTo": "#9d6540",
+    "brownColor": "#684329",
+    "accentColor": "#9d6540",
+    "inkColor": "#211a15",
+    "mutedColor": "#74685e"
+   },
+   "kicker": "",
+   "band": ""
+  },
+  {
+   "id": "b-mtvjgg1f-mf5j",
+   "type": "reviews",
+   "settings": {
+    "title": "What customers say",
+    "subtitle": "Photos from real orders",
+    "ratingLabel": "4.9 from 1,627 buyers",
+    "seeAllLabel": "All reviews",
+    "limit": 6,
+    "seeAllScreen": "reviews"
+   },
+   "kicker": "REAL ORDERS",
+   "band": "paper"
+  },
+  {
+   "id": "b-mtvgc3sk-x8yt",
+   "type": "payment_plans",
+   "settings": {
+    "title": "Pay your way",
+    "subtitle": "Instalments and bank offers",
+    "radius": 14,
+    "items": [
+     {
+      "id": "i-mtvgc3sk-639p",
+      "name": "ValU",
+      "headline": "0% for 6 months",
+      "note": "From EGP 899 a month"
+     },
+     {
+      "id": "i-mty7iup0-dofc",
+      "name": "Sympl",
+      "headline": "Split in 4",
+      "note": "No card, no bank account"
+     },
+     {
+      "id": "i-mtvgdcug-9iqv",
+      "name": "CIB",
+      "headline": "Extra 12% off",
+      "note": "Credit cards, Thu only",
+      "color": "#794d2f"
+     }
+    ]
+   },
+   "kicker": "INSTALMENTS",
+   "band": "paper"
+  },
+  {
+   "id": "b-mty7iup0-ps",
+   "type": "price_slider",
+   "settings": {
+    "title": "Split any price",
+    "subtitle": "Move the slider to see the monthly amount",
+    "priceLabel": "Piece price",
+    "currency": "EGP",
+    "minPrice": 2999,
+    "maxPrice": 16000,
+    "startPrice": 7750,
+    "radius": 14,
+    "items": [
+     {
+      "id": "i-mty7iup0-jnjw",
+      "logo": "https://srv2120209.hstgr.cloud/media/files/1789644346728-u5373s-valu-logo.png",
+      "name": "ValU",
+      "months": "6",
+      "badge": "Triple Zero",
+      "perks": "0% interest · 0 down payment · 0 admin fees"
+     },
+     {
+      "id": "i-mty7iup0-kax8",
+      "logo": "https://srv2120209.hstgr.cloud/media/files/1789644348616-lcf9c7-sympl-logo.png",
+      "name": "Sympl",
+      "months": "4",
+      "badge": "No bank needed"
+     },
+     {
+      "id": "i-mty7iup1-slh5",
+      "logo": "https://srv2120209.hstgr.cloud/media/files/1789644349430-e59p1i-halan-logo.png",
+      "name": "Halan",
+      "months": "12",
+      "badge": "Longest term"
+     }
+    ]
+   },
+   "kicker": "",
+   "band": "paper"
+  },
+  {
+   "id": "b-mtvjjdgj-zamb",
+   "type": "info_rows",
+   "settings": {
+    "cardBg": "#ffffff",
+    "radius": 14,
+    "items": [
+     {
+      "id": "i-mty7iup0-h5gg",
+      "emoji": "⚡",
+      "title": "Express · tomorrow",
+      "subtitle": "Order before 6pm, Cairo and Giza",
+      "note": "Free shipping"
+     },
+     {
+      "id": "i-mty7iup0-trmb",
+      "emoji": "📦",
+      "title": "Standard · 2–4 days",
+      "subtitle": "All governorates",
+      "note": "EGP 90"
+     },
+     {
+      "id": "i-mty7iup0-rgw4",
+      "emoji": "↩️",
+      "title": "Free returns",
+      "subtitle": "14 days, we collect from your door",
+      "note": "Free"
+     }
+    ]
+   },
+   "kicker": "",
+   "band": "paper"
+  }
+ ],
+ "product": [
+  {
+   "id": "b-bundle-u4m919",
+   "type": "bundle_save",
+   "settings": {
+    "eyebrow": "Bundle & save",
+    "title": "Complete the bundle",
+    "limit": 12,
+    "addLabel": "Add bundle to cart",
+    "note": "Use the code at checkout",
+    "radius": 16
+   },
+   "kicker": "",
+   "band": ""
+  }
+ ],
+ "cart": []
+}
