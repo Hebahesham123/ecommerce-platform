@@ -25,8 +25,10 @@
 		respond "ok" 200
 	}
 
+	# Everything else is the store website (through the page cache).
 	handle {
-		respond "not found" 404
+		encode zstd gzip
+		reverse_proxy cache:80
 	}
 
 	header -Server
