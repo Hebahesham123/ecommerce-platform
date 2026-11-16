@@ -9,6 +9,7 @@
 # broken commit never takes the site down: the old one keeps serving.
 set -euo pipefail
 cd /opt/store
+umask 022   # build files must be readable inside the container
 exec 9>/opt/store/.deploy-web.lock
 flock -n 9 || { echo "another deploy is running"; exit 0; }
 
@@ -36,6 +37,7 @@ if [ "$NEW" = "$CUR" ] && [ "${1:-}" != "--force" ]; then exit 0; fi
 
 say "deploying $NEW ($(git -C "$SRC" log -1 --format=%s origin/main | cut -c1-70))"
 git -C "$SRC" reset -q --hard origin/main
+chmod -R a+rX "$SRC" 2>/dev/null || true
 
 # Public settings are baked into the build; secrets are not.
 grep -E '^NEXT_PUBLIC_[A-Z0-9_]+=' /opt/store/web.env > "$SRC/.env.production" || true
