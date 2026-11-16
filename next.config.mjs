@@ -11,6 +11,8 @@ const nextConfig = {
       { protocol: "https", hostname: "*.supabase.co" },
       // Files served from our own server (MinIO behind Caddy).
       { protocol: "https", hostname: "srv2120209.hstgr.cloud", pathname: "/media/**" },
+      // Product photos from Shopify, resized for phones by our image endpoint.
+      { protocol: "https", hostname: "cdn.shopify.com" },
     ],
   },
   experimental: {

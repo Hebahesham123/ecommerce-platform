@@ -1,0 +1,9 @@
+.git
+node_modules
+.next
+.env*.local
+.vercel
+infra/server/*.json
+infra/server/.env
+docs
+*.zip

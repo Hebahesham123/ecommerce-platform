@@ -85,6 +85,8 @@ services:
       - "443:443"
       # File uploads (S3 API) for the store's images and videos.
       - "9443:9443"
+      # Test address for the website running on this server (before it takes over port 443).
+      - "8443:8443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
@@ -101,6 +103,14 @@ services:
     volumes:
       - files_data:/data
       - ./seaweedfs-s3.json:/etc/seaweedfs/s3.json:ro
+
+  # The store website (Next.js). Built from GitHub main by scripts/deploy-web.sh, which sets
+  # WEB_IMAGE to the new build only after it has started and answered its health check.
+  web:
+    image: ${WEB_IMAGE:-store-web:latest}
+    restart: unless-stopped
+    env_file: ./web.env
+    depends_on: [postgrest]
 
   cloudflared:
     # Only used once the store has a domain on Cloudflare:  docker compose --profile tunnel up -d
