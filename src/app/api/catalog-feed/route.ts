@@ -65,7 +65,7 @@ export async function GET(req: Request) {
       const qty = stock.get(it.id) ?? 0;
       const title = [it.product_name, it.variant_title].filter(Boolean).join(" - ");
       const desc = `${it.product_name ?? ""}${it.category ? " — " + it.category : ""} من ${BRAND}`;
-      const link = `${site}/store/products/${encodeURIComponent(handleize(it.product_name))}`;
+      const link = `${site}/shop/products/${encodeURIComponent(handleize(it.product_name))}`;
       rows.push(
         [
           it.sku, title, desc, qty > 0 ? "in stock" : "out of stock", "new",
