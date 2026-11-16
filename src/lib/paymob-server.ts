@@ -97,6 +97,11 @@ export async function createPaymobIntention(
         billing_data: billing,
         special_reference: input.specialReference,
         extras: { order_number: input.orderNumber },
+        // On our own server, Paymob reports the payment back to this server directly (the
+        // dashboard default may still point at the old address). Unset elsewhere = dashboard default.
+        ...(process.env.NEXT_PUBLIC_SITE_URL?.startsWith("https://")
+          ? { notification_url: `${process.env.NEXT_PUBLIC_SITE_URL.replace(/\/+$/, "")}/api/paymob/webhook` }
+          : {}),
       }),
     });
     const json = (await res.json().catch(() => ({}))) as Record<string, unknown>;
