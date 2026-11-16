@@ -1,4 +1,5 @@
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
+import { handleize } from "@/lib/storefront-data";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,7 +24,7 @@ type Item = {
   sku: string | null;
   category: string | null;
   price: number | string | null;
-  handle: string | null;
+  status: string | null;
   image_url: string | null;
 };
 
@@ -36,7 +37,7 @@ export async function GET(req: Request) {
     for (let from = 0; ; from += 1000) {
       const { data, error } = await supabase
         .from("inventory_items")
-        .select("id,product_name,variant_title,sku,category,price,handle,image_url")
+        .select("id,product_name,variant_title,sku,category,price,status,image_url")
         .range(from, from + 999);
       if (error) throw new Error(error.message);
       items.push(...((data ?? []) as Item[]));
@@ -59,11 +60,12 @@ export async function GET(req: Request) {
     ];
     const rows = [cols.join(",")];
     for (const it of items) {
-      if (!it.sku) continue;
+      // Same rule as the store: only active products with a price are on sale.
+      if (!it.sku || (it.status ?? "active") !== "active" || !(Number(it.price) > 0)) continue;
       const qty = stock.get(it.id) ?? 0;
       const title = [it.product_name, it.variant_title].filter(Boolean).join(" - ");
       const desc = `${it.product_name ?? ""}${it.category ? " — " + it.category : ""} من ${BRAND}`;
-      const link = `${site}/shop/products/${encodeURIComponent(it.handle || it.sku)}`;
+      const link = `${site}/store/products/${encodeURIComponent(handleize(it.product_name))}`;
       rows.push(
         [
           it.sku, title, desc, qty > 0 ? "in stock" : "out of stock", "new",
