@@ -7,7 +7,7 @@ import {
   type InventoryItem,
   type Location,
   type ProductStatus,
-  stockStatus,
+  stockStatus, LOW_STOCK_THRESHOLD,
   stockStatusKey,
   stockStatusTone,
   statusKey,
@@ -18,6 +18,7 @@ import {
   emptyItem,
 } from "@/lib/inventory";
 import { listInventory, listLocations, setLevel, deleteItem } from "./actions";
+import { getLowStockThreshold } from "../settings/stock-actions";
 import { ProductEditor } from "./product-editor";
 import { PageHeader } from "@/components/page-header";
 import { DataTable, type Column } from "@/components/data-table";
@@ -54,6 +55,17 @@ type SortKey =
 export default function InventoryPage() {
   const { t, lang } = useI18n();
   const [items, setItems] = useState<InventoryItem[]>([]);
+
+  // The merchant's own "running low" line, from Settings -> Notifications.
+  // Starts at the shipped default so the first paint matches what the page
+  // showed before, then settles on their number.
+  const [lowAt, setLowAt] = useState(LOW_STOCK_THRESHOLD);
+  useEffect(() => {
+    getLowStockThreshold()
+      .then(setLowAt)
+      // A badge colour is never worth an error boundary.
+      .catch(() => {});
+  }, []);
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -110,7 +122,7 @@ export default function InventoryPage() {
     const rows = items.filter((i) => {
       if (status !== "all" && i.status !== status) return false;
       if (category !== "all" && (i.category ?? "") !== category) return false;
-      if (stock !== "all" && stockStatus(availOf(i)) !== stock) return false;
+      if (stock !== "all" && stockStatus(availOf(i), lowAt) !== stock) return false;
       if (needle) {
         const hay =
           `${i.productName} ${i.variantTitle ?? ""} ${i.sku ?? ""} ${i.barcode ?? ""} ${i.category ?? ""} ${i.vendor ?? ""} ${i.tags.join(" ")}`.toLowerCase();
@@ -137,7 +149,7 @@ export default function InventoryPage() {
     });
     return sorted;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, q, status, stock, category, sort, loc, lang]);
+  }, [items, q, status, stock, category, sort, loc, lang, lowAt]);
 
   // Only one page of rows is rendered; the KPIs below still span every match.
   const pg = usePagination(filtered, {
@@ -157,11 +169,11 @@ export default function InventoryPage() {
       units += oh;
       value += oh * (i.price ?? 0);
       if (av <= 0) out += 1;
-      else if (stockStatus(av) === "low_stock") low += 1;
+      else if (stockStatus(av, lowAt) === "low_stock") low += 1;
     }
     return { products: filtered.length, units, value, low, out };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtered, loc]);
+  }, [filtered, loc, lowAt]);
 
   const maxAvail = useMemo(
     () => Math.max(1, ...filtered.map((i) => availOf(i))),
@@ -242,7 +254,7 @@ export default function InventoryPage() {
       rank: "primary",
       cell: (item) => {
         const available = availOf(item);
-        const st = stockStatus(available);
+        const st = stockStatus(available, lowAt);
         const barPct = Math.min(100, Math.round((Math.max(0, available) / maxAvail) * 100));
         const barColor =
           st === "out_stock" ? "bg-rose-400" : st === "low_stock" ? "bg-amber-400" : "bg-emerald-400";

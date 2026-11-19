@@ -3,6 +3,8 @@ import "server-only";
 import { getServerSupabase, isSupabaseConfigured } from "@/lib/supabase/server";
 import { phoneVariants } from "@/lib/phone";
 import { sendMail } from "@/lib/mailer";
+import { getSettingsSection } from "@/lib/settings-server";
+import { orderNumberLabel } from "@/lib/order-number";
 
 /**
  * Build and send an order's invoice to the customer, from the shop's mailbox.
@@ -22,7 +24,7 @@ const egp = (v: number) =>
 const esc = (str: string) =>
   str.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
-function invoiceHtml(order: Row, items: Row[]): string {
+function invoiceHtml(order: Row, items: Row[], label: string): string {
   const rows = items
     .map((li) => {
       const name = esc(s(li.product_name));
@@ -54,7 +56,7 @@ function invoiceHtml(order: Row, items: Row[]): string {
       <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#fff;border-radius:14px;overflow:hidden">
         <tr><td style="background:#111;padding:22px 28px;color:#fff">
           <div style="font-size:20px;font-weight:700;letter-spacing:.04em">BEAUTY BAR</div>
-          <div style="opacity:.75;font-size:13px;margin-top:2px">Invoice · Order #${esc(s(order.order_number))}</div>
+          <div style="opacity:.75;font-size:13px;margin-top:2px">Invoice · Order ${esc(label)}</div>
         </td></tr>
         <tr><td style="padding:24px 28px">
           <p style="margin:0 0 4px;color:#111;font-size:15px">Hi ${esc(s(order.customer_name) || "there")},</p>
@@ -115,7 +117,10 @@ export async function sendOrderInvoiceEmail(
     if (!to || !to.includes("@")) return { ok: false, error: "no_customer_email" };
 
     const items = (Array.isArray(order.store_order_items) ? order.store_order_items : []) as Row[];
-    const html = invoiceHtml(order as Row, items);
+    // The merchant's own prefix/suffix from Settings -> General; "#1234"
+    // when they have set none.
+    const label = orderNumberLabel(order.order_number, await getSettingsSection("general"));
+    const html = invoiceHtml(order as Row, items, label);
     const res = await sendMail({
       to,
       subject: `Invoice for order #${orderNumber} · Beauty Bar`,

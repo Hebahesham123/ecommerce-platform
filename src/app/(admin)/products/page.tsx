@@ -8,11 +8,12 @@ import {
   type InventoryItem,
   type Location,
   type ProductStatus,
-  stockStatus,
+  stockStatus, LOW_STOCK_THRESHOLD,
   totalAvailable,
   emptyItem,
 } from "@/lib/inventory";
 import { deleteItems, listInventory, listLocations, setItemsStatus } from "../inventory/actions";
+import { getLowStockThreshold } from "../settings/stock-actions";
 import { ProductEditor } from "../inventory/product-editor";
 import { ProductImport } from "@/components/product-import";
 import { PageHeader } from "@/components/page-header";
@@ -94,6 +95,17 @@ export default function ProductsPage() {
   const ar = lang === "ar";
   const router = useRouter();
   const [items, setItems] = useState<InventoryItem[]>([]);
+
+  // The merchant's own "running low" line, from Settings -> Notifications.
+  // Starts at the shipped default so the first paint matches what the page
+  // showed before, then settles on their number.
+  const [lowAt, setLowAt] = useState(LOW_STOCK_THRESHOLD);
+  useEffect(() => {
+    getLowStockThreshold()
+      .then(setLowAt)
+      // A badge colour is never worth an error boundary.
+      .catch(() => {});
+  }, []);
   const [locations, setLocations] = useState<Location[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -141,7 +153,7 @@ export default function ProductsPage() {
     return [...s].sort();
   }, [allProducts]);
 
-  const withStatus = (p: Product) => stockStatus(p.available);
+  const withStatus = (p: Product) => stockStatus(p.available, lowAt);
 
   const kpi = useMemo(() => {
     let inStock = 0, low = 0, out = 0;
@@ -186,7 +198,7 @@ export default function ProductsPage() {
       }
     });
     return sorted;
-  }, [allProducts, tab, q, category, stock, sort, ar]);
+  }, [allProducts, tab, q, category, stock, sort, ar, lowAt]);
 
   // Only the current page is rendered, so a large catalog stays fast to paint.
   const pg = usePagination(filtered, {

@@ -7,9 +7,10 @@ import {
 } from "recharts";
 import { useI18n, egp, num } from "@/lib/i18n";
 import {
-  type InventoryItem, totalAvailable, stockStatus,
+  type InventoryItem, totalAvailable, stockStatus, LOW_STOCK_THRESHOLD,
 } from "@/lib/inventory";
 import { listInventory } from "../inventory/actions";
+import { getLowStockThreshold } from "../settings/stock-actions";
 import { listStoreOrders, type PlacedOrder } from "../../store/actions";
 import { PageHeader } from "@/components/page-header";
 import { KpiCard, Panel, ChartFrame, chartAxis } from "@/components/analytics-ui";
@@ -54,6 +55,17 @@ export default function DashboardPage() {
   const c = (k: ChartColor) => CHART[k][dark ? "dark" : "light"];
 
   const [items, setItems] = useState<InventoryItem[]>([]);
+
+  // The merchant's own "running low" line, from Settings -> Notifications.
+  // Starts at the shipped default so the first paint matches what the page
+  // showed before, then settles on their number.
+  const [lowAt, setLowAt] = useState(LOW_STOCK_THRESHOLD);
+  useEffect(() => {
+    getLowStockThreshold()
+      .then(setLowAt)
+      // A badge colour is never worth an error boundary.
+      .catch(() => {});
+  }, []);
   const [placed, setPlaced] = useState<PlacedOrder[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -121,10 +133,10 @@ export default function DashboardPage() {
   }, [live, days]);
 
   const stock = useMemo(() => {
-    const low = items.filter((i) => stockStatus(totalAvailable(i)) === "low_stock");
+    const low = items.filter((i) => stockStatus(totalAvailable(i), lowAt) === "low_stock");
     const out = items.filter((i) => totalAvailable(i) <= 0);
     return { low, out, needs: [...out, ...low].slice(0, 5) };
-  }, [items]);
+  }, [items, lowAt]);
 
   const recentCustomers = useMemo(() => {
     const seen = new Map<string, { name: string; gov: string; total: number }>();

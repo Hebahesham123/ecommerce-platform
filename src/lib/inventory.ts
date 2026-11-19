@@ -82,11 +82,19 @@ export const statusKey: Record<ProductStatus, DictKey> = {
 // ---- Stock status (matches the products page badge language) ----------------
 export type StockStatus = "in_stock" | "low_stock" | "out_stock";
 
+/** What counts as running low when the merchant has not said otherwise. */
 export const LOW_STOCK_THRESHOLD = 10;
 
-export function stockStatus(available: number): StockStatus {
+/**
+ * `at` is the merchant's own threshold, from Settings → Notifications. It is
+ * optional so every existing caller keeps the behaviour it had, and anything
+ * unset, zero or nonsense falls back to the default rather than marking the
+ * whole catalogue low.
+ */
+export function stockStatus(available: number, at: number = LOW_STOCK_THRESHOLD): StockStatus {
+  const limit = Number.isFinite(at) && at > 0 ? at : LOW_STOCK_THRESHOLD;
   if (available <= 0) return "out_stock";
-  if (available <= LOW_STOCK_THRESHOLD) return "low_stock";
+  if (available <= limit) return "low_stock";
   return "in_stock";
 }
 
