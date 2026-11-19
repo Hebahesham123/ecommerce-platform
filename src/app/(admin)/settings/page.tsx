@@ -15,7 +15,7 @@ export default function SettingsHome() {
         {SECTIONS.map((s) => {
           const Icon = sectionIcon(s.icon);
           return (
-            <Link key={s.key} href={`/settings/${s.key}`} className="card p-4 transition-shadow hover:shadow-pop">
+            <Link key={s.key} href={s.href ?? `/settings/${s.key}`} className="card p-4 transition-shadow hover:shadow-pop">
               <div className="flex items-start gap-3">
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
                   <Icon className="h-5 w-5" />

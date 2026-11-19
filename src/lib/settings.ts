@@ -30,6 +30,15 @@ export type Section = {
   icon: string; // maps to an icon component
   fields?: Field[];
   lists?: ListSpec[];
+  /**
+   * Where this card goes when the settings row is not the place the answer
+   * lives. Locations are the one case: they are real rows in the `locations`
+   * table, with a code, a governorate and a default flag, edited on their own
+   * screen and read by inventory. Keeping a second list of names and
+   * addresses in this JSON gave the merchant two places to type a warehouse
+   * into, only one of which anything read.
+   */
+  href?: string;
 };
 
 const sel = (...pairs: [string, string, string][]) =>
@@ -199,14 +208,10 @@ export const SECTIONS: Section[] = [
     label: { ar: "المواقع", en: "Locations" },
     desc: { ar: "مواقع المخزون والتنفيذ", en: "Inventory & fulfillment locations" },
     icon: "courier",
-    lists: [
-      { key: "locations", label: { ar: "المواقع", en: "Locations" }, addLabel: { ar: "إضافة موقع", en: "Add location" },
-        itemFields: [
-          { key: "name", label: { ar: "اسم الموقع", en: "Location name" }, type: "text", half: true },
-          { key: "address", label: { ar: "العنوان", en: "Address" }, type: "text", half: true },
-          { key: "fulfills_online", label: { ar: "ينفّذ الطلبات الإلكترونية", en: "Fulfills online orders" }, type: "toggle" },
-        ] },
-    ],
+    // The locations themselves are rows in the `locations` table, which is
+    // what inventory counts stock against. This card opens that screen rather
+    // than offering a second, emptier copy of the same list.
+    href: "/inventory/locations",
   },
   {
     key: "notifications",
