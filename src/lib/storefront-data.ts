@@ -355,7 +355,16 @@ async function loadShop(): Promise<ShopInfo> {
       .select("data")
       .eq("id", "default")
       .maybeSingle();
-    const s = (data?.data ?? {}) as Record<string, unknown>;
+    const all = (data?.data ?? {}) as Record<string, unknown>;
+    // Settings → General saves under its section key: `updateSection` writes
+    // `{ general: { store_name, ... } }`. This read looked for the fields at
+    // the top level, so it never found them — the store name, currency,
+    // contact details and address typed into the settings screen reached
+    // nothing, and every storefront fell back to "Store" / "EGP" no matter
+    // what the merchant had filled in. The top level is still consulted
+    // second, for any store seeded before the settings screen existed.
+    const general = (all.general ?? {}) as Record<string, unknown>;
+    const s: Record<string, unknown> = { ...all, ...general };
     return {
       name: str(s.store_name) ?? fallback.name,
       currency: str(s.currency) ?? fallback.currency,
