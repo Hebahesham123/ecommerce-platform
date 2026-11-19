@@ -9,6 +9,8 @@ import {
   type DiscountLine,
 } from "@/lib/discount-engine";
 import { quoteShippingFor } from "@/lib/shipping-server";
+import { getSettingsSection } from "@/lib/settings-server";
+import { codFeeFor, taxFrom, taxOn } from "@/lib/order-charges";
 import { recordNudgeConversion } from "@/lib/nudge-service";
 import { recordShopperOrder } from "@/lib/shopper-tracking";
 import { recordSessionOrder } from "@/lib/analytics";
@@ -235,7 +237,24 @@ export async function placeOrderCore(
     });
     const shipping = delivery.cost;
 
-    const total = Math.max(0, subtotal - discount + shipping);
+    // Which method they picked, needed before the total because paying cash
+    // on delivery can carry a fee.
+    const picked = payload.paymentMethod
+      ? (await getPaymentMethods()).find((m) => m.id === payload.paymentMethod) ?? null
+      : null;
+
+    const goods = Math.max(0, subtotal - discount);
+    const codFee = codFeeFor(await getSettingsSection("payments"), picked?.kind);
+    const tax = taxOn(taxFrom(await getSettingsSection("taxes")), {
+      goods,
+      shipping,
+      governorate: payload.governorate,
+    });
+
+    // Tax is only added when the shelf prices do not already contain it. When
+    // they do, `tax.amount` is the share already inside them — recorded on the
+    // order for the books, but not charged twice.
+    const total = Math.max(0, goods + shipping + codFee + (tax.included ? 0 : tax.amount));
 
     // Delivery schedule, gift options and the coupon fold into the merchant
     // note — all of it captured without a schema change.
@@ -256,10 +275,21 @@ export async function placeOrderCore(
     // How they mean to pay. Anything but cash needs somebody to ring them
     // before it ships, so the order says which it is rather than leaving the
     // shop to guess from a code.
-    if (payload.paymentMethod) {
-      const picked = (await getPaymentMethods()).find((m) => m.id === payload.paymentMethod);
+    if (picked) {
       const line = orderLine(picked);
       if (line) noteParts.push(line);
+    }
+    // The charges that have no column of their own are written down the same
+    // way the coupon is, so the shop can see what made up the total.
+    if (shipping > 0) {
+      noteParts.push(`الشحن: ${shipping}${delivery.zone ? ` (${delivery.zone})` : ""}`);
+    } else if (delivery.waived) {
+      noteParts.push("الشحن: مجاني");
+    }
+    if (codFee > 0) noteParts.push(`رسوم الدفع عند الاستلام: ${codFee}`);
+    if (tax.amount > 0) {
+      const pct = Math.round(tax.rate * 1000) / 10;
+      noteParts.push(`ضريبة ${pct}%: ${tax.amount}${tax.included ? " (شاملة)" : ""}`);
     }
     const composedNote = noteParts.join(" | ") || null;
 

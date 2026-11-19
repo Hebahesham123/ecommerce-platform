@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "loadtest": "node scripts/live-load-test.mjs",
-    "check:shipping": "node scripts/check-shipping.mjs"
+    "check:shipping": "node scripts/check-shipping.mjs",
+    "check:charges": "node scripts/check-order-charges.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.48.1",
