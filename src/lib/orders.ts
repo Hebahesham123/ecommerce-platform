@@ -8,6 +8,7 @@ import {
   validateDiscount,
   type DiscountLine,
 } from "@/lib/discount-engine";
+import { quoteShippingFor } from "@/lib/shipping-server";
 import { recordNudgeConversion } from "@/lib/nudge-service";
 import { recordShopperOrder } from "@/lib/shopper-tracking";
 import { recordSessionOrder } from "@/lib/analytics";
@@ -200,7 +201,6 @@ export async function placeOrderCore(
     const items = repriced.lines;
 
     const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
-    const shipping = 0;
 
     // Price any coupon server-side — never trust a client for pricing. Reads
     // the merchant's own discounts table first, then the legacy built-ins.
@@ -219,6 +219,22 @@ export async function placeOrderCore(
     });
     const discount = verdict.ok ? verdict.amount : 0;
     const discountCode = verdict.ok ? verdict.code : null;
+
+    // Delivery, from the merchant's Shipping settings rather than the zero
+    // that used to sit here — every order, on the website and in the app,
+    // shipped free regardless of what the Shipping screen said.
+    //
+    // Priced after the discount, because "free delivery over 1000" is a
+    // statement about what the shopper spends, not about what the basket
+    // listed before their coupon. A store with no zones configured still
+    // quotes 0, so nothing changes until the Shipping screen is filled in.
+    const delivery = await quoteShippingFor({
+      goods: Math.max(0, subtotal - discount),
+      governorate: payload.governorate,
+      city: payload.city,
+    });
+    const shipping = delivery.cost;
+
     const total = Math.max(0, subtotal - discount + shipping);
 
     // Delivery schedule, gift options and the coupon fold into the merchant
