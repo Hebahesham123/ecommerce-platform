@@ -9,6 +9,7 @@ import {
   searchProducts,
   type ProductDrop,
 } from "@/lib/storefront-data";
+import { aiRankSearch } from "@/lib/ai-search";
 import { buildCart, type CartLine } from "@/lib/storefront-cart";
 import { getPixelSnippet, invalidatePixelSnippet } from "@/lib/meta-pixel";
 import { getGa4Snippet, getGscMeta } from "@/lib/ga4";
@@ -559,9 +560,12 @@ export async function renderStorefront(
       query: req.query,
       page,
       searchTerms: terms,
+      // An explicit sort stays a pure keyword sort; the default (relevance)
+      // order is AI-ranked when a key is set, falling back to keyword order
+      // on any failure (handled inside aiRankSearch).
       searchResults: sortBy
         ? sortProducts(searchProducts(catalog, terms), sortBy)
-        : searchProducts(catalog, terms),
+        : await aiRankSearch(catalog, terms),
     };
   } else if (segments[0] === "cart") {
     route = { type: "cart", path: "/cart", query: req.query, page };

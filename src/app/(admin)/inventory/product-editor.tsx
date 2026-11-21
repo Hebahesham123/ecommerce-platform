@@ -18,6 +18,8 @@ import {
 } from "@/lib/inventory";
 import { createItem, createItems, updateItem, setLevel } from "./actions";
 import { IcX, IcPlus, IcImage, IcTrash, IcLocation } from "@/components/icons";
+import { AiGenerateButton } from "@/components/ai-generate-button";
+import { aiCopy } from "@/app/(admin)/ai/actions";
 
 type TFn = ReturnType<typeof useI18n>["t"];
 type ProductOption = { name: string; values: string[] };
@@ -262,12 +264,39 @@ export function ProductEditor({
                   />
                 </Field>
                 <Field label={t("fld_description")}>
-                  <textarea
-                    value={draft.description ?? ""}
-                    onChange={(e) => set("description", e.target.value)}
-                    rows={4}
-                    className="inp h-auto resize-y py-2"
-                  />
+                  <div className="space-y-1.5">
+                    <div className="flex justify-end">
+                      <AiGenerateButton
+                        ar={ar}
+                        disabled={!draft.productName.trim()}
+                        disabledHint={ar ? "أدخل اسم المنتج أولاً" : "Enter a product name first"}
+                        run={() =>
+                          aiCopy({
+                            kind: "product",
+                            title: draft.productName,
+                            context: [
+                              draft.category,
+                              draft.vendor,
+                              (draft.tags ?? []).join(", "),
+                            ]
+                              .filter(Boolean)
+                              .join(" · "),
+                            lang: ar ? "ar" : "en",
+                            instructions: ar
+                              ? "اكتب وصفًا جذابًا للمنتج من فقرتين قصيرتين"
+                              : "an engaging product description of 2–3 short paragraphs",
+                          })
+                        }
+                        onResult={(text) => set("description", text)}
+                      />
+                    </div>
+                    <textarea
+                      value={draft.description ?? ""}
+                      onChange={(e) => set("description", e.target.value)}
+                      rows={4}
+                      className="inp h-auto resize-y py-2"
+                    />
+                  </div>
                 </Field>
               </SectionCard>
 

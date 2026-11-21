@@ -5,7 +5,10 @@ import { useI18n } from "@/lib/i18n";
 import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui";
 import { DEFAULT_SEO, type SeoSettings } from "@/lib/seo-types";
+import { AiGenerateButton } from "@/components/ai-generate-button";
+import { AiSettingsCard } from "@/components/ai-settings-card";
 import { getSeoSettings, saveSeoSettings } from "./actions";
+import { aiSeoMeta } from "@/app/(admin)/ai/actions";
 
 /**
  * SEO settings — the brand name, default description, social image, logo and
@@ -126,8 +129,26 @@ export function SeoSettingsForm() {
                   : "Appended to the end of page titles (optional)",
               )}
               <label className="block">
-                <span className="mb-1 block text-sm font-medium text-ink">
-                  {ar ? "الوصف الافتراضي" : "Default description"}
+                <span className="mb-1 flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium text-ink">
+                    {ar ? "الوصف الافتراضي" : "Default description"}
+                  </span>
+                  <AiGenerateButton
+                    ar={ar}
+                    disabled={!cfg.siteName.trim()}
+                    disabledHint={ar ? "أدخل اسم الموقع أولاً" : "Enter a site name first"}
+                    run={() =>
+                      aiSeoMeta({
+                        kind: "page",
+                        title: cfg.siteName,
+                        context: cfg.titleSuffix,
+                        lang: ar ? "ar" : "en",
+                      })
+                    }
+                    onResult={(meta) =>
+                      setCfg((c) => ({ ...c, defaultDescription: meta.description || meta.title }))
+                    }
+                  />
                 </span>
                 <textarea
                   value={cfg.defaultDescription}
@@ -208,6 +229,8 @@ export function SeoSettingsForm() {
               : "The sitemap and robots file are generated automatically from your products and collections. Submit the sitemap URL to Google Search Console."}
           </p>
         </Card>
+
+        <AiSettingsCard />
       </div>
     </>
   );

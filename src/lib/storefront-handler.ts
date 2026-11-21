@@ -20,7 +20,10 @@ import {
   setLine,
   type CartLine,
 } from "@/lib/storefront-cart";
-import { searchProducts, type ProductDrop } from "@/lib/storefront-data";
+import { type ProductDrop } from "@/lib/storefront-data";
+import { aiRankSearch } from "@/lib/ai-search";
+import { aiEnabled } from "@/lib/ai";
+import { aiRelatedFromCatalog } from "@/lib/ai-recommend";
 import { getServerSupabase } from "@/lib/supabase/server";
 import { recordNudgeEvent } from "@/lib/nudge-service";
 import { offerScript } from "@/lib/offer-script";
@@ -408,6 +411,33 @@ function recommendationProducts(catalog: any, excludeId: string, limit: number):
     pool[j] = t;
   }
   return pool.slice(0, Math.max(0, limit));
+}
+
+/** The product an exclude/product id refers to (product id or one of its variant ids). */
+function productForId(catalog: any, id: string): any | undefined {
+  if (!id) return undefined;
+  for (const p of catalog.productByHandle?.values?.() ?? []) {
+    if (String(p.id) === id) return p;
+    if (Array.isArray(p.variants) && p.variants.some((v: any) => String(v.id) === id)) return p;
+  }
+  return catalog.variantById?.get?.(id)?.product;
+}
+
+/** AI related products when a key is set and they resolve in time; otherwise the
+ *  existing random-buyable pick. Best-effort — never throws into the response. */
+async function relatedProducts(catalog: any, excludeId: string, limit: number): Promise<any[]> {
+  try {
+    if (await aiEnabled()) {
+      const current = productForId(catalog, excludeId);
+      if (current) {
+        const ai = await aiRelatedFromCatalog(catalog, String(current.handle), limit);
+        if (ai && ai.length) return ai;
+      }
+    }
+  } catch {
+    /* fall back to the rule-based pick below */
+  }
+  return recommendationProducts(catalog, excludeId, limit);
 }
 
 // ---- Account entry point (injected on every page) ---------------------------
@@ -997,7 +1027,9 @@ async function storefrontGet(req: Request, config: MountConfig): Promise<Respons
     const terms = String(query.q ?? "").trim();
     if (!terms) return html('<div class="predictive-search"></div>', 200, undefined, shared);
     const catalog = await getStorefrontCatalog(mount);
-    const results = searchProducts(catalog, terms).slice(0, 8);
+    // AI-rank the matches when a key is set; a slow/failed call (or no key)
+    // transparently falls back to the keyword order inside aiRankSearch.
+    const results = (await aiRankSearch(catalog, terms)).slice(0, 8);
     return html(predictiveSearchHtml(results, mount, terms), 200, undefined, shared);
   }
   // Product recommendations (Shopify's API): power "you may also like" and the
@@ -1006,7 +1038,8 @@ async function storefrontGet(req: Request, config: MountConfig): Promise<Respons
     const catalog = await getStorefrontCatalog(mount);
     const excludeId = String(query.product_id ?? "");
     const limit = Math.max(1, Math.min(12, Number(query.limit) || 4));
-    const recs = recommendationProducts(catalog, excludeId, limit).map((p: any) => ({
+    // Prefer AI related products when a key is set; otherwise the random pick.
+    const recs = (await relatedProducts(catalog, excludeId, limit)).map((p: any) => ({
       id: p.id,
       title: p.title,
       handle: p.handle,

@@ -8,7 +8,9 @@ import { PageHeader } from "@/components/page-header";
 import { Card } from "@/components/ui";
 import { Field, fieldClass } from "@/components/modal";
 import { IcContent, IcTrash, IcX, IcChevron, IcEye } from "@/components/icons";
+import { AiGenerateButton } from "@/components/ai-generate-button";
 import { getPost, savePost, deletePost, setPostStatus, type BlogStatus } from "../actions";
+import { aiSeoMeta, aiCopy } from "@/app/(admin)/ai/actions";
 
 /** Mirror of the server slugify, for the live slug preview only. */
 function slugify(input: string): string {
@@ -267,13 +269,35 @@ export function PostEditor({ id }: { id: string }) {
               </div>
             </Field>
             <Field label={ar ? "المقتطف" : "Excerpt"} hint={ar ? "ملخص قصير يظهر في قائمة المدونة." : "A short summary shown in the blog list."}>
-              <textarea
-                value={excerpt}
-                onChange={(e) => setExcerpt(e.target.value)}
-                rows={2}
-                placeholder={ar ? "سطر أو سطران عن المقال…" : "A line or two about the post…"}
-                className={`${inputBase} resize-y`}
-              />
+              <div className="space-y-1.5">
+                <div className="flex justify-end">
+                  <AiGenerateButton
+                    ar={ar}
+                    label={ar ? "✨ مسودة بالذكاء الاصطناعي" : "✨ AI draft"}
+                    disabled={!title.trim()}
+                    disabledHint={ar ? "أدخل العنوان أولاً" : "Enter a title first"}
+                    run={() =>
+                      aiCopy({
+                        kind: "blog",
+                        title,
+                        context: body,
+                        lang: ar ? "ar" : "en",
+                        instructions: ar
+                          ? "اكتب مقتطفًا من جملة أو جملتين للمقال"
+                          : "a 1–2 sentence excerpt summarising the article",
+                      })
+                    }
+                    onResult={(text) => setExcerpt(text)}
+                  />
+                </div>
+                <textarea
+                  value={excerpt}
+                  onChange={(e) => setExcerpt(e.target.value)}
+                  rows={2}
+                  placeholder={ar ? "سطر أو سطران عن المقال…" : "A line or two about the post…"}
+                  className={`${inputBase} resize-y`}
+                />
+              </div>
             </Field>
           </Card>
 
@@ -324,6 +348,26 @@ export function PostEditor({ id }: { id: string }) {
             </button>
             {seoOpen && (
               <div className="space-y-4 border-t border-line px-5 py-4">
+                <div className="flex justify-end">
+                  <AiGenerateButton
+                    ar={ar}
+                    label={ar ? "✨ أنشئ العنوان والوصف" : "✨ Generate title & description"}
+                    disabled={!title.trim()}
+                    disabledHint={ar ? "أدخل العنوان أولاً" : "Enter a title first"}
+                    run={() =>
+                      aiSeoMeta({
+                        kind: "blog",
+                        title,
+                        context: body || excerpt,
+                        lang: ar ? "ar" : "en",
+                      })
+                    }
+                    onResult={(meta) => {
+                      if (meta.title) setSeoTitle(meta.title);
+                      if (meta.description) setSeoDescription(meta.description);
+                    }}
+                  />
+                </div>
                 <Field label={ar ? "عنوان SEO" : "SEO title"} hint={ar ? "يُستخدم عنوان المقال إن تُرك فارغاً." : "Falls back to the post title if empty."}>
                   <input value={seoTitle} onChange={(e) => setSeoTitle(e.target.value)} className={inputBase} />
                 </Field>

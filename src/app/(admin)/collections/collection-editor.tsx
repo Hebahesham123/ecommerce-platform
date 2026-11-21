@@ -21,6 +21,8 @@ import {
   usePagination,
 } from "@/components/dashboard-ui";
 import { IcX, IcImage, IcSearch, IcTrash, IcPlus } from "@/components/icons";
+import { AiGenerateButton } from "@/components/ai-generate-button";
+import { aiCopy } from "@/app/(admin)/ai/actions";
 
 /** A pickable product: the inventory items that share one product_name. */
 export type PickerProduct = {
@@ -268,12 +270,36 @@ export function CollectionEditor({
           </div>
 
           <Field label={t("coll_description")}>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={2}
-              className={`${inputCls} h-auto py-2`}
-            />
+            <div className="space-y-1.5">
+              <div className="flex justify-end">
+                <AiGenerateButton
+                  ar={ar}
+                  disabled={!title.trim()}
+                  disabledHint={ar ? "أدخل اسم المجموعة أولاً" : "Enter a collection title first"}
+                  run={() =>
+                    aiCopy({
+                      kind: "collection",
+                      title,
+                      context:
+                        ruleType === "manual"
+                          ? preview.slice(0, 20).map((p) => p.productName).join(", ")
+                          : `${ruleType}: ${ruleValue}`,
+                      lang: ar ? "ar" : "en",
+                      instructions: ar
+                        ? "اكتب وصفًا موجزًا وجذابًا للمجموعة في فقرة واحدة"
+                        : "an engaging one-paragraph collection description",
+                    })
+                  }
+                  onResult={(text) => setDescription(text)}
+                />
+              </div>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={2}
+                className={`${inputCls} h-auto py-2`}
+              />
+            </div>
           </Field>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_auto]">
