@@ -50,20 +50,19 @@
     },
     {
       "parameters": {
-        "resource": "message",
-        "operation": "send",
+        "fromEmail": "info@beautybareg.com",
+        "toEmail": "={{ $('Build checkout link').item.json.email }}",
         "subject": "=Complete your payment — order {{ $('Build checkout link').item.json.orderName }}",
-        "bodyContent": "=<p>Hi {{ $('Build checkout link').item.json.firstName }},</p><p>Thank you for your order. Please complete your payment securely using the link below — your details are already filled in:</p><p><a href=\"{{ $('Build checkout link').item.json.link }}\">Complete my payment</a></p><p>If the button does not work, copy this link:<br>{{ $('Build checkout link').item.json.link }}</p><p>Thank you!</p>",
-        "toRecipients": "={{ $('Build checkout link').item.json.email }}",
-        "additionalFields": { "bodyContentType": "html" }
+        "html": "=<p>Hi {{ $('Build checkout link').item.json.firstName }},</p><p>Thank you for your order. Please complete your payment securely using the link below — your details are already filled in:</p><p><a href=\"{{ $('Build checkout link').item.json.link }}\">Complete my payment</a></p><p>If the button does not work, copy this link:<br>{{ $('Build checkout link').item.json.link }}</p><p>Thank you!</p>",
+        "options": {}
       },
-      "id": "send-outlook",
-      "name": "Email checkout link (Outlook)",
-      "type": "n8n-nodes-base.microsoftOutlook",
-      "typeVersion": 2,
+      "id": "send-email",
+      "name": "Email checkout link (SMTP)",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
       "position": [180, 220],
       "credentials": {
-        "microsoftOutlookOAuth2Api": { "id": "REPLACE_WITH_OUTLOOK_CREDENTIAL", "name": "Outlook" }
+        "smtp": { "id": "REPLACE_WITH_SMTP_CREDENTIAL", "name": "SMTP" }
       }
     }
   ],
@@ -72,7 +71,7 @@
     "Build checkout link": { "main": [[{ "node": "Link + email ready?", "type": "main", "index": 0 }]] },
     "Link + email ready?": {
       "main": [
-        [{ "node": "Email checkout link (Outlook)", "type": "main", "index": 0 }],
+        [{ "node": "Email checkout link (SMTP)", "type": "main", "index": 0 }],
         []
       ]
     }

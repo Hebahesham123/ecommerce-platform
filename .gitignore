@@ -49,3 +49,6 @@ newaccounting/
 courriersystem-main*.zip
 newaccounting.zip
 courrier2026-main/
+
+.vercel
+.env*
