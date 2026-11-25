@@ -18,6 +18,8 @@ import {
   getMailerStatus,
   createOrderReturn,
   addOrderComment,
+  updateOrderEvent,
+  deleteOrderEvent,
   updateOrderTags,
   saveAdminNote,
   setOrderHold,
@@ -34,6 +36,7 @@ import {
   type OrderConversion,
 } from "./actions";
 import type { ReturnableLine } from "@/lib/returns-service";
+import { isEditableEntry } from "@/lib/order-timeline";
 import { createPaymobCheckout } from "../payments/actions";
 import { getShipmentForOrder, assignOrderToCourier, confirmCourierReport, listCouriers, updateShipmentFees, setShipmentPayments } from "../couriers/actions";
 import { SHIPMENT_STATUS, COLLECTION_METHODS, collectionMethodLabel, type Shipment, type Courier } from "@/lib/courier";
@@ -498,7 +501,15 @@ export function OrderDetailPage({ orderNumber, basePath }: { orderNumber: string
           )}
 
           {/* Timeline */}
-          <TimelineCard orderNumber={orderNumber} ar={ar} entries={timeline} onPosted={(e) => setTimeline((prev) => [e, ...prev])} fmtTime={fmtTime} />
+          <TimelineCard
+            orderNumber={orderNumber}
+            ar={ar}
+            entries={timeline}
+            onPosted={(e) => setTimeline((prev) => [e, ...prev])}
+            onChanged={(e) => setTimeline((prev) => prev.map((x) => (x.id === e.id ? e : x)))}
+            onRemoved={(id) => setTimeline((prev) => prev.filter((x) => x.id !== id))}
+            fmtTime={fmtTime}
+          />
         </div>
 
         {/* Sidebar */}
@@ -840,8 +851,12 @@ function TagsCard({ orderNumber, ar, initial }: { orderNumber: string; ar: boole
 }
 
 // ---- Timeline card ----------------------------------------------------------
-function TimelineCard({ orderNumber, ar, entries, onPosted, fmtTime }: {
-  orderNumber: string; ar: boolean; entries: TimelineEntry[]; onPosted: (e: TimelineEntry) => void; fmtTime: (s: string) => string;
+function TimelineCard({ orderNumber, ar, entries, onPosted, onChanged, onRemoved, fmtTime }: {
+  orderNumber: string; ar: boolean; entries: TimelineEntry[];
+  onPosted: (e: TimelineEntry) => void;
+  onChanged: (e: TimelineEntry) => void;
+  onRemoved: (id: string) => void;
+  fmtTime: (s: string) => string;
 }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
@@ -866,17 +881,131 @@ function TimelineCard({ orderNumber, ar, entries, onPosted, fmtTime }: {
       <p className="mt-2 text-end text-xs text-ink-soft">{ar ? "يراها الموظفون فقط" : "Only you and other staff can see comments"}</p>
       <ul className="mt-3 space-y-3 border-t border-line pt-3">
         {entries.map((e) => (
-          <li key={e.id} className="flex gap-3">
-            <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-ink-soft" />
-            <div className="min-w-0 flex-1">
-              <div className="text-sm text-ink">{e.message}</div>
-              <div className="text-xs text-ink-soft">{fmtTime(e.createdAt)}</div>
-            </div>
-          </li>
+          <TimelineRow
+            key={e.id}
+            orderNumber={orderNumber}
+            ar={ar}
+            entry={e}
+            onChanged={onChanged}
+            onRemoved={onRemoved}
+            fmtTime={fmtTime}
+          />
         ))}
         {entries.length === 0 && <li className="text-sm text-ink-soft">{ar ? "لا يوجد نشاط بعد." : "No activity yet."}</li>}
       </ul>
     </div>
+  );
+}
+
+/**
+ * One line of the timeline.
+ *
+ * Comments and logged events are rows in `order_events`, so a wrong one can be
+ * corrected or taken out here. The entries derived from the order, the payments
+ * and the fulfillments carry no controls — see `isEditableEntry`.
+ *
+ * The controls are always rendered rather than revealed on hover: this screen
+ * is used on a phone, where there is no hover to reveal them with.
+ */
+function TimelineRow({ orderNumber, ar, entry, onChanged, onRemoved, fmtTime }: {
+  orderNumber: string; ar: boolean; entry: TimelineEntry;
+  onChanged: (e: TimelineEntry) => void;
+  onRemoved: (id: string) => void;
+  fmtTime: (s: string) => string;
+}) {
+  const [mode, setMode] = useState<"view" | "edit" | "confirm">("view");
+  const [draft, setDraft] = useState(entry.message);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const editable = isEditableEntry(entry.id);
+
+  async function save() {
+    const body = draft.trim();
+    if (!body || body === entry.message) { setMode("view"); setDraft(entry.message); return; }
+    setBusy(true);
+    setErr(null);
+    const res = await updateOrderEvent(orderNumber, entry.id, body);
+    setBusy(false);
+    if (res.ok) { onChanged(res.data); setMode("view"); }
+    else setErr(orderErrorText(res.error, ar));
+  }
+
+  async function remove() {
+    setBusy(true);
+    setErr(null);
+    const res = await deleteOrderEvent(orderNumber, entry.id);
+    setBusy(false);
+    if (res.ok) onRemoved(entry.id);
+    else { setErr(orderErrorText(res.error, ar)); setMode("view"); }
+  }
+
+  return (
+    <li className="flex gap-3">
+      <div className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-ink-soft" />
+      <div className="min-w-0 flex-1">
+        {mode === "edit" ? (
+          <div className="rounded-xl border border-line p-2">
+            <textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              rows={2}
+              autoFocus
+              className="w-full resize-none bg-transparent text-sm text-ink outline-none"
+            />
+            <div className="mt-1 flex justify-end gap-2">
+              <button onClick={() => { setDraft(entry.message); setMode("view"); }} className="btn-outline h-7 px-3 text-xs">
+                {ar ? "إلغاء" : "Cancel"}
+              </button>
+              <button onClick={save} disabled={busy || !draft.trim()} className="btn-primary h-7 px-3 text-xs disabled:opacity-50">
+                {busy ? "…" : ar ? "حفظ" : "Save"}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="flex items-start gap-2">
+              <div className="min-w-0 flex-1 text-sm text-ink">{entry.message}</div>
+              {editable && mode === "view" && (
+                <div className="flex shrink-0 items-center gap-0.5">
+                  <button
+                    onClick={() => { setDraft(entry.message); setMode("edit"); }}
+                    title={ar ? "تعديل" : "Edit"}
+                    aria-label={ar ? "تعديل" : "Edit"}
+                    className="rounded-md p-1 text-ink-soft opacity-70 hover:bg-surface-page hover:text-ink hover:opacity-100"
+                  >
+                    <IcEdit className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setMode("confirm")}
+                    title={ar ? "حذف" : "Delete"}
+                    aria-label={ar ? "حذف" : "Delete"}
+                    className="rounded-md p-1 text-ink-soft opacity-70 hover:bg-surface-page hover:text-rose-600 hover:opacity-100"
+                  >
+                    <IcTrash className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="text-xs text-ink-soft">
+              {fmtTime(entry.createdAt)}
+              {entry.edited && <span className="ms-1">· {ar ? "مُعدَّل" : "edited"}</span>}
+            </div>
+          </>
+        )}
+        {mode === "confirm" && (
+          <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
+            <span className="text-ink-muted">{ar ? "حذف هذا السطر؟" : "Delete this entry?"}</span>
+            <button onClick={remove} disabled={busy} className="rounded-md bg-rose-600 px-2.5 py-1 font-medium text-white disabled:opacity-50">
+              {busy ? "…" : ar ? "حذف" : "Delete"}
+            </button>
+            <button onClick={() => setMode("view")} className="rounded-md border border-line px-2.5 py-1 text-ink">
+              {ar ? "تراجع" : "Keep"}
+            </button>
+          </div>
+        )}
+        {err && <p className="mt-1 text-xs text-rose-600">{err}</p>}
+      </div>
+    </li>
   );
 }
 

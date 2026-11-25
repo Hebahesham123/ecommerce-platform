@@ -70,6 +70,12 @@ export function orderErrorText(code: string, ar: boolean): string {
     smtp_not_configured: { ar: "أضيفي بيانات البريد (Outlook) أولاً.", en: "Set up the email (Outlook) mailbox first." },
     no_customer_email: { ar: "لا يوجد بريد لهذا العميل لإرسال الفاتورة.", en: "This customer has no email to send the invoice to." },
     send_failed: { ar: "تعذّر إرسال البريد.", en: "Couldn't send the email." },
+    empty_comment: { ar: "اكتبي نصاً أولاً.", en: "Write something first." },
+    entry_not_found: { ar: "لم يعد هذا السطر موجوداً.", en: "That entry is no longer there." },
+    entry_not_editable: {
+      ar: "هذا السطر مبني على سجل آخر (الطلب أو الدفع أو التنفيذ) ولا يُعدَّل من هنا.",
+      en: "This entry comes from another record (the order, a payment, a fulfillment) and can't be changed here.",
+    },
   };
   const e = map[code];
   return e ? (ar ? e.ar : e.en) : ar ? "حدث خطأ." : "Something went wrong.";

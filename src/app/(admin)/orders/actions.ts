@@ -13,6 +13,7 @@ import { sendOrderInvoiceEmail } from "@/lib/order-invoice";
 import { isMailerReady } from "@/lib/mailer";
 import { phoneVariants } from "@/lib/phone";
 import { queuePendingEntry } from "@/lib/accounting/post-order";
+import { isEditableEntry } from "@/lib/order-timeline";
 
 export type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -429,6 +430,8 @@ export type TimelineEntry = {
   message: string;
   createdAt: string;
   amount?: number | null;
+  /** The text was corrected after the entry was written. */
+  edited?: boolean;
 };
 
 /**
@@ -492,6 +495,7 @@ export async function getOrderTimeline(orderNumber: string): Promise<ActionResul
         actor: (s(e.actor) as "system" | "staff") || "system",
         message: s(e.message),
         createdAt: s(e.created_at),
+        edited: Boolean((e.meta as Row | null)?.edited_at),
       });
     }
 
@@ -521,6 +525,96 @@ export async function addOrderComment(orderNumber: string, text: string): Promis
       ok: true,
       data: { id: s(data.id), type: "comment", actor: "staff", message: body, createdAt: s(data.created_at) },
     };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+/**
+ * Correct the text of a timeline entry.
+ *
+ * The id arrives from the browser, so it is matched against the order in the
+ * URL as well as against itself: a staff member looking at one order cannot
+ * reach another order's log by changing the id. The original wording is kept
+ * nowhere, but `meta.edited_at` records that the line was touched, which the
+ * screen shows — a log that can be rewritten invisibly is worse than one that
+ * cannot be rewritten at all.
+ */
+export async function updateOrderEvent(
+  orderNumber: string,
+  eventId: string,
+  text: string,
+): Promise<ActionResult<TimelineEntry>> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  const body = text.trim();
+  if (!body) return { ok: false, error: "empty_comment" };
+  if (!isEditableEntry(eventId)) return { ok: false, error: "entry_not_editable" };
+  try {
+    const supabase = getServerSupabase();
+    const loaded = await loadOrder(supabase, orderNumber, "id");
+    if (!loaded.ok) return { ok: false, error: loaded.error };
+    const orderId = s(loaded.order.id);
+
+    const { data: found, error: readErr } = await supabase
+      .from("order_events")
+      .select("id,type,actor,meta,created_at")
+      .eq("id", eventId)
+      .eq("order_id", orderId)
+      .maybeSingle();
+    if (readErr) return { ok: false, error: missing(readErr) ? "migration_missing" : readErr.message };
+    if (!found) return { ok: false, error: "entry_not_found" };
+    const row = found as Row;
+
+    const meta = { ...((row.meta as Row | null) ?? {}), edited_at: new Date().toISOString() };
+    const { error } = await supabase
+      .from("order_events")
+      .update({ message: body, meta })
+      .eq("id", eventId)
+      .eq("order_id", orderId);
+    if (error) return { ok: false, error: missing(error) ? "migration_missing" : error.message };
+
+    return {
+      ok: true,
+      data: {
+        id: s(row.id),
+        type: s(row.type),
+        actor: (s(row.actor) as "system" | "staff") || "system",
+        message: body,
+        createdAt: s(row.created_at),
+        edited: true,
+      },
+    };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+/**
+ * Remove a timeline entry.
+ *
+ * Scoped to the order in the URL for the same reason as the edit above. An id
+ * that matches nothing is reported rather than silently treated as success,
+ * so a line that someone else already deleted does not look removed twice.
+ */
+export async function deleteOrderEvent(
+  orderNumber: string,
+  eventId: string,
+): Promise<ActionResult<{ id: string }>> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  if (!isEditableEntry(eventId)) return { ok: false, error: "entry_not_editable" };
+  try {
+    const supabase = getServerSupabase();
+    const loaded = await loadOrder(supabase, orderNumber, "id");
+    if (!loaded.ok) return { ok: false, error: loaded.error };
+    const { data, error } = await supabase
+      .from("order_events")
+      .delete()
+      .eq("id", eventId)
+      .eq("order_id", s(loaded.order.id))
+      .select("id");
+    if (error) return { ok: false, error: missing(error) ? "migration_missing" : error.message };
+    if (!data || data.length === 0) return { ok: false, error: "entry_not_found" };
+    return { ok: true, data: { id: eventId } };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }
