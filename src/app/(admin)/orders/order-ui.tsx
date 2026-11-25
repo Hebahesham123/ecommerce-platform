@@ -329,27 +329,51 @@ export function FulfillModal({
   onDone,
 }: {
   orderNumber: string;
-  items: { id: string; productName: string; quantity: number; fulfilledQuantity: number }[];
+  items: {
+    id: string;
+    productName: string;
+    quantity: number;
+    fulfilledQuantity: number;
+    sku?: string | null;
+    imageUrl?: string | null;
+  }[];
   ar: boolean;
   lang: Lang;
   onClose: () => void;
   onDone: () => void;
 }) {
   const outstanding = items.filter((li) => li.quantity - li.fulfilledQuantity > 0);
+  const remainingOf = (li: (typeof outstanding)[number]) => li.quantity - li.fulfilledQuantity;
+
+  // Everything starts ticked at its full remaining quantity, so confirming
+  // without touching anything fulfils the whole order — the common case, and
+  // the one the button used to do without asking.
+  const [picked, setPicked] = useState<Record<string, boolean>>(
+    Object.fromEntries(outstanding.map((li) => [li.id, true])),
+  );
   const [qty, setQty] = useState<Record<string, number>>(
-    Object.fromEntries(outstanding.map((li) => [li.id, li.quantity - li.fulfilledQuantity])),
+    Object.fromEntries(outstanding.map((li) => [li.id, remainingOf(li)])),
   );
   const [tracking, setTracking] = useState("");
   const [carrier, setCarrier] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  const chosenLines = outstanding.filter((li) => picked[li.id] && (qty[li.id] ?? 0) > 0);
+  const allPicked = chosenLines.length === outstanding.length;
+  const toggleAll = () => {
+    const next = !allPicked;
+    setPicked(Object.fromEntries(outstanding.map((li) => [li.id, next])));
+    if (next) setQty(Object.fromEntries(outstanding.map((li) => [li.id, remainingOf(li)])));
+  };
+
   async function submit() {
-    const chosen = outstanding
-      .map((li) => ({ orderItemId: li.id, quantity: Math.max(0, Math.min(qty[li.id] ?? 0, li.quantity - li.fulfilledQuantity)) }))
-      .filter((x) => x.quantity > 0);
+    const chosen = chosenLines.map((li) => ({
+      orderItemId: li.id,
+      quantity: Math.max(0, Math.min(qty[li.id] ?? 0, remainingOf(li))),
+    }));
     if (chosen.length === 0) {
-      setErr(ar ? "اختاري كمية واحدة على الأقل." : "Choose at least one item.");
+      setErr(ar ? "اختاري صنفاً واحداً على الأقل." : "Choose at least one item.");
       return;
     }
     setBusy(true);
@@ -369,27 +393,67 @@ export function FulfillModal({
       footer={
         <>
           <button onClick={onClose} className="btn-outline h-9 px-4 text-sm">{ar ? "إلغاء" : "Cancel"}</button>
-          <button onClick={submit} disabled={busy} className="btn-primary h-9 px-5 text-sm disabled:opacity-50">{busy ? "…" : ar ? "تنفيذ" : "Fulfill"}</button>
+          <button onClick={submit} disabled={busy || chosenLines.length === 0} className="btn-primary h-9 px-5 text-sm disabled:opacity-50">
+            {busy ? "…" : allPicked ? (ar ? "تنفيذ الكل" : "Fulfill all") : ar ? "تنفيذ المحدد" : "Fulfill selected"}
+          </button>
         </>
       }
     >
+      <label className="mb-2 flex cursor-pointer items-center gap-2 text-sm font-medium text-ink">
+        <input
+          type="checkbox"
+          checked={allPicked}
+          onChange={toggleAll}
+          className="h-4 w-4 rounded border-line accent-brand-600"
+        />
+        {ar
+          ? `${num(chosenLines.length, lang)} من ${num(outstanding.length, lang)} أصناف محددة`
+          : `${chosenLines.length} of ${outstanding.length} item${outstanding.length === 1 ? "" : "s"} selected`}
+      </label>
       <div className="space-y-2">
         {outstanding.map((li) => {
-          const max = li.quantity - li.fulfilledQuantity;
+          const max = remainingOf(li);
+          const on = Boolean(picked[li.id]);
           return (
-            <div key={li.id} className="flex items-center gap-3 rounded-xl bg-surface-page px-3 py-2">
+            <div
+              key={li.id}
+              className={`flex items-center gap-3 rounded-xl border px-3 py-2 ${on ? "border-brand-600/40 bg-surface-page" : "border-line opacity-60"}`}
+            >
+              <input
+                type="checkbox"
+                checked={on}
+                onChange={() => {
+                  setPicked((p) => ({ ...p, [li.id]: !on }));
+                  if (!on && (qty[li.id] ?? 0) === 0) setQty((q) => ({ ...q, [li.id]: max }));
+                }}
+                className="h-4 w-4 shrink-0 rounded border-line accent-brand-600"
+                aria-label={li.productName}
+              />
+              <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-line bg-surface">
+                {li.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={li.imageUrl} alt="" className="h-full w-full object-cover" />
+                ) : null}
+              </div>
               <div className="min-w-0 flex-1">
                 <div className="line-clamp-1 text-sm text-ink">{li.productName}</div>
-                <div className="text-xs text-ink-soft">{ar ? `متبقٍ ${num(max, lang)}` : `${max} remaining`}</div>
+                <div className="text-xs text-ink-soft">
+                  {li.sku ? <span dir="ltr">{li.sku} · </span> : null}
+                  {ar ? `متبقٍ ${num(max, lang)}` : `${max} remaining`}
+                </div>
               </div>
-              <input
-                type="number"
-                min={0}
-                max={max}
-                value={qty[li.id] ?? 0}
-                onChange={(e) => setQty((q) => ({ ...q, [li.id]: Math.max(0, Math.min(Number(e.target.value) || 0, max)) }))}
-                className="w-16 rounded-lg border border-line bg-surface px-2 py-1.5 text-center text-sm"
-              />
+              <div className="flex shrink-0 items-center gap-1 text-sm text-ink-soft">
+                <input
+                  type="number"
+                  min={0}
+                  max={max}
+                  disabled={!on}
+                  value={qty[li.id] ?? 0}
+                  onChange={(e) => setQty((q) => ({ ...q, [li.id]: Math.max(0, Math.min(Number(e.target.value) || 0, max)) }))}
+                  className="w-14 rounded-lg border border-line bg-surface px-2 py-1.5 text-center text-sm disabled:opacity-40"
+                />
+                <span className="whitespace-nowrap">{ar ? `من ${num(max, lang)}` : `of ${max}`}</span>
+              </div>
             </div>
           );
         })}

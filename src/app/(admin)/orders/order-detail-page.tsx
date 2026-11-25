@@ -187,14 +187,13 @@ export function OrderDetailPage({ orderNumber, basePath }: { orderNumber: string
               </div>
               {d && !cancelled && (
                 <div className="flex">
-                  <button onClick={() => remainingTotal > 0 ? fulfillAll() : undefined} disabled={remainingTotal === 0} className="btn-primary h-9 rounded-e-none disabled:opacity-50">
+                  <button onClick={() => setModal("fulfill")} disabled={remainingTotal === 0} className="btn-primary h-9 rounded-e-none disabled:opacity-50">
                     {ar ? "تعليم كمنفّذ" : "Mark as fulfilled"}
                   </button>
                   <DropMenu trigger={<span className="btn-primary flex h-9 cursor-pointer items-center rounded-s-none border-s border-white/20 px-2"><IcChevron className="h-4 w-4 rotate-90" /></span>}>
                     <MenuItem onClick={() => run(() => setOrderHold(orderNumber, "in_progress"), ar ? "قيد التنفيذ" : "Marked in progress")}>{ar ? "تعليم قيد التنفيذ" : "Mark as in progress"}</MenuItem>
                     <MenuItem onClick={() => run(() => setOrderHold(orderNumber, "on_hold"), ar ? "تم التعليق" : "Placed on hold")}>{ar ? "تعليق" : "Mark as on hold"}</MenuItem>
                     {d.fulfillmentHold && <MenuItem onClick={() => run(() => setOrderHold(orderNumber, null), ar ? "أُزيل التعليق" : "Hold cleared")}>{ar ? "إزالة التعليق" : "Clear hold"}</MenuItem>}
-                    {remainingTotal > 0 && <MenuItem onClick={() => setModal("fulfill")}>{ar ? "تنفيذ أصناف محددة" : "Fulfill specific items"}</MenuItem>}
                   </DropMenu>
                 </div>
               )}
@@ -602,7 +601,14 @@ export function OrderDetailPage({ orderNumber, basePath }: { orderNumber: string
         <PaymentModal kind="refund" orderNumber={orderNumber} defaultAmount={d.amountPaid} maxAmount={d.amountPaid} ar={ar} lang={lang} onClose={() => setModal(null)} onDone={async () => { setModal(null); await load(); }} />
       )}
       {modal === "fulfill" && d && (
-        <FulfillModal orderNumber={orderNumber} items={d.items} ar={ar} lang={lang} onClose={() => setModal(null)} onDone={async () => { setModal(null); await load(); }} />
+        <FulfillModal
+          orderNumber={orderNumber}
+          items={d.items}
+          ar={ar}
+          lang={lang}
+          onClose={() => setModal(null)}
+          onDone={async () => { setModal(null); await load(); }}
+        />
       )}
       {modal === "cancel" && (
         <CancelModal orderNumber={orderNumber} ar={ar} onClose={() => setModal(null)} onDone={async (msg) => { setModal(null); flashOk(msg); await load(); }} />
@@ -681,14 +687,6 @@ export function OrderDetailPage({ orderNumber, basePath }: { orderNumber: string
     </div>
   );
 
-  async function fulfillAll() {
-    setBusy(true);
-    const res = await fulfillOrder(orderNumber);
-    setBusy(false);
-    if (!res.ok) setErr(res.error);
-    else flashOk(ar ? "تم التنفيذ" : "Fulfilled");
-    await load();
-  }
   async function undo(id: string) {
     await undoFulfillment(id);
     flashOk(ar ? "تم التراجع" : "Fulfillment undone");
