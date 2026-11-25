@@ -36,6 +36,21 @@ export type Column<T> = {
   hideBelow?: "md" | "lg" | "xl";
 };
 
+/**
+ * The hide-below-a-breakpoint classes, written out in full.
+ *
+ * Tailwind generates CSS only for class names it can see spelled out in the
+ * source. Building one as `hidden ${breakpoint}:table-cell` produces the
+ * right string at runtime but no rule to go with it, so the column kept the
+ * `hidden` and never got the `table-cell` back — invisible at every width,
+ * on every table that asked for this. Spelling them out is the fix.
+ */
+const HIDE_BELOW: Record<"md" | "lg" | "xl", string> = {
+  md: "hidden md:table-cell",
+  lg: "hidden lg:table-cell",
+  xl: "hidden xl:table-cell",
+};
+
 export function DataTable<T>({
   rows,
   columns,
@@ -89,7 +104,7 @@ export function DataTable<T>({
                 <th
                   key={c.key}
                   className={`th ${c.width ?? ""} ${c.align === "end" ? "text-end" : ""} ${
-                    c.hideBelow ? `hidden ${c.hideBelow}:table-cell` : ""
+                    c.hideBelow ? HIDE_BELOW[c.hideBelow] : ""
                   }`}
                 >
                   {c.header}
@@ -113,7 +128,7 @@ export function DataTable<T>({
                   <td
                     key={c.key}
                     className={`td ${c.align === "end" ? "text-end" : ""} ${
-                      c.hideBelow ? `hidden ${c.hideBelow}:table-cell` : ""
+                      c.hideBelow ? HIDE_BELOW[c.hideBelow] : ""
                     }`}
                   >
                     {c.cell(row)}
