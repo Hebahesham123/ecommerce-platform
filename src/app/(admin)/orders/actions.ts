@@ -687,6 +687,134 @@ export async function getOrderListMarks(
   }
 }
 
+export type OrderCustomerEdit = {
+  customerName: string;
+  email: string;
+  phone: string;
+  governorate: string;
+  city: string;
+  address: string;
+};
+
+/**
+ * Correct who the order is for and where it is going.
+ *
+ * Name, phone and the address belong to the order itself — a customer who
+ * moved house should not have last month's parcels retrospectively sent
+ * somewhere new, so these are edited per order and nothing else is touched.
+ * The email is the exception: it lives on the customer profile, keyed by
+ * phone, and is where invoices are sent, so it is written there.
+ *
+ * Shipping is NOT re-quoted when the governorate changes, for the same reason
+ * the order editor leaves it alone: the customer was quoted a delivery price
+ * and a correction to their address is not the moment to change what they owe.
+ * Charge or refund the difference deliberately if a new zone really applies.
+ */
+export async function updateOrderCustomer(
+  orderNumber: string,
+  input: OrderCustomerEdit,
+): Promise<ActionResult<{ changes: string[]; entry: TimelineEntry | null }>> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+
+  const next = {
+    customer_name: s(input.customerName).trim().slice(0, 200),
+    phone: s(input.phone).trim().slice(0, 40),
+    governorate: s(input.governorate).trim().slice(0, 120),
+    city: s(input.city).trim().slice(0, 120),
+    address: s(input.address).trim().slice(0, 500),
+  };
+  const email = s(input.email).trim().slice(0, 200);
+  if (!next.customer_name) return { ok: false, error: "name_required" };
+  if (!next.phone) return { ok: false, error: "phone_required" };
+
+  try {
+    const supabase = getServerSupabase();
+    const loaded = await loadOrder(
+      supabase,
+      orderNumber,
+      "id,customer_name,phone,governorate,city,address",
+    );
+    if (!loaded.ok) return { ok: false, error: loaded.error };
+    const before = loaded.order;
+
+    const { data: profile } = await supabase
+      .from("store_customers")
+      .select("phone,email")
+      .in("phone", phoneVariants(s(before.phone)))
+      .maybeSingle();
+    const oldEmail = s((profile as Row | null)?.email).trim();
+
+    const changes: string[] = [];
+    const note = (label: string, was: string, now: string) => {
+      if (was === now) return;
+      changes.push(`${label}: ${was || "—"} → ${now || "—"}`);
+    };
+    note("Name", s(before.customer_name).trim(), next.customer_name);
+    note("Phone", s(before.phone).trim(), next.phone);
+    note("Email", oldEmail, email);
+    note("Governorate", s(before.governorate).trim(), next.governorate);
+    note("City", s(before.city).trim(), next.city);
+    note("Address", s(before.address).trim(), next.address);
+    if (!changes.length) return { ok: true, data: { changes: [], entry: null } };
+
+    const { error } = await supabase
+      .from("store_orders")
+      .update({
+        customer_name: next.customer_name,
+        phone: next.phone,
+        governorate: next.governorate || null,
+        city: next.city || null,
+        address: next.address || null,
+      })
+      .eq("order_number", orderNumber);
+    if (error) return { ok: false, error: missing(error) ? "migration_missing" : error.message };
+
+    // The profile is keyed by phone, so a changed phone writes the email
+    // against the new one — that is the record this order now points at.
+    if (email !== oldEmail) {
+      try {
+        await supabase
+          .from("store_customers")
+          .upsert({ phone: next.phone, email: email || null }, { onConflict: "phone" });
+      } catch {
+        /* the order is saved either way; the profile is a convenience */
+      }
+    }
+
+    let entry: TimelineEntry | null = null;
+    const message = "Customer details edited";
+    try {
+      const { data: ev } = await supabase
+        .from("order_events")
+        .insert({
+          order_id: s(before.id),
+          actor: "staff",
+          type: "customer_edited",
+          message,
+          meta: { changes },
+        })
+        .select("id,created_at")
+        .single();
+      if (ev) {
+        entry = {
+          id: s(ev.id),
+          type: "customer_edited",
+          actor: "staff",
+          message,
+          createdAt: s(ev.created_at),
+          changes,
+        };
+      }
+    } catch {
+      /* the timeline is a log; it never fails the save */
+    }
+
+    return { ok: true, data: { changes, entry } };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
 export type OrderEditLine = {
   /** An existing line being kept. Omit it for a line being added. */
   id?: string;

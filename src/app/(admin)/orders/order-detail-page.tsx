@@ -18,6 +18,7 @@ import {
   getMailerStatus,
   createOrderReturn,
   editOrder,
+  updateOrderCustomer,
   addOrderComment,
   updateOrderTags,
   saveAdminNote,
@@ -75,7 +76,7 @@ export function OrderDetailPage({ orderNumber, basePath }: { orderNumber: string
   const [err, setErr] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [modal, setModal] = useState<null | "collect" | "refund" | "fulfill" | "return" | "cancel" | "conversion" | "assign" | "fees" | "edit">(null);
+  const [modal, setModal] = useState<null | "collect" | "refund" | "fulfill" | "return" | "cancel" | "conversion" | "assign" | "fees" | "edit" | "customer">(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -523,7 +524,19 @@ export function OrderDetailPage({ orderNumber, basePath }: { orderNumber: string
           />
 
           <div className="rounded-2xl border border-line bg-surface px-4 py-3">
-            <div className="mb-2 text-sm font-semibold text-ink">{ar ? "العميل" : "Customer"}</div>
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-sm font-semibold text-ink">{ar ? "العميل" : "Customer"}</span>
+              {d && (
+                <button
+                  onClick={() => setModal("customer")}
+                  title={ar ? "تعديل بيانات العميل" : "Edit customer details"}
+                  aria-label={ar ? "تعديل بيانات العميل" : "Edit customer details"}
+                  className="text-ink-soft hover:text-ink"
+                >
+                  <IcEdit className="h-4 w-4" />
+                </button>
+              )}
+            </div>
             <div className="text-sm font-medium text-ink">{d?.customerName || "—"}</div>
             {conv && <div className="mt-0.5 text-sm text-brand-600">{ar ? `${num(conv.totalOrders, lang)} طلب` : `${conv.totalOrders} order${conv.totalOrders === 1 ? "" : "s"}`}</div>}
             <div className="mt-3 text-xs font-medium uppercase tracking-wide text-ink-soft">{ar ? "معلومات التواصل" : "Contact information"}</div>
@@ -614,6 +627,20 @@ export function OrderDetailPage({ orderNumber, basePath }: { orderNumber: string
           shipment={shipment}
           onClose={() => setModal(null)}
           onDone={async () => { setModal(null); flashOk(ar ? "تم الحفظ" : "Saved"); await load(); }}
+        />
+      )}
+      {modal === "customer" && d && (
+        <CustomerModal
+          orderNumber={orderNumber}
+          ar={ar}
+          detail={d}
+          onClose={() => setModal(null)}
+          onDone={async (entry, summary) => {
+            setModal(null);
+            if (entry) setTimeline((prev) => [entry, ...prev]);
+            flashOk(summary);
+            await load();
+          }}
         />
       )}
       {modal === "edit" && d && (
@@ -890,6 +917,103 @@ function TimelineCard({ orderNumber, ar, entries, onPosted, onChanged, fmtTime }
   );
 }
 
+
+
+// ---- Customer details modal -------------------------------------------------
+/**
+ * Correct who the order is for and where it goes.
+ *
+ * The name, phone and address are this order's own: changing them here does
+ * not rewrite where past parcels were sent. The email is the one field that
+ * belongs to the customer's profile, because that is where invoices go, and
+ * the modal says so rather than leaving the difference to be discovered.
+ */
+function CustomerModal({ orderNumber, ar, detail, onClose, onDone }: {
+  orderNumber: string;
+  ar: boolean;
+  detail: OrderDetail;
+  onClose: () => void;
+  onDone: (entry: TimelineEntry | null, summary: string) => void;
+}) {
+  const [form, setForm] = useState({
+    customerName: detail.customerName ?? "",
+    email: detail.customerEmail ?? "",
+    phone: detail.phone ?? "",
+    governorate: detail.governorate ?? "",
+    city: detail.city ?? "",
+    address: detail.address ?? "",
+  });
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const set = (k: keyof typeof form) => (e: { target: { value: string } }) =>
+    setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  async function submit() {
+    setBusy(true);
+    setErr(null);
+    const res = await updateOrderCustomer(orderNumber, form);
+    setBusy(false);
+    if (!res.ok) { setErr(orderErrorText(res.error, ar)); return; }
+    onDone(
+      res.data.entry,
+      res.data.changes.length
+        ? ar ? "حُدّثت بيانات العميل" : "Customer details updated"
+        : ar ? "لا تغييرات" : "Nothing changed",
+    );
+  }
+
+  return (
+    <Modal
+      title={ar ? "تعديل بيانات العميل" : "Edit customer details"}
+      subtitle={`#${orderNumber}`}
+      icon={IcEdit}
+      size="sm"
+      onClose={onClose}
+      dir={ar ? "rtl" : "ltr"}
+      footer={
+        <>
+          <button onClick={onClose} className="btn-outline h-9 px-4 text-sm">{ar ? "إلغاء" : "Cancel"}</button>
+          <button onClick={submit} disabled={busy} className="btn-primary h-9 px-5 text-sm disabled:opacity-50">
+            {busy ? "…" : ar ? "حفظ" : "Save"}
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <Field label={ar ? "الاسم" : "Name"}>
+          <input value={form.customerName} onChange={set("customerName")} className={fieldClass} />
+        </Field>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Field label={ar ? "الهاتف" : "Phone"}>
+            <input value={form.phone} onChange={set("phone")} dir="ltr" className={fieldClass} />
+          </Field>
+          <Field label={ar ? "البريد" : "Email"}>
+            <input value={form.email} onChange={set("email")} dir="ltr" className={fieldClass} />
+          </Field>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Field label={ar ? "المحافظة" : "Governorate"}>
+            <input value={form.governorate} onChange={set("governorate")} className={fieldClass} />
+          </Field>
+          <Field label={ar ? "المدينة" : "City"}>
+            <input value={form.city} onChange={set("city")} className={fieldClass} />
+          </Field>
+        </div>
+        <Field label={ar ? "العنوان" : "Address"}>
+          <textarea value={form.address} onChange={set("address")} rows={2} className={fieldClass} />
+        </Field>
+
+        <p className="text-xs text-ink-soft">
+          {ar
+            ? "الاسم والهاتف والعنوان تخص هذا الطلب وحده. البريد يُحفظ في ملف العميل لأن الفواتير تُرسل إليه. الشحن لا يُعاد حسابه."
+            : "Name, phone and address belong to this order alone. The email is saved on the customer's profile, because that is where invoices go. Shipping is not re-quoted."}
+        </p>
+
+        {err && <p className="text-sm text-rose-600">{err}</p>}
+      </div>
+    </Modal>
+  );
+}
 
 // ---- Edit order modal -------------------------------------------------------
 /**
