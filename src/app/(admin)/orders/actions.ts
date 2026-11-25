@@ -620,21 +620,30 @@ export async function deleteOrderEvent(
   }
 }
 
+export type OrderListMarks = {
+  /** How many staff comments the order carries. */
+  comments: number;
+  /** The admin note, or "" when there is none. Shown as the icon's tooltip. */
+  note: string;
+};
+
 /**
- * How many staff comments each of these orders carries.
+ * The two markers the list draws beside an order number: a note and a count of
+ * timeline comments.
  *
  * Only `comment` rows are counted, not the whole log. Nearly every order has
  * system events — shipped, cancelled, invoice sent — so counting those would
- * put the indicator on every row and tell the merchant nothing. A comment is
+ * put the bubble on every row and tell the merchant nothing. A comment is
  * something a person chose to write, which is the thing worth flagging.
  *
- * One query for the page rather than one per row. The event cap is generous
- * for a 30-row page; an order with a thousand comments would crowd the others
- * out of the count, which costs an icon, not correctness.
+ * Two queries for a whole page rather than two per row, and the note rides
+ * along in the lookup the counts already need. The event cap is generous for a
+ * 30-row page; an order with a thousand comments would crowd the others out of
+ * the count, which costs an icon, not correctness.
  */
-export async function getOrderCommentCounts(
+export async function getOrderListMarks(
   orderNumbers: string[],
-): Promise<ActionResult<Record<string, number>>> {
+): Promise<ActionResult<Record<string, OrderListMarks>>> {
   if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
   const wanted = Array.from(new Set(orderNumbers.map(s).filter(Boolean))).slice(0, 200);
   if (!wanted.length) return { ok: true, data: {} };
@@ -642,12 +651,17 @@ export async function getOrderCommentCounts(
     const supabase = getServerSupabase();
     const { data: orders, error: oErr } = await supabase
       .from("store_orders")
-      .select("id,order_number")
+      .select("id,order_number,admin_note")
       .in("order_number", wanted);
     if (oErr) return { ok: false, error: missing(oErr) ? "migration_missing" : oErr.message };
 
     const numberById = new Map<string, string>();
-    for (const o of (orders ?? []) as Row[]) numberById.set(s(o.id), s(o.order_number));
+    const out: Record<string, OrderListMarks> = {};
+    for (const o of (orders ?? []) as Row[]) {
+      const orderNo = s(o.order_number);
+      numberById.set(s(o.id), orderNo);
+      out[orderNo] = { comments: 0, note: s(o.admin_note).trim().slice(0, 300) };
+    }
     if (!numberById.size) return { ok: true, data: {} };
 
     const { data: events, error: eErr } = await supabase
@@ -658,10 +672,9 @@ export async function getOrderCommentCounts(
       .limit(2000);
     if (eErr) return { ok: false, error: missing(eErr) ? "migration_missing" : eErr.message };
 
-    const out: Record<string, number> = {};
     for (const e of (events ?? []) as Row[]) {
       const orderNo = numberById.get(s(e.order_id));
-      if (orderNo) out[orderNo] = (out[orderNo] ?? 0) + 1;
+      if (orderNo && out[orderNo]) out[orderNo].comments += 1;
     }
     return { ok: true, data: out };
   } catch (e) {

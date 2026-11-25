@@ -12,9 +12,10 @@ import { listStoreOrders } from "../../store/actions";
 import {
   getOrderDetail,
   getOrderTimeline,
-  getOrderCommentCounts,
+  getOrderListMarks,
   fulfillOrder,
   type OrderDetail,
+  type OrderListMarks,
   type TimelineEntry,
 } from "./actions";
 import { paymentMeta, fulfillMeta, methodLabel, TimelineRow } from "./order-ui";
@@ -32,7 +33,7 @@ import {
   usePagination,
   type PillTone,
 } from "@/components/dashboard-ui";
-import { IcFile, IcX, IcCash, IcCourier, IcChat } from "@/components/icons";
+import { IcFile, IcX, IcCash, IcCourier, IcChat, IcAlert } from "@/components/icons";
 import { ChannelBadge } from "@/components/channel-badge";
 import { CHANNELS, CHANNEL_LABELS, type Channel } from "@/lib/channel";
 
@@ -83,8 +84,8 @@ export function OrdersList({ lockChannel }: { lockChannel?: Channel } = {}) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [pop, setPop] = useState<Pop | null>(null);
   const [placed, setPlaced] = useState<Row[]>([]);
-  // order number -> how many staff comments it has, for the bubble indicator.
-  const [comments, setComments] = useState<Record<string, number>>({});
+  // order number -> the note and comment count the row draws beside the number.
+  const [marks, setMarks] = useState<Record<string, OrderListMarks>>({});
 
   const reload = useCallback(async () => {
     const res = await listStoreOrders();
@@ -113,13 +114,13 @@ export function OrdersList({ lockChannel }: { lockChannel?: Channel } = {}) {
     reload();
   }, [reload]);
 
-  // One count query per page of orders, after the rows themselves are in.
+  // One lookup per page of orders, after the rows themselves are in.
   useEffect(() => {
     if (!placed.length) return;
     let alive = true;
     (async () => {
-      const res = await getOrderCommentCounts(placed.map((o) => o.id));
-      if (alive && res.ok) setComments(res.data);
+      const res = await getOrderListMarks(placed.map((o) => o.id));
+      if (alive && res.ok) setMarks(res.data);
     })();
     return () => {
       alive = false;
@@ -236,8 +237,20 @@ export function OrdersList({ lockChannel }: { lockChannel?: Channel } = {}) {
       cell: (o) => (
         <span className="flex items-center gap-1.5">
           <span className="font-semibold text-ink">#{o.id}</span>
-          {o.flag && <IcFile className="h-3.5 w-3.5 text-ink-soft" />}
-          {(comments[o.id] ?? 0) > 0 && (
+          {/* Note first, then the comment bubble — the pair Shopify shows. The
+              note's own text is the tooltip, which beats a sentence saying one
+              exists. Clicking it falls through to the row and opens the order,
+              where the note can be changed. */}
+          {marks[o.id]?.note && (
+            <span
+              title={(ar ? "ملاحظة: " : "Note: ") + marks[o.id].note}
+              aria-label={ar ? "هذا الطلب به ملاحظة" : "This order has a note"}
+              className="inline-flex text-ink-soft"
+            >
+              <IcFile className="h-3.5 w-3.5" />
+            </span>
+          )}
+          {(marks[o.id]?.comments ?? 0) > 0 && (
             <span
               role="button"
               tabIndex={0}
@@ -247,6 +260,13 @@ export function OrdersList({ lockChannel }: { lockChannel?: Channel } = {}) {
               className="inline-flex cursor-pointer rounded-md text-ink-soft outline-none ring-brand-500/40 hover:text-ink focus-visible:ring-2"
             >
               <IcChat className="h-3.5 w-3.5" />
+            </span>
+          )}
+          {/* Our own marker, and no longer a second document icon meaning
+              something else entirely. It finally says what it is on hover. */}
+          {o.flag && (
+            <span title={flagLabel(o.flag)} aria-label={flagLabel(o.flag)} className="inline-flex text-amber-600">
+              <IcAlert className="h-3.5 w-3.5" />
             </span>
           )}
           <span className="font-normal text-ink-muted sm:hidden">· {o.customer}</span>
@@ -503,7 +523,9 @@ export function OrdersList({ lockChannel }: { lockChannel?: Channel } = {}) {
           pop={pop}
           basePath={basePath}
           ar={ar}
-          onCount={(orderNumber, count) => setComments((prev) => ({ ...prev, [orderNumber]: count }))}
+          onCount={(orderNumber, count) =>
+            setMarks((prev) => ({ ...prev, [orderNumber]: { ...(prev[orderNumber] ?? { note: "" }), comments: count } }))
+          }
           onClose={() => setPop(null)}
         />
       )}
