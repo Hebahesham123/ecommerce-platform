@@ -11,10 +11,13 @@ import {
 import { listStoreOrders } from "../../store/actions";
 import {
   getOrderDetail,
+  getOrderTimeline,
+  getOrderCommentCounts,
   fulfillOrder,
   type OrderDetail,
+  type TimelineEntry,
 } from "./actions";
-import { paymentMeta, fulfillMeta, methodLabel } from "./order-ui";
+import { paymentMeta, fulfillMeta, methodLabel, TimelineRow } from "./order-ui";
 import { PageHeader } from "@/components/page-header";
 import { DataTable, type Column } from "@/components/data-table";
 import { Card } from "@/components/ui";
@@ -29,7 +32,7 @@ import {
   usePagination,
   type PillTone,
 } from "@/components/dashboard-ui";
-import { IcFile, IcX, IcCash, IcCourier } from "@/components/icons";
+import { IcFile, IcX, IcCash, IcCourier, IcChat } from "@/components/icons";
 import { ChannelBadge } from "@/components/channel-badge";
 import { CHANNELS, CHANNEL_LABELS, type Channel } from "@/lib/channel";
 
@@ -64,7 +67,7 @@ const flagPill: Record<OrderFlag, PillTone> = {
 // Table row = an order plus the extra columns the Shopify-style list shows.
 type Row = Order & { itemsCount: number; channel: Channel; tags: string[] };
 
-type Pop = { order: Row; kind: "payment" | "fulfillment"; x: number; y: number };
+type Pop = { order: Row; kind: "payment" | "fulfillment" | "timeline"; x: number; y: number };
 
 export function OrdersList({ lockChannel }: { lockChannel?: Channel } = {}) {
   const { t, lang } = useI18n();
@@ -80,6 +83,8 @@ export function OrdersList({ lockChannel }: { lockChannel?: Channel } = {}) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [pop, setPop] = useState<Pop | null>(null);
   const [placed, setPlaced] = useState<Row[]>([]);
+  // order number -> how many staff comments it has, for the bubble indicator.
+  const [comments, setComments] = useState<Record<string, number>>({});
 
   const reload = useCallback(async () => {
     const res = await listStoreOrders();
@@ -108,6 +113,19 @@ export function OrdersList({ lockChannel }: { lockChannel?: Channel } = {}) {
     reload();
   }, [reload]);
 
+  // One count query per page of orders, after the rows themselves are in.
+  useEffect(() => {
+    if (!placed.length) return;
+    let alive = true;
+    (async () => {
+      const res = await getOrderCommentCounts(placed.map((o) => o.id));
+      if (alive && res.ok) setComments(res.data);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [placed]);
+
   // Orders that were actually placed, and nothing else.
   const orders = placed;
 
@@ -131,7 +149,7 @@ export function OrdersList({ lockChannel }: { lockChannel?: Channel } = {}) {
           ? "مرتجع"
           : "Return";
 
-  const openPill = (o: Row, kind: "payment" | "fulfillment", e: ReactMouseEvent<HTMLElement>) => {
+  const openPill = (o: Row, kind: Pop["kind"], e: ReactMouseEvent<HTMLElement>) => {
     e.stopPropagation();
     const r = e.currentTarget.getBoundingClientRect();
     // Clamp so a pill near the right edge doesn't push the card off-screen.
@@ -219,6 +237,18 @@ export function OrdersList({ lockChannel }: { lockChannel?: Channel } = {}) {
         <span className="flex items-center gap-1.5">
           <span className="font-semibold text-ink">#{o.id}</span>
           {o.flag && <IcFile className="h-3.5 w-3.5 text-ink-soft" />}
+          {(comments[o.id] ?? 0) > 0 && (
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={(e) => openPill(o, "timeline", e)}
+              title={ar ? "هذا الطلب به تعليقات على المخطط الزمني." : "This order has timeline comments."}
+              aria-label={ar ? "عرض تعليقات المخطط الزمني" : "Show timeline comments"}
+              className="inline-flex cursor-pointer rounded-md text-ink-soft outline-none ring-brand-500/40 hover:text-ink focus-visible:ring-2"
+            >
+              <IcChat className="h-3.5 w-3.5" />
+            </span>
+          )}
           <span className="font-normal text-ink-muted sm:hidden">· {o.customer}</span>
         </span>
       ),
@@ -468,7 +498,16 @@ export function OrdersList({ lockChannel }: { lockChannel?: Channel } = {}) {
         <Pagination {...pg} />
       </Card>
 
-      {pop && (
+      {pop?.kind === "timeline" && (
+        <TimelinePopover
+          pop={pop}
+          basePath={basePath}
+          ar={ar}
+          onCount={(orderNumber, count) => setComments((prev) => ({ ...prev, [orderNumber]: count }))}
+          onClose={() => setPop(null)}
+        />
+      )}
+      {pop && pop.kind !== "timeline" && (
         <StatusPopover
           pop={pop}
           basePath={basePath}
@@ -627,6 +666,110 @@ function StatusPopover({
                 </div>
               )}
             </>
+          )}
+        </div>
+
+        <div className="border-t border-line p-2">
+          <button
+            onClick={() => router.push(`${basePath}/${o.id}`)}
+            className="btn-primary h-9 w-full justify-center text-sm"
+          >
+            {ar ? "عرض تفاصيل الطلب" : "View order details"}
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+
+// ---- Timeline popover (the comment bubble on a list row) --------------------
+/**
+ * The order's timeline, read and corrected without leaving the list.
+ *
+ * It renders the same TimelineRow as the order page, so an edit here behaves
+ * exactly as it does there. The comment count is reported back as entries
+ * change: delete the last comment and the bubble that opened this disappears,
+ * rather than lying until the next reload.
+ */
+function TimelinePopover({
+  pop,
+  basePath,
+  ar,
+  onCount,
+  onClose,
+}: {
+  pop: Pop;
+  basePath: string;
+  ar: boolean;
+  onCount: (orderNumber: string, count: number) => void;
+  onClose: () => void;
+}) {
+  const { t } = useI18n();
+  const router = useRouter();
+  const [entries, setEntries] = useState<TimelineEntry[] | null>(null);
+  const o = pop.order;
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const res = await getOrderTimeline(o.id);
+      if (alive) setEntries(res.ok ? res.data : []);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [o.id]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const apply = (next: TimelineEntry[]) => {
+    setEntries(next);
+    onCount(o.id, next.filter((e) => e.type === "comment").length);
+  };
+
+  const fmtTime = (s: string) =>
+    new Date(s).toLocaleString(ar ? "ar-EG" : "en-US", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+
+  return (
+    <>
+      <div className="fixed inset-0 z-40" onClick={onClose} />
+      <div
+        className="fixed z-50 w-[340px] max-w-[calc(100vw-16px)] overflow-hidden rounded-2xl border border-line bg-surface shadow-xl"
+        style={{ left: pop.x, top: Math.min(pop.y, window.innerHeight - 340) }}
+        dir={ar ? "rtl" : "ltr"}
+      >
+        <div className="flex items-center justify-between border-b border-line px-4 py-2.5">
+          <div className="flex items-center gap-2 text-sm font-semibold text-ink">
+            <IcChat className="h-4 w-4 text-ink-soft" />
+            #{o.id}
+          </div>
+          <span className="text-xs text-ink-soft">{ar ? "المخطط الزمني" : "Timeline"}</span>
+        </div>
+
+        <div className="max-h-[260px] overflow-y-auto px-4 py-3">
+          {entries === null ? (
+            <div className="py-4 text-center text-sm text-ink-soft">{t("loading")}</div>
+          ) : entries.length === 0 ? (
+            <div className="py-4 text-center text-sm text-ink-soft">{ar ? "لا يوجد نشاط بعد." : "No activity yet."}</div>
+          ) : (
+            <ul className="space-y-3">
+              {entries.map((e) => (
+                <TimelineRow
+                  key={e.id}
+                  orderNumber={o.id}
+                  ar={ar}
+                  entry={e}
+                  onChanged={(next) => apply(entries.map((x) => (x.id === next.id ? next : x)))}
+                  onRemoved={(id) => apply(entries.filter((x) => x.id !== id))}
+                  fmtTime={fmtTime}
+                />
+              ))}
+            </ul>
           )}
         </div>
 
