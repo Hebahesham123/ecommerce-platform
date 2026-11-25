@@ -75,6 +75,15 @@ export function orderErrorText(code: string, ar: boolean): string {
     send_failed: { ar: "تعذّر إرسال البريد.", en: "Couldn't send the email." },
     empty_comment: { ar: "اكتبي نصاً أولاً.", en: "Write something first." },
     entry_not_found: { ar: "لم يعد هذا السطر موجوداً.", en: "That entry is no longer there." },
+    edit_migration_missing: {
+      ar: "تعديل الطلبات يحتاج ترحيل قاعدة البيانات 0062 أولاً.",
+      en: "Editing orders needs database migration 0062 to be run first.",
+    },
+    line_fulfilled: {
+      ar: "لا يمكن إنقاص صنف تم شحنه. تراجعي عن التنفيذ أولاً.",
+      en: "A line that has already shipped can't be reduced — undo the fulfillment first.",
+    },
+    line_not_found: { ar: "هذا السطر لم يعد في الطلب.", en: "That line is no longer on the order." },
     entry_not_editable: {
       ar: "هذا السطر مبني على سجل آخر (الطلب أو الدفع أو التنفيذ) ولا يُعدَّل من هنا.",
       en: "This entry comes from another record (the order, a payment, a fulfillment) and can't be changed here.",
@@ -107,8 +116,11 @@ export function TimelineRow({ orderNumber, ar, entry, onChanged, fmtTime }: {
   const [err, setErr] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
   const editable = isEditableEntry(entry.id);
-  // A note change carries its wording; everything else is just the one line.
+  // A note change carries its wording and an order edit carries its changes;
+  // everything else is just the one line.
   const note = entry.note;
+  const changes = entry.changes?.length ? entry.changes : null;
+  const hasDetail = Boolean(note || changes);
 
   async function save() {
     const body = draft.trim();
@@ -148,11 +160,11 @@ export function TimelineRow({ orderNumber, ar, entry, onChanged, fmtTime }: {
             <div className="flex items-start gap-2">
               <div className="min-w-0 flex-1 text-sm text-ink">
                 {entry.message}
-                {note && (
+                {hasDetail && (
                   <button
                     onClick={() => setOpen((v) => !v)}
                     aria-expanded={open}
-                    aria-label={ar ? "عرض نص الملاحظة" : "Show the note"}
+                    aria-label={note ? (ar ? "عرض نص الملاحظة" : "Show the note") : (ar ? "عرض التغييرات" : "Show what changed")}
                     className="ms-1 inline-flex align-middle text-ink-soft hover:text-ink"
                   >
                     <IcChevron className={"h-3.5 w-3.5 transition " + (open ? "-rotate-90" : "rotate-90")} />
@@ -170,6 +182,13 @@ export function TimelineRow({ orderNumber, ar, entry, onChanged, fmtTime }: {
                 </button>
               )}
             </div>
+            {open && changes && (
+              <ul className="mt-1.5 space-y-1 rounded-xl border border-line bg-surface-page px-3 py-2" dir="auto">
+                {changes.map((c, i) => (
+                  <li key={i} className="text-sm text-ink">· {c}</li>
+                ))}
+              </ul>
+            )}
             {open && note && (
               <div className="mt-1.5 rounded-xl border border-line bg-surface-page px-3 py-2" dir="auto">
                 {note.after ? (

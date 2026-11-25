@@ -199,7 +199,10 @@ type PaymentResult = { amountPaid: number; balance: number; paymentStatus: strin
 
 function mapRpcError(message: string): string {
   const m = (message || "").toLowerCase();
-  for (const code of ["order_not_found", "invalid_amount", "invalid_kind", "refund_exceeds_paid", "nothing_to_fulfill"]) {
+  for (const code of [
+    "order_not_found", "invalid_amount", "invalid_kind", "refund_exceeds_paid", "nothing_to_fulfill",
+    "line_fulfilled", "line_not_found", "no_items",
+  ]) {
     if (m.includes(code)) return code;
   }
   if (missing({ message })) return "migration_missing";
@@ -438,6 +441,8 @@ export type TimelineEntry = {
    * and the only way to read one that was deleted.
    */
   note?: { before: string; after: string };
+  /** For an order edit: one line per thing that changed. */
+  changes?: string[];
 };
 
 /**
@@ -508,6 +513,7 @@ export async function getOrderTimeline(orderNumber: string): Promise<ActionResul
           type === "note_edited"
             ? { before: s(meta.note_before), after: s(meta.note_after) }
             : undefined,
+        changes: Array.isArray(meta.changes) ? (meta.changes as unknown[]).map(s) : undefined,
       });
     }
 
@@ -676,6 +682,116 @@ export async function getOrderListMarks(
       if (orderNo && out[orderNo]) out[orderNo].comments += 1;
     }
     return { ok: true, data: out };
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+export type OrderEditLine = {
+  /** An existing line being kept. Omit it for a line being added. */
+  id?: string;
+  /** The inventory item, for a line being added. */
+  itemId?: string;
+  productName?: string;
+  price: number;
+  quantity: number;
+};
+
+export type OrderEditResult = {
+  changes: string[];
+  subtotal: number;
+  discount: number;
+  total: number;
+  /** The timeline line this wrote, so the screen can show it without reloading. */
+  entry: TimelineEntry | null;
+};
+
+/**
+ * Edit a placed order: quantities, prices, which products are on it, and the
+ * discount.
+ *
+ * The work happens in the `order_edit` function because an edit moves stock
+ * and rewrites the order's money together — half of that landing would leave
+ * stock returned for a line still on the order. Lines absent from `lines` are
+ * removed; lines with an id are updated; lines without one are added.
+ *
+ * Shipping is left alone and the fees already inside the total are carried
+ * across; see the migration for why.
+ */
+export async function editOrder(
+  orderNumber: string,
+  input: { lines: OrderEditLine[]; discount?: number; reason?: string },
+): Promise<ActionResult<OrderEditResult>> {
+  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  try {
+    const supabase = getServerSupabase();
+    const loaded = await loadOrder(supabase, orderNumber, "id");
+    if (!loaded.ok) return { ok: false, error: loaded.error };
+
+    const lines = (input.lines ?? [])
+      .map((l) => ({
+        id: l.id || null,
+        item_id: l.itemId || null,
+        product_name: (l.productName || "").slice(0, 200) || null,
+        price: Math.max(0, Number(l.price) || 0),
+        quantity: Math.max(0, Math.trunc(Number(l.quantity) || 0)),
+      }))
+      // A new line of nothing is not a line; an existing one at zero is a removal.
+      .filter((l) => l.id || l.quantity > 0);
+    if (!lines.length) return { ok: false, error: "no_items" };
+
+    const { data, error } = await supabase.rpc("order_edit", {
+      p_order_number: orderNumber,
+      p_lines: lines,
+      p_discount: input.discount == null ? null : Math.max(0, Number(input.discount) || 0),
+    });
+    if (error) {
+      // Name the migration this feature needs, rather than the generic
+      // "run migration 0028" every other action points at.
+      const code = mapRpcError(error.message);
+      return { ok: false, error: code === "migration_missing" ? "edit_migration_missing" : code };
+    }
+
+    const res = (data ?? {}) as Row;
+    const changes = Array.isArray(res.changes) ? (res.changes as unknown[]).map(s) : [];
+    const reason = (input.reason || "").trim().slice(0, 200);
+
+    let entry: TimelineEntry | null = null;
+    if (changes.length) {
+      const message = reason ? `Order edited · ${reason}` : "Order edited";
+      try {
+        // What changed is kept on the event: the order now holds only its new
+        // shape, so this is the only record of what it looked like before.
+        const { data: ev } = await supabase
+          .from("order_events")
+          .insert({
+            order_id: s(loaded.order.id),
+            actor: "staff",
+            type: "order_edited",
+            message,
+            meta: { changes, reason, subtotal: n(res.subtotal), discount: n(res.discount), total: n(res.total) },
+          })
+          .select("id,created_at")
+          .single();
+        if (ev) {
+          entry = {
+            id: s(ev.id),
+            type: "order_edited",
+            actor: "staff",
+            message,
+            createdAt: s(ev.created_at),
+            changes,
+          };
+        }
+      } catch {
+        /* the timeline is a log; it never fails the edit itself */
+      }
+    }
+
+    return {
+      ok: true,
+      data: { changes, subtotal: n(res.subtotal), discount: n(res.discount), total: n(res.total), entry },
+    };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }

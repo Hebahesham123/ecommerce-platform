@@ -17,6 +17,7 @@ import {
   getOrderConversion,
   getMailerStatus,
   createOrderReturn,
+  editOrder,
   addOrderComment,
   updateOrderTags,
   saveAdminNote,
@@ -34,6 +35,7 @@ import {
   type OrderConversion,
 } from "./actions";
 import type { ReturnableLine } from "@/lib/returns-service";
+import { feesIn, editedTotals } from "@/lib/order-edit";
 import { createPaymobCheckout } from "../payments/actions";
 import { getShipmentForOrder, assignOrderToCourier, confirmCourierReport, listCouriers, updateShipmentFees, setShipmentPayments } from "../couriers/actions";
 import { SHIPMENT_STATUS, COLLECTION_METHODS, collectionMethodLabel, type Shipment, type Courier } from "@/lib/courier";
@@ -72,7 +74,7 @@ export function OrderDetailPage({ orderNumber, basePath }: { orderNumber: string
   const [err, setErr] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [modal, setModal] = useState<null | "collect" | "refund" | "fulfill" | "return" | "cancel" | "conversion" | "assign" | "fees">(null);
+  const [modal, setModal] = useState<null | "collect" | "refund" | "fulfill" | "return" | "cancel" | "conversion" | "assign" | "fees" | "edit">(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -151,6 +153,7 @@ export function OrderDetailPage({ orderNumber, basePath }: { orderNumber: string
               </button>
             )}
             <DropMenu trigger={<span className="btn-outline h-9 cursor-pointer">{ar ? "المزيد" : "More actions"} <IcChevron className="h-4 w-4 rotate-90" /></span>}>
+              {!cancelled && <MenuItem onClick={() => setModal("edit")}><IcEdit className="h-4 w-4" /> {ar ? "تعديل الطلب" : "Edit order"}</MenuItem>}
               {!cancelled && <MenuItem onClick={() => setModal("cancel")} danger><IcX className="h-4 w-4" /> {ar ? "إلغاء الطلب" : "Cancel order"}</MenuItem>}
               <MenuItem onClick={() => run(() => restockOrder(orderNumber), ar ? "أُعيد للمخزون" : "Restocked")}><IcRefresh className="h-4 w-4" /> {ar ? "إعادة للمخزون" : "Restock items"}</MenuItem>
               <MenuItem onClick={() => run(() => archiveOrder(orderNumber, !archived), archived ? (ar ? "أُلغيت الأرشفة" : "Unarchived") : (ar ? "تمت الأرشفة" : "Archived"))}>
@@ -612,6 +615,21 @@ export function OrderDetailPage({ orderNumber, basePath }: { orderNumber: string
           onDone={async () => { setModal(null); flashOk(ar ? "تم الحفظ" : "Saved"); await load(); }}
         />
       )}
+      {modal === "edit" && d && (
+        <EditOrderModal
+          orderNumber={orderNumber}
+          ar={ar}
+          lang={lang}
+          detail={d}
+          onClose={() => setModal(null)}
+          onDone={async (entry, summary) => {
+            setModal(null);
+            if (entry) setTimeline((prev) => [entry, ...prev]);
+            flashOk(summary);
+            await load();
+          }}
+        />
+      )}
       {modal === "return" && d && (
         <ReturnModal
           orderNumber={orderNumber}
@@ -899,6 +917,272 @@ function TimelineCard({ orderNumber, ar, entries, onPosted, onChanged, fmtTime }
         {entries.length === 0 && <li className="text-sm text-ink-soft">{ar ? "لا يوجد نشاط بعد." : "No activity yet."}</li>}
       </ul>
     </div>
+  );
+}
+
+
+// ---- Edit order modal -------------------------------------------------------
+/**
+ * Change what is on a placed order: quantities, prices, which products, and
+ * the discount.
+ *
+ * Shipping is shown but not editable here, and the fees already folded into
+ * the total are shown as one "fees" line so the arithmetic on screen is the
+ * same arithmetic the database does — a merchant should not press Save and
+ * find a different number than the one they were promised.
+ *
+ * A line that has already shipped can have its quantity raised but not
+ * lowered, and cannot be removed: the order must not claim to hold less than
+ * what physically left.
+ */
+function EditOrderModal({ orderNumber, ar, lang, detail, onClose, onDone }: {
+  orderNumber: string;
+  ar: boolean;
+  lang: "ar" | "en";
+  detail: OrderDetail;
+  onClose: () => void;
+  onDone: (entry: TimelineEntry | null, summary: string) => void;
+}) {
+  type Draft = {
+    key: string;
+    id?: string;
+    itemId?: string;
+    name: string;
+    imageUrl: string | null;
+    price: number;
+    quantity: number;
+    fulfilled: number;
+  };
+
+  const [lines, setLines] = useState<Draft[]>(() =>
+    detail.items.map((li) => ({
+      key: li.id,
+      id: li.id,
+      name: li.productName,
+      imageUrl: li.imageUrl,
+      price: li.price,
+      quantity: li.quantity,
+      fulfilled: li.fulfilledQuantity,
+    })),
+  );
+  const [discount, setDiscount] = useState<number>(detail.discountAmount);
+  const [reason, setReason] = useState("");
+  const [stock, setStock] = useState<InventoryItem[] | null>(null);
+  const [search, setSearch] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function ensureStock() {
+    if (!stock) {
+      const res = await listInventory();
+      if (res.ok) setStock(res.data);
+    }
+  }
+  const availableOf = (it: InventoryItem) => it.levels.reduce((sum, l) => sum + Math.max(0, l.available), 0);
+  const searchResults = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q || !stock) return [];
+    return stock.filter((it) => `${it.productName} ${it.sku ?? ""}`.toLowerCase().includes(q)).slice(0, 25);
+  }, [stock, search]);
+
+  // One tested rule, shared with the database function — see lib/order-edit.
+  const fees = feesIn({
+    total: detail.total,
+    subtotal: detail.subtotal,
+    discount: detail.discountAmount,
+    shipping: detail.shipping,
+  });
+  const { subtotal, discount: capped, total } = editedTotals({
+    lines,
+    discount,
+    shipping: detail.shipping,
+    fees,
+  });
+  const empty = lines.every((l) => l.quantity <= 0);
+
+  const patch = (key: string, next: Partial<Draft>) =>
+    setLines((prev) => prev.map((l) => (l.key === key ? { ...l, ...next } : l)));
+
+  function addItem(it: InventoryItem) {
+    setLines((prev) => {
+      // Adding the same product twice adds to the line already there.
+      const already = prev.find((l) => l.itemId === it.id);
+      if (already) return prev.map((l) => (l.key === already.key ? { ...l, quantity: l.quantity + 1 } : l));
+      return [
+        ...prev,
+        {
+          key: "new-" + it.id + "-" + prev.length,
+          itemId: it.id,
+          name: it.productName,
+          imageUrl: it.imageUrl ?? null,
+          price: it.price ?? 0,
+          quantity: 1,
+          fulfilled: 0,
+        },
+      ];
+    });
+    setSearch("");
+  }
+
+  async function submit() {
+    setBusy(true);
+    setErr(null);
+    const res = await editOrder(orderNumber, {
+      lines: lines
+        .filter((l) => l.id || l.quantity > 0)
+        .map((l) => ({ id: l.id, itemId: l.itemId, productName: l.name, price: l.price, quantity: l.quantity })),
+      discount: capped,
+      reason,
+    });
+    setBusy(false);
+    if (!res.ok) { setErr(orderErrorText(res.error, ar)); return; }
+    onDone(
+      res.data.entry,
+      res.data.changes.length
+        ? `${ar ? "عُدّل الطلب" : "Order edited"} · ${ar ? "الإجمالي" : "total"} ${egp(res.data.total, lang)}`
+        : ar ? "لا تغييرات" : "Nothing changed",
+    );
+  }
+
+  return (
+    <Modal
+      title={ar ? "تعديل الطلب" : "Edit order"}
+      subtitle={`#${orderNumber}`}
+      icon={IcEdit}
+      size="lg"
+      onClose={onClose}
+      dir={ar ? "rtl" : "ltr"}
+      footer={
+        <>
+          <button onClick={onClose} className="btn-outline h-9 px-4 text-sm">{ar ? "إلغاء" : "Cancel"}</button>
+          <button onClick={submit} disabled={busy || empty} className="btn-primary h-9 px-5 text-sm disabled:opacity-50">
+            {busy ? "…" : ar ? "حفظ التعديل" : "Save changes"}
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <div className="space-y-2">
+          {lines.map((l) => (
+            <div key={l.key} className="flex items-center gap-2 rounded-xl border border-line px-2 py-2">
+              <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-line bg-surface-page">
+                {l.imageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={l.imageUrl} alt="" className="h-full w-full object-cover" />
+                ) : null}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="line-clamp-1 text-sm text-ink">{l.name}</div>
+                {l.fulfilled > 0 && (
+                  <div className="text-[11px] text-amber-600">
+                    {ar ? `شُحن ${num(l.fulfilled, lang)}` : `${l.fulfilled} already shipped`}
+                  </div>
+                )}
+              </div>
+              <label className="shrink-0">
+                <span className="sr-only">{ar ? "السعر" : "Price"}</span>
+                <input
+                  type="number"
+                  min={0}
+                  value={l.price}
+                  onChange={(e) => patch(l.key, { price: Math.max(0, Number(e.target.value) || 0) })}
+                  className="h-8 w-24 rounded-lg border border-line bg-surface px-2 text-sm outline-none focus:border-brand-600"
+                />
+              </label>
+              <label className="shrink-0">
+                <span className="sr-only">{ar ? "الكمية" : "Quantity"}</span>
+                <input
+                  type="number"
+                  min={l.fulfilled}
+                  value={l.quantity}
+                  onChange={(e) =>
+                    patch(l.key, { quantity: Math.max(l.fulfilled, Math.trunc(Number(e.target.value) || 0)) })
+                  }
+                  className="h-8 w-16 rounded-lg border border-line bg-surface px-2 text-sm outline-none focus:border-brand-600"
+                />
+              </label>
+              <button
+                onClick={() => setLines((prev) => prev.filter((x) => x.key !== l.key))}
+                disabled={l.fulfilled > 0}
+                title={l.fulfilled > 0 ? (ar ? "تم شحن هذا الصنف" : "This line has already shipped") : (ar ? "إزالة" : "Remove")}
+                aria-label={ar ? "إزالة" : "Remove"}
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-line text-ink-soft hover:text-rose-600 disabled:opacity-30"
+              >
+                <IcTrash className="h-4 w-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <div>
+          <input
+            value={search}
+            onFocus={ensureStock}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={ar ? "أضيفي منتجاً…" : "Add a product…"}
+            className="w-full rounded-lg border border-line bg-surface px-3 py-2 text-sm outline-none focus:border-brand-600"
+          />
+          {search && (
+            <div className="mt-1 max-h-52 space-y-1 overflow-y-auto rounded-lg border border-line p-1">
+              {!stock ? (
+                <div className="px-2 py-2 text-sm text-ink-soft">…</div>
+              ) : searchResults.length === 0 ? (
+                <div className="px-2 py-2 text-sm text-ink-soft">{ar ? "لا نتائج" : "No matches"}</div>
+              ) : (
+                searchResults.map((it) => (
+                  <button
+                    key={it.id}
+                    onClick={() => addItem(it)}
+                    className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start hover:bg-surface-page"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="line-clamp-1 text-sm text-ink">{it.productName}</div>
+                      <div className="text-xs text-ink-soft">
+                        {egp(it.price ?? 0, lang)} · {ar ? `متاح ${num(availableOf(it), lang)}` : `${availableOf(it)} in stock`}
+                      </div>
+                    </div>
+                    <span className="text-xs text-brand-600">{ar ? "إضافة" : "Add"}</span>
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Field label={ar ? "الخصم" : "Discount"}>
+            <input
+              type="number"
+              min={0}
+              value={discount}
+              onChange={(e) => setDiscount(Math.max(0, Number(e.target.value) || 0))}
+              className={fieldClass}
+            />
+          </Field>
+          <Field label={ar ? "السبب (اختياري)" : "Reason (optional)"}>
+            <input value={reason} onChange={(e) => setReason(e.target.value)} className={fieldClass} />
+          </Field>
+        </div>
+
+        <div className="space-y-1.5 rounded-xl bg-surface-page px-3 py-2.5 text-sm">
+          <SummaryRow label={ar ? "المجموع" : "Subtotal"} value={egp(subtotal, lang)} muted />
+          {capped > 0 && <SummaryRow label={ar ? "الخصم" : "Discount"} value={"−" + egp(capped, lang)} muted />}
+          <SummaryRow label={ar ? "الشحن" : "Shipping"} value={egp(detail.shipping, lang)} muted />
+          {fees > 0 && <SummaryRow label={ar ? "رسوم" : "Fees"} value={egp(fees, lang)} muted />}
+          <SummaryRow label={ar ? "الإجمالي" : "Total"} value={egp(total, lang)} bold />
+          {detail.amountPaid > 0 && total !== detail.total && (
+            <p className="pt-1 text-xs text-amber-600">
+              {ar
+                ? `المدفوع ${egp(detail.amountPaid, lang)} — راجعي الفرق بعد الحفظ.`
+                : `${egp(detail.amountPaid, lang)} already paid — settle the difference after saving.`}
+            </p>
+          )}
+        </div>
+
+        {empty && <p className="text-sm text-rose-600">{ar ? "لا بد من صنف واحد على الأقل." : "An order needs at least one line."}</p>}
+        {err && <p className="text-sm text-rose-600">{err}</p>}
+      </div>
+    </Modal>
   );
 }
 

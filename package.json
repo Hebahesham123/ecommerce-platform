@@ -10,7 +10,8 @@
     "loadtest": "node scripts/live-load-test.mjs",
     "check:shipping": "node scripts/check-shipping.mjs",
     "check:charges": "node scripts/check-order-charges.mjs",
-    "check:timeline": "node scripts/check-timeline.mjs"
+    "check:timeline": "node scripts/check-timeline.mjs",
+    "check:order-edit": "node scripts/check-order-edit.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.48.1",
