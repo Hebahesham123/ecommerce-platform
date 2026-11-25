@@ -15,7 +15,7 @@ import { useState } from "react";
 import { egp, num, type Lang } from "@/lib/i18n";
 import { StatusPill, type PillTone } from "@/components/dashboard-ui";
 import { Modal, Field, fieldClass } from "@/components/modal";
-import { IcCash, IcCourier, IcEdit, IcTrash } from "@/components/icons";
+import { IcCash, IcCourier, IcEdit, IcTrash, IcChevron } from "@/components/icons";
 import { collectPayment, refundPayment, fulfillOrder, updateOrderEvent, deleteOrderEvent, type TimelineEntry } from "./actions";
 import { isEditableEntry } from "@/lib/order-timeline";
 
@@ -105,7 +105,10 @@ export function TimelineRow({ orderNumber, ar, entry, onChanged, onRemoved, fmtT
   const [draft, setDraft] = useState(entry.message);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
   const editable = isEditableEntry(entry.id);
+  // A note change carries its wording; everything else is just the one line.
+  const note = entry.note;
 
   async function save() {
     const body = draft.trim();
@@ -152,7 +155,19 @@ export function TimelineRow({ orderNumber, ar, entry, onChanged, onRemoved, fmtT
         ) : (
           <>
             <div className="flex items-start gap-2">
-              <div className="min-w-0 flex-1 text-sm text-ink">{entry.message}</div>
+              <div className="min-w-0 flex-1 text-sm text-ink">
+                {entry.message}
+                {note && (
+                  <button
+                    onClick={() => setOpen((v) => !v)}
+                    aria-expanded={open}
+                    aria-label={ar ? "عرض نص الملاحظة" : "Show the note"}
+                    className="ms-1 inline-flex align-middle text-ink-soft hover:text-ink"
+                  >
+                    <IcChevron className={"h-3.5 w-3.5 transition " + (open ? "-rotate-90" : "rotate-90")} />
+                  </button>
+                )}
+              </div>
               {editable && mode === "view" && (
                 <div className="flex shrink-0 items-center gap-0.5">
                   <button
@@ -174,6 +189,24 @@ export function TimelineRow({ orderNumber, ar, entry, onChanged, onRemoved, fmtT
                 </div>
               )}
             </div>
+            {open && note && (
+              <div className="mt-1.5 rounded-xl border border-line bg-surface-page px-3 py-2" dir="auto">
+                {note.after ? (
+                  <>
+                    <div className="text-xs font-semibold text-ink">{ar ? "الملاحظة" : "Note"}</div>
+                    <div className="mt-0.5 whitespace-pre-wrap text-sm text-ink">{note.after}</div>
+                  </>
+                ) : (
+                  <div className="text-xs font-semibold text-ink">{ar ? "حُذفت الملاحظة" : "Note removed"}</div>
+                )}
+                {note.before && note.before !== note.after && (
+                  <>
+                    <div className="mt-2 text-xs font-semibold text-ink-soft">{ar ? "قبل التعديل" : "Previously"}</div>
+                    <div className="mt-0.5 whitespace-pre-wrap text-sm text-ink-muted">{note.before}</div>
+                  </>
+                )}
+              </div>
+            )}
             <div className="text-xs text-ink-soft">
               {fmtTime(entry.createdAt)}
               {entry.edited && <span className="ms-1">· {ar ? "مُعدَّل" : "edited"}</span>}

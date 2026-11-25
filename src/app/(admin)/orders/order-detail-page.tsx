@@ -512,7 +512,12 @@ export function OrderDetailPage({ orderNumber, basePath }: { orderNumber: string
 
         {/* Sidebar */}
         <div className="space-y-4">
-          <NotesCard orderNumber={orderNumber} ar={ar} initial={d?.adminNote ?? ""} />
+          <NotesCard
+            orderNumber={orderNumber}
+            ar={ar}
+            initial={d?.adminNote ?? ""}
+            onLogged={(e) => setTimeline((prev) => [e, ...prev])}
+          />
 
           <div className="rounded-2xl border border-line bg-surface px-4 py-3">
             <div className="mb-2 text-sm font-semibold text-ink">{ar ? "العميل" : "Customer"}</div>
@@ -775,14 +780,19 @@ function RiskBar({ risk, ar }: { risk: "low" | "medium" | "high"; ar: boolean })
 }
 
 // ---- Notes card -------------------------------------------------------------
-function NotesCard({ orderNumber, ar, initial }: { orderNumber: string; ar: boolean; initial: string }) {
+function NotesCard({ orderNumber, ar, initial, onLogged }: {
+  orderNumber: string; ar: boolean; initial: string; onLogged: (e: TimelineEntry) => void;
+}) {
   const [note, setNote] = useState(initial);
   const [editing, setEditing] = useState(false);
   const [saved, setSaved] = useState(false);
   useEffect(() => { setNote(initial); }, [initial]);
 
   async function save() {
-    await saveAdminNote(orderNumber, note);
+    const res = await saveAdminNote(orderNumber, note);
+    // The save records the change on the timeline; show it straight away
+    // rather than making the merchant reload to see what they just did.
+    if (res.ok && res.data) onLogged(res.data);
     setEditing(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 1500);

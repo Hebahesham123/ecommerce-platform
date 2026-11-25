@@ -432,6 +432,12 @@ export type TimelineEntry = {
   amount?: number | null;
   /** The text was corrected after the entry was written. */
   edited?: boolean;
+  /**
+   * For a note change: the wording before and after it. The order keeps only
+   * the current note, so this is the only record of what a note used to say —
+   * and the only way to read one that was deleted.
+   */
+  note?: { before: string; after: string };
 };
 
 /**
@@ -489,13 +495,19 @@ export async function getOrderTimeline(orderNumber: string): Promise<ActionResul
     }
 
     for (const e of (events ?? []) as Row[]) {
+      const meta = (e.meta as Row | null) ?? {};
+      const type = s(e.type);
       entries.push({
         id: s(e.id),
-        type: s(e.type),
+        type,
         actor: (s(e.actor) as "system" | "staff") || "system",
         message: s(e.message),
         createdAt: s(e.created_at),
-        edited: Boolean((e.meta as Row | null)?.edited_at),
+        edited: Boolean(meta.edited_at),
+        note:
+          type === "note_edited"
+            ? { before: s(meta.note_before), after: s(meta.note_after) }
+            : undefined,
       });
     }
 
@@ -697,13 +709,64 @@ export async function updateOrderTags(orderNumber: string, tags: string[]): Prom
 }
 
 /** Save the staff-facing note. */
-export async function saveAdminNote(orderNumber: string, note: string): Promise<ActionResult> {
+/**
+ * Save the order's staff note, and record the change on the timeline.
+ *
+ * Returns the timeline entry it wrote so the screen can show it without
+ * reloading, or null when the note did not actually change (saving the same
+ * text twice should not fill the log with noise).
+ */
+export async function saveAdminNote(
+  orderNumber: string,
+  note: string,
+): Promise<ActionResult<TimelineEntry | null>> {
   if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
+  const after = note.trim();
   try {
     const supabase = getServerSupabase();
-    const { error } = await supabase.from("store_orders").update({ admin_note: note.trim() || null }).eq("order_number", orderNumber);
+    const loaded = await loadOrder(supabase, orderNumber, "id,admin_note");
+    if (!loaded.ok) return { ok: false, error: loaded.error };
+    const before = s(loaded.order.admin_note).trim();
+
+    const { error } = await supabase
+      .from("store_orders")
+      .update({ admin_note: after || null })
+      .eq("order_number", orderNumber);
     if (error) return { ok: false, error: missing(error) ? "migration_missing" : error.message };
-    return { ok: true, data: undefined };
+    if (after === before) return { ok: true, data: null };
+
+    const message = !before ? "Note added" : !after ? "Note removed" : "Note edited";
+    try {
+      // The column keeps only the latest text, so both wordings are kept here.
+      // A note that is written and then deleted is still readable afterwards.
+      const { data } = await supabase
+        .from("order_events")
+        .insert({
+          order_id: s(loaded.order.id),
+          actor: "staff",
+          type: "note_edited",
+          message,
+          meta: { note_before: before, note_after: after },
+        })
+        .select("id,created_at")
+        .single();
+      if (data) {
+        return {
+          ok: true,
+          data: {
+            id: s(data.id),
+            type: "note_edited",
+            actor: "staff",
+            message,
+            createdAt: s(data.created_at),
+            note: { before, after },
+          },
+        };
+      }
+    } catch {
+      /* the timeline is a log; it never fails the save itself */
+    }
+    return { ok: true, data: null };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
   }
