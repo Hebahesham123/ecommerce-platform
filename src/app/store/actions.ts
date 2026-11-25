@@ -521,6 +521,8 @@ export type PlacedOrder = {
    */
   createdAt: string;
   itemsCount: number;
+  /** Where it is going, for the list's destination column. */
+  city: string;
   /** Which surface placed it. Every pre-channel order reads as the website. */
   channel: Channel;
   /** Free labels the merchant filed the order under. */
@@ -543,6 +545,7 @@ export async function listStoreOrders(): Promise<ActionResult<PlacedOrder[]>> {
       customer: String(r.customer_name ?? ""),
       phone: String(r.phone ?? ""),
       governorate: String(r.governorate ?? ""),
+      city: String(r.city ?? ""),
       total: Number(r.total ?? 0),
       method: "cod",
       lifecycle: (String(r.lifecycle ?? "placed") as PlacedOrder["lifecycle"]),

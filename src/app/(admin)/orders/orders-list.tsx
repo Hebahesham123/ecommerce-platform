@@ -66,7 +66,15 @@ const flagPill: Record<OrderFlag, PillTone> = {
 };
 
 // Table row = an order plus the extra columns the Shopify-style list shows.
-type Row = Order & { itemsCount: number; channel: Channel; tags: string[] };
+type Row = Order & {
+  itemsCount: number;
+  channel: Channel;
+  tags: string[];
+  city: string;
+  /** The full timestamp. `date` is only the day, which cannot tell two
+   *  orders placed an hour apart from each other. */
+  createdAt: string;
+};
 
 type Pop = { order: Row; kind: "payment" | "fulfillment" | "timeline"; x: number; y: number };
 
@@ -102,6 +110,8 @@ export function OrdersList({ lockChannel }: { lockChannel?: Channel } = {}) {
           payment: o.payment,
           fulfillment: o.fulfillment,
           date: o.date,
+          createdAt: o.createdAt,
+          city: o.city,
           itemsCount: o.itemsCount,
           channel: o.channel,
           tags: o.tags,
@@ -136,6 +146,27 @@ export function OrdersList({ lockChannel }: { lockChannel?: Channel } = {}) {
       month: "short",
       day: "numeric",
     });
+
+  /**
+   * The day and the clock time an order came in.
+   *
+   * "Nov 4" cannot separate two orders an hour apart, and on a busy morning
+   * that is most of the list. Today and yesterday are named rather than
+   * dated, because that is how anyone reading a list of today's orders
+   * thinks about them.
+   */
+  const fmtWhen = (iso: string): { day: string; time: string } => {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return { day: "", time: "" };
+    const time = d.toLocaleTimeString(ar ? "ar-EG" : "en-US", { hour: "numeric", minute: "2-digit" });
+    const now = new Date();
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
+    if (sameDay(d, now)) return { day: ar ? "اليوم" : "Today", time };
+    if (sameDay(d, yesterday)) return { day: ar ? "أمس" : "Yesterday", time };
+    return { day: fmtDate(iso), time };
+  };
 
   const flagLabel = (f: OrderFlag) =>
     f === "fake_cod"
@@ -188,13 +219,13 @@ export function OrdersList({ lockChannel }: { lockChannel?: Channel } = {}) {
     sorted.sort((a, b) => {
       switch (sort) {
         case "oldest":
-          return a.date.localeCompare(b.date);
+          return (a.createdAt || a.date).localeCompare(b.createdAt || b.date);
         case "total_high":
           return b.total - a.total;
         case "total_low":
           return a.total - b.total;
         default:
-          return b.date.localeCompare(a.date) || Number(b.id) - Number(a.id);
+          return (b.createdAt || b.date).localeCompare(a.createdAt || a.date) || Number(b.id) - Number(a.id);
       }
     });
     return sorted;
@@ -303,7 +334,15 @@ export function OrdersList({ lockChannel }: { lockChannel?: Channel } = {}) {
       key: "date",
       header: t("col_date"),
       rank: "secondary",
-      cell: (o) => <span className="text-ink-muted">{fmtDate(o.date)}</span>,
+      cell: (o) => {
+        const w = fmtWhen(o.createdAt || o.date);
+        return (
+          <span className="block whitespace-nowrap">
+            <span className="block text-ink-muted">{w.day}</span>
+            <span className="block text-xs text-ink-soft">{w.time}</span>
+          </span>
+        );
+      },
     },
     {
       key: "customer",
@@ -350,28 +389,6 @@ export function OrdersList({ lockChannel }: { lockChannel?: Channel } = {}) {
       hideBelow: "lg",
     },
     {
-      key: "governorate",
-      header: t("col_governorate"),
-      rank: "secondary",
-      cell: (o) => (
-        <span className="flex items-center gap-2">
-          <span className="text-ink-muted">{o.governorate}</span>
-          {o.flag && <StatusPill label={flagLabel(o.flag)} tone={flagPill[o.flag]} />}
-        </span>
-      ),
-      hideBelow: "lg",
-    },
-    ...(lockChannel
-      ? []
-      : [
-          {
-            key: "channel",
-            header: t("col_channel"),
-            rank: "secondary" as const,
-            cell: (o: (typeof pg.items)[number]) => <ChannelBadge value={o.channel} />,
-          },
-        ]),
-    {
       key: "tags",
       header: ar ? "الوسوم" : "Tags",
       rank: "secondary",
@@ -388,6 +405,30 @@ export function OrdersList({ lockChannel }: { lockChannel?: Channel } = {}) {
         ),
       hideBelow: "lg",
     },
+    {
+      key: "destination",
+      header: t("col_governorate"),
+      rank: "secondary",
+      cell: (o) => (
+        <span className="flex items-center gap-2">
+          <span className="min-w-0 text-ink-muted">
+            {[o.city, o.governorate].filter(Boolean).join(", ") || "—"}
+          </span>
+          {o.flag && <StatusPill label={flagLabel(o.flag)} tone={flagPill[o.flag]} />}
+        </span>
+      ),
+      hideBelow: "lg",
+    },
+    ...(lockChannel
+      ? []
+      : [
+          {
+            key: "channel",
+            header: t("col_channel"),
+            rank: "secondary" as const,
+            cell: (o: (typeof pg.items)[number]) => <ChannelBadge value={o.channel} />,
+          },
+        ]),
   ];
 
   return (
