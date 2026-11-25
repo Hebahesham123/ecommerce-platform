@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useI18n, egp, num } from "@/lib/i18n";
-import {
+import { variantLabel,
   type InventoryItem,
   type Location,
   type ProductStatus,
@@ -241,7 +241,7 @@ export default function InventoryPage() {
           <span className="min-w-0">
             <span className="block truncate font-semibold text-ink">{item.productName}</span>
             <span className="flex flex-wrap items-center gap-1.5 text-xs font-normal text-ink-soft">
-              {item.variantTitle && <span>{item.variantTitle}</span>}
+              {variantLabel(item.variantTitle) && <span>{variantLabel(item.variantTitle)}</span>}
               {item.vendor && <span>· {item.vendor}</span>}
             </span>
           </span>

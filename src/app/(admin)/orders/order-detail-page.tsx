@@ -7,7 +7,7 @@ import { slotLabel } from "@/lib/offers";
 import { IcCash, IcCourier, IcChevron, IcX, IcRedo, IcRefresh, IcEdit, IcMail, IcFile, IcLink, IcPlus, IcTrash } from "@/components/icons";
 import { kindLabel, statusLabel } from "@/lib/returns";
 import type { ReturnRequest } from "@/lib/returns";
-import type { InventoryItem } from "@/lib/inventory";
+import { variantLabel, type InventoryItem } from "@/lib/inventory";
 import { listInventory } from "../inventory/actions";
 import {
   getOrderDetail,
@@ -917,6 +917,49 @@ function TimelineCard({ orderNumber, ar, entries, onPosted, onChanged, fmtTime }
 
 
 
+
+/**
+ * One product in a search result.
+ *
+ * The thumbnail comes first because that is what a person actually matches
+ * on — a list of four "Louis Vuitton Handbag..." rows, truncated before the
+ * words that differ, is unusable without it. The variant sits with the name
+ * and the SKU leads the second line, so two sizes of the same shoe are told
+ * apart without opening anything.
+ */
+function PickerRow({ item, available, lang, ar, onAdd }: {
+  item: InventoryItem;
+  available: number;
+  lang: "ar" | "en";
+  ar: boolean;
+  onAdd: () => void;
+}) {
+  return (
+    <button
+      onClick={onAdd}
+      className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start hover:bg-surface-page"
+    >
+      <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-line bg-surface-page">
+        {item.imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={item.imageUrl} alt="" className="h-full w-full object-cover" loading="lazy" />
+        ) : null}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="line-clamp-2 text-sm text-ink">
+          {item.productName}
+          {variantLabel(item.variantTitle) ? <span className="text-ink-soft"> · {variantLabel(item.variantTitle)}</span> : null}
+        </div>
+        <div className="truncate text-xs text-ink-soft">
+          {item.sku ? <span dir="ltr">{item.sku} · </span> : null}
+          {egp(item.price ?? 0, lang)} · {ar ? `متاح ${num(available, lang)}` : `${available} in stock`}
+        </div>
+      </div>
+      <span className="shrink-0 text-xs text-brand-600">{ar ? "إضافة" : "Add"}</span>
+    </button>
+  );
+}
+
 // ---- Customer details modal -------------------------------------------------
 /**
  * Correct who the order is for and where it goes.
@@ -1074,7 +1117,9 @@ function EditOrderModal({ orderNumber, ar, lang, detail, onClose, onDone }: {
   const searchResults = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q || !stock) return [];
-    return stock.filter((it) => `${it.productName} ${it.sku ?? ""}`.toLowerCase().includes(q)).slice(0, 25);
+    return stock
+      .filter((it) => `${it.productName} ${it.variantTitle ?? ""} ${it.sku ?? ""}`.toLowerCase().includes(q))
+      .slice(0, 25);
   }, [stock, search]);
 
   // One tested rule, shared with the database function — see lib/order-edit.
@@ -1222,19 +1267,14 @@ function EditOrderModal({ orderNumber, ar, lang, detail, onClose, onDone }: {
                 <div className="px-2 py-2 text-sm text-ink-soft">{ar ? "لا نتائج" : "No matches"}</div>
               ) : (
                 searchResults.map((it) => (
-                  <button
+                  <PickerRow
                     key={it.id}
-                    onClick={() => addItem(it)}
-                    className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start hover:bg-surface-page"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="line-clamp-1 text-sm text-ink">{it.productName}</div>
-                      <div className="text-xs text-ink-soft">
-                        {egp(it.price ?? 0, lang)} · {ar ? `متاح ${num(availableOf(it), lang)}` : `${availableOf(it)} in stock`}
-                      </div>
-                    </div>
-                    <span className="text-xs text-brand-600">{ar ? "إضافة" : "Add"}</span>
-                  </button>
+                    item={it}
+                    available={availableOf(it)}
+                    lang={lang}
+                    ar={ar}
+                    onAdd={() => addItem(it)}
+                  />
                 ))
               )}
             </div>
@@ -1678,13 +1718,14 @@ function ReturnModal({ orderNumber, ar, lang, onClose, onDone }: {
                 <div className="mt-1 max-h-52 space-y-1 overflow-y-auto rounded-lg border border-line p-1">
                   {!stock ? <div className="px-2 py-2 text-sm text-ink-soft">…</div> : searchResults.length === 0 ? <div className="px-2 py-2 text-sm text-ink-soft">{ar ? "لا نتائج" : "No matches"}</div> : (
                     searchResults.map((it) => (
-                      <button key={it.id} onClick={() => addRepl(it)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-start hover:bg-surface-page">
-                        <div className="min-w-0 flex-1">
-                          <div className="line-clamp-1 text-sm text-ink">{it.productName}</div>
-                          <div className="text-xs text-ink-soft">{egp(it.price ?? 0, lang)} · {ar ? `متاح ${num(availableOf(it), lang)}` : `${availableOf(it)} in stock`}</div>
-                        </div>
-                        <span className="text-xs text-brand-600">{ar ? "إضافة" : "Add"}</span>
-                      </button>
+                      <PickerRow
+                        key={it.id}
+                        item={it}
+                        available={availableOf(it)}
+                        lang={lang}
+                        ar={ar}
+                        onAdd={() => addRepl(it)}
+                      />
                     ))
                   )}
                 </div>

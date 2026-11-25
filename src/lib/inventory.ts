@@ -31,6 +31,19 @@ export type Level = {
 /** A stock-keeping unit with its per-location levels. */
 export type ProductStatus = "active" | "draft" | "archived";
 
+/**
+ * A variant worth showing, or "" when there is nothing to say.
+ *
+ * Shopify gives every single-variant product the variant "Default Title".
+ * It means "this product has no variants", so printing it next to a name
+ * tells the reader nothing and buries the variants that do matter — the
+ * sizes. A quarter of this catalogue carries the placeholder.
+ */
+export function variantLabel(v: string | null | undefined): string {
+  const s = (v ?? "").trim();
+  return !s || s.toLowerCase() === "default title" ? "" : s;
+}
+
 export type InventoryItem = {
   id: string;
   productName: string; // acts as the product title
