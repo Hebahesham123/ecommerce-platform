@@ -545,12 +545,16 @@ export async function addOrderComment(orderNumber: string, text: string): Promis
 /**
  * Correct the text of a timeline entry.
  *
+ * This is the only way a timeline line ever changes: there is no delete, so a
+ * correction is the whole of what anyone can do to the record.
+ *
  * The id arrives from the browser, so it is matched against the order in the
  * URL as well as against itself: a staff member looking at one order cannot
  * reach another order's log by changing the id. The original wording is kept
  * nowhere, but `meta.edited_at` records that the line was touched, which the
  * screen shows — a log that can be rewritten invisibly is worse than one that
- * cannot be rewritten at all.
+ * cannot be rewritten at all. An empty edit is refused, so a line cannot be
+ * blanked as a way around the missing delete.
  */
 export async function updateOrderEvent(
   orderNumber: string,
@@ -601,36 +605,19 @@ export async function updateOrderEvent(
   }
 }
 
-/**
- * Remove a timeline entry.
+/*
+ * There is deliberately no action that deletes a timeline entry.
  *
- * Scoped to the order in the URL for the same reason as the edit above. An id
- * that matches nothing is reported rather than silently treated as success,
- * so a line that someone else already deleted does not look removed twice.
+ * The timeline is the order's record: what was promised, when it shipped, what
+ * a note used to say. Nothing removes a line from it, by design — a log that
+ * can be emptied is not a log. Correcting the wording is enough, and an edit
+ * says so on the line itself.
+ *
+ * This is enforced by the action not existing rather than by hiding a button.
+ * Server actions are POST endpoints whose ids ship in the public page bundle,
+ * so while this admin has no login, any action that can delete is one that
+ * anyone who finds the page can call.
  */
-export async function deleteOrderEvent(
-  orderNumber: string,
-  eventId: string,
-): Promise<ActionResult<{ id: string }>> {
-  if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
-  if (!isEditableEntry(eventId)) return { ok: false, error: "entry_not_editable" };
-  try {
-    const supabase = getServerSupabase();
-    const loaded = await loadOrder(supabase, orderNumber, "id");
-    if (!loaded.ok) return { ok: false, error: loaded.error };
-    const { data, error } = await supabase
-      .from("order_events")
-      .delete()
-      .eq("id", eventId)
-      .eq("order_id", s(loaded.order.id))
-      .select("id");
-    if (error) return { ok: false, error: missing(error) ? "migration_missing" : error.message };
-    if (!data || data.length === 0) return { ok: false, error: "entry_not_found" };
-    return { ok: true, data: { id: eventId } };
-  } catch (e) {
-    return { ok: false, error: (e as Error).message };
-  }
-}
 
 export type OrderListMarks = {
   /** How many staff comments the order carries. */

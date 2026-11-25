@@ -505,7 +505,6 @@ export function OrderDetailPage({ orderNumber, basePath }: { orderNumber: string
             entries={timeline}
             onPosted={(e) => setTimeline((prev) => [e, ...prev])}
             onChanged={(e) => setTimeline((prev) => prev.map((x) => (x.id === e.id ? e : x)))}
-            onRemoved={(id) => setTimeline((prev) => prev.filter((x) => x.id !== id))}
             fmtTime={fmtTime}
           />
         </div>
@@ -859,11 +858,10 @@ function TagsCard({ orderNumber, ar, initial }: { orderNumber: string; ar: boole
 }
 
 // ---- Timeline card ----------------------------------------------------------
-function TimelineCard({ orderNumber, ar, entries, onPosted, onChanged, onRemoved, fmtTime }: {
+function TimelineCard({ orderNumber, ar, entries, onPosted, onChanged, fmtTime }: {
   orderNumber: string; ar: boolean; entries: TimelineEntry[];
   onPosted: (e: TimelineEntry) => void;
   onChanged: (e: TimelineEntry) => void;
-  onRemoved: (id: string) => void;
   fmtTime: (s: string) => string;
 }) {
   const [text, setText] = useState("");
@@ -895,7 +893,6 @@ function TimelineCard({ orderNumber, ar, entries, onPosted, onChanged, onRemoved
             ar={ar}
             entry={e}
             onChanged={onChanged}
-            onRemoved={onRemoved}
             fmtTime={fmtTime}
           />
         ))}

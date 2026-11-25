@@ -710,9 +710,8 @@ function StatusPopover({
  * The order's timeline, read and corrected without leaving the list.
  *
  * It renders the same TimelineRow as the order page, so an edit here behaves
- * exactly as it does there. The comment count is reported back as entries
- * change: delete the last comment and the bubble that opened this disappears,
- * rather than lying until the next reload.
+ * exactly as it does there. The count is still reported back after a change,
+ * because an edit can turn the list's idea of this order stale.
  */
 function TimelinePopover({
   pop,
@@ -787,7 +786,6 @@ function TimelinePopover({
                   ar={ar}
                   entry={e}
                   onChanged={(next) => apply(entries.map((x) => (x.id === next.id ? next : x)))}
-                  onRemoved={(id) => apply(entries.filter((x) => x.id !== id))}
                   fmtTime={fmtTime}
                 />
               ))}

@@ -15,8 +15,8 @@ import { useState } from "react";
 import { egp, num, type Lang } from "@/lib/i18n";
 import { StatusPill, type PillTone } from "@/components/dashboard-ui";
 import { Modal, Field, fieldClass } from "@/components/modal";
-import { IcCash, IcCourier, IcEdit, IcTrash, IcChevron } from "@/components/icons";
-import { collectPayment, refundPayment, fulfillOrder, updateOrderEvent, deleteOrderEvent, type TimelineEntry } from "./actions";
+import { IcCash, IcCourier, IcEdit, IcChevron } from "@/components/icons";
+import { collectPayment, refundPayment, fulfillOrder, updateOrderEvent, type TimelineEntry } from "./actions";
 import { isEditableEntry } from "@/lib/order-timeline";
 
 export type StatusMeta = { tone: PillTone; hollow: boolean; ar: string; en: string };
@@ -89,19 +89,19 @@ export function orderErrorText(code: string, ar: boolean): string {
  * One line of an order's timeline.
  *
  * Comments and logged events are rows in `order_events`, so a wrong one can be
- * corrected or taken out here. The entries derived from the order, the payments
- * and the fulfillments carry no controls — see `isEditableEntry`.
+ * corrected here. Nothing can be removed: the timeline is the order's record.
+ * The entries derived from the order, the payments and the fulfillments cannot
+ * even be corrected — see `isEditableEntry`.
  *
- * The controls are always rendered rather than revealed on hover: this screen
- * is used on a phone, where there is no hover to reveal them with.
+ * The control is always rendered rather than revealed on hover: this screen is
+ * used on a phone, where there is no hover to reveal it with.
  */
-export function TimelineRow({ orderNumber, ar, entry, onChanged, onRemoved, fmtTime }: {
+export function TimelineRow({ orderNumber, ar, entry, onChanged, fmtTime }: {
   orderNumber: string; ar: boolean; entry: TimelineEntry;
   onChanged: (e: TimelineEntry) => void;
-  onRemoved: (id: string) => void;
   fmtTime: (s: string) => string;
 }) {
-  const [mode, setMode] = useState<"view" | "edit" | "confirm">("view");
+  const [mode, setMode] = useState<"view" | "edit">("view");
   const [draft, setDraft] = useState(entry.message);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -119,15 +119,6 @@ export function TimelineRow({ orderNumber, ar, entry, onChanged, onRemoved, fmtT
     setBusy(false);
     if (res.ok) { onChanged(res.data); setMode("view"); }
     else setErr(orderErrorText(res.error, ar));
-  }
-
-  async function remove() {
-    setBusy(true);
-    setErr(null);
-    const res = await deleteOrderEvent(orderNumber, entry.id);
-    setBusy(false);
-    if (res.ok) onRemoved(entry.id);
-    else { setErr(orderErrorText(res.error, ar)); setMode("view"); }
   }
 
   return (
@@ -169,24 +160,14 @@ export function TimelineRow({ orderNumber, ar, entry, onChanged, onRemoved, fmtT
                 )}
               </div>
               {editable && mode === "view" && (
-                <div className="flex shrink-0 items-center gap-0.5">
-                  <button
-                    onClick={() => { setDraft(entry.message); setMode("edit"); }}
-                    title={ar ? "تعديل" : "Edit"}
-                    aria-label={ar ? "تعديل" : "Edit"}
-                    className="rounded-md p-1 text-ink-soft opacity-70 hover:bg-surface-page hover:text-ink hover:opacity-100"
-                  >
-                    <IcEdit className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    onClick={() => setMode("confirm")}
-                    title={ar ? "حذف" : "Delete"}
-                    aria-label={ar ? "حذف" : "Delete"}
-                    className="rounded-md p-1 text-ink-soft opacity-70 hover:bg-surface-page hover:text-rose-600 hover:opacity-100"
-                  >
-                    <IcTrash className="h-3.5 w-3.5" />
-                  </button>
-                </div>
+                <button
+                  onClick={() => { setDraft(entry.message); setMode("edit"); }}
+                  title={ar ? "تعديل" : "Edit"}
+                  aria-label={ar ? "تعديل" : "Edit"}
+                  className="shrink-0 rounded-md p-1 text-ink-soft opacity-70 hover:bg-surface-page hover:text-ink hover:opacity-100"
+                >
+                  <IcEdit className="h-3.5 w-3.5" />
+                </button>
               )}
             </div>
             {open && note && (
@@ -212,17 +193,6 @@ export function TimelineRow({ orderNumber, ar, entry, onChanged, onRemoved, fmtT
               {entry.edited && <span className="ms-1">· {ar ? "مُعدَّل" : "edited"}</span>}
             </div>
           </>
-        )}
-        {mode === "confirm" && (
-          <div className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
-            <span className="text-ink-muted">{ar ? "حذف هذا السطر؟" : "Delete this entry?"}</span>
-            <button onClick={remove} disabled={busy} className="rounded-md bg-rose-600 px-2.5 py-1 font-medium text-white disabled:opacity-50">
-              {busy ? "…" : ar ? "حذف" : "Delete"}
-            </button>
-            <button onClick={() => setMode("view")} className="rounded-md border border-line px-2.5 py-1 text-ink">
-              {ar ? "تراجع" : "Keep"}
-            </button>
-          </div>
         )}
         {err && <p className="mt-1 text-xs text-rose-600">{err}</p>}
       </div>
