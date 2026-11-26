@@ -170,7 +170,13 @@ begin
         v_order.id,
         v_item,
         v_name,
-        coalesce(nullif(v_in->>'variant_title', ''), v_i_variant),
+        -- "Default Title" is Shopify's placeholder for a product with no
+        -- variants. Order lines store a real variant or nothing, so copying
+        -- the placeholder across would put it on the packing slip.
+        coalesce(
+          nullif(v_in->>'variant_title', ''),
+          case when lower(coalesce(v_i_variant, '')) = 'default title' then null else v_i_variant end
+        ),
         coalesce(nullif(v_in->>'sku', ''), v_i_sku),
         coalesce(nullif(v_in->>'image_url', ''), v_i_image),
         v_price,
