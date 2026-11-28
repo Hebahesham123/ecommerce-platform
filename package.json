@@ -13,7 +13,8 @@
     "check:timeline": "node scripts/check-timeline.mjs",
     "check:order-edit": "node scripts/check-order-edit.mjs",
     "check:slip": "node scripts/check-packing-slip.mjs",
-    "check:audit": "node scripts/check-audit.mjs"
+    "check:audit": "node scripts/check-audit.mjs",
+    "check:mask": "node scripts/check-mask.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.48.1",
