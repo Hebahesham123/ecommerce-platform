@@ -65,5 +65,24 @@ ok(
   /id: s\(e\.id\),/.test(timeline),
 );
 
+// ---- the comment lock ------------------------------------------------------
+// Off until staff sign-ins exist. The action is what enforces it; the missing
+// pencil is only the signpost, so both are checked.
+const lib = fs.readFileSync(path.join(ROOT, "src/lib/order-timeline.ts"), "utf8");
+const actionsSrc = fs.readFileSync(path.join(ROOT, "src/app/(admin)/orders/actions.ts"), "utf8");
+const uiSrc = fs.readFileSync(path.join(ROOT, "src/app/(admin)/orders/order-ui.tsx"), "utf8");
+
+ok("the switch exists and is OFF",
+   /export const TIMELINE_EDITING_ENABLED = false;/.test(lib));
+ok("updateOrderEvent refuses before anything else",
+   /updateOrderEvent[\s\S]{0,400}if \(!TIMELINE_EDITING_ENABLED\) return/.test(actionsSrc));
+ok("it refuses with its own reason, not a generic error",
+   /error: "comment_locked"/.test(actionsSrc));
+ok("the screen gates the pencil on the same switch",
+   /{TIMELINE_EDITING_ENABLED && editable/.test(uiSrc));
+ok("both sides import it from one place",
+   /TIMELINE_EDITING_ENABLED } from "@\/lib\/order-timeline"/.test(actionsSrc)
+   && /TIMELINE_EDITING_ENABLED } from "@\/lib\/order-timeline"/.test(uiSrc));
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

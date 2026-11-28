@@ -13,7 +13,7 @@ import { sendOrderInvoiceEmail } from "@/lib/order-invoice";
 import { isMailerReady } from "@/lib/mailer";
 import { phoneVariants } from "@/lib/phone";
 import { queuePendingEntry } from "@/lib/accounting/post-order";
-import { isEditableEntry } from "@/lib/order-timeline";
+import { isEditableEntry, TIMELINE_EDITING_ENABLED } from "@/lib/order-timeline";
 import { writeAudit, currentActor } from "@/lib/audit";
 import { maskedChange } from "@/lib/mask";
 
@@ -569,6 +569,8 @@ export async function updateOrderEvent(
   eventId: string,
   text: string,
 ): Promise<ActionResult<TimelineEntry>> {
+  // See TIMELINE_EDITING_ENABLED: off until there is a signed-in author.
+  if (!TIMELINE_EDITING_ENABLED) return { ok: false, error: "comment_locked" };
   if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
   const body = text.trim();
   if (!body) return { ok: false, error: "empty_comment" };

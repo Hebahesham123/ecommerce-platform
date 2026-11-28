@@ -17,7 +17,7 @@ import { StatusPill, type PillTone } from "@/components/dashboard-ui";
 import { Modal, Field, fieldClass } from "@/components/modal";
 import { IcCash, IcCourier, IcEdit, IcChevron } from "@/components/icons";
 import { collectPayment, refundPayment, fulfillOrder, updateOrderEvent, type TimelineEntry } from "./actions";
-import { isEditableEntry } from "@/lib/order-timeline";
+import { isEditableEntry, TIMELINE_EDITING_ENABLED } from "@/lib/order-timeline";
 
 export type StatusMeta = { tone: PillTone; hollow: boolean; ar: string; en: string };
 
@@ -73,6 +73,10 @@ export function orderErrorText(code: string, ar: boolean): string {
     smtp_not_configured: { ar: "أضيفي بيانات البريد (Outlook) أولاً.", en: "Set up the email (Outlook) mailbox first." },
     no_customer_email: { ar: "لا يوجد بريد لهذا العميل لإرسال الفاتورة.", en: "This customer has no email to send the invoice to." },
     send_failed: { ar: "تعذّر إرسال البريد.", en: "Couldn't send the email." },
+    comment_locked: {
+      ar: "لا يمكن تعديل سطور المخطط الزمني قبل تفعيل تسجيل دخول الموظفين.",
+      en: "Timeline lines can't be edited until staff sign-ins are in place.",
+    },
     empty_comment: { ar: "اكتبي نصاً أولاً.", en: "Write something first." },
     entry_not_found: { ar: "لم يعد هذا السطر موجوداً.", en: "That entry is no longer there." },
     note_locked: {
@@ -181,7 +185,7 @@ export function TimelineRow({ orderNumber, ar, entry, onChanged, fmtTime }: {
                   </button>
                 )}
               </div>
-              {editable && mode === "view" && (
+              {TIMELINE_EDITING_ENABLED && editable && mode === "view" && (
                 <button
                   onClick={() => { setDraft(entry.message); setMode("edit"); }}
                   title={ar ? "تعديل" : "Edit"}
