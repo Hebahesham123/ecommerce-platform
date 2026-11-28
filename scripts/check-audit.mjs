@@ -70,5 +70,31 @@ ok("a failed write is logged loudly", /console\.error\(\s*"\[audit\]/.test(ts));
 ok("AUDIT_ENFORCE can make it fail closed", /AUDIT_ENFORCE/.test(ts));
 ok("the actor comes from the header, not the caller", /x-admin-user/.test(ts));
 
+// ---- 0066: the money and its audit row are one transaction ----------------
+// The ordering is the whole fix. Written after the change, a failed audit
+// reports an error for money that already moved, and the merchant retries.
+const m66 = fs
+  .readFileSync(path.join(ROOT, "supabase/migrations/0066_order_edit_audits_itself.sql"), "utf8")
+  .replace(/^\s*--.*$/gm, "");
+const actionsSrc = fs.readFileSync(path.join(ROOT, "src/app/(admin)/orders/actions.ts"), "utf8");
+
+ok("order_edit writes its own audit row", /insert into admin_audit/.test(m66));
+ok("inside the function, before it returns",
+   m66.indexOf("insert into admin_audit") < m66.indexOf("return jsonb_build_object"));
+ok("the old unaudited overload is dropped",
+   /drop function if exists public\.order_edit\(text, jsonb, numeric\)/.test(m66));
+ok("exactly one order_edit is asserted", /expected exactly one order_edit/.test(m66));
+ok("the recreated function is re-locked",
+   /revoke all on function public\.order_edit\(text, jsonb, numeric, text\) from public, anon, authenticated/.test(m66)
+   && /grant execute on function public\.order_edit\(text, jsonb, numeric, text\) to service_role/.test(m66));
+ok("the app no longer writes order.edit after the fact", !/action: "order\.edit"/.test(actionsSrc));
+ok("the app passes the actor into the function", /p_actor: await currentActor\(\)/.test(actionsSrc));
+
+// ---- the customer edit stores masks, not values ---------------------------
+ok("the customer audit is built from maskedChange", /maskedChange\("phone"/.test(actionsSrc));
+ok("it no longer stores the raw phone or address",
+   !/phone: s\(before\.phone\)\.trim\(\),/.test(actionsSrc)
+   && !/address: s\(before\.address\)\.trim\(\),/.test(actionsSrc));
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

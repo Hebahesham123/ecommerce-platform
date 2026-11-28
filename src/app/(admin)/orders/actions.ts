@@ -14,7 +14,8 @@ import { isMailerReady } from "@/lib/mailer";
 import { phoneVariants } from "@/lib/phone";
 import { queuePendingEntry } from "@/lib/accounting/post-order";
 import { isEditableEntry } from "@/lib/order-timeline";
-import { writeAudit } from "@/lib/audit";
+import { writeAudit, currentActor } from "@/lib/audit";
+import { maskedChange } from "@/lib/mask";
 
 export type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -810,22 +811,27 @@ export async function updateOrderCustomer(
       /* the timeline is a log; it never fails the save */
     }
 
+    // Masked, not plain. admin_audit cannot be deleted from, and a customer
+    // has the right to have their data erased (law 151/2020), so this records
+    // which fields moved and enough to recognise the values — never the
+    // values. The readable before/after stays on the order's timeline, which
+    // is an ordinary table and can be erased on request.
+    const masked = [
+      maskedChange("name", s(before.customer_name), next.customer_name),
+      maskedChange("phone", s(before.phone), next.phone),
+      maskedChange("email", oldEmail, email),
+      maskedChange("governorate", s(before.governorate), next.governorate),
+      maskedChange("city", s(before.city), next.city),
+      maskedChange("address", s(before.address), next.address),
+    ].filter(Boolean);
+
     await writeAudit({
       action: "order.customer_edit",
       subject: orderNumber,
-      summary: changes.join(" · "),
-      // The address and contact details themselves, so a later question about
-      // where a parcel went has an answer.
-      before: {
-        name: s(before.customer_name).trim(),
-        phone: s(before.phone).trim(),
-        email: oldEmail,
-        governorate: s(before.governorate).trim(),
-        city: s(before.city).trim(),
-        address: s(before.address).trim(),
-      },
-      after: { ...next, email },
-      meta: { changes },
+      summary: masked.map((m) => m!.field).join(", ") + " changed",
+      before: Object.fromEntries(masked.map((m) => [m!.field, m!.before])),
+      after: Object.fromEntries(masked.map((m) => [m!.field, m!.after])),
+      meta: { fields: masked.map((m) => m!.field) },
     });
 
     return { ok: true, data: { changes, entry } };
@@ -872,8 +878,7 @@ export async function editOrder(
   if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
   try {
     const supabase = getServerSupabase();
-    // subtotal/discount/total come along for the audit's "before".
-    const loaded = await loadOrder(supabase, orderNumber, "id,subtotal,discount_amount,total");
+    const loaded = await loadOrder(supabase, orderNumber, "id");
     if (!loaded.ok) return { ok: false, error: loaded.error };
     const before = loaded.order;
 
@@ -889,10 +894,15 @@ export async function editOrder(
       .filter((l) => l.id || l.quantity > 0);
     if (!lines.length) return { ok: false, error: "no_items" };
 
+    // The audit row is written inside order_edit, in the same transaction as
+    // the money (migration 0066). Written out here instead, a failed audit
+    // would report an error for a change that had already been saved — and
+    // the merchant would press again and edit the order twice.
     const { data, error } = await supabase.rpc("order_edit", {
       p_order_number: orderNumber,
       p_lines: lines,
       p_discount: input.discount == null ? null : Math.max(0, Number(input.discount) || 0),
+      p_actor: await currentActor(),
     });
     if (error) {
       // Name the migration this feature needs, rather than the generic
@@ -936,15 +946,6 @@ export async function editOrder(
         /* the timeline is a log; it never fails the edit itself */
       }
     }
-
-    await writeAudit({
-      action: "order.edit",
-      subject: orderNumber,
-      summary: changes.length ? changes.join(" · ") : "no change",
-      before: { subtotal: n(before.subtotal), discount: n(before.discount_amount), total: n(before.total) },
-      after: { subtotal: n(res.subtotal), discount: n(res.discount), total: n(res.total) },
-      meta: { reason: reason || null, changes },
-    });
 
     return {
       ok: true,
