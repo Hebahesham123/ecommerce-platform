@@ -92,7 +92,7 @@ export function packingSlipHtml(
     [ar ? "تاريخ الطلب" : "Placed", esc(date)],
   ];
   if (labels.deliveryLabel) detail.push([ar ? "التسليم المطلوب" : "Requested delivery", esc(labels.deliveryLabel)]);
-  if (o.discountCode) detail.push([ar ? "كود الخصم" : "Discount code", esc(o.discountCode)]);
+
 
   return `<!doctype html><html lang="${ar ? "ar" : "en"}"><head><meta charset="utf-8">
 <title>${ar ? "قسيمة تغليف" : "Packing slip"} #${esc(o.orderNumber)}</title>
@@ -177,7 +177,12 @@ export function packingSlipHtml(
 
     <div class="sums"><table><tbody>
       ${sumRow(ar ? "المجموع" : "Subtotal", money(o.subtotal))}
-      ${o.discountAmount > 0 ? sumRow(ar ? "الخصم" : "Discount", "−" + money(o.discountAmount)) : ""}
+      ${o.discountAmount > 0
+        ? sumRow(
+            (ar ? "الخصم" : "Discount") + (o.discountCode ? ` · ${esc(o.discountCode)}` : ""),
+            "−" + money(o.discountAmount),
+          )
+        : ""}
       ${sumRow(ar ? "الشحن" : "Shipping", o.shipping > 0 ? money(o.shipping) : ar ? "مجاني" : "Free")}
       ${fees > 0 ? sumRow(ar ? "رسوم" : "Fees", money(fees)) : ""}
       ${sumRow(ar ? "الإجمالي" : "Total", money(o.total), "tot")}

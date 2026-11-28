@@ -118,5 +118,27 @@ ok(
   ok("edit keeps shipping and fee intact", after, { subtotal: 1500, discount: 150, total: 1470 });
 }
 
+
+// ---- how a discount is described ------------------------------------------
+// A coupon writes its code onto the order, so an amount with no code is money
+// taken off by hand. Telling those apart is the whole point: before this, a
+// manual reduction and a coupon whose code had gone missing looked identical.
+const { discountLabel } = await load("src/lib/order-edit.ts");
+
+ok("no discount, nothing to say", discountLabel({ discountAmount: 0, discountCode: null }), null);
+ok("a coupon is named by its code",
+   discountLabel({ discountAmount: 150, discountCode: "EID10" }), "EID10");
+ok("an amount with no code is manual",
+   discountLabel({ discountAmount: 150, discountCode: null }), "manual");
+ok("an amount with a blank code is still manual",
+   discountLabel({ discountAmount: 150, discountCode: "   " }), "manual");
+ok("a missing code field is manual", discountLabel({ discountAmount: 150 }), "manual");
+ok("manual is translated", discountLabel({ discountAmount: 150, discountCode: null }, true), "يدوي");
+ok("a code is never translated",
+   discountLabel({ discountAmount: 150, discountCode: "EID10" }, true), "EID10");
+// A code that discounted nothing is not a discount line at all.
+ok("a zero-value coupon shows no discount row",
+   discountLabel({ discountAmount: 0, discountCode: "FREESHIP" }), null);
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

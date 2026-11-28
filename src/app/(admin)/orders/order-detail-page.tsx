@@ -36,7 +36,7 @@ import {
   type OrderConversion,
 } from "./actions";
 import type { ReturnableLine } from "@/lib/returns-service";
-import { feesIn, editedTotals } from "@/lib/order-edit";
+import { feesIn, editedTotals, discountLabel } from "@/lib/order-edit";
 import { packingSlipHtml } from "@/lib/packing-slip";
 import { createPaymobCheckout } from "../payments/actions";
 import { getShipmentForOrder, assignOrderToCourier, confirmCourierReport, listCouriers, updateShipmentFees, setShipmentPayments } from "../couriers/actions";
@@ -291,7 +291,11 @@ export function OrderDetailPage({ orderNumber, basePath }: { orderNumber: string
             <div className="space-y-2 px-4 py-3 text-sm">
               <SummaryRow label={ar ? "الإجمالي الفرعي" : "Subtotal"} value={egp(d?.subtotal ?? 0, lang)} />
               {d && d.discountAmount > 0 && (
-                <SummaryRow label={`${ar ? "خصم" : "Discount"}${d.discountCode ? ` · ${d.discountCode}` : ""}`} value={`-${egp(d.discountAmount, lang)}`} muted />
+                <SummaryRow
+                  label={`${ar ? "خصم" : "Discount"} · ${discountLabel(d, ar)}`}
+                  value={`-${egp(d.discountAmount, lang)}`}
+                  muted
+                />
               )}
               <SummaryRow label={ar ? "الشحن" : "Shipping"} value={d && d.shipping > 0 ? egp(d.shipping, lang) : (ar ? "مجاني" : "Free")} muted />
               <div className="my-1 border-t border-line" />

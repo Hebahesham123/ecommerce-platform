@@ -23,6 +23,31 @@ const round2 = (v: number) => Math.round((v + Number.EPSILON) * 100) / 100;
 
 export type EditLineMoney = { price: number; quantity: number };
 
+/**
+ * How an order's discount came about, and what to call it.
+ *
+ * There is no column for this and none is needed: a coupon writes its code
+ * onto the order, so an amount with no code is money somebody took off by
+ * hand. Before this, both rendered as a bare "Discount" — a manual reduction
+ * was indistinguishable from a coupon whose code had gone missing, which is
+ * exactly the pair a merchant needs to tell apart when the total looks wrong.
+ *
+ * This is staff language. The order screen and the timeline use it; the
+ * packing slip and the emailed invoice do not, because "manual" tells the
+ * customer holding the parcel nothing except that the shop has internal
+ * categories. Those name a coupon when there is one and otherwise just say
+ * "Discount".
+ */
+export function discountLabel(
+  order: { discountAmount: number; discountCode?: string | null },
+  ar = false,
+): string | null {
+  if (!(order.discountAmount > 0)) return null;
+  const code = (order.discountCode ?? "").trim();
+  if (code) return code;
+  return ar ? "يدوي" : "manual";
+}
+
 export type OrderMoney = {
   total: number;
   subtotal: number;
