@@ -81,6 +81,70 @@ revoke all on table public.admin_audit from public, anon, authenticated;
 grant insert, select on table public.admin_audit to service_role;
 grant usage, select on sequence public.admin_audit_id_seq to service_role;
 
+-- ---- prove it, here, on first apply -----------------------------------------
+-- This SQL has never run anywhere, so the first apply is also the test. It
+-- writes a row, tries to tamper with it both ways, and requires both to be
+-- refused.
+--
+-- The row is undone by rolling back rather than deleting it, because deleting
+-- it is exactly what the trigger forbids — there is no way to take a row out
+-- of an append-only log, which is the whole idea. Raising inside the block
+-- discards the insert and everything with it; plpgsql variables are not
+-- transactional, so the two results survive the rollback and can be checked
+-- afterwards.
+do $$
+declare
+  v_id          bigint;
+  update_refused boolean := false;
+  delete_refused boolean := false;
+begin
+  begin
+    insert into public.admin_audit (actor, action, subject, summary)
+    values (null, 'audit.selftest', '-', '0065 self-test — rolled back')
+    returning id into v_id;
+
+    begin
+      update public.admin_audit set summary = 'tampered with' where id = v_id;
+    exception when others then
+      update_refused := true;
+    end;
+
+    begin
+      delete from public.admin_audit where id = v_id;
+    exception when others then
+      delete_refused := true;
+    end;
+
+    -- Undo the test row.
+    raise exception using errcode = 'P0001', message = '__selftest_rollback__';
+  exception when others then
+    if sqlerrm <> '__selftest_rollback__' then
+      raise;                       -- a real failure: let it out
+    end if;
+  end;
+
+  if not update_refused then
+    raise exception '0065 self-test FAILED: UPDATE on admin_audit was not refused';
+  end if;
+  if not delete_refused then
+    raise exception '0065 self-test FAILED: DELETE on admin_audit was not refused';
+  end if;
+
+  raise notice '0065 self-test: UPDATE and DELETE both refused, test row rolled back';
+end $$;
+
+-- Nothing should remain from the self-test.
+do $$
+declare
+  n integer;
+begin
+  select count(*) into n from public.admin_audit where action = 'audit.selftest';
+  if n <> 0 then
+    raise exception '0065: the self-test left % row(s) behind', n;
+  end if;
+  raise notice '0065: admin_audit is empty and append-only';
+end $$;
+
 -- PostgREST caches the schema; without this the table is invisible until a
 -- restart.
 notify pgrst, 'reload schema';

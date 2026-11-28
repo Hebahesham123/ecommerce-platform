@@ -56,6 +56,12 @@ ok("service_role may insert and select, nothing more",
 ok("no update or delete is granted to anyone",
    !/grant[^;]*\b(update|delete)\b[^;]*admin_audit/i.test(code));
 ok("row level security is on", /alter table public\.admin_audit enable row level security/.test(code));
+// The migration proves the trigger on first apply; losing that would make the
+// first run silent again.
+ok("the self-test is still in the migration", /audit\.selftest/.test(code));
+ok("the self-test rolls back rather than deleting", /__selftest_rollback__/.test(code));
+ok("the self-test fails loudly if tampering succeeds",
+   /self-test FAILED: UPDATE/.test(code) && /self-test FAILED: DELETE/.test(code));
 ok("PostgREST is told to reload", /notify pgrst/.test(code));
 
 // ---- the helper's own contract ---------------------------------------------
