@@ -907,7 +907,12 @@ export async function editOrder(
 
     let entry: TimelineEntry | null = null;
     if (changes.length) {
-      const message = reason ? `Order edited · ${reason}` : "Order edited";
+      // Say on the collapsed line that money moved. The discount is in the
+      // expandable list either way, but a line nobody expands is a line
+      // nobody reads, and this is the change worth noticing.
+      const touchedDiscount = changes.some((c) => c.startsWith("discount "));
+      const headline = touchedDiscount ? "Order edited · discount changed" : "Order edited";
+      const message = reason ? `${headline} · ${reason}` : headline;
       try {
         // What changed is kept on the event: the order now holds only its new
         // shape, so this is the only record of what it looked like before.
