@@ -523,6 +523,9 @@ export type PlacedOrder = {
   itemsCount: number;
   /** Where it is going, for the list's destination column. */
   city: string;
+  /** What came off the order, for the list's discount filter. */
+  discountAmount: number;
+  discountCode: string | null;
   /** Which surface placed it. Every pre-channel order reads as the website. */
   channel: Channel;
   /** Free labels the merchant filed the order under. */
@@ -546,6 +549,8 @@ export async function listStoreOrders(): Promise<ActionResult<PlacedOrder[]>> {
       phone: String(r.phone ?? ""),
       governorate: String(r.governorate ?? ""),
       city: String(r.city ?? ""),
+      discountAmount: Number(r.discount_amount ?? 0),
+      discountCode: r.discount_code ? String(r.discount_code) : null,
       total: Number(r.total ?? 0),
       method: "cod",
       lifecycle: (String(r.lifecycle ?? "placed") as PlacedOrder["lifecycle"]),

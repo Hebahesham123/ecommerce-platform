@@ -36,6 +36,7 @@ import {
 import { IcFile, IcX, IcCash, IcCourier, IcChat, IcAlert } from "@/components/icons";
 import { ChannelBadge } from "@/components/channel-badge";
 import { CHANNELS, CHANNEL_LABELS, type Channel } from "@/lib/channel";
+import { inDateWindow, matchesDiscount, type DateKey } from "@/lib/order-filters";
 
 /**
  * The orders list, mounted twice.
@@ -58,6 +59,7 @@ import { CHANNELS, CHANNEL_LABELS, type Channel } from "@/lib/channel";
 type Tab = "all" | "unfulfilled" | "unpaid" | "open" | "attention";
 type SortKey = "newest" | "oldest" | "total_high" | "total_low";
 
+
 type OrderFlag = NonNullable<Order["flag"]>;
 const flagPill: Record<OrderFlag, PillTone> = {
   fake_cod: "critical",
@@ -71,6 +73,8 @@ type Row = Order & {
   channel: Channel;
   tags: string[];
   city: string;
+  discountAmount: number;
+  discountCode: string | null;
   /** The full timestamp. `date` is only the day, which cannot tell two
    *  orders placed an hour apart from each other. */
   createdAt: string;
@@ -89,6 +93,10 @@ export function OrdersList({ lockChannel }: { lockChannel?: Channel } = {}) {
   const [method, setMethod] = useState<"all" | PayMethod>("all");
   const [channel, setChannel] = useState<"all" | Channel>(lockChannel ?? "all");
   const [sort, setSort] = useState<SortKey>("newest");
+  // "any" / "none" / a specific code.
+  const [discount, setDiscount] = useState<string>("all");
+  const [dateRange, setDateRange] = useState<DateKey>("all");
+  const [tag, setTag] = useState<string>("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [pop, setPop] = useState<Pop | null>(null);
   const [placed, setPlaced] = useState<Row[]>([]);
@@ -112,6 +120,8 @@ export function OrdersList({ lockChannel }: { lockChannel?: Channel } = {}) {
           date: o.date,
           createdAt: o.createdAt,
           city: o.city,
+          discountAmount: o.discountAmount,
+          discountCode: o.discountCode,
           itemsCount: o.itemsCount,
           channel: o.channel,
           tags: o.tags,
@@ -139,6 +149,16 @@ export function OrdersList({ lockChannel }: { lockChannel?: Channel } = {}) {
 
   // Orders that were actually placed, and nothing else.
   const orders = placed;
+
+  // Offer only what exists: a filter that can return nothing is a dead end.
+  const codesOnPage = useMemo(
+    () => Array.from(new Set(orders.map((o) => o.discountCode).filter(Boolean) as string[])).sort(),
+    [orders],
+  );
+  const tagsOnPage = useMemo(
+    () => Array.from(new Set(orders.flatMap((o) => o.tags))).sort(),
+    [orders],
+  );
 
   const ar = lang === "ar";
   const fmtDate = (d: string) =>
@@ -205,6 +225,10 @@ export function OrdersList({ lockChannel }: { lockChannel?: Channel } = {}) {
       if (tab === "open" && (o.lifecycle === "completed" || o.lifecycle === "cancelled"))
         return false;
       if (tab === "attention" && !o.flag) return false;
+
+      if (!matchesDiscount(discount, o)) return false;
+      if (tag !== "all" && !o.tags.includes(tag)) return false;
+      if (!inDateWindow(o.createdAt || o.date, dateRange)) return false;
       if (payment !== "all" && o.payment !== payment) return false;
       if (fulfillment !== "all" && o.fulfillment !== fulfillment) return false;
       if (method !== "all" && o.method !== method) return false;
@@ -229,7 +253,7 @@ export function OrdersList({ lockChannel }: { lockChannel?: Channel } = {}) {
       }
     });
     return sorted;
-  }, [orders, tab, q, payment, fulfillment, method, channel, sort]);
+  }, [orders, tab, q, payment, fulfillment, method, channel, sort, discount, dateRange, tag]);
 
   const pg = usePagination(filtered, {
     perPage: 20,
@@ -508,6 +532,30 @@ export function OrdersList({ lockChannel }: { lockChannel?: Channel } = {}) {
                 <option value="all">{t("col_channel")}</option>
                 {CHANNELS.map((ch) => (
                   <option key={ch} value={ch}>{CHANNEL_LABELS[ch][ar ? "ar" : "en"]}</option>
+                ))}
+              </Select>
+            )}
+            <Select value={discount} onChange={(v) => setDiscount(v)}>
+              <option value="all">{ar ? "الخصم" : "Discount"}</option>
+              <option value="any">{ar ? "عليه خصم" : "With a discount"}</option>
+              <option value="none">{ar ? "بدون خصم" : "No discount"}</option>
+              {codesOnPage.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </Select>
+            <Select value={dateRange} onChange={(v) => setDateRange(v as DateKey)}>
+              <option value="all">{t("col_date")}</option>
+              <option value="today">{ar ? "اليوم" : "Today"}</option>
+              <option value="yesterday">{ar ? "أمس" : "Yesterday"}</option>
+              <option value="7d">{ar ? "آخر ٧ أيام" : "Last 7 days"}</option>
+              <option value="30d">{ar ? "آخر ٣٠ يوماً" : "Last 30 days"}</option>
+              <option value="month">{ar ? "هذا الشهر" : "This month"}</option>
+            </Select>
+            {tagsOnPage.length > 0 && (
+              <Select value={tag} onChange={(v) => setTag(v)}>
+                <option value="all">{ar ? "الوسوم" : "Tags"}</option>
+                {tagsOnPage.map((tg) => (
+                  <option key={tg} value={tg}>{tg}</option>
                 ))}
               </Select>
             )}
