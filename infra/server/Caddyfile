@@ -56,6 +56,10 @@
 	basic_auth @admin_action {
 		{$ADMIN_GATE_USER} {$ADMIN_GATE_HASH}
 	}
+	# Who is acting, for the audit log (src/lib/audit.ts reads X-Admin-User). Set on EVERY
+	# request, so whatever a client sent is overwritten: it is the dashboard login name after
+	# basic_auth, and empty (= unknown) everywhere else. Runs after basic_auth in Caddy's order.
+	request_header X-Admin-User "{http.auth.user.id}"
 
 	# supabase-js calls <url>/rest/v1/<table>; PostgREST expects /<table>.
 	handle_path /rest/v1/* {
