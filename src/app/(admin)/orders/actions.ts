@@ -14,6 +14,7 @@ import { isMailerReady } from "@/lib/mailer";
 import { phoneVariants } from "@/lib/phone";
 import { queuePendingEntry } from "@/lib/accounting/post-order";
 import { isEditableEntry } from "@/lib/order-timeline";
+import { writeAudit } from "@/lib/audit";
 
 export type ActionResult<T = void> =
   | { ok: true; data: T }
@@ -809,6 +810,24 @@ export async function updateOrderCustomer(
       /* the timeline is a log; it never fails the save */
     }
 
+    await writeAudit({
+      action: "order.customer_edit",
+      subject: orderNumber,
+      summary: changes.join(" · "),
+      // The address and contact details themselves, so a later question about
+      // where a parcel went has an answer.
+      before: {
+        name: s(before.customer_name).trim(),
+        phone: s(before.phone).trim(),
+        email: oldEmail,
+        governorate: s(before.governorate).trim(),
+        city: s(before.city).trim(),
+        address: s(before.address).trim(),
+      },
+      after: { ...next, email },
+      meta: { changes },
+    });
+
     return { ok: true, data: { changes, entry } };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
@@ -853,8 +872,10 @@ export async function editOrder(
   if (!isSupabaseConfigured()) return { ok: false, error: "not_configured" };
   try {
     const supabase = getServerSupabase();
-    const loaded = await loadOrder(supabase, orderNumber, "id");
+    // subtotal/discount/total come along for the audit's "before".
+    const loaded = await loadOrder(supabase, orderNumber, "id,subtotal,discount_amount,total");
     if (!loaded.ok) return { ok: false, error: loaded.error };
+    const before = loaded.order;
 
     const lines = (input.lines ?? [])
       .map((l) => ({
@@ -893,7 +914,7 @@ export async function editOrder(
         const { data: ev } = await supabase
           .from("order_events")
           .insert({
-            order_id: s(loaded.order.id),
+            order_id: s(before.id),
             actor: "staff",
             type: "order_edited",
             message,
@@ -915,6 +936,15 @@ export async function editOrder(
         /* the timeline is a log; it never fails the edit itself */
       }
     }
+
+    await writeAudit({
+      action: "order.edit",
+      subject: orderNumber,
+      summary: changes.length ? changes.join(" · ") : "no change",
+      before: { subtotal: n(before.subtotal), discount: n(before.discount_amount), total: n(before.total) },
+      after: { subtotal: n(res.subtotal), discount: n(res.discount), total: n(res.total) },
+      meta: { reason: reason || null, changes },
+    });
 
     return {
       ok: true,
