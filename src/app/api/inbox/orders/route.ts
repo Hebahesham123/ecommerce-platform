@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
 import { getChatServerClient, chatConfigured } from "@/lib/chat/supabase-server";
+import { inboxGate } from '@/lib/inbox-gate'
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
+  const denied = inboxGate(req)
+  if (denied) return denied
   if (!chatConfigured()) return NextResponse.json({ success: false, error: "not_configured" });
   try {
     const url = new URL(req.url);

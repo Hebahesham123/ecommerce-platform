@@ -18,13 +18,12 @@ const nextConfig = {
   experimental: {
     serverActions: {
       bodySizeLimit: "50mb",
-      // Allow the app to be reached through HTTPS dev tunnels (for Meta OAuth).
-      allowedOrigins: [
-        "localhost:3000",
-        "*.trycloudflare.com",
-        "*.ngrok-free.app",
-        "*.ngrok.io",
-      ],
+      // HTTPS dev tunnels (for testing Meta OAuth) may post forms only on a developer's own
+      // machine. On the live site, anyone can open a tunnel address, so they're not trusted there.
+      allowedOrigins:
+        process.env.NODE_ENV === "development"
+          ? ["localhost:3000", "*.trycloudflare.com", "*.ngrok-free.app", "*.ngrok.io"]
+          : [],
     },
   },
 };

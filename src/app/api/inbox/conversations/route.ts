@@ -2,11 +2,14 @@
 import { NextResponse } from 'next/server'
 import { getChatServerClient } from '@/lib/chat/supabase-server'
 import { mapConversation } from '@/lib/chat/inbox-mappers'
+import { inboxGate } from '@/lib/inbox-gate'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 25
 
 export async function GET(req: Request) {
+  const denied = inboxGate(req)
+  if (denied) return denied
   try {
     const url = new URL(req.url)
     const limit = Math.min(parseInt(url.searchParams.get('limit') ?? '50', 10), 200)

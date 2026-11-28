@@ -37,8 +37,13 @@ export function getServerSupabase(): SupabaseClient {
     );
   }
 
+  // DATABASE_GATE: a second secret the server's front door (Caddy) checks on /rest/v1, so the
+  // database API refuses anyone who has only the key. Sent only to the self-hosted database,
+  // and only when set; until Caddy checks it, sending it changes nothing.
+  const gate = process.env.DATABASE_API_URL ? process.env.DATABASE_GATE : undefined;
   cached = createClient(url, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
+    ...(gate ? { global: { headers: { "X-Store-Gate": gate } } } : {}),
   });
   return cached;
 }

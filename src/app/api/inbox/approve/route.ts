@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getChatServerClient } from "@/lib/chat/supabase-server";
 import { sendText, getChannelCreds, type ChannelCreds } from "@/lib/whatsapp/client";
 import { STAFF_MEMBERS } from "@/lib/chat/constants";
+import { inboxGate } from '@/lib/inbox-gate'
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -9,6 +10,8 @@ export const runtime = "nodejs";
 // POST /api/inbox/approve — approve (and optionally edit) a drafted bot reply,
 // mark it reviewed + sent, and ship it. Body: { message_id, content?, staff_id? }
 export async function POST(req: Request) {
+  const denied = inboxGate(req)
+  if (denied) return denied
   try {
     const { message_id, content, staff_id } = (await req.json()) as {
       message_id: string;

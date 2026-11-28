@@ -1,10 +1,13 @@
 import { NextResponse } from 'next/server'
 import { getChatServerClient } from '@/lib/chat/supabase-server'
+import { inboxGate } from '@/lib/inbox-gate'
 
 export const dynamic = 'force-dynamic'
 
 // GET /api/inbox/customer?customer_id=<uuid>
 export async function GET(req: Request) {
+  const denied = inboxGate(req)
+  if (denied) return denied
   try {
     const url = new URL(req.url)
     const customerId = url.searchParams.get('customer_id')
@@ -37,6 +40,8 @@ export async function GET(req: Request) {
 // PATCH /api/inbox/customer
 // Body: { customer_id, tags?, notes?, add_tag?, remove_tag? }
 export async function PATCH(req: Request) {
+  const denied = inboxGate(req)
+  if (denied) return denied
   try {
     const body = (await req.json()) as {
       customer_id: string

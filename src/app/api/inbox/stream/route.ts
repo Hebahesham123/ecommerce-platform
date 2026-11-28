@@ -1,4 +1,5 @@
 import { getChatServerClient, chatConfigured } from "@/lib/chat/supabase-server";
+import { inboxGate } from '@/lib/inbox-gate'
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -7,6 +8,8 @@ export const runtime = "nodejs";
 // service-role key (bypasses RLS) and streams change notifications to the
 // browser. The browser never touches the chat tables directly.
 export async function GET(req: Request) {
+  const denied = inboxGate(req)
+  if (denied) return denied
   if (!chatConfigured()) return new Response("not configured", { status: 503 });
   const supabase = getChatServerClient();
   const encoder = new TextEncoder();

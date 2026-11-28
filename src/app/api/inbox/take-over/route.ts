@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getChatServerClient } from '@/lib/chat/supabase-server'
+import { inboxGate } from '@/lib/inbox-gate'
 
 export const dynamic = 'force-dynamic'
 
@@ -7,6 +8,8 @@ export const dynamic = 'force-dynamic'
 // Body: { conversation_id, staff_id?, reason? }
 // Escalates the conversation — agent stops drafting, a human owns the thread.
 export async function POST(req: Request) {
+  const denied = inboxGate(req)
+  if (denied) return denied
   try {
     const { conversation_id, staff_id, reason } = (await req.json()) as {
       conversation_id: string

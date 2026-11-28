@@ -1,11 +1,14 @@
 // @ts-nocheck — faithful port from dashboard-web; Supabase rows are untyped here
 import { NextResponse } from 'next/server'
 import { getChatServerClient } from '@/lib/chat/supabase-server'
+import { inboxGate } from '@/lib/inbox-gate'
 
 export const dynamic = 'force-dynamic'
 
 // GET /api/inbox/stats — today's inbox headline numbers.
-export async function GET() {
+export async function GET(req: Request) {
+  const denied = inboxGate(req)
+  if (denied) return denied
   try {
     const supabase = getChatServerClient()
     const todayStart = new Date()

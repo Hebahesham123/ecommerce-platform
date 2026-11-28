@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getChatServerClient } from '@/lib/chat/supabase-server'
 import { sendText, getChannelCreds, type ChannelCreds } from '@/lib/whatsapp/client'
 import { STAFF_MEMBERS } from '@/lib/chat/constants'
+import { inboxGate } from '@/lib/inbox-gate'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -10,6 +11,8 @@ export const runtime = 'nodejs'
 // dashboard. Goes straight to WhatsApp Cloud API (no n8n hop, no Chatwoot).
 // Body: { conversation_id, content, staff_id? }
 export async function POST(req: Request) {
+  const denied = inboxGate(req)
+  if (denied) return denied
   try {
     const { conversation_id, content, staff_id } = (await req.json()) as {
       conversation_id: string
