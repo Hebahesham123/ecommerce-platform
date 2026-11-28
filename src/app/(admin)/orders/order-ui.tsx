@@ -78,8 +78,12 @@ export function orderErrorText(code: string, ar: boolean): string {
     name_required: { ar: "الاسم مطلوب.", en: "A name is required." },
     phone_required: { ar: "رقم الهاتف مطلوب.", en: "A phone number is required." },
     edit_migration_missing: {
-      ar: "تعديل الطلبات يحتاج ترحيل قاعدة البيانات 0062 أولاً.",
-      en: "Editing orders needs database migration 0062 to be run first.",
+      // Names the newest migration the editor needs, not the one that first
+      // introduced it. This is the message staff see in the minutes between
+      // a deploy and its migration being applied by hand, so it has to point
+      // at the right file.
+      ar: "تعديل الطلبات يحتاج ترحيل قاعدة البيانات 0066 أولاً.",
+      en: "Editing orders needs database migration 0066 to be applied first.",
     },
     line_fulfilled: {
       ar: "لا يمكن إنقاص صنف تم شحنه. تراجعي عن التنفيذ أولاً.",
