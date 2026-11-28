@@ -792,19 +792,33 @@ function RiskBar({ risk, ar }: { risk: "low" | "medium" | "high"; ar: boolean })
 }
 
 // ---- Notes card -------------------------------------------------------------
+/**
+ * The order's note: written once, then read-only.
+ *
+ * The pencil disappears after the first save, but that is only the signpost —
+ * saveAdminNote refuses the change regardless of what the screen offers. For
+ * anything that needs correcting later there is the timeline, which keeps
+ * both wordings.
+ */
 function NotesCard({ orderNumber, ar, initial, onLogged }: {
   orderNumber: string; ar: boolean; initial: string; onLogged: (e: TimelineEntry) => void;
 }) {
   const [note, setNote] = useState(initial);
   const [editing, setEditing] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
   useEffect(() => { setNote(initial); }, [initial]);
 
+  // What the server has, not what is typed: that is what decides the lock.
+  const locked = initial.trim().length > 0;
+
   async function save() {
+    setErr(null);
     const res = await saveAdminNote(orderNumber, note);
+    if (!res.ok) { setErr(orderErrorText(res.error, ar)); return; }
     // The save records the change on the timeline; show it straight away
     // rather than making the merchant reload to see what they just did.
-    if (res.ok && res.data) onLogged(res.data);
+    if (res.data) onLogged(res.data);
     setEditing(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 1500);
@@ -812,8 +826,17 @@ function NotesCard({ orderNumber, ar, initial, onLogged }: {
   return (
     <div className="rounded-2xl border border-line bg-surface px-4 py-3">
       <div className="mb-2 flex items-center justify-between">
-        <span className="text-sm font-semibold text-ink">{ar ? "ملاحظات" : "Notes"}</span>
-        {!editing && <button onClick={() => setEditing(true)} className="text-ink-soft hover:text-ink"><IcEdit className="h-4 w-4" /></button>}
+        <span className="text-sm font-semibold text-ink">{ar ? "ملاحظة" : "Note"}</span>
+        {!editing && !locked && (
+          <button
+            onClick={() => setEditing(true)}
+            title={ar ? "إضافة ملاحظة" : "Add a note"}
+            aria-label={ar ? "إضافة ملاحظة" : "Add a note"}
+            className="text-ink-soft hover:text-ink"
+          >
+            <IcEdit className="h-4 w-4" />
+          </button>
+        )}
       </div>
       {editing ? (
         <div>
@@ -824,7 +847,20 @@ function NotesCard({ orderNumber, ar, initial, onLogged }: {
           </div>
         </div>
       ) : (
-        <p className="text-sm text-ink-muted">{note || (ar ? "لا توجد ملاحظات." : "No notes yet.")}{saved && <span className="ms-2 text-emerald-600">✓</span>}</p>
+        <>
+          <p className="whitespace-pre-wrap text-sm text-ink-muted" dir="auto">
+            {note || (ar ? "لا توجد ملاحظة بعد." : "No note yet.")}
+            {saved && <span className="ms-2 text-emerald-600">✓</span>}
+          </p>
+          {locked && (
+            <p className="mt-1 text-xs text-ink-soft">
+              {ar
+                ? "تُكتب مرة واحدة. للإضافة لاحقاً استخدمي تعليقاً على المخطط الزمني."
+                : "Written once. Use a timeline comment to add anything later."}
+            </p>
+          )}
+          {err && <p className="mt-1 text-xs text-rose-600">{err}</p>}
+        </>
       )}
     </div>
   );
