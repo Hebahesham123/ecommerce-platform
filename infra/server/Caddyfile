@@ -5,6 +5,28 @@
 #   DB_API_HOST unset                    Tunnel: plain port 80 inside Docker; Cloudflare Tunnel
 #                                        handles HTTPS. (Once the store has a domain on Cloudflare.)
 {$DB_API_HOST::80} {
+	# Security step 1.8: record who calls the database API from outside, so every caller can be
+	# made to send the gate header before Caddy starts requiring it (1.10, 1.11). Only /rest/v1
+	# requests are logged; the key headers are removed from the log.
+	# Read it with: docker compose exec caddy cat /data/access-rest.log
+	log {
+		output file /data/access-rest.log {
+			roll_size 20MiB
+			roll_keep 5
+		}
+		format filter {
+			wrap json
+			fields {
+				request>headers>Apikey delete
+				request>headers>Authorization delete
+				request>headers>X-Store-Gate delete
+				request>headers>Cookie delete
+			}
+		}
+	}
+	@not_db_api not path /rest/v1/*
+	log_skip @not_db_api
+
 	# supabase-js calls <url>/rest/v1/<table>; PostgREST expects /<table>.
 	handle_path /rest/v1/* {
 		reverse_proxy postgrest:3000
@@ -60,24 +82,6 @@
 			header_down Access-Control-Allow-Origin "*"
 			header_down Access-Control-Expose-Headers "ETag"
 		}
-	}
-	header -Server
-}
-
-# The website on this server, on a test port while it is being checked (port 443 keeps serving
-# the database API and files as before).
-{$DB_API_HOST}:8443 {
-	# Live-stream chat stays open and streams: straight to the website, no cache, no compression.
-	@livestream path_regexp livestream ^/api/storefront/lives/[^/]+/stream$
-	handle @livestream {
-		reverse_proxy web:3000 {
-			flush_interval -1
-		}
-	}
-
-	handle {
-		encode zstd gzip
-		reverse_proxy cache:80
 	}
 	header -Server
 }

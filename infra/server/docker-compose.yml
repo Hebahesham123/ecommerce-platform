@@ -85,8 +85,6 @@ services:
       - "443:443"
       # File uploads (S3 API) for the store's images and videos.
       - "9443:9443"
-      # Test address for the website running on this server (before it takes over port 443).
-      - "8443:8443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
