@@ -79,6 +79,9 @@ services:
     depends_on: [postgrest]
     environment:
       DB_API_HOST: ${DB_API_HOST:-}
+      # Temporary dashboard password (security step 1.1). Both must be set, or Caddy will not start.
+      ADMIN_GATE_USER: ${ADMIN_GATE_USER:?set ADMIN_GATE_USER in .env}
+      ADMIN_GATE_HASH: ${ADMIN_GATE_HASH:?set ADMIN_GATE_HASH in .env}
     # Published only in direct mode (no own domain yet). In tunnel mode these can be removed.
     ports:
       - "80:80"

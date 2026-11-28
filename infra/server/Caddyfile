@@ -27,6 +27,36 @@
 	@not_db_api not path /rest/v1/*
 	log_skip @not_db_api
 
+	# Security step 1.1 (temporary, until staff login 3.3 works): a password in front of the
+	# dashboard. Removed in step 3.6. Paths come from BeautyBar-H1-Admin-Paths.md.
+	# ADMIN_GATE_USER / ADMIN_GATE_HASH come from /opt/store/.env; the hash is
+	# `caddy hash-password` output, base64-encoded (no "$" for docker compose to eat).
+	@admin {
+		path /
+		path /dashboard /dashboard/* /orders /orders/* /products /products/*
+		path /collections /collections/* /inventory /inventory/* /customers /customers/*
+		path /discounts /discounts/* /payments /payments/* /settings /settings/*
+		path /accounting /accounting/* /analytics /analytics/* /marketing /marketing/*
+		path /email /email/* /blog /blog/* /pages /pages/* /content /content/*
+		path /navigation /navigation/* /online-store /online-store/* /seo /seo/*
+		path /channels /channels/* /inbox /inbox/* /lives /lives/* /loyalty /loyalty/*
+		path /nudges /nudges/* /requests /requests/* /returns /returns/* /reviews /reviews/*
+		path /couriers /couriers/* /courier-system /courier-system/* /app /app/*
+		path /app-preview /app-preview/* /api/meta/connect /api/meta/callback
+	}
+	# Dashboard buttons are server actions (POST + Next-Action header). Customers' actions are
+	# posted only from /store/* and /courier, so an action posted anywhere else needs the password.
+	@admin_action {
+		header Next-Action *
+		not path /store /store/* /courier /courier/*
+	}
+	basic_auth @admin {
+		{$ADMIN_GATE_USER} {$ADMIN_GATE_HASH}
+	}
+	basic_auth @admin_action {
+		{$ADMIN_GATE_USER} {$ADMIN_GATE_HASH}
+	}
+
 	# supabase-js calls <url>/rest/v1/<table>; PostgREST expects /<table>.
 	handle_path /rest/v1/* {
 		reverse_proxy postgrest:3000
