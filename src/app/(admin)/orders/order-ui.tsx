@@ -75,6 +75,10 @@ export function orderErrorText(code: string, ar: boolean): string {
     send_failed: { ar: "تعذّر إرسال البريد.", en: "Couldn't send the email." },
     empty_comment: { ar: "اكتبي نصاً أولاً.", en: "Write something first." },
     entry_not_found: { ar: "لم يعد هذا السطر موجوداً.", en: "That entry is no longer there." },
+    note_locked: {
+      ar: "الملاحظة تُكتب مرة واحدة ولا تُعدَّل بعدها. اكتبي تعليقاً على المخطط الزمني بدلاً من ذلك.",
+      en: "A note is written once and can't be changed afterwards — add a timeline comment instead.",
+    },
     name_required: { ar: "الاسم مطلوب.", en: "A name is required." },
     phone_required: { ar: "رقم الهاتف مطلوب.", en: "A phone number is required." },
     edit_migration_missing: {

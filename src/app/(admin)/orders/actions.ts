@@ -941,11 +941,19 @@ export async function updateOrderTags(orderNumber: string, tags: string[]): Prom
 
 /** Save the staff-facing note. */
 /**
- * Save the order's staff note, and record the change on the timeline.
+ * Save the order's staff note, and record it on the timeline.
+ *
+ * Written once, then locked: a note is a record of what was agreed with a
+ * customer, and a record that can be rewritten afterwards is not much of a
+ * record. Once the order carries one, this refuses every further save —
+ * including a save that would only clear it.
+ *
+ * The refusal lives here rather than in the screen that hides the pencil. A
+ * server action is a POST endpoint whose id travels in the public page
+ * bundle, so a button that is not drawn is not a rule.
  *
  * Returns the timeline entry it wrote so the screen can show it without
- * reloading, or null when the note did not actually change (saving the same
- * text twice should not fill the log with noise).
+ * reloading, or null when nothing changed.
  */
 export async function saveAdminNote(
   orderNumber: string,
@@ -958,6 +966,10 @@ export async function saveAdminNote(
     const loaded = await loadOrder(supabase, orderNumber, "id,admin_note");
     if (!loaded.ok) return { ok: false, error: loaded.error };
     const before = s(loaded.order.admin_note).trim();
+
+    // Locked once written. Saving the identical text is allowed through as a
+    // no-op below, so a double-click on the first save is not an error.
+    if (before && after !== before) return { ok: false, error: "note_locked" };
 
     const { error } = await supabase
       .from("store_orders")
