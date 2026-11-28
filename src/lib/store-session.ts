@@ -20,8 +20,9 @@ const MAX_AGE = 60 * 60 * 24 * 30; // 30 days
 function secret(): string {
   // A dedicated secret is preferred; fall back to the service-role key so the
   // feature works without new env wiring. Both are server-only.
-  const s = process.env.STORE_SESSION_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!s) throw new Error("Missing STORE_SESSION_SECRET (or SUPABASE_SERVICE_ROLE_KEY)");
+  // Its own secret only: never the database key, so a leak of one is not a leak of both.
+  const s = process.env.STORE_SESSION_SECRET;
+  if (!s || s.length < 32) throw new Error("STORE_SESSION_SECRET must be set (at least 32 characters)");
   return s;
 }
 
